@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import ProtectedRoute from './components/ProtectedRoute';
+import { Analytics } from "@vercel/analytics/next"
 
 // Lazy load pages
 const LandingPage = lazy(() => import('./pages/LandingPage'));
