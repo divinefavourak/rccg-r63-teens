@@ -1,7 +1,10 @@
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
+import { useAuth } from "../hooks/useAuth";
+import { useBulkOperations } from "../hooks/useBulkOperations";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import BulkEmailModal from "../components/BulkEmailModal";
 import { EVENT_DETAILS } from "../constants/eventDetails";
 import { 
   FaSearch, 
@@ -15,22 +18,27 @@ import {
   FaEnvelope,
   FaChurch,
   FaMapMarkerAlt,
-  FaCalendar,
+  FaSignOutAlt,
   FaSort,
   FaSortUp,
-  FaSortDown
+  FaSortDown,
+  FaEnvelopeOpen,
+  FaUsers,
+  FaCheckCircle,
+  FaExclamationTriangle
 } from "react-icons/fa";
 import { 
-  ChevronDown, 
-  ChevronUp, 
   Users, 
   CheckCircle, 
   Clock, 
   XCircle,
-  BarChart3
+  Mail,
+  BarChart3,
+  Send
 } from "lucide-react";
 
 const AdminVerify = () => {
+  const { logout } = useAuth();
   const [tickets, setTickets] = useState([]);
   const [filteredTickets, setFilteredTickets] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -39,12 +47,28 @@ const AdminVerify = () => {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [sortField, setSortField] = useState("registeredAt");
   const [sortDirection, setSortDirection] = useState("desc");
+  const [showEmailModal, setShowEmailModal] = useState(false);
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
     approved: 0,
     rejected: 0
   });
+
+  // Bulk operations hook
+  const {
+    selectedTickets,
+    setSelectedTickets,
+    bulkAction,
+    setBulkAction,
+    isProcessing,
+    operationResults,
+    setOperationResults,
+    handleSelectAll,
+    handleSelectTicket,
+    handleBulkAction,
+    sendCustomEmail
+  } = useBulkOperations(tickets, setTickets);
 
   // Sample data for demonstration
   useEffect(() => {
@@ -64,11 +88,15 @@ const AdminVerify = () => {
         parish: "RCCG Jesus Palace Parish",
         department: "Teens Church",
         medicalConditions: "None",
+        medications: "None",
+        dietaryRestrictions: "none",
         emergencyContact: "Mrs. Adebayo",
         emergencyPhone: "+234 800 987 6543",
+        emergencyRelationship: "Mother",
         parentName: "Mr. & Mrs. Adebayo",
         parentEmail: "parents@example.com",
         parentPhone: "+234 800 987 6543",
+        parentRelationship: "parents",
         status: "pending",
         registeredAt: "2024-01-15T10:30:00Z"
       },
@@ -86,12 +114,16 @@ const AdminVerify = () => {
         area: "Area 2",
         parish: "RCCG Grace Tabernacle",
         department: "Children Church",
-        medicalConditions: "Asthma",
+        medicalConditions: "Asthma - uses inhaler",
+        medications: "Ventolin inhaler",
+        dietaryRestrictions: "none",
         emergencyContact: "Dr. Johnson",
         emergencyPhone: "+234 800 987 6544",
+        emergencyRelationship: "Father",
         parentName: "Dr. Johnson",
         parentEmail: "dr.johnson@example.com",
         parentPhone: "+234 800 987 6544",
+        parentRelationship: "father",
         status: "approved",
         registeredAt: "2024-01-14T14:20:00Z"
       },
@@ -110,13 +142,71 @@ const AdminVerify = () => {
         parish: "RCCG Victory Cathedral",
         department: "Media",
         medicalConditions: "None",
+        medications: "None",
+        dietaryRestrictions: "vegetarian",
         emergencyContact: "Mrs. Brown",
         emergencyPhone: "+234 800 987 6545",
+        emergencyRelationship: "Mother",
         parentName: "Mr. Brown",
         parentEmail: "brown.family@example.com",
         parentPhone: "+234 800 987 6545",
+        parentRelationship: "father",
         status: "rejected",
         registeredAt: "2024-01-13T09:15:00Z"
+      },
+      {
+        id: 4,
+        ticketId: "R63T123459",
+        fullName: "Grace Williams",
+        age: "8",
+        category: "children_6_8",
+        gender: "female",
+        phone: "+234 800 123 4570",
+        email: "grace.w@example.com",
+        province: "Province 3",
+        zone: "Zone 1",
+        area: "Area 3",
+        parish: "RCCG Living Spring Parish",
+        department: "Children Church",
+        medicalConditions: "Peanut allergy",
+        medications: "EpiPen",
+        dietaryRestrictions: "allergies",
+        emergencyContact: "Mr. Williams",
+        emergencyPhone: "+234 800 987 6546",
+        emergencyRelationship: "Father",
+        parentName: "Mr. Williams",
+        parentEmail: "williams@example.com",
+        parentPhone: "+234 800 987 6546",
+        parentRelationship: "father",
+        status: "pending",
+        registeredAt: "2024-01-16T11:45:00Z"
+      },
+      {
+        id: 5,
+        ticketId: "R63T123460",
+        fullName: "David Thompson",
+        age: "16",
+        category: "teens",
+        gender: "male",
+        phone: "+234 800 123 4571",
+        email: "david.t@example.com",
+        province: "Province 1",
+        zone: "Zone 2",
+        area: "Area 1",
+        parish: "RCCG King's Court",
+        department: "Teens Church",
+        medicalConditions: "None",
+        medications: "None",
+        dietaryRestrictions: "none",
+        emergencyContact: "Mrs. Thompson",
+        emergencyPhone: "+234 800 987 6547",
+        emergencyRelationship: "Mother",
+        parentName: "Mrs. Thompson",
+        parentEmail: "thompson@example.com",
+        parentPhone: "+234 800 987 6547",
+        parentRelationship: "mother",
+        status: "pending",
+        registeredAt: "2024-01-17T08:20:00Z"
       }
     ];
 
@@ -259,7 +349,6 @@ const AdminVerify = () => {
   };
 
   const exportToCSV = () => {
-    // Simple CSV export implementation
     const headers = ["Ticket ID", "Name", "Age", "Category", "Church", "Status", "Registered"];
     const csvData = filteredTickets.map(ticket => [
       ticket.ticketId,
@@ -284,6 +373,11 @@ const AdminVerify = () => {
     window.URL.revokeObjectURL(url);
   };
 
+  const handleEmailSend = async (subject, message, recipients) => {
+    await sendCustomEmail(subject, message, recipients);
+    setShowEmailModal(false);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
@@ -295,14 +389,133 @@ const AdminVerify = () => {
           className="max-w-7xl mx-auto"
         >
           {/* Header */}
-          <div className="text-center mb-8">
-            <h1 className="text-4xl font-black text-gray-800 mb-4">
-              Admin <span className="text-gradient">Dashboard</span>
-            </h1>
-            <p className="text-gray-600 max-w-2xl mx-auto">
-              Manage and verify participant registrations for {EVENT_DETAILS.title}
-            </p>
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8">
+            <div className="text-center lg:text-left mb-4 lg:mb-0">
+              <h1 className="text-4xl font-black text-gray-800 mb-2">
+                Admin <span className="text-gradient">Dashboard</span>
+              </h1>
+              <p className="text-gray-600 max-w-2xl">
+                Manage and verify participant registrations for {EVENT_DETAILS.title}
+              </p>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setShowEmailModal(true)}
+                disabled={selectedTickets.size === 0}
+                className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                <Mail className="w-4 h-4" />
+                <span>Email ({selectedTickets.size})</span>
+              </motion.button>
+              
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={logout}
+                className="flex items-center space-x-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                <FaSignOutAlt />
+                <span>Logout</span>
+              </motion.button>
+            </div>
           </div>
+
+          {/* Operation Results */}
+          {operationResults && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              className={`mb-6 p-4 rounded-lg border ${
+                operationResults.failed > 0 
+                  ? "bg-red-50 border-red-200 text-red-800"
+                  : "bg-green-50 border-green-200 text-green-800"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  {operationResults.failed > 0 ? (
+                    <FaExclamationTriangle className="text-red-600" />
+                  ) : (
+                    <FaCheckCircle className="text-green-600" />
+                  )}
+                  <div>
+                    <h4 className="font-semibold">
+                      {operationResults.action.replace('_', ' ').toUpperCase()} Completed
+                    </h4>
+                    <p className="text-sm">
+                      {operationResults.successful} successful, {operationResults.failed} failed
+                      {operationResults.error && ` - ${operationResults.error}`}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setOperationResults(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <FaTimes />
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Bulk Actions Bar */}
+          {selectedTickets.size > 0 && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              className="card p-4 mb-6 bg-yellow-50 border border-yellow-200"
+            >
+              <div className="flex flex-col sm:flex-row items-center justify-between space-y-3 sm:space-y-0">
+                <div className="flex items-center space-x-2">
+                  <FaUsers className="text-yellow-600" />
+                  <span className="font-semibold text-yellow-800">
+                    {selectedTickets.size} ticket(s) selected
+                  </span>
+                </div>
+                
+                <div className="flex items-center space-x-3">
+                  <select
+                    value={bulkAction}
+                    onChange={(e) => setBulkAction(e.target.value)}
+                    disabled={isProcessing}
+                    className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50"
+                  >
+                    <option value="">Bulk Actions</option>
+                    <option value="approve">Approve Selected</option>
+                    <option value="reject">Reject Selected</option>
+                    <option value="send_reminder">Send Reminder</option>
+                    <option value="delete">Delete Selected</option>
+                  </select>
+                  
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleBulkAction}
+                    disabled={!bulkAction || isProcessing}
+                    className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
+                  >
+                    {isProcessing ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
+                    <span>{isProcessing ? "Processing..." : "Apply"}</span>
+                  </motion.button>
+                  
+                  <button
+                    onClick={() => setSelectedTickets(new Set())}
+                    disabled={isProcessing}
+                    className="text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
 
           {/* Statistics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -427,6 +640,14 @@ const AdminVerify = () => {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200">
+                    <th className="py-3 px-4 w-12">
+                      <input
+                        type="checkbox"
+                        onChange={handleSelectAll}
+                        checked={selectedTickets.size === filteredTickets.length && filteredTickets.length > 0}
+                        className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                      />
+                    </th>
                     <th 
                       className="text-left py-3 px-4 cursor-pointer"
                       onClick={() => handleSort("ticketId")}
@@ -484,6 +705,14 @@ const AdminVerify = () => {
                       animate={{ opacity: 1 }}
                       className="border-b border-gray-100 hover:bg-gray-50"
                     >
+                      <td className="py-3 px-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedTickets.has(ticket.id)}
+                          onChange={(e) => handleSelectTicket(ticket.id, e.target.checked)}
+                          className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                        />
+                      </td>
                       <td className="py-3 px-4 font-mono text-sm text-gray-600">
                         {ticket.ticketId}
                       </td>
@@ -567,6 +796,17 @@ const AdminVerify = () => {
         </motion.div>
       </div>
 
+      {/* Bulk Email Modal */}
+      <BulkEmailModal
+        isOpen={showEmailModal}
+        onClose={() => setShowEmailModal(false)}
+        onSend={handleEmailSend}
+        selectedCount={selectedTickets.size}
+        totalCount={stats.total}
+        pendingCount={stats.pending}
+        approvedCount={stats.approved}
+      />
+
       {/* Ticket Detail Modal */}
       {selectedTicket && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -647,6 +887,25 @@ const AdminVerify = () => {
                 </div>
               </div>
 
+              {/* Medical Information */}
+              <div className="space-y-4">
+                <h4 className="font-semibold text-gray-800 border-b pb-2">Medical Information</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Conditions:</span>
+                    <span className="font-semibold">{selectedTicket.medicalConditions || "None"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Medications:</span>
+                    <span className="font-semibold">{selectedTicket.medications || "None"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Dietary:</span>
+                    <span className="font-semibold capitalize">{selectedTicket.dietaryRestrictions || "No restrictions"}</span>
+                  </div>
+                </div>
+              </div>
+
               {/* Parent Information */}
               <div className="space-y-4">
                 <h4 className="font-semibold text-gray-800 border-b pb-2">Parent/Guardian</h4>
@@ -662,6 +921,25 @@ const AdminVerify = () => {
                   <div className="flex justify-between">
                     <span className="text-gray-600">Phone:</span>
                     <span className="font-semibold">{selectedTicket.parentPhone}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Emergency Contact */}
+              <div className="space-y-4">
+                <h4 className="font-semibold text-gray-800 border-b pb-2">Emergency Contact</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Name:</span>
+                    <span className="font-semibold">{selectedTicket.emergencyContact}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Phone:</span>
+                    <span className="font-semibold">{selectedTicket.emergencyPhone}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Relationship:</span>
+                    <span className="font-semibold capitalize">{selectedTicket.emergencyRelationship}</span>
                   </div>
                 </div>
               </div>

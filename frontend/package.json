@@ -5,11 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@vercel/analytics": "^1.5.0",
+    "@vitejs/plugin-react": "^5.1.1",
     "framer-motion": "^12.23.24",
     "lucide-react": "^0.555.0",
     "qrcode.react": "^4.2.0",
