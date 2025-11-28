@@ -10,7 +10,7 @@ const Countdown = () => {
   });
 
   useEffect(() => {
-    const campDate = new Date("2025-08-15").getTime();
+    const campDate = new Date("2025-12-22").getTime();
 
     const timer = setInterval(() => {
       const now = new Date().getTime();
