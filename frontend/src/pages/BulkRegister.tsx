@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAuth } from "../hooks/useAuth";
+import { useAuth } from "../hooks/useAuth"; // Updated to direct import
 import { useNavigate } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
 import { FaTrash, FaPlus, FaSave } from "react-icons/fa";
@@ -16,7 +16,24 @@ const BulkRegister = () => {
   const { control, register, handleSubmit, formState: { errors } } = useForm({
     defaultValues: {
       candidates: [
-        { fullName: "", age: "", gender: "male", category: "teens", parentName: "", parentPhone: "", parish: "" }
+        { 
+          fullName: "", 
+          age: "", 
+          gender: "male", 
+          category: "teens", 
+          phone: "", 
+          email: "", 
+          parish: "",
+          parentName: "", 
+          parentPhone: "", 
+          parentEmail: "",
+          emergencyContact: "",
+          emergencyPhone: "",
+          emergencyRelationship: "Parent",
+          medicalConditions: "None",
+          medications: "None",
+          dietaryRestrictions: "None"
+        }
       ]
     }
   });
@@ -35,14 +52,10 @@ const BulkRegister = () => {
           ...candidate,
           age: parseInt(candidate.age),
           province: user?.province || "Unknown",
-          zone: "Coordinator Upload", // Default for bulk
+          zone: "Coordinator Upload", 
           area: "Coordinator Upload",
-          email: `${candidate.fullName.replace(/\s/g,'.')}@placeholder.com`, // Placeholder email if not provided
-          phone: candidate.parentPhone, // Use parent phone for child
-          emergencyContact: candidate.parentName,
-          emergencyPhone: candidate.parentPhone,
-          emergencyRelationship: "Parent",
-          parentEmail: "coordinator@upload.com", // Placeholder
+          // Ensure fallback if fields empty to satisfy types, though required validation handles emptiness
+          emergencyRelationship: candidate.emergencyRelationship || "Parent",
           parentRelationship: "Parent",
           parentConsent: true, // Implied by coordinator
           medicalConsent: true,
@@ -75,46 +88,47 @@ const BulkRegister = () => {
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)}>
-            <div className="space-y-4">
+            <div className="space-y-6">
               {fields.map((field, index) => (
-                <div key={field.id} className="card p-6 relative group">
+                <div key={field.id} className="card p-6 relative group border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5">
                   <div className="absolute top-4 right-4">
                     {fields.length > 1 && (
-                      <button type="button" onClick={() => remove(index)} className="text-red-400 hover:text-red-600 p-2">
+                      <button type="button" onClick={() => remove(index)} className="text-red-400 hover:text-red-600 p-2 transition-colors">
                         <FaTrash />
                       </button>
                     )}
                   </div>
                   
-                  <h4 className="font-bold text-yellow-600 dark:text-yellow-400 mb-4 text-sm">CANDIDATE #{index + 1}</h4>
+                  <h4 className="font-bold text-yellow-600 dark:text-yellow-400 mb-6 text-sm border-b border-gray-100 dark:border-white/10 pb-2">CANDIDATE #{index + 1}</h4>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    <div className="col-span-2">
-                      <label className="text-xs uppercase font-bold opacity-60">Full Name</label>
+                  <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-4">
+                    {/* Personal Info */}
+                    <div className="col-span-1 md:col-span-2">
+                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Full Name *</label>
                       <input 
                         {...register(`candidates.${index}.fullName`, { required: true })}
-                        className="w-full p-2 bg-gray-100 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded"
+                        className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded focus:ring-2 focus:ring-yellow-500 outline-none"
                         placeholder="Surname Firstname"
                       />
                     </div>
                     <div>
-                      <label className="text-xs uppercase font-bold opacity-60">Age</label>
+                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Age *</label>
                       <input 
                         type="number"
                         {...register(`candidates.${index}.age`, { required: true, min: 1, max: 25 })}
-                        className="w-full p-2 bg-gray-100 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded"
+                        className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded focus:ring-2 focus:ring-yellow-500 outline-none"
                       />
                     </div>
                     <div>
-                      <label className="text-xs uppercase font-bold opacity-60">Gender</label>
-                      <select {...register(`candidates.${index}.gender`)} className="w-full p-2 bg-gray-100 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded">
+                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Gender *</label>
+                      <select {...register(`candidates.${index}.gender`)} className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded focus:ring-2 focus:ring-yellow-500 outline-none">
                         <option value="male">Male</option>
                         <option value="female">Female</option>
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs uppercase font-bold opacity-60">Category</label>
-                      <select {...register(`candidates.${index}.category`)} className="w-full p-2 bg-gray-100 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded">
+                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Category *</label>
+                      <select {...register(`candidates.${index}.category`)} className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded focus:ring-2 focus:ring-yellow-500 outline-none">
                         <option value="toddler">Toddler (1-5)</option>
                         <option value="children_6_8">Children (6-8)</option>
                         <option value="pre_teens">Pre-Teens (9-12)</option>
@@ -122,37 +136,103 @@ const BulkRegister = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs uppercase font-bold opacity-60">Parish</label>
+                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Phone</label>
                       <input 
-                        {...register(`candidates.${index}.parish`, { required: true })}
-                        className="w-full p-2 bg-gray-100 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded"
-                        placeholder="Local Parish Name"
+                        {...register(`candidates.${index}.phone`, { required: true })}
+                        className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded focus:ring-2 focus:ring-yellow-500 outline-none"
+                        placeholder="Candidate Phone"
                       />
                     </div>
-                    <div>
-                      <label className="text-xs uppercase font-bold opacity-60">Parent Name</label>
+                    <div className="col-span-1 md:col-span-2">
+                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Email</label>
                       <input 
-                        {...register(`candidates.${index}.parentName`, { required: true })}
-                        className="w-full p-2 bg-gray-100 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs uppercase font-bold opacity-60">Parent Phone</label>
-                      <input 
-                        {...register(`candidates.${index}.parentPhone`, { required: true })}
-                        className="w-full p-2 bg-gray-100 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded"
+                        type="email"
+                        {...register(`candidates.${index}.email`, { required: true })}
+                        className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded focus:ring-2 focus:ring-yellow-500 outline-none"
+                        placeholder="candidate@example.com"
                       />
                     </div>
                   </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 pt-4 border-t border-gray-100 dark:border-white/5">
+                     {/* Church Info */}
+                    <div className="col-span-1 md:col-span-3">
+                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Parish *</label>
+                      <input 
+                        {...register(`candidates.${index}.parish`, { required: true })}
+                        className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded focus:ring-2 focus:ring-yellow-500 outline-none"
+                        placeholder="Local Parish Name"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 pt-4 border-t border-gray-100 dark:border-white/5">
+                    {/* Parent Info */}
+                    <div>
+                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Parent Name *</label>
+                      <input 
+                        {...register(`candidates.${index}.parentName`, { required: true })}
+                        className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded focus:ring-2 focus:ring-yellow-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Parent Phone *</label>
+                      <input 
+                        {...register(`candidates.${index}.parentPhone`, { required: true })}
+                        className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded focus:ring-2 focus:ring-yellow-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Parent Email *</label>
+                      <input 
+                        type="email"
+                        {...register(`candidates.${index}.parentEmail`, { required: true })}
+                        className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded focus:ring-2 focus:ring-yellow-500 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-100 dark:border-white/5">
+                    {/* Emergency & Medical (Simplified) */}
+                    <div>
+                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Emergency Contact *</label>
+                      <input 
+                        {...register(`candidates.${index}.emergencyContact`, { required: true })}
+                        className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded focus:ring-2 focus:ring-yellow-500 outline-none"
+                        placeholder="Name"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Emergency Phone *</label>
+                      <input 
+                        {...register(`candidates.${index}.emergencyPhone`, { required: true })}
+                        className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded focus:ring-2 focus:ring-yellow-500 outline-none"
+                      />
+                    </div>
+                     <div>
+                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Medical Conditions</label>
+                      <input 
+                        {...register(`candidates.${index}.medicalConditions`)}
+                        className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded focus:ring-2 focus:ring-yellow-500 outline-none"
+                        placeholder="If any (Optional)"
+                      />
+                    </div>
+                  </div>
+
                 </div>
               ))}
             </div>
 
-            <div className="flex justify-between items-center mt-8">
+            <div className="flex justify-between items-center mt-8 pb-20">
               <button
                 type="button"
-                onClick={() => append({ fullName: "", age: "", gender: "male", category: "teens", parentName: "", parentPhone: "", parish: "" })}
-                className="btn-secondary px-6 py-3 flex items-center gap-2"
+                onClick={() => append({ 
+                  fullName: "", age: "", gender: "male", category: "teens", phone: "", email: "", 
+                  parish: "", parentName: "", parentPhone: "", parentEmail: "", 
+                  emergencyContact: "", emergencyPhone: "", emergencyRelationship: "Parent",
+                  medicalConditions: "None", medications: "None", dietaryRestrictions: "None"
+                })}
+                className="btn-secondary px-6 py-3 flex items-center gap-2 text-sm"
               >
                 <FaPlus /> Add Another Candidate
               </button>
