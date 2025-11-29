@@ -4,10 +4,8 @@ import Countdown from "../components/Countdown";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { EVENT_DETAILS, CAMP_FEATURES } from "../constants/eventDetails";
-import { FaPray, FaGamepad, FaTheaterMasks, FaUsers } from "react-icons/fa";
+import { FaPray, FaGamepad, FaTheaterMasks, FaUsers, FaInfoCircle } from "react-icons/fa";
 import { IconType } from "react-icons";
-
-// --- Snow Effect Component ---
 
 const LandingPage = () => {
   const stats = [
@@ -34,8 +32,6 @@ const LandingPage = () => {
         <div className="absolute inset-y-0 left-0 w-1/4 bg-gradient-to-r from-black/80 to-transparent z-0 opacity-0 dark:opacity-100 transition-opacity duration-500"></div>
         <div className="absolute inset-y-0 right-0 w-1/4 bg-gradient-to-l from-black/80 to-transparent z-0 opacity-0 dark:opacity-100 transition-opacity duration-500"></div>
         
-
-
         {/* Hero Content */}
         <div className="relative z-10 text-center max-w-6xl mx-auto">
           {/* Logo / Subtitle */}
@@ -79,6 +75,28 @@ const LandingPage = () => {
             </span>
           </motion.div>
 
+          {/* Policy Notice - NEW */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6 }}
+            className="mb-8 max-w-2xl mx-auto"
+          >
+            <div className="bg-red-100 dark:bg-red-900/40 border border-red-200 dark:border-red-500/30 p-4 rounded-xl flex items-start gap-3 text-left shadow-lg backdrop-blur-sm">
+              <FaInfoCircle className="text-red-600 dark:text-yellow-400 text-xl mt-1 shrink-0" />
+              <div>
+                <h4 className="font-bold text-red-800 dark:text-yellow-400 uppercase text-sm tracking-wider mb-1">
+                  Registration Policy Update
+                </h4>
+                <p className="text-red-800/80 dark:text-red-100/80 text-sm leading-relaxed">
+                  <strong>Individual registration is NOT permitted.</strong> All registrations must be done through your 
+                  Provincial Coordinator. Payments should be made directly to the Provincial Coordinator, 
+                  not the Regional account.
+                </p>
+              </div>
+            </div>
+          </motion.div>
+
           {/* Location & Date Card */}
           <motion.div
             initial={{ y: 50, opacity: 0 }}
@@ -106,7 +124,7 @@ const LandingPage = () => {
             className="flex flex-col sm:flex-row gap-6 justify-center items-center relative z-20"
           >
             <Link to="/get-ticket" className="btn-primary flex items-center gap-2">
-              <span>🎁 REGISTER FOR FREE</span>
+              <span>🎁 COORDINATOR REGISTRATION</span>
             </Link>
             <button className="btn-secondary">
               LEARN MORE

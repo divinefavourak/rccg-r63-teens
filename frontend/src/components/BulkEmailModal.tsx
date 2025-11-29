@@ -68,7 +68,12 @@ const BulkEmailModal = ({
       name: "Payment Reminder",
       subject: "Payment Reminder - RCCG Teens Camp",
       message: `Dear {name},\n\nThis is a friendly reminder about your camp registration payment.\n\nThank you!\nRCCG Region 63 Team`
-    }
+    },
+    {
+      name: "Payment Reminder",
+      subject: "Payment Reminder - RCCG Teens Camp",
+      message: `Dear {name},\n\nThis is a friendly reminder about your camp registration payment.\n\nIMPORTANT: Please make your payment of ₦15,000 directly to your PROVINCIAL COORDINATOR.\n\nDo NOT pay into the Regional account.\n\nIf you have already paid your Coordinator, please disregard this message.\n\nThank you!\nRCCG Region 63 Team`
+    },
   ];
 
   const applyTemplate = (template: { subject: string; message: string }) => {

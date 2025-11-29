@@ -56,7 +56,7 @@ const Footer = () => {
               <a href="/#features" className="block text-red-100/80 hover:text-yellow-400 transition-colors">
                 Event Features
               </a>
-              <a href="/admin" className="block text-red-100/80 hover:text-yellow-400 transition-colors">
+              <a href="/admin-login" className="block text-red-100/80 hover:text-yellow-400 transition-colors">
                 Admin Portal
               </a>
             </div>
