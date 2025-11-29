@@ -14,7 +14,7 @@ const Navbar = () => {
   const navItems = [
     { name: "Home", path: "/" },
     { name: "Register", path: "/get-ticket" },
-    { name: "Admin", path: "/admin" },
+    { name: "Admin", path: "/admin-login" },
   ];
 
   return (

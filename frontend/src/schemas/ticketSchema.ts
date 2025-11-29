@@ -37,7 +37,7 @@ export const ticketSchema = z.object({
   parentEmail: z.string().email("Valid parent email is required"),
   parentPhone: z.string().min(10, "Parent phone is required"),
   parentRelationship: z.string().min(1, "Relationship is required"),
-  
+  coordinatorName: z.string().min(3, "Coordinator name is required"),
   // Consents
   parentConsent: z.boolean().refine(val => val === true, {
     message: "Parent consent is required to proceed"

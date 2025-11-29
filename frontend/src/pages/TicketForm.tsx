@@ -15,8 +15,9 @@ import {
 import { ticketSchema, TicketFormData } from "../schemas/ticketSchema";
 import { useTicketStore } from "../store/ticketStore";
 
+// Added 'coordinatorName' to Step 1
 const STEP_FIELDS = {
-  1: ['fullName', 'age', 'category', 'gender', 'phone', 'email'],
+  1: ['coordinatorName', 'fullName', 'age', 'category', 'gender', 'phone', 'email'],
   2: ['province', 'zone', 'area', 'parish', 'department'],
   3: ['medicalConditions', 'medications', 'dietaryRestrictions', 'emergencyContact', 'emergencyPhone', 'emergencyRelationship'],
   4: ['parentName', 'parentEmail', 'parentPhone', 'parentRelationship', 'parentConsent', 'medicalConsent', 'photoConsent']
@@ -45,6 +46,7 @@ const TicketForm = () => {
     resolver: zodResolver(ticketSchema),
     mode: "onChange",
     defaultValues: {
+      coordinatorName: "", // New Field
       fullName: "",
       age: undefined,
       category: "",
@@ -81,7 +83,7 @@ const TicketForm = () => {
   }, [watchedValues, setFormData]);
 
   const nextStep = async () => {
-  //  /@ts-expect-error - Keys are valid but TS inference on partial keys is strict
+    // /@ts-expect-error - Keys are valid but TS inference on partial keys is strict
     const fields = STEP_FIELDS[currentStep as keyof typeof STEP_FIELDS];
     // Trigger validation only for current step fields
     const isStepValid = await trigger(fields);
@@ -121,14 +123,14 @@ const TicketForm = () => {
   const renderFormField = (field: any) => {
     const hasError = !!errors[field.name as keyof TicketFormData];
     
-    // Light/Dark mode compatible styles
+    // Light/Dark mode compatible styles with "Royal" borders
     const inputClasses = `w-full px-4 py-3 bg-white dark:bg-[#1a0505]/50 border rounded-xl 
       focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all 
       text-gray-900 dark:text-white 
       placeholder-gray-400 dark:placeholder-white/30 
       ${hasError 
         ? 'border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/20' 
-        : 'border-gray-200 dark:border-red-900/50'}`;
+        : 'border-gray-300 dark:border-red-900/50'}`;
 
     const registerOptions = field.name === 'age' ? { valueAsNumber: true } : {};
 
@@ -189,8 +191,18 @@ const TicketForm = () => {
 
     switch (currentStep) {
       case 1:
-        title = "Personal Information";
-        fields = PERSONAL_INFO_FIELDS;
+        title = "Participant Details";
+        // Prepend Coordinator Name Field
+        fields = [
+          {
+            name: "coordinatorName",
+            label: "Provincial Coordinator Name",
+            type: "text",
+            required: true,
+            placeholder: "Enter Coordinator's Name"
+          },
+          ...PERSONAL_INFO_FIELDS
+        ];
         break;
       case 2:
         title = "Church Information";
@@ -216,6 +228,16 @@ const TicketForm = () => {
         className="space-y-6"
       >
         <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-6 font-['Impact'] tracking-wide">{title}</h3>
+        
+        {/* NEW: Coordinator Warning Banner */}
+        {currentStep === 1 && (
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-500/30 rounded-xl p-4 mb-6">
+            <p className="text-blue-800 dark:text-blue-200 text-sm font-medium text-center">
+              ℹ️ This form is for <strong>Provincial Coordinators</strong> to register children/teens. 
+              Please ensure all details are accurate before submission.
+            </p>
+          </div>
+        )}
         
         {currentStep === 4 && (
           <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-500/30 rounded-xl p-6 mb-6">
@@ -270,10 +292,10 @@ const TicketForm = () => {
         >
           <div className="text-center mb-10">
             <h1 className="text-4xl md:text-5xl font-black mb-4 text-red-900 dark:text-white">
-              <span className="text-gold-3d">CLAIM</span> YOUR TICKET
+              <span className="text-gold-3d">COORDINATOR</span> PORTAL
             </h1>
             <p className="text-gray-600 dark:text-red-100/80 max-w-2xl mx-auto text-lg">
-              Complete the steps below to secure your spot at The Priceless Gift Camp.
+              Official registration portal for Provincial Coordinators.
             </p>
           </div>
 
