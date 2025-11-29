@@ -8,27 +8,6 @@ import { FaPray, FaGamepad, FaTheaterMasks, FaUsers } from "react-icons/fa";
 import { IconType } from "react-icons";
 
 // --- Snow Effect Component ---
-const Snowfall = () => {
-  const snowflakes = Array.from({ length: 50 });
-  return (
-    <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
-      {snowflakes.map((_, i) => (
-        <div
-          key={i}
-          className="absolute bg-white rounded-full opacity-80 animate-snow"
-          style={{
-            left: `${Math.random() * 100}%`,
-            top: `-${Math.random() * 20}%`,
-            width: `${Math.random() * 4 + 2}px`,
-            height: `${Math.random() * 4 + 2}px`,
-            animationDuration: `${Math.random() * 5 + 5}s`,
-            animationDelay: `${Math.random() * 5}s`,
-          }}
-        />
-      ))}
-    </div>
-  );
-};
 
 const LandingPage = () => {
   const stats = [
@@ -55,7 +34,7 @@ const LandingPage = () => {
         <div className="absolute inset-y-0 left-0 w-1/4 bg-gradient-to-r from-black/80 to-transparent z-0 opacity-0 dark:opacity-100 transition-opacity duration-500"></div>
         <div className="absolute inset-y-0 right-0 w-1/4 bg-gradient-to-l from-black/80 to-transparent z-0 opacity-0 dark:opacity-100 transition-opacity duration-500"></div>
         
-        <Snowfall />
+
 
         {/* Hero Content */}
         <div className="relative z-10 text-center max-w-6xl mx-auto">

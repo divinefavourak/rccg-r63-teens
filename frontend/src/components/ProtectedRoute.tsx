@@ -1,6 +1,7 @@
 import { useEffect, ReactNode } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom'; // <--- Import useNavigate
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -8,44 +9,34 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const { isAuthenticated, isLoading } = useAuth();
+  const navigate = useNavigate(); // <--- Initialize hook
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      window.location.href = '/admin-login';
+      // Use navigate() instead of window.location.href
+      // This prevents the "404 Not Found" server error
+      navigate('/admin-login', { replace: true });
     }
-  }, [isAuthenticated, isLoading]);
+  }, [isAuthenticated, isLoading, navigate]);
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-[#1a0505] flex items-center justify-center">
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
           className="text-center"
         >
-          <div className="w-16 h-16 border-4 border-green-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Checking authentication...</p>
+          <div className="w-16 h-16 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-yellow-500/80 font-bold">Verifying Access...</p>
         </motion.div>
       </div>
     );
   }
 
   if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center"
-        >
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-2xl">🔒</span>
-          </div>
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">Access Denied</h2>
-          <p className="text-gray-600 mb-4">Redirecting to login...</p>
-        </motion.div>
-      </div>
-    );
+    // Return null while redirecting to avoid flash of content
+    return null; 
   }
 
   return <>{children}</>;
