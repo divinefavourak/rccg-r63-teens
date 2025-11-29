@@ -1,13 +1,16 @@
-import { useEffect } from 'react';
+import { useEffect, ReactNode } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { motion } from 'framer-motion';
 
-const ProtectedRoute = ({ children }) => {
+interface ProtectedRouteProps {
+  children: ReactNode;
+}
+
+const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const { isAuthenticated, isLoading } = useAuth();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      // Use window.location for reliable redirect
       window.location.href = '/admin-login';
     }
   }, [isAuthenticated, isLoading]);
@@ -45,7 +48,7 @@ const ProtectedRoute = ({ children }) => {
     );
   }
 
-  return children;
+  return <>{children}</>;
 };
 
 export default ProtectedRoute;

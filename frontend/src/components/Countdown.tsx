@@ -1,8 +1,15 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 
+interface TimeLeft {
+  days: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
+}
+
 const Countdown = () => {
-  const [timeLeft, setTimeLeft] = useState({
+  const [timeLeft, setTimeLeft] = useState<TimeLeft>({
     days: 0,
     hours: 0,
     minutes: 0,
@@ -10,6 +17,7 @@ const Countdown = () => {
   });
 
   useEffect(() => {
+    // Set to a future date
     const campDate = new Date("2025-12-22").getTime();
 
     const timer = setInterval(() => {
@@ -29,38 +37,38 @@ const Countdown = () => {
     return () => clearInterval(timer);
   }, []);
 
-  const TimeUnit = ({ value, label }) => (
+  const TimeUnit = ({ value, label }: { value: number; label: string }) => (
     <motion.div
       initial={{ scale: 0, rotate: -180 }}
       animate={{ scale: 1, rotate: 0 }}
       transition={{ type: "spring", stiffness: 200 }}
       className="text-center mx-2"
     >
-      <div className="bg-white/20 backdrop-blur-lg rounded-xl p-4 min-w-[100px] border border-white/30 shadow-2xl">
+      <div className="bg-white/20 backdrop-blur-lg rounded-xl p-4 min-w-[80px] md:min-w-[100px] border border-white/30 shadow-2xl">
         <motion.span
           key={value}
           initial={{ y: -20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="text-4xl md:text-5xl font-black text-white block font-mono"
+          className="text-3xl md:text-5xl font-black text-white block font-mono"
         >
           {value.toString().padStart(2, "0")}
         </motion.span>
       </div>
-      <span className="text-sm font-bold text-white mt-3 block tracking-wide">
+      <span className="text-xs md:text-sm font-bold text-white mt-3 block tracking-wide">
         {label}
       </span>
     </motion.div>
   );
 
   return (
-    <div className="flex flex-wrap justify-center items-center gap-4 md:gap-6">
+    <div className="flex flex-wrap justify-center items-center gap-2 md:gap-6">
       <TimeUnit value={timeLeft.days} label="DAYS" />
-      <div className="text-2xl text-white font-black">:</div>
+      <div className="text-xl md:text-2xl text-white font-black pb-8">:</div>
       <TimeUnit value={timeLeft.hours} label="HOURS" />
-      <div className="text-2xl text-white font-black">:</div>
-      <TimeUnit value={timeLeft.minutes} label="MINUTES" />
-      <div className="text-2xl text-white font-black">:</div>
-      <TimeUnit value={timeLeft.seconds} label="SECONDS" />
+      <div className="text-xl md:text-2xl text-white font-black pb-8">:</div>
+      <TimeUnit value={timeLeft.minutes} label="MINS" />
+      <div className="text-xl md:text-2xl text-white font-black pb-8">:</div>
+      <TimeUnit value={timeLeft.seconds} label="SECS" />
     </div>
   );
 };
