@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useAuthContext } from "../context/AuthContext";
+import { useAuth } from "../hooks/useAuth";
 import { ticketService } from "../services/ticketService";
 import { Ticket } from "../types";
 import Navbar from "../components/Navbar";
@@ -10,10 +10,9 @@ import {
 } from "react-icons/fa";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { motion } from "framer-motion";
 
 const CoordinatorDashboard = () => {
-  const { user, logout } = useAuthContext();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [myTickets, setMyTickets] = useState<Ticket[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
