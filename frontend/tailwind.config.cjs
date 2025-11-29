@@ -1,30 +1,28 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  darkMode: 'class', // <--- ENABLE THIS
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {
-      animation: {
-        'blob': 'blob 7s infinite',
-        'float': 'float 3s ease-in-out infinite',
-        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-      },
-      keyframes: {
-        blob: {
-          '0%': { transform: 'translate(0px, 0px) scale(1)' },
-          '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
-          '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
-          '100%': { transform: 'translate(0px, 0px) scale(1)' },
-        },
-        float: {
-          '0%, 100%': { transform: 'translateY(0)' },
-          '50%': { transform: 'translateY(-10px)' },
+      colors: {
+        christmas: {
+          red: '#8B0000',
+          crimson: '#C41E3A',
+          gold: '#FFD700',
+          'gold-dark': '#B8860B',
+          green: '#2F5233',
+          dark: '#1a0505',
+          light: '#f8fafc', // Snow white for light mode
         }
       },
+      // ... keep existing animations/keyframes ...
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+        'gold-text': 'linear-gradient(to bottom, #FDB931 0%, #FFD700 50%, #B8860B 100%)',
+        'snow-pattern': "url('https://www.transparenttextures.com/patterns/snow.png')", // Helper
       }
     },
   },
