@@ -11,6 +11,7 @@ const TicketForm = lazy(() => import('./pages/TicketForm'));
 const TicketPreview = lazy(() => import('./pages/TicketPreview'));
 const AdminLogin = lazy(() => import('./pages/AdminLogin'));
 const AdminVerify = lazy(() => import('./pages/AdminVerify'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 
 const Loading = () => (
   <div className="min-h-screen flex items-center justify-center">
@@ -62,6 +63,7 @@ function App() {
               </ProtectedRoute>
             } 
           /> 
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
     </Router>
