@@ -3,6 +3,7 @@ import { Suspense, lazy } from 'react';
 import { Toaster } from 'react-hot-toast'; // <--- IMPORT THIS
 import ProtectedRoute from './components/ProtectedRoute';
 import { Analytics } from "@vercel/analytics/next"
+import ScrollToTop from './components/ScrollToTop';
 
 // Lazy load pages
 const LandingPage = lazy(() => import('./pages/LandingPage'));
@@ -21,6 +22,7 @@ function App() {
   return (
     <Router>
       {/* Configure Toaster globally */}
+      <ScrollToTop />
       <Toaster 
         position="top-center"
         toastOptions={{
