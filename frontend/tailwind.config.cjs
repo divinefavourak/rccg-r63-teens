@@ -1,6 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  darkMode: 'class', // Enables dark mode
+  darkMode: 'class',
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -9,20 +9,23 @@ module.exports = {
     extend: {
       colors: {
         christmas: {
-          red: '#8B0000',      // Deep red background
-          crimson: '#C41E3A',  // Brighter red for highlights
-          gold: '#FFD700',     // Standard gold
-          'gold-dark': '#B8860B', // Shadow gold
-          green: '#2F5233',    // Pine green
-          dark: '#1a0505',     // Very dark red/black for depth
-          light: '#f8fafc',    // Snow white for light mode
+          red: '#8B0000',
+          crimson: '#C41E3A',
+          gold: '#FFD700',
+          'gold-dark': '#B8860B',
+          green: '#2F5233',
+          dark: '#1a0505',
+          light: '#f8fafc',
         }
       },
       animation: {
         'blob': 'blob 7s infinite',
         'float': 'float 3s ease-in-out infinite',
-        'snow': 'snow 10s linear infinite', // <--- THIS WAS MISSING
+        'snow': 'snow 10s linear infinite',
         'shine': 'shine 3s infinite',
+        'swing': 'swing 3s ease-in-out infinite',
+        'twinkle': 'twinkle 2s ease-in-out infinite',
+        'wave': 'wave 3s ease-in-out infinite', // <--- NEW
       },
       keyframes: {
         blob: {
@@ -35,13 +38,27 @@ module.exports = {
           '0%, 100%': { transform: 'translateY(0)' },
           '50%': { transform: 'translateY(-10px)' },
         },
-        snow: { // <--- THIS WAS MISSING
+        snow: {
           '0%': { transform: 'translateY(-10px) translateX(0)', opacity: '0' },
           '10%': { opacity: '1' },
           '100%': { transform: 'translateY(100vh) translateX(20px)', opacity: '0' }
         },
         shine: {
           '0%, 100%': { backgroundPosition: '200% center' },
+        },
+        swing: {
+          '0%, 100%': { transform: 'rotate(-5deg)' },
+          '50%': { transform: 'rotate(5deg)' },
+        },
+        twinkle: {
+          '0%, 100%': { opacity: '0.4', transform: 'scale(0.8)' },
+          '50%': { opacity: '1', transform: 'scale(1.2)' },
+        },
+        // NEW WAVE KEYFRAME
+        wave: {
+          '0%, 100%': { transform: 'rotate(0deg)' },
+          '25%': { transform: 'rotate(-5deg)' },
+          '75%': { transform: 'rotate(5deg)' },
         }
       },
       backgroundImage: {
