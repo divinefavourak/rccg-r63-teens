@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
+import { Toaster } from 'react-hot-toast'; // <--- IMPORT THIS
 import ProtectedRoute from './components/ProtectedRoute';
 import { Analytics } from "@vercel/analytics/next"
 
@@ -19,6 +20,32 @@ const Loading = () => (
 function App() {
   return (
     <Router>
+      {/* Configure Toaster globally */}
+      <Toaster 
+        position="top-center"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#363636',
+            color: '#fff',
+          },
+          success: {
+            duration: 3000,
+            iconTheme: {
+              primary: '#4ade80',
+              secondary: '#fff',
+            },
+          },
+          error: {
+            duration: 5000,
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: '#fff',
+            },
+          },
+        }}
+      />
+      
       <Suspense fallback={<Loading />}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
@@ -26,13 +53,14 @@ function App() {
           <Route path="/ticket-preview" element={<TicketPreview />} />
           <Route path="/admin-login" element={<AdminLogin />} />
           <Route 
-    path="/admin" 
-    element={
-      <ProtectedRoute>
-        <AdminVerify />
-      </ProtectedRoute>
-     } 
-     /> </Routes>
+            path="/admin" 
+            element={
+              <ProtectedRoute>
+                <AdminVerify />
+              </ProtectedRoute>
+            } 
+          /> 
+        </Routes>
       </Suspense>
     </Router>
   );

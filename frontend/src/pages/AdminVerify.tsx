@@ -6,6 +6,9 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import BulkEmailModal from "../components/BulkEmailModal";
 import { EVENT_DETAILS } from "../constants/eventDetails";
+import { ticketService } from "../services/ticketService";
+import { Ticket } from "../types";
+import toast from "react-hot-toast";
 import { 
   FaSearch, 
   FaFilter, 
@@ -14,40 +17,33 @@ import {
   FaEye, 
   FaDownload,
   FaUser,
-  FaPhone,
-  FaEnvelope,
-  FaChurch,
-  FaMapMarkerAlt,
   FaSignOutAlt,
-  FaSort,
   FaSortUp,
   FaSortDown,
-  FaEnvelopeOpen,
   FaUsers,
   FaCheckCircle,
-  FaExclamationTriangle
+  FaExclamationTriangle,
+  FaEnvelope,
+  FaPaperPlane
 } from "react-icons/fa";
-import { 
-  Users, 
-  CheckCircle, 
-  Clock, 
-  XCircle,
-  Mail,
-  BarChart3,
-  Send
-} from "lucide-react";
 
 const AdminVerify = () => {
   const { logout } = useAuth();
-  const [tickets, setTickets] = useState([]);
-  const [filteredTickets, setFilteredTickets] = useState([]);
+  
+  // State
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
-  const [selectedTicket, setSelectedTicket] = useState(null);
-  const [sortField, setSortField] = useState("registeredAt");
-  const [sortDirection, setSortDirection] = useState("desc");
+  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+  
+  const [sortField, setSortField] = useState<keyof Ticket>("registeredAt");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [showEmailModal, setShowEmailModal] = useState(false);
+  
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
@@ -70,202 +66,62 @@ const AdminVerify = () => {
     sendCustomEmail
   } = useBulkOperations(tickets, setTickets);
 
-  // Sample data for demonstration
+  // 1. Fetch Data
   useEffect(() => {
-    const sampleTickets = [
-      {
-        id: 1,
-        ticketId: "R63T123456",
-        fullName: "John Adebayo",
-        age: "15",
-        category: "teens",
-        gender: "male",
-        phone: "+234 800 123 4567",
-        email: "john.adebayo@example.com",
-        province: "Province 1",
-        zone: "Zone 1",
-        area: "Area 1",
-        parish: "RCCG Jesus Palace Parish",
-        department: "Teens Church",
-        medicalConditions: "None",
-        medications: "None",
-        dietaryRestrictions: "none",
-        emergencyContact: "Mrs. Adebayo",
-        emergencyPhone: "+234 800 987 6543",
-        emergencyRelationship: "Mother",
-        parentName: "Mr. & Mrs. Adebayo",
-        parentEmail: "parents@example.com",
-        parentPhone: "+234 800 987 6543",
-        parentRelationship: "parents",
-        status: "pending",
-        registeredAt: "2024-01-15T10:30:00Z"
-      },
-      {
-        id: 2,
-        ticketId: "R63T123457",
-        fullName: "Sarah Johnson",
-        age: "12",
-        category: "pre_teens",
-        gender: "female",
-        phone: "+234 800 123 4568",
-        email: "sarah.j@example.com",
-        province: "Province 2",
-        zone: "Zone 2",
-        area: "Area 2",
-        parish: "RCCG Grace Tabernacle",
-        department: "Children Church",
-        medicalConditions: "Asthma - uses inhaler",
-        medications: "Ventolin inhaler",
-        dietaryRestrictions: "none",
-        emergencyContact: "Dr. Johnson",
-        emergencyPhone: "+234 800 987 6544",
-        emergencyRelationship: "Father",
-        parentName: "Dr. Johnson",
-        parentEmail: "dr.johnson@example.com",
-        parentPhone: "+234 800 987 6544",
-        parentRelationship: "father",
-        status: "approved",
-        registeredAt: "2024-01-14T14:20:00Z"
-      },
-      {
-        id: 3,
-        ticketId: "R63T123458",
-        fullName: "Michael Brown",
-        age: "17",
-        category: "super_teens",
-        gender: "male",
-        phone: "+234 800 123 4569",
-        email: "michael.b@example.com",
-        province: "Province 1",
-        zone: "Zone 3",
-        area: "Area 1",
-        parish: "RCCG Victory Cathedral",
-        department: "Media",
-        medicalConditions: "None",
-        medications: "None",
-        dietaryRestrictions: "vegetarian",
-        emergencyContact: "Mrs. Brown",
-        emergencyPhone: "+234 800 987 6545",
-        emergencyRelationship: "Mother",
-        parentName: "Mr. Brown",
-        parentEmail: "brown.family@example.com",
-        parentPhone: "+234 800 987 6545",
-        parentRelationship: "father",
-        status: "rejected",
-        registeredAt: "2024-01-13T09:15:00Z"
-      },
-      {
-        id: 4,
-        ticketId: "R63T123459",
-        fullName: "Grace Williams",
-        age: "8",
-        category: "children_6_8",
-        gender: "female",
-        phone: "+234 800 123 4570",
-        email: "grace.w@example.com",
-        province: "Province 3",
-        zone: "Zone 1",
-        area: "Area 3",
-        parish: "RCCG Living Spring Parish",
-        department: "Children Church",
-        medicalConditions: "Peanut allergy",
-        medications: "EpiPen",
-        dietaryRestrictions: "allergies",
-        emergencyContact: "Mr. Williams",
-        emergencyPhone: "+234 800 987 6546",
-        emergencyRelationship: "Father",
-        parentName: "Mr. Williams",
-        parentEmail: "williams@example.com",
-        parentPhone: "+234 800 987 6546",
-        parentRelationship: "father",
-        status: "pending",
-        registeredAt: "2024-01-16T11:45:00Z"
-      },
-      {
-        id: 5,
-        ticketId: "R63T123460",
-        fullName: "David Thompson",
-        age: "16",
-        category: "teens",
-        gender: "male",
-        phone: "+234 800 123 4571",
-        email: "david.t@example.com",
-        province: "Province 1",
-        zone: "Zone 2",
-        area: "Area 1",
-        parish: "RCCG King's Court",
-        department: "Teens Church",
-        medicalConditions: "None",
-        medications: "None",
-        dietaryRestrictions: "none",
-        emergencyContact: "Mrs. Thompson",
-        emergencyPhone: "+234 800 987 6547",
-        emergencyRelationship: "Mother",
-        parentName: "Mrs. Thompson",
-        parentEmail: "thompson@example.com",
-        parentPhone: "+234 800 987 6547",
-        parentRelationship: "mother",
-        status: "pending",
-        registeredAt: "2024-01-17T08:20:00Z"
+    const fetchTickets = async () => {
+      try {
+        setIsLoading(true);
+        const data = await ticketService.getAllTickets();
+        setTickets(data);
+      } catch (error) {
+        toast.error("Failed to load tickets");
+        console.error(error);
+      } finally {
+        setIsLoading(false);
       }
-    ];
+    };
 
-    setTickets(sampleTickets);
-    setFilteredTickets(sampleTickets);
-    calculateStats(sampleTickets);
+    fetchTickets();
   }, []);
 
-  const calculateStats = (ticketsList) => {
-    const stats = {
-      total: ticketsList.length,
-      pending: ticketsList.filter(t => t.status === 'pending').length,
-      approved: ticketsList.filter(t => t.status === 'approved').length,
-      rejected: ticketsList.filter(t => t.status === 'rejected').length
-    };
-    setStats(stats);
-  };
+  // 2. Filter & Stats Logic
+  useEffect(() => {
+    let result = tickets;
 
-  const handleSearch = (e) => {
-    const term = e.target.value.toLowerCase();
-    setSearchTerm(term);
-    filterTickets(term, statusFilter, categoryFilter);
-  };
-
-  const handleStatusFilter = (status) => {
-    setStatusFilter(status);
-    filterTickets(searchTerm, status, categoryFilter);
-  };
-
-  const handleCategoryFilter = (category) => {
-    setCategoryFilter(category);
-    filterTickets(searchTerm, statusFilter, category);
-  };
-
-  const filterTickets = (search, status, category) => {
-    let filtered = tickets;
-
-    if (search) {
-      filtered = filtered.filter(ticket =>
-        ticket.fullName.toLowerCase().includes(search) ||
-        ticket.ticketId.toLowerCase().includes(search) ||
-        ticket.email.toLowerCase().includes(search) ||
-        ticket.parish.toLowerCase().includes(search)
+    // Search
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(ticket =>
+        ticket.fullName.toLowerCase().includes(term) ||
+        ticket.ticketId.toLowerCase().includes(term) ||
+        ticket.email.toLowerCase().includes(term) ||
+        ticket.parish.toLowerCase().includes(term)
       );
     }
 
-    if (status !== "all") {
-      filtered = filtered.filter(ticket => ticket.status === status);
+    // Status Filter
+    if (statusFilter !== "all") {
+      result = result.filter(ticket => ticket.status === statusFilter);
     }
 
-    if (category !== "all") {
-      filtered = filtered.filter(ticket => ticket.category === category);
+    // Category Filter
+    if (categoryFilter !== "all") {
+      result = result.filter(ticket => ticket.category === categoryFilter);
     }
 
-    setFilteredTickets(filtered);
-    calculateStats(filtered);
-  };
+    setFilteredTickets(result);
 
-  const handleSort = (field) => {
+    setStats({
+      total: tickets.length,
+      pending: tickets.filter(t => t.status === 'pending').length,
+      approved: tickets.filter(t => t.status === 'approved').length,
+      rejected: tickets.filter(t => t.status === 'rejected').length
+    });
+
+  }, [tickets, searchTerm, statusFilter, categoryFilter]);
+
+  // 3. Sorting Logic
+  const handleSort = (field: keyof Ticket) => {
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
@@ -278,74 +134,38 @@ const AdminVerify = () => {
     const aValue = a[sortField];
     const bValue = b[sortField];
     
-    if (sortDirection === "asc") {
-      return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
-    } else {
-      return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
-    }
+    if (aValue === undefined || bValue === undefined) return 0;
+    if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
+    if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
+    return 0;
   });
 
-  const handleApprove = (ticketId) => {
-    setTickets(prev => prev.map(ticket =>
-      ticket.id === ticketId ? { ...ticket, status: "approved" } : ticket
-    ));
-    setFilteredTickets(prev => prev.map(ticket =>
-      ticket.id === ticketId ? { ...ticket, status: "approved" } : ticket
-    ));
-    calculateStats(filteredTickets.map(ticket =>
-      ticket.id === ticketId ? { ...ticket, status: "approved" } : ticket
-    ));
-  };
-
-  const handleReject = (ticketId) => {
-    setTickets(prev => prev.map(ticket =>
-      ticket.id === ticketId ? { ...ticket, status: "rejected" } : ticket
-    ));
-    setFilteredTickets(prev => prev.map(ticket =>
-      ticket.id === ticketId ? { ...ticket, status: "rejected" } : ticket
-    ));
-    calculateStats(filteredTickets.map(ticket =>
-      ticket.id === ticketId ? { ...ticket, status: "rejected" } : ticket
-    ));
-  };
-
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'approved':
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case 'pending':
-        return <Clock className="w-4 h-4 text-yellow-500" />;
-      case 'rejected':
-        return <XCircle className="w-4 h-4 text-red-500" />;
-      default:
-        return <Clock className="w-4 h-4 text-yellow-500" />;
+  // 4. Action Handlers
+  const handleApprove = async (id: number) => {
+    try {
+      setTickets(prev => prev.map(t => t.id === id ? { ...t, status: "approved" } : t));
+      toast.success("Ticket Approved");
+      await ticketService.updateTicketStatus(id, "approved");
+    } catch (err) {
+      toast.error("Failed to approve ticket");
     }
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'approved':
-        return "bg-green-100 text-green-800";
-      case 'pending':
-        return "bg-yellow-100 text-yellow-800";
-      case 'rejected':
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-yellow-100 text-yellow-800";
+  const handleReject = async (id: number) => {
+    if(!window.confirm("Are you sure you want to reject this ticket?")) return;
+    try {
+      setTickets(prev => prev.map(t => t.id === id ? { ...t, status: "rejected" } : t));
+      toast.success("Ticket Rejected");
+      await ticketService.updateTicketStatus(id, "rejected");
+    } catch (err) {
+      toast.error("Failed to reject ticket");
     }
   };
 
-  const getCategoryLabel = (category) => {
-    const categories = {
-      toddler: "Toddler",
-      children_6_8: "Children 6-8",
-      pre_teens: "Pre-Teens",
-      teens: "Teens",
-      super_teens: "Super Teens",
-      alumni: "Alumni",
-      teacher: "Teacher"
-    };
-    return categories[category] || category;
+  const handleEmailSend = async (subject: string, message: string, recipients: string) => {
+    await sendCustomEmail(subject, message, recipients);
+    setShowEmailModal(false);
+    toast.success("Emails sent successfully!");
   };
 
   const exportToCSV = () => {
@@ -371,51 +191,77 @@ const AdminVerify = () => {
     a.download = `rccg-tickets-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
+    toast.success("Export downloaded!");
   };
 
-  const handleEmailSend = async (subject, message, recipients) => {
-    await sendCustomEmail(subject, message, recipients);
-    setShowEmailModal(false);
+  // Helpers
+  const getCategoryLabel = (category: string) => {
+    const categories: Record<string, string> = {
+      toddler: "Toddler",
+      children_6_8: "Children 6-8",
+      pre_teens: "Pre-Teens",
+      teens: "Teens",
+      super_teens: "Super Teens",
+      alumni: "Alumni",
+      teacher: "Teacher"
+    };
+    return categories[category] || category;
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'approved': return <FaCheckCircle className="w-4 h-4 text-green-400" />;
+      case 'pending': return <FaExclamationTriangle className="w-4 h-4 text-yellow-400" />;
+      case 'rejected': return <FaTimes className="w-4 h-4 text-red-400" />;
+      default: return <FaExclamationTriangle className="w-4 h-4 text-yellow-400" />;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'approved': return "bg-green-500/20 text-green-300 border-green-500/30";
+      case 'pending': return "bg-yellow-500/20 text-yellow-300 border-yellow-500/30";
+      case 'rejected': return "bg-red-500/20 text-red-300 border-red-500/30";
+      default: return "bg-gray-500/20 text-gray-300";
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#1a0505] text-white">
       <Navbar />
       
-      <div className="pt-24 pb-16 px-6">
+      <div className="pt-28 pb-16 px-6">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           className="max-w-7xl mx-auto"
         >
           {/* Header */}
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8">
-            <div className="text-center lg:text-left mb-4 lg:mb-0">
-              <h1 className="text-4xl font-black text-gray-800 mb-2">
-                Admin <span className="text-gradient">Dashboard</span>
+          <div className="flex flex-col lg:flex-row justify-between items-end mb-8 border-b border-yellow-500/20 pb-6">
+            <div>
+              <h1 className="text-3xl font-black text-white">
+                ADMIN <span className="text-yellow-500">DASHBOARD</span>
               </h1>
-              <p className="text-gray-600 max-w-2xl">
-                Manage and verify participant registrations for {EVENT_DETAILS.title}
-              </p>
+              <p className="text-red-200/60 mt-1">Manage registrations for The Priceless Gift</p>
             </div>
             
-            <div className="flex items-center space-x-4">
+            <div className="flex gap-3 mt-4 lg:mt-0">
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setShowEmailModal(true)}
                 disabled={selectedTickets.size === 0}
-                className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg transition-colors"
+                className="flex items-center space-x-2 bg-blue-600/20 border border-blue-500/30 text-blue-300 px-4 py-2 rounded-lg hover:bg-blue-600/30 transition-colors disabled:opacity-50"
               >
-                <Mail className="w-4 h-4" />
-                <span>Email ({selectedTickets.size})</span>
+                <FaEnvelope className="w-4 h-4" />
+                <span>Broadcast ({selectedTickets.size})</span>
               </motion.button>
               
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={logout}
-                className="flex items-center space-x-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
+                className="flex items-center space-x-2 bg-red-600/20 border border-red-500/30 text-red-300 px-4 py-2 rounded-lg hover:bg-red-600/30 transition-colors"
               >
                 <FaSignOutAlt />
                 <span>Logout</span>
@@ -430,22 +276,22 @@ const AdminVerify = () => {
               animate={{ opacity: 1, height: "auto" }}
               className={`mb-6 p-4 rounded-lg border ${
                 operationResults.failed > 0 
-                  ? "bg-red-50 border-red-200 text-red-800"
-                  : "bg-green-50 border-green-200 text-green-800"
+                  ? "bg-red-900/20 border-red-500/30 text-red-200"
+                  : "bg-green-900/20 border-green-500/30 text-green-200"
               }`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   {operationResults.failed > 0 ? (
-                    <FaExclamationTriangle className="text-red-600" />
+                    <FaExclamationTriangle className="text-red-400" />
                   ) : (
-                    <FaCheckCircle className="text-green-600" />
+                    <FaCheckCircle className="text-green-400" />
                   )}
                   <div>
-                    <h4 className="font-semibold">
-                      {operationResults.action.replace('_', ' ').toUpperCase()} Completed
+                    <h4 className="font-bold">
+                      {operationResults.action.replace('_', ' ').toUpperCase()} COMPLETED
                     </h4>
-                    <p className="text-sm">
+                    <p className="text-sm opacity-80">
                       {operationResults.successful} successful, {operationResults.failed} failed
                       {operationResults.error && ` - ${operationResults.error}`}
                     </p>
@@ -453,7 +299,7 @@ const AdminVerify = () => {
                 </div>
                 <button
                   onClick={() => setOperationResults(null)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-white/40 hover:text-white"
                 >
                   <FaTimes />
                 </button>
@@ -466,12 +312,12 @@ const AdminVerify = () => {
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
-              className="card p-4 mb-6 bg-yellow-50 border border-yellow-200"
+              className="p-4 mb-6 bg-yellow-500/10 border border-yellow-500/30 rounded-xl"
             >
               <div className="flex flex-col sm:flex-row items-center justify-between space-y-3 sm:space-y-0">
                 <div className="flex items-center space-x-2">
-                  <FaUsers className="text-yellow-600" />
-                  <span className="font-semibold text-yellow-800">
+                  <FaUsers className="text-yellow-500" />
+                  <span className="font-bold text-yellow-100">
                     {selectedTickets.size} ticket(s) selected
                   </span>
                 </div>
@@ -481,7 +327,7 @@ const AdminVerify = () => {
                     value={bulkAction}
                     onChange={(e) => setBulkAction(e.target.value)}
                     disabled={isProcessing}
-                    className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50"
+                    className="bg-[#1a0505] border border-yellow-500/30 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-yellow-500 focus:border-transparent outline-none"
                   >
                     <option value="">Bulk Actions</option>
                     <option value="approve">Approve Selected</option>
@@ -495,20 +341,20 @@ const AdminVerify = () => {
                     whileTap={{ scale: 0.95 }}
                     onClick={handleBulkAction}
                     disabled={!bulkAction || isProcessing}
-                    className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
+                    className="bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 font-bold"
                   >
                     {isProcessing ? (
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                     ) : (
-                      <Send className="w-4 h-4" />
+                      <FaPaperPlane className="w-3 h-3" />
                     )}
-                    <span>{isProcessing ? "Processing..." : "Apply"}</span>
+                    <span>Apply</span>
                   </motion.button>
                   
                   <button
                     onClick={() => setSelectedTickets(new Set())}
                     disabled={isProcessing}
-                    className="text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
+                    className="text-white/60 hover:text-white transition-colors text-sm"
                   >
                     Clear
                   </button>
@@ -519,81 +365,45 @@ const AdminVerify = () => {
 
           {/* Statistics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <motion.div
-              whileHover={{ scale: 1.05 }}
-              className="card p-6 text-center"
-            >
-              <div className="flex items-center justify-center space-x-3 mb-3">
-                <Users className="w-8 h-8 text-blue-600" />
-                <div>
-                  <div className="text-2xl font-bold text-gray-800">{stats.total}</div>
-                  <div className="text-sm text-gray-600">Total Registrations</div>
-                </div>
-              </div>
-            </motion.div>
-
-            <motion.div
-              whileHover={{ scale: 1.05 }}
-              className="card p-6 text-center"
-            >
-              <div className="flex items-center justify-center space-x-3 mb-3">
-                <Clock className="w-8 h-8 text-yellow-600" />
-                <div>
-                  <div className="text-2xl font-bold text-gray-800">{stats.pending}</div>
-                  <div className="text-sm text-gray-600">Pending Approval</div>
-                </div>
-              </div>
-            </motion.div>
-
-            <motion.div
-              whileHover={{ scale: 1.05 }}
-              className="card p-6 text-center"
-            >
-              <div className="flex items-center justify-center space-x-3 mb-3">
-                <CheckCircle className="w-8 h-8 text-green-600" />
-                <div>
-                  <div className="text-2xl font-bold text-gray-800">{stats.approved}</div>
-                  <div className="text-sm text-gray-600">Approved</div>
-                </div>
-              </div>
-            </motion.div>
-
-            <motion.div
-              whileHover={{ scale: 1.05 }}
-              className="card p-6 text-center"
-            >
-              <div className="flex items-center justify-center space-x-3 mb-3">
-                <XCircle className="w-8 h-8 text-red-600" />
-                <div>
-                  <div className="text-2xl font-bold text-gray-800">{stats.rejected}</div>
-                  <div className="text-sm text-gray-600">Rejected</div>
-                </div>
-              </div>
-            </motion.div>
+            {[
+              { label: "Total", value: stats.total, color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20" },
+              { label: "Pending", value: stats.pending, color: "text-yellow-400", bg: "bg-yellow-500/10", border: "border-yellow-500/20" },
+              { label: "Approved", value: stats.approved, color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/20" },
+              { label: "Rejected", value: stats.rejected, color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20" },
+            ].map((stat) => (
+              <motion.div 
+                key={stat.label}
+                whileHover={{ scale: 1.02 }}
+                className={`${stat.bg} ${stat.border} border rounded-2xl p-6 backdrop-blur-sm shadow-lg`}
+              >
+                <div className={`text-3xl font-black ${stat.color} mb-1`}>{stat.value}</div>
+                <div className="text-white/60 text-xs uppercase font-bold tracking-widest">{stat.label}</div>
+              </motion.div>
+            ))}
           </div>
 
           {/* Filters and Search */}
-          <div className="card p-6 mb-8">
+          <div className="glass-effect p-6 mb-8 rounded-2xl border border-white/5">
             <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
               {/* Search */}
               <div className="relative flex-1 w-full">
-                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <FaSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white/30" />
                 <input
                   type="text"
-                  placeholder="Search by name, ticket ID, email, or church..."
+                  placeholder="Search by name, ID, email..."
                   value={searchTerm}
-                  onChange={handleSearch}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-white dark:bg-[#0f0202]/50 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white ..."
                 />
               </div>
 
               {/* Status Filter */}
               <div className="flex items-center space-x-2">
-                <FaFilter className="text-gray-400" />
+                <FaFilter className="text-white/40" />
                 <select
                   value={statusFilter}
-                  onChange={(e) => handleStatusFilter(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="bg-white dark:bg-[#0f0202]/50 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white ..."
                 >
                   <option value="all">All Status</option>
                   <option value="pending">Pending</option>
@@ -604,11 +414,11 @@ const AdminVerify = () => {
 
               {/* Category Filter */}
               <div className="flex items-center space-x-2">
-                <Users className="w-4 h-4 text-gray-400" />
+                <FaUsers className="text-white/40" />
                 <select
                   value={categoryFilter}
-                  onChange={(e) => handleCategoryFilter(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="bg-[#0f0202]/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-yellow-500/50 outline-none"
                 >
                   <option value="all">All Categories</option>
                   <option value="toddler">Toddler</option>
@@ -626,169 +436,137 @@ const AdminVerify = () => {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={exportToCSV}
-                className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
+                className="flex items-center space-x-2 bg-green-700/80 hover:bg-green-600 text-white px-6 py-3 rounded-xl transition-colors font-bold shadow-lg"
               >
                 <FaDownload />
-                <span>Export CSV</span>
+                <span>Export</span>
               </motion.button>
             </div>
           </div>
 
           {/* Tickets Table */}
-          <div className="card p-6">
+          <div className="glass-effect rounded-2xl overflow-hidden border border-white/5 shadow-2xl">
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="py-3 px-4 w-12">
-                      <input
-                        type="checkbox"
-                        onChange={handleSelectAll}
-                        checked={selectedTickets.size === filteredTickets.length && filteredTickets.length > 0}
-                        className="rounded border-gray-300 text-green-600 focus:ring-green-500"
-                      />
-                    </th>
-                    <th 
-                      className="text-left py-3 px-4 cursor-pointer"
-                      onClick={() => handleSort("ticketId")}
-                    >
-                      <div className="flex items-center space-x-1">
-                        <span>Ticket ID</span>
-                        {sortField === "ticketId" && (
-                          sortDirection === "asc" ? <FaSortUp /> : <FaSortDown />
-                        )}
-                      </div>
-                    </th>
-                    <th 
-                      className="text-left py-3 px-4 cursor-pointer"
-                      onClick={() => handleSort("fullName")}
-                    >
-                      <div className="flex items-center space-x-1">
-                        <span>Participant</span>
-                        {sortField === "fullName" && (
-                          sortDirection === "asc" ? <FaSortUp /> : <FaSortDown />
-                        )}
-                      </div>
-                    </th>
-                    <th className="text-left py-3 px-4">Category</th>
-                    <th className="text-left py-3 px-4">Church</th>
-                    <th 
-                      className="text-left py-3 px-4 cursor-pointer"
-                      onClick={() => handleSort("status")}
-                    >
-                      <div className="flex items-center space-x-1">
-                        <span>Status</span>
-                        {sortField === "status" && (
-                          sortDirection === "asc" ? <FaSortUp /> : <FaSortDown />
-                        )}
-                      </div>
-                    </th>
-                    <th 
-                      className="text-left py-3 px-4 cursor-pointer"
-                      onClick={() => handleSort("registeredAt")}
-                    >
-                      <div className="flex items-center space-x-1">
-                        <span>Registered</span>
-                        {sortField === "registeredAt" && (
-                          sortDirection === "asc" ? <FaSortUp /> : <FaSortDown />
-                        )}
-                      </div>
-                    </th>
-                    <th className="text-left py-3 px-4">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedTickets.map((ticket) => (
-                    <motion.tr
-                      key={ticket.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="border-b border-gray-100 hover:bg-gray-50"
-                    >
-                      <td className="py-3 px-4">
+              {isLoading ? (
+                <div className="p-8 space-y-4 animate-pulse">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <div key={i} className="h-16 bg-white/5 rounded-lg w-full"></div>
+                  ))}
+                </div>
+              ) : (
+                <table className="w-full">
+                  <thead className="bg-gray-100 dark:bg-[#0f0202]/80 text-gray-500 dark:text-white/50 ...">
+                  <tr className="hover:bg-gray-50 dark:hover:bg-white/5 ...">
+                      <th className="py-4 px-6 w-12">
                         <input
                           type="checkbox"
-                          checked={selectedTickets.has(ticket.id)}
-                          onChange={(e) => handleSelectTicket(ticket.id, e.target.checked)}
-                          className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                          onChange={handleSelectAll}
+                          checked={selectedTickets.size === filteredTickets.length && filteredTickets.length > 0}
+                          className="rounded bg-white/10 border-white/20 text-yellow-500 focus:ring-yellow-500"
                         />
-                      </td>
-                      <td className="py-3 px-4 font-mono text-sm text-gray-600">
-                        {ticket.ticketId}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div>
-                          <div className="font-semibold text-gray-800">{ticket.fullName}</div>
-                          <div className="text-sm text-gray-500 flex items-center">
-                            <FaUser className="mr-1" />
-                            {ticket.age} yrs • {ticket.gender}
+                      </th>
+                      <th className="text-left py-4 px-6 cursor-pointer hover:text-white transition-colors" onClick={() => handleSort("ticketId")}>
+                        <div className="flex items-center space-x-1"><span>ID</span>{sortField === "ticketId" && (sortDirection === "asc" ? <FaSortUp /> : <FaSortDown />)}</div>
+                      </th>
+                      <th className="text-left py-4 px-6 cursor-pointer hover:text-white transition-colors" onClick={() => handleSort("fullName")}>
+                        <div className="flex items-center space-x-1"><span>Participant</span>{sortField === "fullName" && (sortDirection === "asc" ? <FaSortUp /> : <FaSortDown />)}</div>
+                      </th>
+                      <th className="text-left py-4 px-6">Category</th>
+                      <th className="text-left py-4 px-6">Church</th>
+                      <th className="text-left py-4 px-6 cursor-pointer hover:text-white transition-colors" onClick={() => handleSort("status")}>
+                        <div className="flex items-center space-x-1"><span>Status</span>{sortField === "status" && (sortDirection === "asc" ? <FaSortUp /> : <FaSortDown />)}</div>
+                      </th>
+                      <th className="text-right py-4 px-6">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-white/5">
+                    {sortedTickets.map((ticket) => (
+                      <motion.tr
+                        key={ticket.id}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="hover:bg-white/5 transition-colors group"
+                      >
+                        <td className="py-4 px-6">
+                          <input
+                            type="checkbox"
+                            checked={selectedTickets.has(ticket.id)}
+                            onChange={(e) => handleSelectTicket(ticket.id, e.target.checked)}
+                            className="rounded bg-white/10 border-white/20 text-yellow-500 focus:ring-yellow-500"
+                          />
+                        </td>
+                        <td className="py-4 px-6 font-mono text-sm text-yellow-500/70">{ticket.ticketId}</td>
+                        <td className="py-4 px-6">
+                          <div>
+                            <div className="font-bold text-white">{ticket.fullName}</div>
+                            <div className="text-xs text-white/40 flex items-center mt-1">
+                              <FaUser className="mr-1" />
+                              {ticket.age} yrs • {ticket.gender}
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
-                          {getCategoryLabel(ticket.category)}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="text-sm">
-                          <div className="font-medium text-gray-800">{ticket.parish}</div>
-                          <div className="text-gray-500 text-xs">{ticket.area}</div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs ${getStatusColor(ticket.status)}`}>
-                          {getStatusIcon(ticket.status)}
-                          <span className="capitalize">{ticket.status}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-sm text-gray-600">
-                        {new Date(ticket.registeredAt).toLocaleDateString()}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center space-x-2">
-                          <motion.button
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={() => setSelectedTicket(ticket)}
-                            className="p-1 text-blue-600 hover:text-blue-800 transition-colors"
-                            title="View Details"
-                          >
-                            <FaEye />
-                          </motion.button>
-                          
-                          {ticket.status === "pending" && (
-                            <>
-                              <motion.button
-                                whileHover={{ scale: 1.1 }}
-                                whileTap={{ scale: 0.9 }}
-                                onClick={() => handleApprove(ticket.id)}
-                                className="p-1 text-green-600 hover:text-green-800 transition-colors"
-                                title="Approve"
-                              >
-                                <FaCheck />
-                              </motion.button>
-                              <motion.button
-                                whileHover={{ scale: 1.1 }}
-                                whileTap={{ scale: 0.9 }}
-                                onClick={() => handleReject(ticket.id)}
-                                className="p-1 text-red-600 hover:text-red-800 transition-colors"
-                                title="Reject"
-                              >
-                                <FaTimes />
-                              </motion.button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </motion.tr>
-                  ))}
-                </tbody>
-              </table>
+                        </td>
+                        <td className="py-4 px-6">
+                          <span className="inline-block px-3 py-1 bg-blue-500/10 text-blue-300 border border-blue-500/20 rounded-full text-xs font-medium">
+                            {getCategoryLabel(ticket.category)}
+                          </span>
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="text-sm text-white/80">
+                            <div className="font-medium">{ticket.parish}</div>
+                            <div className="text-white/40 text-xs">{ticket.area}</div>
+                          </div>
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-bold uppercase border ${getStatusColor(ticket.status)}`}>
+                            {getStatusIcon(ticket.status)}
+                            <span className="capitalize">{ticket.status}</span>
+                          </div>
+                        </td>
+                        <td className="py-4 px-6 text-right">
+                          <div className="flex items-center justify-end space-x-2">
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => setSelectedTicket(ticket)}
+                              className="p-2 bg-white/5 text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                              title="View Details"
+                            >
+                              <FaEye />
+                            </motion.button>
+                            
+                            {ticket.status === "pending" && (
+                              <>
+                                <motion.button
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={() => handleApprove(ticket.id)}
+                                  className="p-2 bg-green-500/10 text-green-400 hover:bg-green-500/20 rounded-lg transition-colors"
+                                  title="Approve"
+                                >
+                                  <FaCheck />
+                                </motion.button>
+                                <motion.button
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={() => handleReject(ticket.id)}
+                                  className="p-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
+                                  title="Reject"
+                                >
+                                  <FaTimes />
+                                </motion.button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
 
-              {sortedTickets.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  No tickets found matching your criteria.
+              {!isLoading && sortedTickets.length === 0 && (
+                <div className="text-center py-12 text-white/30">
+                  <p className="text-lg">No tickets found matching your criteria.</p>
                 </div>
               )}
             </div>
@@ -809,137 +587,95 @@ const AdminVerify = () => {
 
       {/* Ticket Detail Modal */}
       {selectedTicket && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            className="bg-[#1a0505] border border-yellow-500/30 rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl relative"
           >
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-bold text-gray-800">Ticket Details</h3>
+            <div className="flex justify-between items-center mb-8 border-b border-white/10 pb-4">
+              <h3 className="text-2xl font-black text-white">TICKET <span className="text-yellow-500">DETAILS</span></h3>
               <button
                 onClick={() => setSelectedTicket(null)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="text-white/40 hover:text-white transition-colors"
               >
                 <FaTimes className="w-6 h-6" />
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-white">
               {/* Personal Information */}
               <div className="space-y-4">
-                <h4 className="font-semibold text-gray-800 border-b pb-2">Personal Information</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Full Name:</span>
-                    <span className="font-semibold">{selectedTicket.fullName}</span>
+                <h4 className="font-bold text-yellow-500/80 uppercase text-xs tracking-wider border-b border-white/10 pb-2">Personal Information</h4>
+                <div className="space-y-3">
+                  <div className="flex justify-between border-b border-white/5 pb-2">
+                    <span className="text-white/50">Full Name:</span>
+                    <span className="font-semibold text-right">{selectedTicket.fullName}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Age:</span>
-                    <span className="font-semibold">{selectedTicket.age} years</span>
+                  <div className="flex justify-between border-b border-white/5 pb-2">
+                    <span className="text-white/50">Age:</span>
+                    <span className="font-semibold text-right">{selectedTicket.age} years</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Category:</span>
-                    <span className="font-semibold">{getCategoryLabel(selectedTicket.category)}</span>
+                  <div className="flex justify-between border-b border-white/5 pb-2">
+                    <span className="text-white/50">Category:</span>
+                    <span className="font-semibold text-right">{getCategoryLabel(selectedTicket.category)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Gender:</span>
-                    <span className="font-semibold capitalize">{selectedTicket.gender}</span>
+                  <div className="flex justify-between border-b border-white/5 pb-2">
+                    <span className="text-white/50">Gender:</span>
+                    <span className="font-semibold text-right capitalize">{selectedTicket.gender}</span>
                   </div>
                 </div>
               </div>
 
               {/* Contact Information */}
               <div className="space-y-4">
-                <h4 className="font-semibold text-gray-800 border-b pb-2">Contact Information</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Phone:</span>
-                    <span className="font-semibold">{selectedTicket.phone}</span>
+                <h4 className="font-bold text-yellow-500/80 uppercase text-xs tracking-wider border-b border-white/10 pb-2">Contact Information</h4>
+                <div className="space-y-3">
+                  <div className="flex justify-between border-b border-white/5 pb-2">
+                    <span className="text-white/50">Phone:</span>
+                    <span className="font-semibold text-right">{selectedTicket.phone}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Email:</span>
-                    <span className="font-semibold">{selectedTicket.email}</span>
+                  <div className="flex justify-between border-b border-white/5 pb-2">
+                    <span className="text-white/50">Email:</span>
+                    <span className="font-semibold text-right truncate max-w-[200px]">{selectedTicket.email}</span>
                   </div>
                 </div>
               </div>
 
               {/* Church Information */}
               <div className="space-y-4">
-                <h4 className="font-semibold text-gray-800 border-b pb-2">Church Information</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Province:</span>
-                    <span className="font-semibold">{selectedTicket.province}</span>
+                <h4 className="font-bold text-yellow-500/80 uppercase text-xs tracking-wider border-b border-white/10 pb-2">Church Information</h4>
+                <div className="space-y-3">
+                  <div className="flex justify-between border-b border-white/5 pb-2">
+                    <span className="text-white/50">Province:</span>
+                    <span className="font-semibold text-right">{selectedTicket.province}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Zone:</span>
-                    <span className="font-semibold">{selectedTicket.zone}</span>
+                  <div className="flex justify-between border-b border-white/5 pb-2">
+                    <span className="text-white/50">Zone:</span>
+                    <span className="font-semibold text-right">{selectedTicket.zone}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Area:</span>
-                    <span className="font-semibold">{selectedTicket.area}</span>
+                  <div className="flex justify-between border-b border-white/5 pb-2">
+                    <span className="text-white/50">Area:</span>
+                    <span className="font-semibold text-right">{selectedTicket.area}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Parish:</span>
-                    <span className="font-semibold">{selectedTicket.parish}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Medical Information */}
-              <div className="space-y-4">
-                <h4 className="font-semibold text-gray-800 border-b pb-2">Medical Information</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Conditions:</span>
-                    <span className="font-semibold">{selectedTicket.medicalConditions || "None"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Medications:</span>
-                    <span className="font-semibold">{selectedTicket.medications || "None"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Dietary:</span>
-                    <span className="font-semibold capitalize">{selectedTicket.dietaryRestrictions || "No restrictions"}</span>
+                  <div className="flex justify-between border-b border-white/5 pb-2">
+                    <span className="text-white/50">Parish:</span>
+                    <span className="font-semibold text-right">{selectedTicket.parish}</span>
                   </div>
                 </div>
               </div>
 
               {/* Parent Information */}
               <div className="space-y-4">
-                <h4 className="font-semibold text-gray-800 border-b pb-2">Parent/Guardian</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Name:</span>
-                    <span className="font-semibold">{selectedTicket.parentName}</span>
+                <h4 className="font-bold text-yellow-500/80 uppercase text-xs tracking-wider border-b border-white/10 pb-2">Parent/Guardian</h4>
+                <div className="space-y-3">
+                  <div className="flex justify-between border-b border-white/5 pb-2">
+                    <span className="text-white/50">Name:</span>
+                    <span className="font-semibold text-right">{selectedTicket.parentName}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Email:</span>
-                    <span className="font-semibold">{selectedTicket.parentEmail}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Phone:</span>
-                    <span className="font-semibold">{selectedTicket.parentPhone}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Emergency Contact */}
-              <div className="space-y-4">
-                <h4 className="font-semibold text-gray-800 border-b pb-2">Emergency Contact</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Name:</span>
-                    <span className="font-semibold">{selectedTicket.emergencyContact}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Phone:</span>
-                    <span className="font-semibold">{selectedTicket.emergencyPhone}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Relationship:</span>
-                    <span className="font-semibold capitalize">{selectedTicket.emergencyRelationship}</span>
+                  <div className="flex justify-between border-b border-white/5 pb-2">
+                    <span className="text-white/50">Phone:</span>
+                    <span className="font-semibold text-right">{selectedTicket.parentPhone}</span>
                   </div>
                 </div>
               </div>
@@ -947,7 +683,7 @@ const AdminVerify = () => {
 
             {/* Action Buttons */}
             {selectedTicket.status === "pending" && (
-              <div className="flex space-x-4 mt-6 pt-6 border-t border-gray-200">
+              <div className="flex space-x-4 mt-8 pt-6 border-t border-white/10">
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -955,9 +691,9 @@ const AdminVerify = () => {
                     handleApprove(selectedTicket.id);
                     setSelectedTicket(null);
                   }}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-lg transition-colors font-semibold"
+                  className="flex-1 bg-green-600 hover:bg-green-500 text-white py-3 px-6 rounded-xl transition-colors font-bold shadow-lg"
                 >
-                  Approve Registration
+                  APPROVE
                 </motion.button>
                 <motion.button
                   whileHover={{ scale: 1.05 }}
@@ -966,9 +702,9 @@ const AdminVerify = () => {
                     handleReject(selectedTicket.id);
                     setSelectedTicket(null);
                   }}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 px-6 rounded-lg transition-colors font-semibold"
+                  className="flex-1 bg-red-600 hover:bg-red-500 text-white py-3 px-6 rounded-xl transition-colors font-bold shadow-lg"
                 >
-                  Reject Registration
+                  REJECT
                 </motion.button>
               </div>
             )}

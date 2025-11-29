@@ -1,15 +1,23 @@
+// frontend/src/hooks/useBulkOperations.ts
 import { useState } from 'react';
 import { emailService } from '../utils/emailService';
 import { EVENT_DETAILS } from '../constants/eventDetails';
+import { Ticket, OperationResult } from '../types';
 
-export const useBulkOperations = (tickets, setTickets) => {
-  const [selectedTickets, setSelectedTickets] = useState(new Set());
-  const [bulkAction, setBulkAction] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [operationResults, setOperationResults] = useState(null);
+export const useBulkOperations = (
+  tickets: Ticket[], 
+  setTickets: React.Dispatch<React.SetStateAction<Ticket[]>>
+) => {
+  // Explicitly type the state to allow number values (Ticket IDs)
+  const [selectedTickets, setSelectedTickets] = useState<Set<number>>(new Set());
+  const [bulkAction, setBulkAction] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  
+  // FIX: Explicitly type this state so it can hold the result object or null
+  const [operationResults, setOperationResults] = useState<OperationResult | null>(null);
 
   // Select all tickets
-  const handleSelectAll = (e) => {
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
       setSelectedTickets(new Set(tickets.map(ticket => ticket.id)));
     } else {
@@ -18,7 +26,7 @@ export const useBulkOperations = (tickets, setTickets) => {
   };
 
   // Select individual ticket
-  const handleSelectTicket = (ticketId, checked) => {
+  const handleSelectTicket = (ticketId: number, checked: boolean) => {
     const newSelected = new Set(selectedTickets);
     if (checked) {
       newSelected.add(ticketId);
@@ -35,11 +43,12 @@ export const useBulkOperations = (tickets, setTickets) => {
     setIsProcessing(true);
     setOperationResults(null);
 
-    const ticketIds = Array.from(selectedTickets);
+    // Filter to get the full ticket objects for the selected IDs
     const selectedTicketsData = tickets.filter(ticket => selectedTickets.has(ticket.id));
 
     try {
-      let results = {
+      // Initialize results with the OperationResult interface
+      let results: OperationResult = {
         action: bulkAction,
         total: selectedTickets.size,
         successful: 0,
@@ -49,7 +58,7 @@ export const useBulkOperations = (tickets, setTickets) => {
 
       switch (bulkAction) {
         case "approve":
-          // Update tickets status
+          // Update tickets status in local state
           setTickets(prev => prev.map(ticket =>
             selectedTickets.has(ticket.id) ? { ...ticket, status: "approved" } : ticket
           ));
@@ -57,8 +66,8 @@ export const useBulkOperations = (tickets, setTickets) => {
           // Send approval emails
           const approvalResults = await emailService.sendBulkEmails(
             selectedTicketsData.map(t => ({ id: t.id, email: t.email, name: t.fullName })),
-            emailService.templates.approval('Participant', t.ticketId, EVENT_DETAILS).subject,
-            emailService.templates.approval(t.fullName, t.ticketId, EVENT_DETAILS).message
+            emailService.templates.approval('Participant', 'BULK', EVENT_DETAILS).subject,
+            emailService.templates.approval('Participant', 'BULK', EVENT_DETAILS).message
           );
           
           results.successful = approvalResults.successful;
@@ -67,7 +76,7 @@ export const useBulkOperations = (tickets, setTickets) => {
           break;
 
         case "reject":
-          // Update tickets status
+          // Update tickets status in local state
           setTickets(prev => prev.map(ticket =>
             selectedTickets.has(ticket.id) ? { ...ticket, status: "rejected" } : ticket
           ));
@@ -75,8 +84,8 @@ export const useBulkOperations = (tickets, setTickets) => {
           // Send rejection emails
           const rejectionResults = await emailService.sendBulkEmails(
             selectedTicketsData.map(t => ({ id: t.id, email: t.email, name: t.fullName })),
-            emailService.templates.rejection('Participant', t.ticketId, EVENT_DETAILS).subject,
-            emailService.templates.rejection(t.fullName, t.ticketId, EVENT_DETAILS).message
+            emailService.templates.rejection('Participant', 'BULK', EVENT_DETAILS).subject,
+            emailService.templates.rejection('Participant', 'BULK', EVENT_DETAILS).message
           );
           
           results.successful = rejectionResults.successful;
@@ -85,8 +94,9 @@ export const useBulkOperations = (tickets, setTickets) => {
           break;
 
         case "delete":
-          // Remove tickets
+          // Remove tickets from local state
           setTickets(prev => prev.filter(ticket => !selectedTickets.has(ticket.id)));
+          
           results.successful = selectedTickets.size;
           results.details = selectedTicketsData.map(t => ({
             success: true,
@@ -100,8 +110,8 @@ export const useBulkOperations = (tickets, setTickets) => {
           // Send reminder emails
           const reminderResults = await emailService.sendBulkEmails(
             selectedTicketsData.map(t => ({ id: t.id, email: t.email, name: t.fullName })),
-            emailService.templates.reminder('Participant', t.ticketId, EVENT_DETAILS).subject,
-            emailService.templates.reminder(t.fullName, t.ticketId, EVENT_DETAILS).message
+            emailService.templates.reminder('Participant', 'BULK', EVENT_DETAILS).subject,
+            emailService.templates.reminder('Participant', 'BULK', EVENT_DETAILS).message
           );
           
           results.successful = reminderResults.successful;
@@ -114,13 +124,13 @@ export const useBulkOperations = (tickets, setTickets) => {
       setSelectedTickets(new Set());
       setBulkAction('');
 
-    } catch (error) {
+    } catch (error: any) {
       setOperationResults({
         action: bulkAction,
         total: selectedTickets.size,
         successful: 0,
         failed: selectedTickets.size,
-        error: error.message,
+        error: error.message || "An unknown error occurred",
         details: []
       });
     } finally {
@@ -129,11 +139,11 @@ export const useBulkOperations = (tickets, setTickets) => {
   };
 
   // Send custom email to selected tickets
-  const sendCustomEmail = async (subject, message, recipientType = 'selected') => {
+  const sendCustomEmail = async (subject: string, message: string, recipientType = 'selected') => {
     setIsProcessing(true);
     setOperationResults(null);
 
-    let recipients = [];
+    let recipients: Ticket[] = [];
     
     switch (recipientType) {
       case 'selected':
@@ -165,13 +175,13 @@ export const useBulkOperations = (tickets, setTickets) => {
         details: results.results
       });
 
-    } catch (error) {
+    } catch (error: any) {
       setOperationResults({
         action: 'custom_email',
         total: recipients.length,
         successful: 0,
         failed: recipients.length,
-        error: error.message,
+        error: error.message || "An unknown error occurred",
         details: []
       });
     } finally {

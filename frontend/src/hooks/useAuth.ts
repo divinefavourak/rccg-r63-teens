@@ -1,7 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-export const useAuth = () => {
+// Define the shape of your Auth Context/Hook return value
+interface UseAuthReturn {
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  login: (username: string, password: string) => Promise<boolean>;
+  logout: () => void;
+  checkAuth: () => void;
+}
+
+export const useAuth = (): UseAuthReturn => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
@@ -17,15 +26,13 @@ export const useAuth = () => {
     if (auth && loginTime) {
       const loginDate = new Date(loginTime);
       const now = new Date();
-      const hoursDiff = (now - loginDate) / (1000 * 60 * 60);
+      const hoursDiff = (now.getTime() - loginDate.getTime()) / (1000 * 60 * 60);
       
       if (hoursDiff < 24) {
         setIsAuthenticated(true);
       } else {
         // Session expired
-        localStorage.removeItem("adminAuth");
-        localStorage.removeItem("adminLoginTime");
-        setIsAuthenticated(false);
+        logout();
       }
     } else {
       setIsAuthenticated(false);
@@ -34,9 +41,8 @@ export const useAuth = () => {
     setIsLoading(false);
   };
 
-  const login = async (username, password) => {
-    // Admin credentials
-    console.log('Login attempt with:', username);
+  const login = async (username: string, password: string): Promise<boolean> => {
+    // Admin credentials (In a real app, verify against backend)
     const ADMIN_CREDENTIALS = {
       username: "admin@rccg63",
       password: "R63Teens2025!"
@@ -52,11 +58,6 @@ export const useAuth = () => {
       return true;
     }
     return false;
-    if (success) {
-        console.log('Login successful, setting auth state');
-        setIsAuthenticated(true);
-      }
-      return success;
   };
 
   const logout = () => {
