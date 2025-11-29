@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { FaLock, FaUser, FaEye, FaEyeSlash, FaChurch } from "react-icons/fa";
 import { useAuth } from "../hooks/useAuth";
 import toast from "react-hot-toast";
+import rccgLogo from "../assets/logo.jpg";
+import faithLogo from "../assets/faith_logo.jpg";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
@@ -56,14 +58,19 @@ const AdminLogin = () => {
       >
         <div className="glass-effect rounded-2xl shadow-2xl p-8 border border-yellow-500/30">
           <div className="text-center mb-8">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.2 }}
-              className="w-20 h-20 bg-gradient-to-br from-yellow-400 to-yellow-700 rounded-full flex items-center justify-center mx-auto mb-4 shadow-[0_0_20px_rgba(255,215,0,0.3)] border-4 border-red-900"
-            >
-              <FaChurch className="text-3xl text-red-900" />
-            </motion.div>
+          <motion.div
+  initial={{ scale: 0 }}
+  animate={{ scale: 1 }}
+  transition={{ delay: 0.2 }}
+  className="flex justify-center items-center -space-x-4 mb-6"
+>
+  <div className="w-20 h-20 rounded-full border-4 border-red-900 shadow-xl overflow-hidden bg-white z-10">
+    <img src={rccgLogo} alt="RCCG Logo" className="w-full h-full object-cover" />
+  </div>
+  <div className="w-20 h-20 rounded-full border-4 border-red-900 shadow-xl overflow-hidden bg-white z-0">
+    <img src={faithLogo} alt="Faith Tribe Logo" className="w-full h-full object-cover" />
+  </div>
+</motion.div>
             <h1 className="text-3xl font-black text-white mb-1 tracking-tight">
               ADMIN <span className="text-yellow-400">PORTAL</span>
             </h1>

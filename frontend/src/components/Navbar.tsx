@@ -1,8 +1,10 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useLocation } from "react-router-dom";
 import { useState } from "react";
-import { useTheme } from "../hooks/useTheme"; // Create this hook first!
+import { useTheme } from "../hooks/useTheme";
 import { FaSun, FaMoon } from "react-icons/fa";
+import rccgLogo from "../assets/logo.jpg";
+import faithLogo from "../assets/faith_logo.jpg";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -19,26 +21,44 @@ const Navbar = () => {
     <motion.nav
       initial={{ y: -100 }}
       animate={{ y: 0 }}
-      className="fixed top-0 w-full z-50 transition-all duration-300 bg-white/80 dark:bg-[#2b0303]/90 backdrop-blur-md border-b border-red-100 dark:border-yellow-500/20 shadow-lg"
+      className="fixed top-0 w-full z-50 transition-all duration-300 bg-white/90 dark:bg-[#2b0303]/95 backdrop-blur-md border-b border-red-100 dark:border-yellow-500/20 shadow-xl"
     >
-      <div className="container mx-auto px-6 py-4">
+      <div className="container mx-auto px-4 py-3">
         <div className="flex justify-between items-center">
-          {/* Logo */}
+          {/* Dual Logo Section - Updated for Size & Spacing */}
           <motion.div
-            whileHover={{ scale: 1.05 }}
-            className="flex items-center space-x-3"
+            whileHover={{ scale: 1.02 }}
+            className="flex items-center gap-3 md:gap-4"
           >
-            <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-full flex items-center justify-center text-red-900 font-black text-sm border-2 border-yellow-200 shadow-md">
-              R63
+            {/* Logos Container - Removed overlap, increased size */}
+            <div className="flex items-center gap-2">
+              <img 
+                src={rccgLogo} 
+                alt="RCCG Logo" 
+                className="w-12 h-12 md:w-14 md:h-14 rounded-full border-2 border-yellow-500/50 shadow-md object-cover hover:scale-110 transition-transform duration-300"
+              />
+              <img 
+                src={faithLogo} 
+                alt="Faith Tribe Logo" 
+                className="w-12 h-12 md:w-14 md:h-14 rounded-full border-2 border-yellow-500/50 shadow-md object-cover hover:scale-110 transition-transform duration-300"
+              />
             </div>
-            <Link to="/" className="text-left">
-              <div className="text-red-900 dark:text-white font-bold text-sm leading-tight tracking-wide">RCCG REGION 63</div>
-              <div className="text-yellow-600 dark:text-yellow-400 text-xs leading-tight font-medium">JUNIOR CHURCH</div>
+            
+            {/* Divider (Optional, adds separation) */}
+            <div className="hidden sm:block w-px h-10 bg-yellow-500/30"></div>
+
+            <Link to="/" className="text-left flex flex-col justify-center">
+              <div className="text-red-900 dark:text-white font-black text-sm md:text-base leading-none tracking-wide font-['Impact'] mb-1">
+                RCCG REGION 63
+              </div>
+              <div className="text-yellow-600 dark:text-yellow-400 text-[10px] md:text-xs leading-none font-bold tracking-widest uppercase">
+                Junior Church | Faith Tribe
+              </div>
             </Link>
           </motion.div>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-8">
+          <div className="hidden md:flex items-center space-x-6 lg:space-x-8">
             {navItems.map((item) => (
               <Link
                 key={item.name}
@@ -59,27 +79,26 @@ const Navbar = () => {
               </Link>
             ))}
             
-            {/* Theme Toggle */}
             <button 
               onClick={toggleTheme}
-              className="p-2 rounded-full bg-red-100 dark:bg-black/20 text-red-800 dark:text-yellow-400 hover:scale-110 transition-transform"
+              className="p-2 rounded-full bg-red-100 dark:bg-black/20 text-red-800 dark:text-yellow-400 hover:scale-110 transition-transform shadow-sm"
             >
-              {theme === 'dark' ? <FaSun size={14} /> : <FaMoon size={14} />}
+              {theme === 'dark' ? <FaSun size={16} /> : <FaMoon size={16} />}
             </button>
 
             <Link
               to="/get-ticket"
-              className="bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 text-red-900 text-xs font-black py-2 px-5 rounded-full shadow-lg hover:shadow-yellow-500/50 transition-all transform hover:-translate-y-0.5"
+              className="bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 text-red-900 text-xs font-black py-2.5 px-6 rounded-full shadow-lg hover:shadow-yellow-500/50 transition-all transform hover:-translate-y-0.5"
             >
-              REGISTER
+              REGISTER NOW
             </Link>
           </div>
 
-          {/* Mobile menu button */}
-          <div className="flex items-center gap-4 md:hidden">
+          {/* Mobile Menu Controls */}
+          <div className="flex items-center gap-3 md:hidden">
             <button 
               onClick={toggleTheme}
-              className="p-2 rounded-full bg-red-100 dark:bg-black/20 text-red-800 dark:text-yellow-400"
+              className="p-2 rounded-full bg-red-50 dark:bg-white/10 text-red-800 dark:text-yellow-400 border border-red-100 dark:border-white/10"
             >
               {theme === 'dark' ? <FaSun size={14} /> : <FaMoon size={14} />}
             </button>
@@ -94,7 +113,7 @@ const Navbar = () => {
           </div>
         </div>
 
-        {/* Mobile menu */}
+        {/* Mobile Menu Dropdown */}
         <AnimatePresence>
           {isMenuOpen && (
             <motion.div
