@@ -3,9 +3,10 @@ import { Suspense, lazy } from 'react';
 import { Toaster } from 'react-hot-toast';
 import ScrollToTop from './components/ScrollToTop';
 import ProtectedRoute from './components/ProtectedRoute';
-import Snowfall from './components/Snowfall'; // <--- IMPORT THIS
+import Snowfall from './components/Snowfall';
+import ChristmasDecorations from './components/ChristmasDecorations'; // <--- IMPORT THIS
 
-// Lazy load pages
+// Lazy load pages...
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const TicketForm = lazy(() => import('./pages/TicketForm'));
 const TicketPreview = lazy(() => import('./pages/TicketPreview'));
@@ -24,8 +25,10 @@ function App() {
     <Router>
       <ScrollToTop />
       
-      {/* Global Effects */}
-      <Snowfall /> {/* <--- ADD THIS HERE */}
+      {/* Global Christmas Atmosphere */}
+      <Snowfall />
+      <ChristmasDecorations /> {/* <--- ADD THIS HERE */}
+      
       <Toaster 
         position="top-center"
         toastOptions={{
