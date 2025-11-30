@@ -4,7 +4,7 @@ export const PERSONAL_INFO_FIELDS = [
     label: "Full Name",
     type: "text",
     required: true,
-    placeholder: "Enter your full name as it appears on ID"
+    placeholder: "Enter your full name"
   },
   {
     name: "age",
@@ -65,14 +65,13 @@ export const CHURCH_INFO_FIELDS = [
     type: "select",
     required: true,
     options: [
-      { value: "", label: "Select Province" },
       { value: "lagos_province_9", label: "Lagos Province 9" },
       { value: "lagos_province_28", label: "Lagos Province 28" },
       { value: "lagos_province_69", label: "Lagos Province 69" },
       { value: "lagos_province_84", label: "Lagos Province 84" },
       { value: "lagos_province_86", label: "Lagos Province 86" },
       { value: "lagos_province_104", label: "Lagos Province 104" },
-      { value: "other", label: "Other Province" }
+      { value: "regional_hq", label: "Regional Headquarter" },
     ]
   },
   {
@@ -105,16 +104,7 @@ export const CHURCH_INFO_FIELDS = [
       { value: "", label: "Select Department" },
       { value: "teens_church", label: "Teens Church" },
       { value: "children_church", label: "Children Church" },
-      { value: "choir", label: "Choir" },
-      { value: "media", label: "Media" },
-      { value: "ushering", label: "Ushering" },
-      { value: "protocol", label: "Protocol" },
-      { value: "welfare", label: "Welfare" },
-      { value: "prayer", label: "Prayer Team" },
-      { value: "evangelism", label: "Evangelism" },
-      { value: "sanitation", label: "Sanitation" },
-      { value: "logistics", label: "Logistics & Technical" },
-      { value: "program", label: "Program" },
+      { value: "executive", label: "Executive" },
       { value: "none", label: "Not in any department" }
     ]
   }

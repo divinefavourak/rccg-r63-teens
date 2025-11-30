@@ -19,6 +19,7 @@ const COORDINATORS: User[] = [
   { id: 'c4', username: 'lp84@faithtribe', role: 'coordinator', province: 'Lagos Province 84', name: 'Pst. LP 84 Coord' },
   { id: 'c5', username: 'lp86@faithtribe', role: 'coordinator', province: 'Lagos Province 86', name: 'Pst. LP 86 Coord' },
   { id: 'c6', username: 'lp104@faithtribe', role: 'coordinator', province: 'Lagos Province 104', name: 'Pst. LP 104 Coord' },
+  { id: 'c7', username: 'regionalhq@faithtribe', role: 'coordinator', province: 'Regional HQ', name: 'Pst. Regional HQ Coord' },
 ];
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
