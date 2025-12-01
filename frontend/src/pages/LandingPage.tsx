@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import Countdown from "../components/Countdown";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-import { EVENT_DETAILS, CAMP_FEATURES } from "../constants/eventDetails";
+import { CAMP_FEATURES } from "../constants/eventDetails";
 import { FaPray, FaGamepad, FaTheaterMasks, FaUsers, FaInfoCircle } from "react-icons/fa";
 import { IconType } from "react-icons";
 
@@ -75,23 +75,22 @@ const LandingPage = () => {
             </span>
           </motion.div>
 
-          {/* Policy Notice - NEW */}
+          {/* Policy Notice - UPDATED */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6 }}
             className="mb-8 max-w-2xl mx-auto"
           >
-            <div className="bg-red-100 dark:bg-red-900/40 border border-red-200 dark:border-red-500/30 p-4 rounded-xl flex items-start gap-3 text-left shadow-lg backdrop-blur-sm">
-              <FaInfoCircle className="text-red-600 dark:text-yellow-400 text-xl mt-1 shrink-0" />
+            <div className="bg-green-100 dark:bg-green-900/40 border border-green-200 dark:border-green-500/30 p-4 rounded-xl flex items-start gap-3 text-left shadow-lg backdrop-blur-sm">
+              <FaInfoCircle className="text-green-600 dark:text-yellow-400 text-xl mt-1 shrink-0" />
               <div>
-                <h4 className="font-bold text-red-800 dark:text-yellow-400 uppercase text-sm tracking-wider mb-1">
-                  Registration Policy Update
+                <h4 className="font-bold text-green-800 dark:text-yellow-400 uppercase text-sm tracking-wider mb-1">
+                  Registration Now Open
                 </h4>
-                <p className="text-red-800/80 dark:text-red-100/80 text-sm leading-relaxed">
-                  <strong>Individual registration is NOT permitted.</strong> All registrations must be done through your 
-                  Provincial Coordinator. Payments should be made directly to the Provincial Coordinator, 
-                  not the Regional account.
+                <p className="text-green-800/80 dark:text-green-100/80 text-sm leading-relaxed">
+                  <strong>Individual registration is now live!</strong> Secure your spot for the camp. 
+                  Registration fee: <span className="font-bold">₦1,000</span>.
                 </p>
               </div>
             </div>
@@ -124,7 +123,7 @@ const LandingPage = () => {
             className="flex flex-col sm:flex-row gap-6 justify-center items-center relative z-20"
           >
             <Link to="/get-ticket" className="btn-primary flex items-center gap-2">
-              <span>🎁 COORDINATOR REGISTRATION</span>
+              <span>🎁 REGISTER NOW</span>
             </Link>
             <button className="btn-secondary">
               LEARN MORE

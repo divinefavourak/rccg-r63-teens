@@ -18,13 +18,14 @@ class TicketService {
     return this.tickets.find(t => t.ticketId === ticketId);
   }
 
-  async createTicket(data: Omit<Ticket, "id" | "status" | "registeredAt">): Promise<Ticket> {
+  // Updated to allow any data input including payment refs
+  async createTicket(data: any): Promise<Ticket> {
     await delay(1500);
     
     const newTicket: Ticket = {
       ...data,
       id: Date.now(), // Simple mock ID
-      status: "pending",
+      status: data.status || "pending", // Accept status if passed (e.g. 'approved' after payment)
       registeredAt: new Date().toISOString()
     };
     

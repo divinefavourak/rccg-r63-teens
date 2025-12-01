@@ -3,9 +3,10 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm, SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { usePaystackPayment } from 'react-paystack'; // IMPORT PAYSTACK
+import toast from "react-hot-toast"; 
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-import { EVENT_DETAILS } from "../constants/eventDetails";
 import { 
   PERSONAL_INFO_FIELDS, 
   CHURCH_INFO_FIELDS, 
@@ -15,9 +16,9 @@ import {
 import { ticketSchema, TicketFormData } from "../schemas/ticketSchema";
 import { useTicketStore } from "../store/ticketStore";
 
-// Added 'coordinatorName' to Step 1
+// Updated Step Fields (removed coordinatorName)
 const STEP_FIELDS = {
-  1: ['coordinatorName', 'fullName', 'age', 'category', 'gender', 'phone', 'email'],
+  1: ['fullName', 'age', 'category', 'gender', 'phone', 'email'],
   2: ['province', 'zone', 'area', 'parish', 'department'],
   3: ['medicalConditions', 'medications', 'dietaryRestrictions', 'emergencyContact', 'emergencyPhone', 'emergencyRelationship'],
   4: ['parentName', 'parentEmail', 'parentPhone', 'parentRelationship', 'parentConsent', 'medicalConsent', 'photoConsent']
@@ -46,7 +47,6 @@ const TicketForm = () => {
     resolver: zodResolver(ticketSchema),
     mode: "onChange",
     defaultValues: {
-      coordinatorName: "", // New Field
       fullName: "",
       age: undefined,
       category: "",
@@ -82,8 +82,54 @@ const TicketForm = () => {
     setFormData(watchedValues);
   }, [watchedValues, setFormData]);
 
+  // --- PAYSTACK CONFIGURATION ---
+  const config = {
+    reference: (new Date()).getTime().toString(),
+    email: watchedValues.email || "user@example.com",
+    amount: 3000 * 100, // Amount in kobo (₦3,000)
+    publicKey: 'pk_test_xxxxxxxxxxxxxxxxxxxx', // REPLACE WITH YOUR PUBLIC KEY
+  };
+
+  // Hook must be called at top level
+  const initializePayment = usePaystackPayment(config);
+
+  const onSuccess = (reference: any) => {
+    // Payment complete, now save ticket to backend
+    completeRegistration(reference);
+  };
+
+  const onClose = () => {
+    setIsSubmitting(false);
+    toast.error("Payment cancelled. Registration not complete.");
+  };
+
+  const completeRegistration = async (paymentReference: any) => {
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      const ticketData = {
+        ...watchedValues,
+        ticketId: `R63T${Date.now()}`,
+        status: 'approved', // Auto-approve on successful payment
+        registeredAt: new Date().toISOString(),
+        paymentReference: paymentReference,
+        registeredBy: 'Self'
+      };
+
+      resetForm();
+      navigate('/ticket-preview', { state: { ticket: ticketData } });
+      toast.success("Registration Successful! See you at camp.");
+    } catch (error) {
+      toast.error("Error saving ticket details. Please contact support.");
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const nextStep = async () => {
-    // /@ts-expect-error - Keys are valid but TS inference on partial keys is strict
+    // @ts-expect-error - Keys are valid but TS inference on partial keys is strict
     const fields = STEP_FIELDS[currentStep as keyof typeof STEP_FIELDS];
     // Trigger validation only for current step fields
     const isStepValid = await trigger(fields);
@@ -99,21 +145,10 @@ const TicketForm = () => {
     window.scrollTo(0, 0);
   };
 
-  const onSubmit: SubmitHandler<TicketFormData> = async (data) => {
+  const onSubmit: SubmitHandler<TicketFormData> = (data) => {
     setIsSubmitting(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    const ticketData = {
-      ...data,
-      ticketId: `R63T${Date.now()}`,
-      status: 'pending',
-      registeredAt: new Date().toISOString(),
-    };
-
-    resetForm();
-    navigate('/ticket-preview', { state: { ticket: ticketData } });
-    setIsSubmitting(false);
+    // Trigger Paystack Modal instead of direct submission
+    initializePayment({ onSuccess, onClose });
   };
 
   const getErrorMessage = (fieldName: string) => {
@@ -192,17 +227,7 @@ const TicketForm = () => {
     switch (currentStep) {
       case 1:
         title = "Participant Details";
-        // Prepend Coordinator Name Field
-        fields = [
-          {
-            name: "coordinatorName",
-            label: "Provincial Coordinator Name",
-            type: "text",
-            required: true,
-            placeholder: "Enter Coordinator's Name"
-          },
-          ...PERSONAL_INFO_FIELDS
-        ];
+        fields = PERSONAL_INFO_FIELDS; // Just personal info, no coordinator name
         break;
       case 2:
         title = "Church Information";
@@ -229,24 +254,13 @@ const TicketForm = () => {
       >
         <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-6 font-['Impact'] tracking-wide">{title}</h3>
         
-        {/* NEW: Coordinator Warning Banner */}
-        {currentStep === 1 && (
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-500/30 rounded-xl p-4 mb-6">
-            <p className="text-blue-800 dark:text-blue-200 text-sm font-medium text-center">
-              ℹ️ This form is for <strong>Provincial Coordinators</strong> to register children/teens. 
-              Please ensure all details are accurate before submission.
-            </p>
-          </div>
-        )}
-        
         {currentStep === 4 && (
           <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-500/30 rounded-xl p-6 mb-6">
             <h4 className="font-bold text-yellow-800 dark:text-yellow-400 mb-2 flex items-center gap-2">
-              <span className="text-xl">⚠️</span> Important Notice:
+              <span className="text-xl">⚠️</span> Payment Required:
             </h4>
             <p className="text-yellow-700 dark:text-yellow-200/80 text-sm">
-              A consent email will be sent to the parent/guardian email provided. 
-              Registration is only confirmed after parental approval.
+              A registration fee of <strong>₦3,000</strong> is required to secure your spot. You will be redirected to a secure payment gateway.
             </p>
           </div>
         )}
@@ -292,10 +306,10 @@ const TicketForm = () => {
         >
           <div className="text-center mb-10">
             <h1 className="text-4xl md:text-5xl font-black mb-4 text-red-900 dark:text-white">
-              <span className="text-gold-3d">COORDINATOR</span> PORTAL
+              <span className="text-gold-3d">GET YOUR</span> TICKET
             </h1>
             <p className="text-gray-600 dark:text-red-100/80 max-w-2xl mx-auto text-lg">
-              Official registration portal for Provincial Coordinators.
+              Secure your spot for The Priceless Gift Camp 2025.
             </p>
           </div>
 
@@ -380,7 +394,7 @@ const TicketForm = () => {
                         PROCESSING...
                       </>
                     ) : (
-                      "FINISH REGISTRATION ✨"
+                      "PAY ₦3,000 & REGISTER 💳"
                     )}
                   </motion.button>
                 )}
