@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import { Toaster } from 'react-hot-toast';
+import { Analytics } from "@vercel/analytics/react"; // NEW: Analytics
 import ScrollToTop from './components/ScrollToTop';
 import ProtectedRoute from './components/ProtectedRoute';
 import Snowfall from './components/Snowfall';
@@ -57,7 +58,7 @@ function App() {
             <Route path="/admin-login" element={<AdminLogin />} />
             <Route path="/coordinator-login" element={<CoordinatorLogin />} />
             
-            {/* Coordinator Routes - Kept for legacy/viewing purposes */}
+            {/* Coordinator Routes */}
             <Route 
               path="/coordinator/dashboard" 
               element={<ProtectedRoute allowedRoles={['coordinator']}><CoordinatorDashboard /></ProtectedRoute>} 
@@ -80,6 +81,9 @@ function App() {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
+        
+        {/* Vercel Analytics Tracker */}
+        <Analytics />
       </Router>
     </AuthProvider>
   );
