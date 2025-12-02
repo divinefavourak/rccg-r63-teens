@@ -1,15 +1,13 @@
-// src/services/ticketService.ts
 import { Ticket } from "../types";
 import { MOCK_TICKETS } from "../data/mockTickets";
 
-// Simulate network delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 class TicketService {
   private tickets: Ticket[] = [...MOCK_TICKETS];
 
   async getAllTickets(): Promise<Ticket[]> {
-    await delay(800); // Simulate API latency
+    await delay(800); 
     return [...this.tickets];
   }
 
@@ -18,14 +16,13 @@ class TicketService {
     return this.tickets.find(t => t.ticketId === ticketId);
   }
 
-  // Updated to allow any data input including payment refs
   async createTicket(data: any): Promise<Ticket> {
     await delay(1500);
     
     const newTicket: Ticket = {
       ...data,
-      id: Date.now(), // Simple mock ID
-      status: data.status || "pending", // Accept status if passed (e.g. 'approved' after payment)
+      id: Date.now() + Math.floor(Math.random() * 1000), // Random ID to prevent collisions in bulk
+      status: data.status || "pending",
       registeredAt: new Date().toISOString()
     };
     

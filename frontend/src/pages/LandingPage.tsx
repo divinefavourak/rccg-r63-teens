@@ -4,7 +4,7 @@ import Countdown from "../components/Countdown";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { CAMP_FEATURES } from "../constants/eventDetails";
-import { FaPray, FaGamepad, FaTheaterMasks, FaUsers, FaInfoCircle } from "react-icons/fa";
+import { FaPray, FaGamepad, FaTheaterMasks, FaUsers, FaInfoCircle, FaUser, FaUserTie } from "react-icons/fa";
 import { IconType } from "react-icons";
 
 const LandingPage = () => {
@@ -75,7 +75,7 @@ const LandingPage = () => {
             </span>
           </motion.div>
 
-          {/* Policy Notice - UPDATED */}
+          {/* Policy Notice - UPDATED with Price */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -89,8 +89,8 @@ const LandingPage = () => {
                   Registration Now Open
                 </h4>
                 <p className="text-green-800/80 dark:text-green-100/80 text-sm leading-relaxed">
-                  <strong>Individual registration is now live!</strong> Secure your spot for the camp. 
-                  Registration fee: <span className="font-bold">₦1,000</span>.
+                  <strong>Individual & Coordinator registration is live!</strong> Secure your spot for the camp. 
+                  Registration fee: <span className="font-bold text-lg">₦3,000</span>.
                 </p>
               </div>
             </div>
@@ -115,19 +115,40 @@ const LandingPage = () => {
             </div>
           </motion.div>
 
-          {/* CTA Buttons */}
+          {/* DUAL CTA Buttons - NEW */}
           <motion.div
             initial={{ y: 30, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 1 }}
-            className="flex flex-col sm:flex-row gap-6 justify-center items-center relative z-20"
+            className="flex flex-col md:flex-row gap-6 justify-center items-center relative z-20"
           >
-            <Link to="/get-ticket" className="btn-primary flex items-center gap-2">
-              <span>🎁 REGISTER NOW</span>
+            {/* Individual Path */}
+            <Link to="/get-ticket" className="group relative w-full md:w-auto">
+              <div className="absolute -inset-1 bg-gradient-to-r from-yellow-600 to-red-600 rounded-2xl blur opacity-25 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
+              <div className="relative flex items-center gap-4 bg-white dark:bg-black border border-yellow-500/30 px-8 py-5 rounded-xl hover:scale-105 transition-transform shadow-xl">
+                <div className="bg-yellow-100 dark:bg-yellow-900/30 p-3 rounded-full text-yellow-600">
+                  <FaUser className="text-2xl" />
+                </div>
+                <div className="text-left">
+                  <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">For Individuals</p>
+                  <p className="text-xl font-black text-gray-900 dark:text-white whitespace-nowrap">Register Yourself</p>
+                </div>
+              </div>
             </Link>
-            <button className="btn-secondary">
-              LEARN MORE
-            </button>
+
+            {/* Coordinator Path */}
+            <Link to="/coordinator-login" className="group relative w-full md:w-auto">
+              <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-2xl blur opacity-25 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
+              <div className="relative flex items-center gap-4 bg-white dark:bg-black border border-blue-500/30 px-8 py-5 rounded-xl hover:scale-105 transition-transform shadow-xl">
+                <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded-full text-blue-600">
+                  <FaUserTie className="text-2xl" />
+                </div>
+                <div className="text-left">
+                  <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">For Coordinators</p>
+                  <p className="text-xl font-black text-gray-900 dark:text-white whitespace-nowrap">Bulk Portal</p>
+                </div>
+              </div>
+            </Link>
           </motion.div>
         </div>
       </section>
@@ -148,7 +169,7 @@ const LandingPage = () => {
                 <div className="text-4xl md:text-5xl font-black text-yellow-500 dark:text-yellow-400 mb-2 drop-shadow-sm">
                   {stat.number}
                 </div>
-                <div className="text-red-900 dark:text-red-100 font-medium uppercase tracking-widest text-xs md:text-sm font-bold">{stat.label}</div>
+                <div className="text-red-900 dark:text-red-100  uppercase tracking-widest text-xs md:text-sm font-bold">{stat.label}</div>
               </motion.div>
             ))}
           </div>
@@ -199,7 +220,6 @@ const LandingPage = () => {
 
       {/* Countdown Section */}
       <section className="py-24 relative overflow-hidden bg-green-900 dark:bg-transparent">
-        {/* Light Mode: Green Background / Dark Mode: Transparent over global gradient */}
         <div className="absolute inset-0 bg-gradient-to-br from-green-800 to-green-950 opacity-100 dark:opacity-0 transition-opacity duration-500"></div>
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/diagonal-stripes.png')] opacity-10"></div>
         
