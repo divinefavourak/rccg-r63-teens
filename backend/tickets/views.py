@@ -483,3 +483,27 @@ class TicketAuditLogView(generics.ListAPIView):
             queryset = queryset.filter(timestamp__lte=end_date)
         
         return queryset.order_by('-timestamp')
+    
+@action(detail=True, methods=['get'])
+def qr_code(self, request, pk=None):
+    """Get QR code for a ticket"""
+    ticket = self.get_object()
+    
+    # Check permissions
+    if not self.request.user.has_perm('tickets.view_ticket', ticket):
+        return Response(
+            {'error': 'Permission denied'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    # Generate QR code if not exists
+    if not ticket.qr_code:
+        from .services import QRCodeService
+        QRCodeService.generate_ticket_qr_code(ticket)
+    
+    # Return QR code URL
+    return Response({
+        'qr_code_url': request.build_absolute_uri(ticket.qr_code.url) if ticket.qr_code else None,
+        'ticket_id': ticket.ticket_id,
+        'verification_code': f"RCCG-{ticket.ticket_id}"
+    })
