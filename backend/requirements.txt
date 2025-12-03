@@ -10,6 +10,7 @@ celery==5.4.0
 certifi==2025.11.12
 cffi==2.0.0
 chardet==5.2.0
+charset-normalizer==3.4.4
 click==8.3.1
 click-didyoumean==0.3.1
 click-plugins==1.1.1.2
@@ -33,6 +34,8 @@ ecdsa==0.19.1
 et_xmlfile==2.0.0
 flake8==7.1.1
 future==1.0.0
+gunicorn==23.0.0
+idna==3.11
 inflection==0.5.1
 iniconfig==2.3.0
 jmespath==1.0.1
@@ -69,6 +72,7 @@ PyYAML==6.0.3
 qrcode==7.4.2
 redis==5.0.7
 reportlab==4.2.2
+requests==2.32.5
 s3transfer==0.10.4
 sendgrid==6.12.4
 sentry-sdk==2.15.0
