@@ -1,135 +1,233 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.utils import timezone
-from django.utils.translation import gettext_lazy as _
+from django.core.validators import MinLengthValidator, RegexValidator
+import uuid
 
 class UserManager(BaseUserManager):
-    """Custom user manager for the User model."""
+    """Custom manager for User model"""
     
-    def create_user(self, username, password=None, **extra_fields):
-        """Create and return a regular user with a username and password."""
+    def create_user(self, username, email, password=None, **extra_fields):
         if not username:
-            raise ValueError(_('The Username field must be set'))
+            raise ValueError('Username is required')
+        if not email:
+            raise ValueError('Email is required')
         
-        user = self.model(username=username, **extra_fields)
+        email = self.normalize_email(email)
+        user = self.model(username=username, email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
         return user
-
-    def create_superuser(self, username, password=None, **extra_fields):
-        """Create and return a superuser."""
+    
+    def create_superuser(self, username, email, password=None, **extra_fields):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
-        extra_fields.setdefault('role', User.Role.ADMIN)
         extra_fields.setdefault('is_active', True)
+        extra_fields.setdefault('role', 'admin')
         
         if extra_fields.get('is_staff') is not True:
-            raise ValueError(_('Superuser must have is_staff=True.'))
+            raise ValueError('Superuser must have is_staff=True.')
         if extra_fields.get('is_superuser') is not True:
-            raise ValueError(_('Superuser must have is_superuser=True.'))
+            raise ValueError('Superuser must have is_superuser=True.')
         
-        return self.create_user(username, password, **extra_fields)
+        return self.create_user(username, email, password, **extra_fields)
 
 
 class User(AbstractBaseUser, PermissionsMixin):
-    """Custom User model for the R63 Teens system."""
+    """Comprehensive User model for RCCG R63 system"""
     
     class Role(models.TextChoices):
-        ADMIN = 'admin', _('Administrator')
-        COORDINATOR = 'coordinator', _('Coordinator')
+        ADMIN = 'admin', 'Administrator'
+        COORDINATOR = 'coordinator', 'Coordinator'
     
-    # Required fields
+    class Province(models.TextChoices):
+        # List of provinces in RCCG Region 63
+        PROVINCE_1 = 'province_1', 'Province 1'
+        PROVINCE_2 = 'province_2', 'Province 2'
+        PROVINCE_3 = 'province_3', 'Province 3'
+        PROVINCE_4 = 'province_4', 'Province 4'
+        PROVINCE_5 = 'province_5', 'Province 5'
+        PROVINCE_6 = 'province_6', 'Province 6'
+        PROVINCE_7 = 'province_7', 'Province 7'
+        PROVINCE_8 = 'province_8', 'Province 8'
+    
+    # Core identification
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     username = models.CharField(
-        _('username'),
-        max_length=255,
+        max_length=150,
         unique=True,
-        help_text=_('Required. 255 characters or fewer. Letters, digits and @/./+/-/_ only.')
+        validators=[
+            MinLengthValidator(3),
+            RegexValidator(
+                regex=r'^[\w.@+-]+$',
+                message='Enter a valid username. Only letters, numbers, and @/./+/-/_ are allowed.'
+            )
+        ]
     )
-    email = models.EmailField(
-        _('email address'),
-        unique=True,
-        blank=True,
-        null=True,
-        help_text=_('Optional email address for notifications.')
-    )
-    name = models.CharField(
-        _('full name'),
-        max_length=255,
-        help_text=_('Full name of the user.')
-    )
+    email = models.EmailField(unique=True)
     
-    # Role-based fields
-    role = models.CharField(
-        _('role'),
+    # Personal information
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    phone = models.CharField(
         max_length=20,
-        choices=Role.choices,
-        default=Role.COORDINATOR,
-        help_text=_('User role in the system.')
-    )
-    province = models.CharField(
-        _('province'),
-        max_length=255,
-        blank=True,
-        null=True,
-        help_text=_('Province assigned to the coordinator.')
+        validators=[
+            RegexValidator(
+                regex=r'^\+?1?\d{9,15}$',
+                message="Phone number must be entered in the format: '+999999999'. Up to 15 digits allowed."
+            )
+        ]
     )
     
-    # Status fields
-    is_active = models.BooleanField(
-        _('active'),
-        default=True,
-        help_text=_(
-            'Designates whether this user should be treated as active. '
-            'Unselect this instead of deleting accounts.'
-        )
-    )
-    is_staff = models.BooleanField(
-        _('staff status'),
-        default=False,
-        help_text=_('Designates whether the user can log into this admin site.')
-    )
+    # Role and permissions
+    role = models.CharField(max_length=20, choices=Role.choices, default=Role.COORDINATOR)
+    province = models.CharField(max_length=50, choices=Province.choices, null=True, blank=True)
+    
+    # Church hierarchy (for coordinators)
+    zone = models.CharField(max_length=100, blank=True)
+    area = models.CharField(max_length=100, blank=True)
+    parish = models.CharField(max_length=100, blank=True)
+    
+    # Status flags
+    is_active = models.BooleanField(default=True)
+    is_staff = models.BooleanField(default=False)
+    is_superuser = models.BooleanField(default=False)
     
     # Timestamps
-    date_joined = models.DateTimeField(_('date joined'), default=timezone.now)
-    last_login = models.DateTimeField(_('last login'), blank=True, null=True)
+    date_joined = models.DateTimeField(default=timezone.now)
+    last_login = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
-    # Custom manager
+    # Profile metadata
+    profile_picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True)
+    bio = models.TextField(blank=True, max_length=500)
+    
+    # Communication preferences
+    email_notifications = models.BooleanField(default=True)
+    sms_notifications = models.BooleanField(default=False)
+    
+    # Security
+    password_reset_required = models.BooleanField(default=False)
+    failed_login_attempts = models.IntegerField(default=0)
+    account_locked_until = models.DateTimeField(null=True, blank=True)
+    
+    # Audit fields
+    created_by = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_users'
+    )
+    
     objects = UserManager()
     
-    # Field used for authentication
     USERNAME_FIELD = 'username'
-    REQUIRED_FIELDS = ['name', 'email']
+    REQUIRED_FIELDS = ['email', 'first_name', 'last_name']
     
     class Meta:
-        verbose_name = _('user')
-        verbose_name_plural = _('users')
+        verbose_name = 'User'
+        verbose_name_plural = 'Users'
         indexes = [
             models.Index(fields=['username']),
             models.Index(fields=['email']),
             models.Index(fields=['role']),
             models.Index(fields=['province']),
+            models.Index(fields=['is_active']),
         ]
-        ordering = ['name']
+        ordering = ['-date_joined']
     
     def __str__(self):
-        return f"{self.name} ({self.username})"
+        return f"{self.username} ({self.get_role_display()})"
+    
+    @property
+    def full_name(self):
+        return f"{self.first_name} {self.last_name}"
     
     @property
     def is_admin(self):
-        """Check if user is an administrator."""
         return self.role == self.Role.ADMIN
     
     @property
     def is_coordinator(self):
-        """Check if user is a coordinator."""
         return self.role == self.Role.COORDINATOR
     
-    def has_coordinator_access(self, province):
-        """Check if coordinator has access to a specific province."""
+    def get_display_name(self):
+        """Get display name for the user"""
+        if self.first_name and self.last_name:
+            return self.full_name
+        return self.username
+    
+    def can_access_province(self, province_name):
+        """Check if user can access data from a specific province"""
         if self.is_admin:
             return True
-        return self.is_coordinator and self.province == province
+        return self.province == province_name
     
-    def get_role_display_name(self):
-        """Get human-readable role name."""
-        return dict(self.Role.choices).get(self.role, self.role)
+    def increment_failed_login(self):
+        """Increment failed login attempts and lock if needed"""
+        self.failed_login_attempts += 1
+        if self.failed_login_attempts >= 5:
+            self.account_locked_until = timezone.now() + timezone.timedelta(minutes=15)
+        self.save()
+    
+    def reset_failed_logins(self):
+        """Reset failed login attempts"""
+        self.failed_login_attempts = 0
+        self.account_locked_until = None
+        self.save()
+
+
+class LoginHistory(models.Model):
+    """Track user login history"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='login_history')
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    login_time = models.DateTimeField(auto_now_add=True)
+    success = models.BooleanField(default=True)
+    
+    class Meta:
+        verbose_name_plural = 'Login Histories'
+        ordering = ['-login_time']
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.login_time}"
+
+
+class AuditLog(models.Model):
+    """Audit log for tracking changes in the system"""
+    class ActionType(models.TextChoices):
+        CREATE = 'create', 'Create'
+        UPDATE = 'update', 'Update'
+        DELETE = 'delete', 'Delete'
+        LOGIN = 'login', 'Login'
+        LOGOUT = 'logout', 'Logout'
+        PASSWORD_CHANGE = 'password_change', 'Password Change'
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='audit_actions'
+    )
+    action = models.CharField(max_length=50, choices=ActionType.choices)
+    entity_type = models.CharField(max_length=100)  # e.g., 'User', 'Ticket'
+    entity_id = models.CharField(max_length=255)
+    old_values = models.JSONField(null=True, blank=True)
+    new_values = models.JSONField(null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['user', 'timestamp']),
+            models.Index(fields=['entity_type', 'entity_id']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username if self.user else 'System'} - {self.action} - {self.entity_type}"

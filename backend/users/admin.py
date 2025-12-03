@@ -1,57 +1,50 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.utils.translation import gettext_lazy as _
-from .models import User
+from .models import User, LoginHistory, AuditLog
 
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    """Admin interface for User model."""
-    
-    list_display = ('username', 'email', 'name', 'role', 'province', 'is_active', 'is_staff', 'date_joined')
+    """Admin configuration for User model"""
+    list_display = ('username', 'email', 'full_name', 'role', 'province', 'is_active', 'date_joined')
     list_filter = ('role', 'province', 'is_active', 'is_staff', 'is_superuser')
-    search_fields = ('username', 'email', 'name', 'province')
-    ordering = ('name',)
+    search_fields = ('username', 'email', 'first_name', 'last_name')
+    ordering = ('-date_joined',)
     
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
-        (_('Personal Info'), {'fields': ('name', 'email')}),
-        (_('Role Information'), {'fields': ('role', 'province')}),
-        (_('Permissions'), {
-            'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions'),
-        }),
-        (_('Important dates'), {'fields': ('last_login', 'date_joined')}),
+        ('Personal Info', {'fields': ('first_name', 'last_name', 'email', 'phone')}),
+        ('Church Info', {'fields': ('role', 'province', 'zone', 'area', 'parish')}),
+        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+        ('Preferences', {'fields': ('email_notifications', 'sms_notifications', 'bio')}),
+        ('Important Dates', {'fields': ('last_login', 'date_joined', 'updated_at')}),
     )
     
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('username', 'name', 'email', 'role', 'province', 'password1', 'password2'),
+            'fields': ('username', 'email', 'first_name', 'last_name', 'role', 'province', 'password1', 'password2'),
         }),
     )
     
-    def get_readonly_fields(self, request, obj=None):
-        """Make certain fields read-only based on user role."""
-        if obj:  # Editing an existing user
-            readonly_fields = ['last_login', 'date_joined']
-            if not request.user.is_superuser:
-                readonly_fields.append('is_superuser')
-            return readonly_fields
-        return []
-    
-    def get_fieldsets(self, request, obj=None):
-        """Customize fieldsets based on user role."""
-        fieldsets = super().get_fieldsets(request, obj)
-        
-        # If user is not superuser, hide some fields
-        if not request.user.is_superuser:
-            fieldsets = list(fieldsets)
-            # Remove superuser field
-            for i, fieldset in enumerate(fieldsets):
-                if fieldset[0] == _('Permissions'):
-                    fields = list(fieldset[1]['fields'])
-                    if 'is_superuser' in fields:
-                        fields.remove('is_superuser')
-                    fieldsets[i][1]['fields'] = tuple(fields)
-        
-        return fieldsets
+    readonly_fields = ('date_joined', 'updated_at', 'last_login')
+
+
+@admin.register(LoginHistory)
+class LoginHistoryAdmin(admin.ModelAdmin):
+    """Admin configuration for LoginHistory"""
+    list_display = ('user', 'ip_address', 'login_time', 'success')
+    list_filter = ('success', 'login_time')
+    search_fields = ('user__username', 'user__email', 'ip_address')
+    readonly_fields = ('login_time',)
+    date_hierarchy = 'login_time'
+
+
+@admin.register(AuditLog)
+class AuditLogAdmin(admin.ModelAdmin):
+    """Admin configuration for AuditLog"""
+    list_display = ('user', 'action', 'entity_type', 'entity_id', 'timestamp')
+    list_filter = ('action', 'entity_type', 'timestamp')
+    search_fields = ('user__username', 'entity_type', 'entity_id')
+    readonly_fields = ('timestamp',)
+    date_hierarchy = 'timestamp'
