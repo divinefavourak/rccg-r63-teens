@@ -1,231 +1,113 @@
-import uuid
-import os
 from django.db import models
-from django.contrib.postgres.fields import ArrayField
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator
 from django.utils import timezone
-from django.utils.translation import gettext_lazy as _
-from django.dispatch import receiver
-from django.db.models.signals import post_save
+import uuid
+from users.models import User
 
 
 class Ticket(models.Model):
-    """
-    Main Ticket model for R63 Teens registrations.
-    """
+    """Ticket model for teen registrations"""
     
     class Category(models.TextChoices):
-        PRE_TEENS = 'pre_teens', _('Pre-Teens (8-12)')
-        TEENS = 'teens', _('Teens (13-19)')
+        PRE_TEENS = 'pre_teens', 'Pre-Teens (8-12)'
+        TEENS = 'teens', 'Teens (13-19)'
     
     class Gender(models.TextChoices):
-        MALE = 'male', _('Male')
-        FEMALE = 'female', _('Female')
+        MALE = 'male', 'Male'
+        FEMALE = 'female', 'Female'
     
     class Status(models.TextChoices):
-        PENDING = 'pending', _('Pending')
-        APPROVED = 'approved', _('Approved')
-        REJECTED = 'rejected', _('Rejected')
+        PENDING = 'pending', 'Pending'
+        APPROVED = 'approved', 'Approved'
+        REJECTED = 'rejected', 'Rejected'
+        CANCELLED = 'cancelled', 'Cancelled'
     
-    # Ticket Identification
+    # Ticket identification
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     ticket_id = models.CharField(
-        _('ticket ID'),
         max_length=20,
         unique=True,
         editable=False,
-        help_text=_('Auto-generated unique ticket identifier')
+        verbose_name='Ticket ID'
     )
     
-    # Basic Information
-    full_name = models.CharField(
-        _('full name'),
-        max_length=255,
-        help_text=_('Full name of the teen')
-    )
+    # Personal information
+    full_name = models.CharField(max_length=255)
     age = models.IntegerField(
-        _('age'),
-        validators=[MinValueValidator(8), MaxValueValidator(19)],
-        help_text=_('Age must be between 8 and 19 years')
+        validators=[
+            MinValueValidator(8, message="Age must be at least 8 years."),
+            MaxValueValidator(19, message="Age must not exceed 19 years.")
+        ]
     )
-    category = models.CharField(
-        _('category'),
-        max_length=20,
-        choices=Category.choices,
-        help_text=_('Age category of the teen')
-    )
-    gender = models.CharField(
-        _('gender'),
-        max_length=20,
-        choices=Gender.choices,
-        help_text=_('Gender of the teen')
-    )
+    category = models.CharField(max_length=20, choices=Category.choices)
+    gender = models.CharField(max_length=20, choices=Gender.choices)
+    date_of_birth = models.DateField(null=True, blank=True)
     
-    # Contact Information
+    # Contact information
     phone = models.CharField(
-        _('phone number'),
         max_length=20,
-        help_text=_('Phone number of the teen')
+        validators=[
+            RegexValidator(
+                regex=r'^\+?1?\d{9,15}$',
+                message="Phone number must be entered in the format: '+999999999'. Up to 15 digits allowed."
+            )
+        ]
     )
-    email = models.EmailField(
-        _('email address'),
-        max_length=255,
-        help_text=_('Email address of the teen')
-    )
+    email = models.EmailField()
     
-    # Church Hierarchy
-    province = models.CharField(
-        _('province'),
-        max_length=255,
-        help_text=_('Church province')
-    )
-    zone = models.CharField(
-        _('zone'),
-        max_length=255,
-        help_text=_('Church zone within the province')
-    )
-    area = models.CharField(
-        _('area'),
-        max_length=255,
-        help_text=_('Church area within the zone')
-    )
-    parish = models.CharField(
-        _('parish'),
-        max_length=255,
-        help_text=_('Church parish name')
-    )
-    department = models.CharField(
-        _('department'),
-        max_length=255,
-        blank=True,
-        null=True,
-        help_text=_('Department within the church (optional)')
-    )
+    # Church hierarchy (from PRD)
+    province = models.CharField(max_length=255, choices=User.Province.choices)
+    zone = models.CharField(max_length=255)
+    area = models.CharField(max_length=255)
+    parish = models.CharField(max_length=255)
+    department = models.CharField(max_length=255, blank=True)
     
-    # Medical Information
-    medical_conditions = models.TextField(
-        _('medical conditions'),
-        blank=True,
-        null=True,
-        help_text=_('Any existing medical conditions (optional)')
-    )
-    medications = models.TextField(
-        _('medications'),
-        blank=True,
-        null=True,
-        help_text=_('Current medications (optional)')
-    )
-    dietary_restrictions = models.TextField(
-        _('dietary restrictions'),
-        blank=True,
-        null=True,
-        help_text=_('Any dietary restrictions or allergies (optional)')
-    )
+    # Medical information
+    medical_conditions = models.TextField(blank=True, verbose_name='Any medical conditions or allergies?')
+    medications = models.TextField(blank=True, verbose_name='Current medications')
+    dietary_restrictions = models.TextField(blank=True, verbose_name='Dietary restrictions')
     
-    # Emergency Contact
-    emergency_contact = models.CharField(
-        _('emergency contact name'),
-        max_length=255,
-        help_text=_('Name of emergency contact person')
-    )
-    emergency_phone = models.CharField(
-        _('emergency contact phone'),
-        max_length=20,
-        help_text=_('Phone number of emergency contact')
-    )
-    emergency_relationship = models.CharField(
-        _('emergency contact relationship'),
-        max_length=100,
-        help_text=_('Relationship to the teen (e.g., Parent, Guardian)')
-    )
+    # Emergency contact
+    emergency_contact = models.CharField(max_length=255)
+    emergency_phone = models.CharField(max_length=20)
+    emergency_relationship = models.CharField(max_length=100)
     
-    # Parent/Guardian Information
-    parent_name = models.CharField(
-        _('parent/guardian name'),
-        max_length=255,
-        help_text=_('Full name of parent or guardian')
-    )
-    parent_email = models.EmailField(
-        _('parent/guardian email'),
-        max_length=255,
-        help_text=_('Email address of parent or guardian')
-    )
-    parent_phone = models.CharField(
-        _('parent/guardian phone'),
-        max_length=20,
-        help_text=_('Phone number of parent or guardian')
-    )
-    parent_relationship = models.CharField(
-        _('parent/guardian relationship'),
-        max_length=100,
-        help_text=_('Relationship to the teen (e.g., Mother, Father, Guardian)')
-    )
+    # Parent/Guardian information
+    parent_name = models.CharField(max_length=255)
+    parent_email = models.EmailField()
+    parent_phone = models.CharField(max_length=20)
+    parent_relationship = models.CharField(max_length=100)
     
-    # System Fields
-    status = models.CharField(
-        _('status'),
-        max_length=20,
-        choices=Status.choices,
-        default=Status.PENDING,
-        help_text=_('Current status of the ticket')
-    )
-    registered_at = models.DateTimeField(
-        _('registered at'),
-        default=timezone.now,
-        help_text=_('Date and time when the ticket was registered')
-    )
+    # Status and tracking
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    notes = models.TextField(blank=True, help_text='Any additional notes or comments')
+    
+    # Registration metadata
+    registered_at = models.DateTimeField(default=timezone.now)
     registered_by = models.ForeignKey(
-        'users.User',
+        User,
         on_delete=models.SET_NULL,
         null=True,
-        related_name='registered_tickets',
-        verbose_name=_('registered by'),
-        help_text=_('User who registered this ticket')
+        related_name='registered_tickets'
     )
+    approved_at = models.DateTimeField(null=True, blank=True)
     approved_by = models.ForeignKey(
-        'users.User',
+        User,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='approved_tickets',
-        verbose_name=_('approved by'),
-        help_text=_('Admin who approved this ticket')
-    )
-    approved_at = models.DateTimeField(
-        _('approved at'),
-        null=True,
-        blank=True,
-        help_text=_('Date and time when the ticket was approved')
-    )
-    rejection_reason = models.TextField(
-        _('rejection reason'),
-        blank=True,
-        null=True,
-        help_text=_('Reason for ticket rejection (if applicable)')
-    )
-    
-    # Media Files
-    qr_code = models.ImageField(
-        _('QR code'),
-        upload_to='tickets/qr_codes/',
-        null=True,
-        blank=True,
-        help_text=_('QR code image for ticket validation')
-    )
-    ticket_pdf = models.FileField(
-        _('ticket PDF'),
-        upload_to='tickets/pdfs/',
-        null=True,
-        blank=True,
-        help_text=_('PDF version of the ticket')
+        related_name='approved_tickets'
     )
     
     # Timestamps
-    created_at = models.DateTimeField(_('created at'), auto_now_add=True)
-    updated_at = models.DateTimeField(_('updated at'), auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    # QR Code (for future implementation)
+    qr_code = models.ImageField(upload_to='qr_codes/', null=True, blank=True)
     
     class Meta:
-        verbose_name = _('ticket')
-        verbose_name_plural = _('tickets')
+        ordering = ['-registered_at']
         indexes = [
             models.Index(fields=['ticket_id']),
             models.Index(fields=['status']),
@@ -233,213 +115,139 @@ class Ticket(models.Model):
             models.Index(fields=['category']),
             models.Index(fields=['registered_by']),
             models.Index(fields=['registered_at']),
-            models.Index(fields=['approved_at']),
         ]
-        ordering = ['-registered_at']
-        permissions = [
-            ('can_approve_ticket', 'Can approve ticket'),
-            ('can_reject_ticket', 'Can reject ticket'),
-            ('can_view_all_tickets', 'Can view all tickets'),
-        ]
+        verbose_name = 'Ticket'
+        verbose_name_plural = 'Tickets'
     
     def __str__(self):
         return f"{self.ticket_id} - {self.full_name}"
     
     def save(self, *args, **kwargs):
-        """Override save to generate ticket ID and handle status changes."""
-        is_new = self._state.adding
-        
+        """Generate ticket ID on first save"""
         if not self.ticket_id:
-            self.ticket_id = self.generate_ticket_id()
-        
-        # Handle status changes
-        if not is_new:
-            self.handle_status_change()
+            # Generate ticket ID format: TKT-YYYY-MM-XXXXX
+            date_prefix = timezone.now().strftime('%Y%m')
+            last_ticket = Ticket.objects.filter(
+                ticket_id__startswith=f'TKT-{date_prefix}-'
+            ).order_by('ticket_id').last()
+            
+            if last_ticket:
+                last_num = int(last_ticket.ticket_id.split('-')[-1])
+                new_num = last_num + 1
+            else:
+                new_num = 1
+            
+            self.ticket_id = f'TKT-{date_prefix}-{new_num:05d}'
         
         super().save(*args, **kwargs)
-    
-    def generate_ticket_id(self):
-        """Generate a unique ticket ID."""
-        current_year = timezone.now().strftime('%Y')
-        current_month = timezone.now().strftime('%m')
-        
-        # Find the last ticket for this month
-        last_ticket = Ticket.objects.filter(
-            ticket_id__startswith=f"R63-{current_year}{current_month}"
-        ).order_by('-ticket_id').first()
-        
-        if last_ticket:
-            last_number = int(last_ticket.ticket_id.split('-')[-1])
-            next_number = last_number + 1
-        else:
-            next_number = 1
-        
-        return f"R63-{current_year}{current_month}-{next_number:04d}"
-    
-    def handle_status_change(self):
-        """Handle status changes and update related fields."""
-        if self.pk:
-            try:
-                old_ticket = Ticket.objects.get(pk=self.pk)
-                
-                if old_ticket.status != self.status:
-                    # Log status change
-                    print(f"Ticket {self.ticket_id} status changed from {old_ticket.status} to {self.status}")
-                    
-                    if self.status == self.Status.APPROVED:
-                        self.approved_at = timezone.now()
-                    elif self.status in [self.Status.PENDING, self.Status.REJECTED]:
-                        self.approved_at = None
-            except Ticket.DoesNotExist:
-                pass
-    
-    @property
-    def is_pending(self):
-        return self.status == self.Status.PENDING
     
     @property
     def is_approved(self):
         return self.status == self.Status.APPROVED
     
     @property
+    def is_pending(self):
+        return self.status == self.Status.PENDING
+    
+    @property
     def is_rejected(self):
         return self.status == self.Status.REJECTED
     
-    @property
+    def approve(self, user):
+        """Approve this ticket"""
+        self.status = self.Status.APPROVED
+        self.approved_at = timezone.now()
+        self.approved_by = user
+        self.save()
+    
+    def reject(self, user, notes=''):
+        """Reject this ticket"""
+        self.status = self.Status.REJECTED
+        if notes:
+            self.notes = notes
+        self.save()
+    
     def get_age_group(self):
-        """Get the age group based on age."""
+        """Get age group description"""
         if 8 <= self.age <= 12:
-            return 'pre_teens'
+            return 'Pre-Teens'
         elif 13 <= self.age <= 19:
-            return 'teens'
-        return 'unknown'
+            return 'Teens'
+        return 'Unknown'
 
 
 class BulkUpload(models.Model):
-    """
-    Model for tracking bulk uploads of tickets.
-    """
+    """Model for tracking bulk uploads"""
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        PROCESSING = 'processing', 'Processing'
+        COMPLETED = 'completed', 'Completed'
+        FAILED = 'failed', 'Failed'
+        PARTIAL = 'partial', 'Partial Success'
     
-    class StatusChoices(models.TextChoices):
-        PENDING = 'pending', _('Pending')
-        PROCESSING = 'processing', _('Processing')
-        COMPLETED = 'completed', _('Completed')
-        FAILED = 'failed', _('Failed')
-    
-    upload_id = models.UUIDField(
-        _('upload ID'),
-        default=uuid.uuid4,
-        editable=False,
-        unique=True
-    )
-    file = models.FileField(
-        _('upload file'),
-        upload_to='bulk_uploads/%Y/%m/%d/',
-        help_text=_('CSV or Excel file containing ticket data')
-    )
-    uploaded_by = models.ForeignKey(
-        'users.User',
-        on_delete=models.CASCADE,
-        related_name='bulk_uploads',
-        verbose_name=_('uploaded by'),
-        help_text=_('User who uploaded the file')
-    )
-    
-    # Statistics
-    total_records = models.IntegerField(
-        _('total records'),
-        default=0,
-        help_text=_('Total number of records in the file')
-    )
-    successful_records = models.IntegerField(
-        _('successful records'),
-        default=0,
-        help_text=_('Number of records successfully processed')
-    )
-    failed_records = models.IntegerField(
-        _('failed records'),
-        default=0,
-        help_text=_('Number of records that failed to process')
-    )
-    
-    # Processing information
-    status = models.CharField(
-        _('status'),
-        max_length=20,
-        choices=StatusChoices.choices,
-        default=StatusChoices.PENDING
-    )
-    errors = models.JSONField(
-        _('errors'),
-        default=list,
-        blank=True,
-        help_text=_('List of errors encountered during processing')
-    )
-    error_file = models.FileField(
-        _('error file'),
-        upload_to='bulk_uploads/errors/',
-        null=True,
-        blank=True,
-        help_text=_('File containing error details')
-    )
-    
-    # Timestamps
-    created_at = models.DateTimeField(_('created at'), auto_now_add=True)
-    started_at = models.DateTimeField(_('started at'), null=True, blank=True)
-    completed_at = models.DateTimeField(_('completed at'), null=True, blank=True)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bulk_uploads')
+    filename = models.CharField(max_length=255)
+    file = models.FileField(upload_to='bulk_uploads/')
+    total_records = models.IntegerField(default=0)
+    successful_records = models.IntegerField(default=0)
+    failed_records = models.IntegerField(default=0)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    error_log = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
     
     class Meta:
-        verbose_name = _('bulk upload')
-        verbose_name_plural = _('bulk uploads')
         ordering = ['-created_at']
     
     def __str__(self):
-        return f"Bulk Upload {self.upload_id} - {self.status}"
-    
-    def save(self, *args, **kwargs):
-        """Update timestamps based on status."""
-        if self.status == self.StatusChoices.PROCESSING and not self.started_at:
-            self.started_at = timezone.now()
-        elif self.status in [self.StatusChoices.COMPLETED, self.StatusChoices.FAILED] and not self.completed_at:
-            self.completed_at = timezone.now()
-        super().save(*args, **kwargs)
-    
-    def get_success_rate(self):
-        """Calculate the success rate of the upload."""
-        if self.total_records == 0:
-            return 0
-        return (self.successful_records / self.total_records) * 100
+        return f"{self.filename} - {self.get_status_display()}"
 
 
-class TicketComment(models.Model):
-    """
-    Model for comments on tickets.
-    """
+class TicketAuditLog(models.Model):
+    """Audit log specifically for ticket changes"""
+    class ActionType(models.TextChoices):
+        CREATE = 'create', 'Create'
+        UPDATE = 'update', 'Update'
+        STATUS_CHANGE = 'status_change', 'Status Change'
+        BULK_UPLOAD = 'bulk_upload', 'Bulk Upload'
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='ticket_audit_actions'
+    )
+    action = models.CharField(max_length=50, choices=ActionType.choices)
     ticket = models.ForeignKey(
         Ticket,
         on_delete=models.CASCADE,
-        related_name='comments',
-        verbose_name=_('ticket')
+        related_name='audit_logs',
+        null=True,
+        blank=True
     )
-    user = models.ForeignKey(
-        'users.User',
-        on_delete=models.CASCADE,
-        related_name='ticket_comments',
-        verbose_name=_('user')
+    bulk_upload = models.ForeignKey(
+        BulkUpload,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='audit_logs'
     )
-    comment = models.TextField(_('comment'))
-    is_internal = models.BooleanField(
-        _('internal comment'),
-        default=False,
-        help_text=_('If True, only staff can see this comment')
-    )
-    created_at = models.DateTimeField(_('created at'), auto_now_add=True)
-    updated_at = models.DateTimeField(_('updated at'), auto_now=True)
+    old_values = models.JSONField(null=True, blank=True)
+    new_values = models.JSONField(null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
     
     class Meta:
-        verbose_name = _('ticket comment')
-        verbose_name_plural = _('ticket comments')
-        ordering = ['-created_at']
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['ticket', 'timestamp']),
+            models.Index(fields=['user', 'timestamp']),
+        ]
     
     def __str__(self):
-        return f"Comment on {self.ticket.ticket_id} by {self.user.username}"
+        ticket_ref = self.ticket.ticket_id if self.ticket else 'Bulk Upload'
+        return f"{self.user.username if self.user else 'System'} - {self.action} - {ticket_ref}"

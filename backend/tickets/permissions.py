@@ -1,34 +1,50 @@
 from rest_framework import permissions
+from users.models import User
 
-class IsAdminOrCoordinatorForProvince(permissions.BasePermission):
+
+class TicketPermission(permissions.BasePermission):
     """
-    Permission check for admin users or coordinators for their province.
+    Permission check for ticket operations.
+    Admins can access all tickets.
+    Coordinators can only access tickets from their province.
     """
     
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated
+        user = request.user
+        
+        if not user or not user.is_authenticated:
+            return False
+        
+        # Everyone can create tickets (coordinator or admin)
+        if request.method == 'POST':
+            return True
+        
+        return True
     
     def has_object_permission(self, request, view, obj):
-        # Admin can access all tickets
-        if request.user.is_admin:
+        user = request.user
+        
+        if not user or not user.is_authenticated:
+            return False
+        
+        # Admins can access all tickets
+        if user.role == User.Role.ADMIN:
             return True
         
         # Coordinators can only access tickets from their province
-        if request.user.is_coordinator:
-            return obj.province == request.user.province
+        if user.role == User.Role.COORDINATOR:
+            return obj.province == user.province
         
         return False
 
 
-class IsCoordinatorOnly(permissions.BasePermission):
-    """Only coordinators can access."""
+class CanApproveTicket(permissions.BasePermission):
+    """Only admins can approve tickets"""
     
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and request.user.is_coordinator
-
-
-class IsAdminOnly(permissions.BasePermission):
-    """Only admins can access."""
+        user = request.user
+        return user and user.is_authenticated and user.role == User.Role.ADMIN
     
-    def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and request.user.is_admin
+    def has_object_permission(self, request, view, obj):
+        user = request.user
+        return user and user.is_authenticated and user.role == User.Role.ADMIN
