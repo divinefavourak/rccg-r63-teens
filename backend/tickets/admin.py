@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Ticket, BulkUpload, TicketAuditLog
+from .models import Ticket, BulkUpload, TicketAuditLog, CheckInRecord
 
 
 @admin.register(Ticket)
@@ -68,3 +68,12 @@ class TicketAuditLogAdmin(admin.ModelAdmin):
     search_fields = ('user__username', 'ticket__ticket_id', 'ticket__full_name')
     readonly_fields = ('timestamp',)
     date_hierarchy = 'timestamp'
+    
+@admin.register(CheckInRecord)
+class CheckInRecordAdmin(admin.ModelAdmin):
+    """Admin configuration for CheckInRecord model"""
+    list_display = ('ticket', 'checked_in_by', 'checked_in_at', 'check_in_method')
+    list_filter = ('check_in_method', 'checked_in_at')
+    search_fields = ('ticket__ticket_id', 'ticket__full_name', 'checked_in_by__username')
+    readonly_fields = ('checked_in_at',)
+    date_hierarchy = 'checked_in_at'

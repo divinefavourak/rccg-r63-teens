@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.core.validators import EmailValidator
-from .models import Ticket, BulkUpload, TicketAuditLog
+from .models import Ticket, BulkUpload, TicketAuditLog, CheckInRecord
 from users.models import User
 
 
@@ -224,3 +224,23 @@ class TicketAuditLogSerializer(serializers.ModelSerializer):
 #     # Recent activity
 #     recent_tickets = TicketSerializer(many=True)
 #     recent_activity = TicketAuditLogSerializer(many=True)
+
+class CheckInRecordSerializer(serializers.ModelSerializer):
+    """Serializer for check-in records"""
+    ticket_id_display = serializers.CharField(source='ticket.ticket_id', read_only=True)
+    ticket_full_name = serializers.CharField(source='ticket.full_name', read_only=True)
+    checked_by_name = serializers.CharField(source='checked_in_by.get_display_name', read_only=True)
+    check_in_method_display = serializers.CharField(source='get_check_in_method_display', read_only=True)
+    
+    class Meta:
+        model = CheckInRecord
+        fields = [
+            'id', 'ticket', 'ticket_id_display', 'ticket_full_name',
+            'checked_in_by', 'checked_by_name', 'checked_in_at',
+            'check_in_method', 'check_in_method_display', 'notes',
+            'location_lat', 'location_long', 'ip_address', 'user_agent',
+            'device_id'
+        ]
+        read_only_fields = [
+            'id', 'checked_in_at', 'ip_address', 'user_agent'
+        ]

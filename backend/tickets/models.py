@@ -251,3 +251,50 @@ class TicketAuditLog(models.Model):
     def __str__(self):
         ticket_ref = self.ticket.ticket_id if self.ticket else 'Bulk Upload'
         return f"{self.user.username if self.user else 'System'} - {self.action} - {ticket_ref}"
+    
+class CheckInRecord(models.Model):
+    """Record of ticket check-ins at the event"""
+    
+    class CheckInMethod(models.TextChoices):
+        MANUAL = 'manual', 'Manual Entry'
+        QR_SCAN = 'qr_scan', 'QR Scan'
+        BARCODE = 'barcode', 'Barcode Scan'
+        NFC = 'nfc', 'NFC Tap'
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    ticket = models.ForeignKey(
+        Ticket,
+        on_delete=models.CASCADE,
+        related_name='check_in_records'
+    )
+    checked_in_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='checked_in_tickets'
+    )
+    checked_in_at = models.DateTimeField(auto_now_add=True)
+    check_in_method = models.CharField(max_length=20, choices=CheckInMethod.choices, default=CheckInMethod.MANUAL)
+    notes = models.TextField(blank=True)
+    
+    # Location data (if available)
+    location_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    location_long = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    
+    # Device info
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    device_id = models.CharField(max_length=255, blank=True)
+    
+    class Meta:
+        ordering = ['-checked_in_at']
+        indexes = [
+            models.Index(fields=['ticket', 'checked_in_at']),
+            models.Index(fields=['checked_in_at']),
+            models.Index(fields=['checked_in_by', 'checked_in_at']),
+        ]
+        verbose_name = 'Check-in Record'
+        verbose_name_plural = 'Check-in Records'
+    
+    def __str__(self):
+        return f"{self.ticket.ticket_id} - {self.checked_in_at.strftime('%Y-%m-%d %H:%M')}"
