@@ -14,6 +14,8 @@ import {
 } from "../constants/formFields";
 import { ticketSchema, TicketFormData } from "../schemas/ticketSchema";
 import { useTicketStore } from "../store/ticketStore";
+import { ticketService } from "../services/ticketService";
+import { paymentService } from "../services/paymentService";
 
 const STEP_FIELDS = {
   1: ['fullName', 'age', 'category', 'gender', 'phone', 'email'],
@@ -75,53 +77,8 @@ const TicketForm = () => {
     setFormData(watchedValues);
   }, [watchedValues, setFormData]);
 
-  // --- PAYSTACK CONFIGURATION ---
-  const config = {
-    reference: (new Date()).getTime().toString(),
-    email: watchedValues.email || "user@example.com",
-    amount: 3000 * 100, // ₦3,000 in kobo
-    publicKey: 'pk_test_241ed76659d67e941a1008604b95645d80db23a8', // REPLACE WITH YOUR PUBLIC KEY
-  };
-
-  const initializePayment = usePaystackPayment(config);
-
-  const onSuccess = (reference: any) => {
-    completeRegistration(reference);
-  };
-
-  const onClose = () => {
-    setIsSubmitting(false);
-    toast.error("Payment cancelled. Registration not complete.");
-  };
-
-  const completeRegistration = async (paymentReference: any) => {
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      const ticketData = {
-        ...watchedValues,
-        ticketId: `R63T${Date.now()}`,
-        status: 'approved', // Auto-approve
-        registeredAt: new Date().toISOString(),
-        paymentRef: paymentReference.reference,
-        registeredBy: 'Self',
-        registrationType: 'individual', // Mark as individual
-        province: watchedValues.province
-      };
-
-      resetForm();
-      navigate('/ticket-preview', { state: { ticket: ticketData } });
-      toast.success("Registration Successful! See you at camp.");
-    } catch (error) {
-      toast.error("Error saving ticket details.");
-      console.error(error);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const nextStep = async () => {
-    // /@ts-expect-error - Keys are valid
+    // /@ts-expect-error - Keys are mapped correctly
     const fields = STEP_FIELDS[currentStep as keyof typeof STEP_FIELDS];
     const isStepValid = await trigger(fields);
     
@@ -136,9 +93,39 @@ const TicketForm = () => {
     window.scrollTo(0, 0);
   };
 
-  const onSubmit: SubmitHandler<TicketFormData> = (data) => {
+  const onSubmit: SubmitHandler<TicketFormData> = async (data) => {
     setIsSubmitting(true);
-    initializePayment({ onSuccess, onClose });
+    try {
+      // 1. Create the Ticket in the backend first
+      // The backend will assign an ID and status='pending'
+      const newTicket = await ticketService.createTicket(data);
+      
+      if (!newTicket || !newTicket.id) {
+        throw new Error("Failed to create ticket record.");
+      }
+
+      // 2. Initialize Payment using the new Ticket ID
+      // The backend creates a transaction reference and returns the Paystack URL
+      const paymentData = await paymentService.initializePayment(newTicket.id);
+
+      // 3. Clear local store state before redirecting
+      resetForm();
+
+      // 4. Redirect user to Paystack's authorization URL
+      if (paymentData.authorization_url) {
+        window.location.href = paymentData.authorization_url;
+      } else {
+        throw new Error("No payment URL returned.");
+      }
+
+    } catch (error: any) {
+      console.error("Registration error:", error);
+      const errorMsg = error.response?.data?.detail || 
+                       error.response?.data?.error || 
+                       "Registration failed. Please try again.";
+      toast.error(errorMsg);
+      setIsSubmitting(false);
+    }
   };
 
   const getErrorMessage = (fieldName: string) => {
@@ -159,6 +146,7 @@ const TicketForm = () => {
       case 'select':
         return (
           <select {...register(field.name as keyof TicketFormData, registerOptions)} className={inputClasses}>
+            <option value="">Select...</option>
             {field.options.map((option: any) => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}

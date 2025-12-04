@@ -1,13 +1,13 @@
 import { motion } from "framer-motion";
 import { FaInstagram } from "react-icons/fa";
 import mj from "../assets/mummyJ.JPG";
-import img1 from "../assets/img1.jpg";
-import img2 from "../assets/img2.jpg";
-import img3 from "../assets/img3.jpg";
-import img4 from "../assets/img4.jpg";
-import img5 from "../assets/img5.jpg";
+// FIXED: Changed .jpg to .JPG to match your file system
+import img1 from "../assets/img1.JPG";
+import img2 from "../assets/img2.JPG";
+import img3 from "../assets/img3.JPG";
+import img4 from "../assets/img4.JPG";
+import img5 from "../assets/img5.JPG";
 
-// You can mix local imports and remote URLs
 const photos = [
   mj,
   img2,

@@ -1,43 +1,68 @@
+import { api } from "./api";
 import { Ticket } from "../types";
-import { MOCK_TICKETS } from "../data/mockTickets";
 
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+// Helper to map frontend camelCase to backend snake_case
+const mapToBackend = (data: any) => ({
+  full_name: data.fullName,
+  age: data.age,
+  category: data.category,
+  gender: data.gender,
+  phone: data.phone,
+  email: data.email,
+  province: data.province,
+  zone: data.zone,
+  area: data.area,
+  parish: data.parish,
+  department: data.department,
+  medical_conditions: data.medicalConditions,
+  medications: data.medications,
+  dietary_restrictions: data.dietaryRestrictions,
+  emergency_contact: data.emergencyContact,
+  emergency_phone: data.emergencyPhone,
+  emergency_relationship: data.emergencyRelationship,
+  parent_name: data.parentName,
+  parent_email: data.parentEmail,
+  parent_phone: data.parentPhone,
+  parent_relationship: data.parentRelationship,
+  parent_consent: data.parentConsent,
+  medical_consent: data.medicalConsent,
+  // Add any other fields if necessary
+});
 
 class TicketService {
-  private tickets: Ticket[] = [...MOCK_TICKETS];
-
+  /**
+   * Fetch all tickets (Admin/Coordinator view)
+   */
   async getAllTickets(): Promise<Ticket[]> {
-    await delay(800); 
-    return [...this.tickets];
+    const response = await api.get('/tickets/');
+    return response.data.results || response.data; 
   }
 
+  /**
+   * Get a single ticket by ID
+   */
   async getTicketById(ticketId: string): Promise<Ticket | undefined> {
-    await delay(500);
-    return this.tickets.find(t => t.ticketId === ticketId);
+    const response = await api.get(`/tickets/?search=${ticketId}`);
+    const results = response.data.results || response.data;
+    return results.length > 0 ? results[0] : undefined;
   }
 
+  /**
+   * Create a ticket.
+   * Maps frontend data to backend format before sending.
+   */
   async createTicket(data: any): Promise<Ticket> {
-    await delay(1500);
-    
-    const newTicket: Ticket = {
-      ...data,
-      id: Date.now() + Math.floor(Math.random() * 1000), // Random ID to prevent collisions in bulk
-      status: data.status || "pending",
-      registeredAt: new Date().toISOString()
-    };
-    
-    this.tickets.unshift(newTicket);
-    return newTicket;
+    const payload = mapToBackend(data);
+    const response = await api.post('/tickets/', payload);
+    return response.data;
   }
 
-  async updateTicketStatus(id: number, status: 'approved' | 'rejected' | 'pending'): Promise<Ticket> {
-    await delay(600);
-    
-    const index = this.tickets.findIndex(t => t.id === id);
-    if (index === -1) throw new Error("Ticket not found");
-    
-    this.tickets[index] = { ...this.tickets[index], status };
-    return this.tickets[index];
+  /**
+   * Update ticket status (Admin only)
+   */
+  async updateTicketStatus(id: string | number, status: 'approved' | 'rejected' | 'pending'): Promise<Ticket> {
+    const response = await api.post(`/tickets/${id}/update-status/`, { status });
+    return response.data;
   }
 }
 
