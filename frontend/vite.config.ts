@@ -5,8 +5,9 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 3000,
-    historyApiFallback: true, // Crucial for local dev SPA routing
+    host: true,
+    port: 5173,
+     // Crucial for local dev SPA routing
   },
   build: {
     outDir: 'dist',

@@ -1,6 +1,7 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import { Toaster } from 'react-hot-toast';
+import { Analytics } from "@vercel/analytics/react"; // NEW: Analytics
 import ScrollToTop from './components/ScrollToTop';
 import ProtectedRoute from './components/ProtectedRoute';
 import Snowfall from './components/Snowfall';
@@ -51,11 +52,11 @@ function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/ticket-preview" element={<TicketPreview />} />
             
+            {/* PUBLIC REGISTRATION ROUTE */}
+            <Route path="/get-ticket" element={<TicketForm />} />
+            
             <Route path="/admin-login" element={<AdminLogin />} />
             <Route path="/coordinator-login" element={<CoordinatorLogin />} />
-            
-            {/* Legacy Redirect */}
-            <Route path="/get-ticket" element={<Navigate to="/coordinator-login" replace />} />
             
             {/* Coordinator Routes */}
             <Route 
@@ -80,6 +81,9 @@ function App() {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
+        
+        {/* Vercel Analytics Tracker */}
+        <Analytics />
       </Router>
     </AuthProvider>
   );

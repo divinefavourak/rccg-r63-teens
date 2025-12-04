@@ -10,24 +10,20 @@ import {
 } from "react-icons/fa";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
+import jsPDF from "jspdf";
 
 const CoordinatorDashboard = () => {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
   const [myTickets, setMyTickets] = useState<Ticket[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // Load only this coordinator's province data
   useEffect(() => {
     if (!user || user.role !== 'coordinator') return;
 
     const fetchMyData = async () => {
       try {
         const allTickets = await ticketService.getAllTickets();
-        
-        // Filter logic: In production, backend does this. Here we filter by province name.
-        // We normalize names to ensure "Lagos Province 9" matches "lp9" logic if needed.
         const normalize = (str: string) => str.toLowerCase().replace(/\s/g, '');
         const userProv = normalize(user.province || '');
         
@@ -65,7 +61,7 @@ const CoordinatorDashboard = () => {
       headers.join(","),
       ...myTickets.map(t => [
         t.ticketId, 
-        `"${t.fullName}"`, // Quote names to handle spaces/commas
+        `"${t.fullName}"`,
         t.age, 
         t.gender, 
         t.category, 
@@ -82,6 +78,49 @@ const CoordinatorDashboard = () => {
     a.download = `${user?.province?.replace(/ /g, '_')}_List.csv`;
     a.click();
     toast.success("List downloaded successfully!");
+  };
+
+  const handleBulkDownload = () => {
+    if (myTickets.length === 0) return toast.error("No tickets to download");
+
+    const doc = new jsPDF();
+    let yPos = 20;
+
+    doc.setFontSize(16);
+    doc.text(`RCCG R63 CAMP TICKETS - ${user?.province}`, 105, 15, { align: "center" });
+    
+    doc.setFontSize(10);
+    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 105, 22, { align: "center" });
+
+    myTickets.forEach((ticket, index) => {
+      if (index > 0 && index % 5 === 0) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      doc.setDrawColor(200);
+      doc.rect(10, yPos, 190, 45); 
+
+      doc.setFontSize(12);
+      doc.setTextColor(0);
+      doc.setFont("helvetica", "bold");
+      doc.text(`TICKET ID: ${ticket.ticketId}`, 15, yPos + 10);
+      
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text(`Name: ${ticket.fullName}`, 15, yPos + 20);
+      doc.text(`Category: ${ticket.category.toUpperCase()}`, 15, yPos + 30);
+      doc.text(`Gender: ${ticket.gender}`, 100, yPos + 20);
+      doc.text(`Status: ${ticket.status.toUpperCase()}`, 100, yPos + 30);
+      
+      doc.setTextColor(100);
+      doc.text("Present this ID at the gate.", 15, yPos + 40);
+
+      yPos += 55;
+    });
+
+    doc.save(`${user?.province}_Tickets.pdf`);
+    toast.success("Tickets PDF downloaded successfully!");
   };
 
   return (
@@ -106,7 +145,6 @@ const CoordinatorDashboard = () => {
 
           {/* Action Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            {/* Stats Card */}
             <div className="card p-6 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl shadow-sm">
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400">
@@ -123,7 +161,6 @@ const CoordinatorDashboard = () => {
               </div>
             </div>
 
-            {/* Registration Actions */}
             <Link to="/coordinator/bulk-register" className="card p-6 bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-500/20 rounded-2xl shadow-sm hover:shadow-md transition-all group cursor-pointer">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-full bg-yellow-200 dark:bg-yellow-500/20 flex items-center justify-center text-yellow-700 dark:text-yellow-400 text-xl group-hover:scale-110 transition-transform">
@@ -151,7 +188,6 @@ const CoordinatorDashboard = () => {
 
           {/* List Table */}
           <div className="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-sm">
-            {/* Toolbar */}
             <div className="p-4 border-b border-gray-200 dark:border-white/10 flex flex-col md:flex-row gap-4 justify-between items-center bg-gray-50 dark:bg-white/5">
               <div className="relative w-full md:w-96">
                 <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -163,12 +199,10 @@ const CoordinatorDashboard = () => {
                   className="w-full pl-10 pr-4 py-2 bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg outline-none focus:ring-2 focus:ring-yellow-500 dark:text-white"
                 />
               </div>
-              <button 
-                onClick={handleDownloadCSV}
-                className="flex items-center gap-2 bg-gray-800 dark:bg-white/10 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-700 dark:hover:bg-white/20 transition-colors"
-              >
-                <FaDownload /> Download List
-              </button>
+              <div className="flex gap-2">
+                <button onClick={handleDownloadCSV} className="bg-gray-800 dark:bg-white/10 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-700 dark:hover:bg-white/20 transition-colors">CSV</button>
+                <button onClick={handleBulkDownload} className="flex items-center gap-2 bg-yellow-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-yellow-700 transition-colors shadow-sm"><FaDownload /> Tickets PDF</button>
+              </div>
             </div>
             
             <div className="overflow-x-auto">
@@ -212,7 +246,6 @@ const CoordinatorDashboard = () => {
               </table>
             </div>
           </div>
-
         </div>
       </div>
       <Footer />
