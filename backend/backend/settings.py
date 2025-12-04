@@ -28,7 +28,7 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -106,7 +106,7 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 DATABASE_URL=os.getenv("DATABASE_URL")
 if(DATABASE_URL):
     DATABASES = {
-        'default': dj_database_url.os.getenv(
+        'default': dj_database_url.config(
             default=DATABASE_URL
         )
     }

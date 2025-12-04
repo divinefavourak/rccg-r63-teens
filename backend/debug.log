@@ -1620,3 +1620,6 @@ AttributeError: 'UUID' object has no attribute 'pk'
 Unauthorized: /api/auth/login/
 Unauthorized: /api/auth/login/
 Watching for file changes with StatReloader
+Forbidden: /api/payments/payment-plans/
+Bad Request: /api/payments/payments/initialize/
+Forbidden: /api/payments/dashboard/
