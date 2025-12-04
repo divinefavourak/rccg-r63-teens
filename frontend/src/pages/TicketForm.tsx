@@ -3,7 +3,6 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm, SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { usePaystackPayment } from 'react-paystack'; // Ensure you installed this
 import toast from "react-hot-toast"; 
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
