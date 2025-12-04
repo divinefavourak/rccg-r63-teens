@@ -9,7 +9,7 @@ export const EVENT_DETAILS = {
   address: "KM 46, LAGOS-IBADAN EXPRESSWAY, OGUN STATE",
   contact: {
     phone: "+234 806 425 4001",
-    email: "info@rccgregion63teens.org",
+    email: "region63juniorchurch@gmail.com",
     pastor: "A/P Joy Oladipupo Tobi",
   },
   features: [
