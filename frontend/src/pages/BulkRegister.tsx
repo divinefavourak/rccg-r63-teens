@@ -7,7 +7,6 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import toast from "react-hot-toast";
 import { ticketService } from "../services/ticketService";
-import { usePaystackPayment } from 'react-paystack'; 
 import CoordinatorDashboard from "./CoordinatorDashboard";
 
 const BulkRegister = () => {
