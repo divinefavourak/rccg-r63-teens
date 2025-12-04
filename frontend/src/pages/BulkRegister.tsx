@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
-import { usePaystackPayment } from "react-paystack"; // Added Import
+// Added Import
 import { FaTrash, FaPlus, FaCreditCard, FaCalculator } from "react-icons/fa";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -64,8 +64,7 @@ const BulkRegister = () => {
     }
   };
 
-  const initializePayment = usePaystackPayment(config);
-
+ 
   const onSuccess = (reference: any) => {
     processBulkRegistration(reference);
   };
