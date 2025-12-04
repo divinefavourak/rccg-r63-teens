@@ -24,7 +24,9 @@ export interface Ticket {
   parentRelationship: string;
   status: 'pending' | 'approved' | 'rejected';
   registeredAt: string;
-  registeredBy?: string; // New: to track who registered them
+  registeredBy?: string; // e.g., "Self" or "Coordinator Name"
+  registrationType: 'individual' | 'coordinator'; // New field for Admin tracking
+  paymentRef?: string; // New field for payment confirmation
 }
 
 export interface User {

@@ -62,18 +62,18 @@ const BulkEmailModal = ({
     {
       name: "Welcome Email",
       subject: "Welcome to RCCG Region 63 Teens Camp!",
-      message: `Dear {name},\n\nWelcome to the RCCG Region 63 Teens Camp! We're excited to have you join us for this amazing experience.\n\nSee you at the camp!\n\nBlessings,\nRCCG Region 63 Team`
+      message: `Dear {name},\n\nWelcome to the RCCG Region 63 Teens Camp! We're excited to have you join us for this amazing experience.\n\nGet ready for:\n• Powerful worship sessions\n• Engaging workshops\n• Fun activities and games\n• Life-changing encounters\n\nSee you at the camp!\n\nBlessings,\nRCCG Region 63 Team`
     },
     {
       name: "Payment Reminder",
       subject: "Payment Reminder - RCCG Teens Camp",
-      message: `Dear {name},\n\nThis is a friendly reminder about your camp registration payment.\n\nThank you!\nRCCG Region 63 Team`
+      message: `Dear {name},\n\nThis is a friendly reminder about your camp registration payment.\n\nPlease complete your payment at your earliest convenience to secure your spot.\n\nPayment Details:\n• Amount: ₦3,000\n• Please proceed to the payment portal to complete your transaction if you haven't done so.\n\nIf you've already made payment, please disregard this message.\n\nThank you!\nRCCG Region 63 Team`
     },
     {
-      name: "Payment Reminder",
-      subject: "Payment Reminder - RCCG Teens Camp",
-      message: `Dear {name},\n\nThis is a friendly reminder about your camp registration payment.\n\nIMPORTANT: Please make your payment of ₦15,000 directly to your PROVINCIAL COORDINATOR.\n\nDo NOT pay into the Regional account.\n\nIf you have already paid your Coordinator, please disregard this message.\n\nThank you!\nRCCG Region 63 Team`
-    },
+      name: "Final Instructions",
+      subject: "Final Instructions - Camp Preparation",
+      message: `Dear {name},\n\nThe camp is almost here! Here are some final instructions:\n\nWhat to Bring:\n• Bible and notebook\n• Comfortable clothing\n• Toiletries\n• Bedding (if required)\n• Any medications\n\nArrival: Please arrive by 9:00 AM\nLocation: ${EVENT_DETAILS.location}\n\nWe can't wait to see you!\n\nRCCG Region 63 Team`
+    }
   ];
 
   const applyTemplate = (template: { subject: string; message: string }) => {
