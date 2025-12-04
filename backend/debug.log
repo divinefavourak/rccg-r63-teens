@@ -1623,3 +1623,40 @@ Watching for file changes with StatReloader
 Forbidden: /api/payments/payment-plans/
 Bad Request: /api/payments/payments/initialize/
 Forbidden: /api/payments/dashboard/
+Watching for file changes with StatReloader
+Watching for file changes with StatReloader
+Not Found: /
+Not Found: /favicon.ico
+Internal Server Error: /health
+Traceback (most recent call last):
+  File "/Users/koded/Desktop/Code/rccg-r63-teens/backend/.venv/lib/python3.11/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/koded/Desktop/Code/rccg-r63-teens/backend/.venv/lib/python3.11/site-packages/django/utils/deprecation.py", line 122, in __call__
+    response = self.process_response(request, response)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/koded/Desktop/Code/rccg-r63-teens/backend/.venv/lib/python3.11/site-packages/django/middleware/clickjacking.py", line 34, in process_response
+    response.headers["X-Frame-Options"] = self.get_xframe_options_value(
+    ^^^^^^^^^^^^^^^^
+AttributeError: 'dict' object has no attribute 'headers'
+/Users/koded/Desktop/Code/rccg-r63-teens/backend/backend/urls.py changed, reloading.
+Watching for file changes with StatReloader
+Internal Server Error: /health
+Traceback (most recent call last):
+  File "/Users/koded/Desktop/Code/rccg-r63-teens/backend/.venv/lib/python3.11/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/koded/Desktop/Code/rccg-r63-teens/backend/.venv/lib/python3.11/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: health() takes 0 positional arguments but 1 was given
+/Users/koded/Desktop/Code/rccg-r63-teens/backend/backend/urls.py changed, reloading.
+Watching for file changes with StatReloader
+/Users/koded/Desktop/Code/rccg-r63-teens/backend/backend/urls.py changed, reloading.
+Watching for file changes with StatReloader
+/Users/koded/Desktop/Code/rccg-r63-teens/backend/backend/urls.py changed, reloading.
+Watching for file changes with StatReloader
+/Users/koded/Desktop/Code/rccg-r63-teens/backend/backend/urls.py changed, reloading.
+Watching for file changes with StatReloader
+/Users/koded/Desktop/Code/rccg-r63-teens/backend/backend/urls.py changed, reloading.
+Watching for file changes with StatReloader

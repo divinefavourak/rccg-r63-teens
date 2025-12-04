@@ -18,6 +18,10 @@ from django.contrib import admin
 from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import path, include
+from django.http import JsonResponse
+
+def health(request):
+    return JsonResponse({"health": "active"})
 
 urlpatterns = [
     # Admin
@@ -27,6 +31,7 @@ urlpatterns = [
     path('api/auth/', include('users.urls')),
     path('api/', include('tickets.urls')),
     path('api/payments/', include('payments.urls')),
+    path("health", health, name='health'),
 ]
 
 # Serve media files in development
