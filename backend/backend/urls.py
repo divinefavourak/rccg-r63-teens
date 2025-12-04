@@ -22,9 +22,17 @@ from django.http import JsonResponse
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
 def health(request):
-    return JsonResponse({"health": "active"})
+    """Simple health check endpoint"""
+    return JsonResponse({
+        "status": "active",
+        "service": "RCCG R63 Ticketing App"
+    })
 
 urlpatterns = [
+    # Health check - put this FIRST to avoid conflicts
+    path('health/', health, name='health'),
+    path('health', health, name='health-root'),  # Add this for root-level access
+    
     # Admin
     path('admin/', admin.site.urls),
     
@@ -32,15 +40,12 @@ urlpatterns = [
     path('api/auth/', include('users.urls')),
     path('api/', include('tickets.urls')),
     path('api/payments/', include('payments.urls')),
-    path("health", health, name='health'),
     
-    # ...
+    # Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
-    # ...
 ]
-
 
 # Serve media files in development
 if settings.DEBUG:
