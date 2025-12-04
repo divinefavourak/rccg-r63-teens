@@ -19,6 +19,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import path, include
 from django.http import JsonResponse
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
 def health(request):
     return JsonResponse({"health": "active"})
@@ -32,7 +33,14 @@ urlpatterns = [
     path('api/', include('tickets.urls')),
     path('api/payments/', include('payments.urls')),
     path("health", health, name='health'),
+    
+    # ...
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    # ...
 ]
+
 
 # Serve media files in development
 if settings.DEBUG:

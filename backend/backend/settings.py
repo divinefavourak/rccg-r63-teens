@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'drf_yasg',
+    'drf_spectacular',
     'django_filters',
     'storages',
     
@@ -195,6 +196,7 @@ REST_FRAMEWORK = {
     ],
     'UPLOADED_FILES_USE_URL': True,
     'TEST_REQUEST_DEFAULT_FORMAT': 'json',
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 
@@ -253,4 +255,17 @@ LOGGING = {
         'handlers': ['console', 'file'],
         'level': 'INFO',
     },
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'R63 API',
+    'DESCRIPTION': 'R63 API description',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SWAGGER_UI_SETTINGS': {
+        'deepLinking': True,
+    },
+    'COMPONENT_SPLIT_REQUEST': True,
+    'COMPONENT_SPLIT_RESPONSE': True,
+    # OTHER SETTINGS
 }
