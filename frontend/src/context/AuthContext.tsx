@@ -11,19 +11,27 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Use the Vite environment variable for the API URL
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Check login status on mount
   useEffect(() => {
     const storedUser = localStorage.getItem("rccg_user");
     if (storedUser) {
       try {
         const parsedUser = JSON.parse(storedUser);
-        // Optional: Verify token validity here
-        setUser(parsedUser);
+        // Ensure the user has a token before setting state
+        if (parsedUser && (parsedUser.token || parsedUser.access)) {
+          setUser(parsedUser);
+        } else {
+          // Invalid user data, clear it
+          localStorage.removeItem("rccg_user");
+        }
       } catch (e) {
         localStorage.removeItem("rccg_user");
       }
@@ -33,21 +41,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
+      // Call the real Backend Login Endpoint
       const response = await axios.post(`${API_URL}/auth/login/`, {
         username,
         password
       });
 
+      // The backend returns { access, refresh, user: { ... } }
       const { access, refresh, user: userData } = response.data;
       
-      const userWithToken = {
+      // Merge the token into the user object so we can use it later
+      const userWithToken: User = {
         ...userData,
-        token: access,
+        token: access, // ✅ CRITICAL: Save the token here!
         refreshToken: refresh
       };
 
+      // Save to LocalStorage and State
       localStorage.setItem("rccg_user", JSON.stringify(userWithToken));
       setUser(userWithToken);
+      
       return true;
     } catch (error) {
       console.error("Login failed:", error);

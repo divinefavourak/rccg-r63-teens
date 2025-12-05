@@ -2,20 +2,19 @@ import { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
-// Added Import
 import { FaTrash, FaPlus, FaCreditCard, FaCalculator } from "react-icons/fa";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import toast from "react-hot-toast";
 import { ticketService } from "../services/ticketService";
+import { paymentService } from "../services/paymentService";
 
 const BulkRegister = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Form setup with default values including required fields
-  const { control, register, handleSubmit, watch, formState: { errors } } = useForm({
+  const { control, register, handleSubmit, watch } = useForm({
     defaultValues: {
       candidates: [
         { 
@@ -26,14 +25,14 @@ const BulkRegister = () => {
           phone: "", 
           email: "", 
           parish: "", 
-          department: "Teens", // Default
+          department: "Teens",
           parentName: "", 
           parentPhone: "", 
-          parentEmail: "",
-          parentRelationship: "Parent", // Default
+          parentEmail: "", 
+          parentRelationship: "Parent",
           emergencyContact: "", 
-          emergencyPhone: "",
-          emergencyRelationship: "Parent", // Default
+          emergencyPhone: "", 
+          emergencyRelationship: "Parent",
           medicalConditions: "None",
           medications: "None",
           dietaryRestrictions: "None",
@@ -48,74 +47,53 @@ const BulkRegister = () => {
   });
 
   const candidates = watch("candidates");
-  const totalAmount = candidates.length * 3000; // ₦3,000 per person
+  const totalAmount = candidates.length * 3000;
 
-  // Paystack Configuration
-  const config = {
-    reference: (new Date()).getTime().toString(),
-    email: user?.username || "coordinator@faithtribe.org",
-    amount: totalAmount * 100, // in kobo
-    publicKey: 'pk_test_241ed76659d67e941a1008604b95645d80db23a8', // Replace with Env Var in production
-    metadata: {
-      custom_fields: [
-        { display_name: "Coordinator", variable_name: "coordinator", value: user?.province },
-        { display_name: "Quantity", variable_name: "quantity", value: candidates.length }
-      ]
-    }
-  };
+  const onFormSubmit = async (data: any) => {
+    if (candidates.length === 0) return toast.error("Add at least one candidate");
+    setIsSubmitting(true);
 
- 
-  const onSuccess = (reference: any) => {
-    processBulkRegistration(reference);
-  };
-
-  const onClose = () => {
-    toast.error("Payment cancelled. Candidates were not registered.");
-    setIsSubmitting(false);
-  };
-
-  const processBulkRegistration = async (paymentRef: any) => {
     try {
-      const promises = candidates.map(async (candidate: any) => {
-        // We use the camelCase to snake_case converter inside ticketService
-        return ticketService.createTicket({
+      // 1. Create ALL tickets first (Status will be Pending)
+      const createdTickets = [];
+      
+      for (const candidate of candidates) {
+        const ticket = await ticketService.createTicket({
           ...candidate,
           age: parseInt(candidate.age),
-          // Auto-fill Coordinator Fields
-          province: user?.province || "Unknown Province",
-          zone: "Coordinator Upload", 
+          province: user?.province || "lagos_province_9",
+          zone: "Coordinator Upload",
           area: "Coordinator Upload",
-          
-          // Consent Flags (Implicit for Bulk)
           parentConsent: true,
           medicalConsent: true,
           photoConsent: true,
-          
-          // Payment Info
           registeredBy: user?.name || "Coordinator",
           registrationType: 'coordinator',
-          paymentRef: paymentRef.reference, // Pass the bulk reference
-          status: 'approved' // Coordinator uploads are auto-approved after payment
-        });
-      });
+          status: 'pending' 
+        }, user?.token);
+        
+        createdTickets.push(ticket);
+      }
 
-      await Promise.all(promises);
-      toast.success(`Successfully registered ${candidates.length} candidates!`);
-      navigate('/coordinator/dashboard');
+      // 2. Collect IDs
+      const ticketIds = createdTickets.map(t => t.id);
+
+      // 3. Initialize Bulk Payment via Backend
+      const paymentData = await paymentService.initializeBulkPayment(ticketIds, user?.token);
+
+      // 4. Redirect to Paystack
+      if (paymentData.authorization_url) {
+        window.location.href = paymentData.authorization_url;
+      } else {
+        throw new Error("No payment URL returned");
+      }
+
     } catch (error: any) {
       console.error(error);
-      const msg = error.response?.data?.detail || "Error submitting registrations.";
+      const msg = error.response?.data?.detail || "Registration failed. Please try again.";
       toast.error(msg);
-    } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const onFormSubmit = (data: any) => {
-    if (candidates.length === 0) return toast.error("Add at least one candidate");
-    setIsSubmitting(true);
-    // Initialize Paystack Modal
-    initializePayment({ onSuccess, onClose });
   };
 
   return (
@@ -126,7 +104,7 @@ const BulkRegister = () => {
           <div className="flex flex-col md:flex-row justify-between items-end mb-8 border-b border-gray-200 dark:border-white/10 pb-6">
             <div>
               <h1 className="text-3xl font-black uppercase">Bulk Registration</h1>
-              <p className="text-gray-500 dark:text-white/60">Province: <span className="text-yellow-600 font-bold">{user?.province}</span></p>
+              <p className="text-gray-500 dark:text-white/60">Province: <span className="text-yellow-600 font-bold">{user?.province?.replace(/_/g, ' ')}</span></p>
             </div>
             <button
               type="button"
@@ -139,7 +117,6 @@ const BulkRegister = () => {
               <p className="text-xs font-bold uppercase  text-yellow-700 dark:text-yellow-400">Total To Pay (₦3,000/head)</p>
               <p className="text-2xl font-black flex items-center gap-2">
                 <FaCalculator className="text-lg" /> ₦{totalAmount.toLocaleString()}
-                
               </p>
             </div>
           </div>
@@ -225,11 +202,15 @@ const BulkRegister = () => {
                     </div>
                   </div>
 
-                  {/* Parent Details */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 pt-4 border-t border-gray-100 dark:border-white/5">
+                  {/* Parent Details (FIXED: Added Parent Email) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 pt-4 border-t border-gray-100 dark:border-white/5">
                     <div>
                       <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Parent Name *</label>
                       <input {...register(`candidates.${index}.parentName`, { required: true })} className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none" />
+                    </div>
+                    <div>
+                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Parent Email *</label>
+                      <input type="email" {...register(`candidates.${index}.parentEmail`, { required: true })} className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none" />
                     </div>
                     <div>
                       <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Parent Phone *</label>

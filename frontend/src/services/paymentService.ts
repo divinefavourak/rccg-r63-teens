@@ -9,22 +9,38 @@ interface InitializeResponse {
 
 class PaymentService {
   /**
-   * Initialize payment via Backend.
-   * The backend talks to Paystack and returns the authorization URL.
-   * @param ticketId - The ID (UUID) of the created ticket
+   * Initialize SINGLE payment via Backend.
    */
-  async initializePayment(ticketId: string | number): Promise<InitializeResponse> {
+  async initializePayment(ticketId: string | number, token?: string): Promise<InitializeResponse> {
+    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+
     const response = await api.post('/payments/payments/initialize/', {
       ticket_id: ticketId
-    });
+    }, config);
+    
     return response.data;
   }
 
   /**
-   * Verify payment status (Optional: usually handled via callback page)
+   * Initialize BULK payment via Backend.
    */
-  async verifyPayment(reference: string) {
-    const response = await api.post('/payments/payments/verify/', { reference });
+  async initializeBulkPayment(ticketIds: string[], token?: string): Promise<InitializeResponse> {
+    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+    
+    const response = await api.post('/payments/payments/initialize/', {
+      ticket_ids: ticketIds 
+    }, config);
+    
+    return response.data;
+  }
+
+  /**
+   * Verify payment.
+   */
+  async verifyPayment(reference: string, token?: string) {
+    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+
+    const response = await api.post('/payments/payments/verify/', { reference }, config);
     return response.data;
   }
 }

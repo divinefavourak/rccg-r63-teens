@@ -46,9 +46,10 @@ class PaymentViewSet(viewsets.ModelViewSet):
         # User-based filtering
         if user.role == user.Role.COORDINATOR:
             # Coordinators can see payments for tickets from their province
+            # OR payments they made themselves (bulk payments)
             queryset = queryset.filter(
-                Q(payer_email=user.email) |  # Their own payments
-                Q(ticket__province=user.province)  # Payments for tickets in their province
+                Q(payer_email=user.email) |  
+                Q(ticket__province=user.province)
             )
         elif user.role == user.Role.ADMIN:
             # Admins see all payments
@@ -61,36 +62,59 @@ class PaymentViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'])
     def initialize(self, request):
-        """Initialize a new payment"""
+        """Initialize a new payment (Supports Single and Bulk)"""
         serializer = InitializePaymentSerializer(data=request.data)
         if serializer.is_valid():
             try:
-                ticket_id = serializer.validated_data['ticket_id']
-                payment_plan_id = serializer.validated_data.get('payment_plan_id')
-                
-                # Get ticket
-                try:
-                    ticket = Ticket.objects.get(id=ticket_id)
-                except Ticket.DoesNotExist:
-                    return Response(
-                        {'error': 'Ticket not found'},
-                        status=status.HTTP_404_NOT_FOUND
-                    )
-                
-                # Check if ticket already has a successful payment
-                if ticket.payments.filter(status=Payment.Status.SUCCESS).exists():
-                    return Response(
-                        {'error': 'Ticket already paid for'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                
-                # Create payment
                 payment_service = PaymentService()
-                payment, paystack_response = payment_service.create_payment(
-                    ticket=ticket,
-                    user=request.user,
-                    request=request
-                )
+                
+                # --- CASE 1: BULK PAYMENT ---
+                if serializer.validated_data.get('ticket_ids'):
+                    ticket_ids = serializer.validated_data['ticket_ids']
+                    tickets = Ticket.objects.filter(id__in=ticket_ids)
+                    
+                    if len(tickets) != len(ticket_ids):
+                        return Response(
+                            {'error': 'One or more tickets not found'},
+                            status=status.HTTP_404_NOT_FOUND
+                        )
+                        
+                    # Check if any are already approved/paid
+                    if any(t.status == Ticket.Status.APPROVED for t in tickets):
+                         return Response(
+                             {'error': 'One or more tickets are already approved/paid'}, 
+                             status=status.HTTP_400_BAD_REQUEST
+                         )
+
+                    payment, paystack_response = payment_service.create_bulk_payment(
+                        tickets=tickets,
+                        user=request.user,
+                        request=request
+                    )
+                
+                # --- CASE 2: SINGLE PAYMENT ---
+                else:
+                    ticket_id = serializer.validated_data['ticket_id']
+                    try:
+                        ticket = Ticket.objects.get(id=ticket_id)
+                    except Ticket.DoesNotExist:
+                        return Response(
+                            {'error': 'Ticket not found'}, 
+                            status=status.HTTP_404_NOT_FOUND
+                        )
+                    
+                    # Check for existing successful payment
+                    if ticket.payments.filter(status=Payment.Status.SUCCESS).exists():
+                        return Response(
+                            {'error': 'Ticket already paid for'}, 
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    
+                    payment, paystack_response = payment_service.create_payment(
+                        ticket=ticket,
+                        user=request.user,
+                        request=request
+                    )
                 
                 return Response({
                     'payment': PaymentSerializer(payment).data,
@@ -235,8 +259,6 @@ class PaystackWebhookView(APIView):
             )
         
         # Verify signature (implement proper verification)
-        # For now, we'll process the webhook
-        
         payment_service = PaymentService()
         success = payment_service.handle_webhook(request.data, signature)
         
@@ -272,9 +294,11 @@ class PaymentCallbackView(APIView):
             payment = payment_service.verify_and_complete_payment(payment_reference, request)
             
             # Redirect to frontend with success message
-            # In practice, you'd redirect to your frontend URL
-            frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
-            redirect_url = f"{frontend_url}/payment/success?reference={payment.reference}"
+            frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173')
+            
+            # Note: The frontend handles the redirect logic now via the PaymentCallback page,
+            # but if you use this endpoint for direct browser redirects:
+            redirect_url = f"{frontend_url}/payment/callback?reference={payment.reference}"
             
             return Response({
                 'success': True,
@@ -283,12 +307,10 @@ class PaymentCallbackView(APIView):
             })
             
         except Exception as e:
-            # Redirect to failure page
-            frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
-            redirect_url = f"{frontend_url}/payment/failed?error={str(e)}"
+            frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173')
+            # redirect_url = f"{frontend_url}/payment/failed?error={str(e)}"
             
             return Response({
                 'success': False,
-                'redirect_url': redirect_url,
                 'error': str(e)
             })

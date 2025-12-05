@@ -1,8 +1,8 @@
 export interface Ticket {
-  id: number;
+  id: string; // ✅ Changed from number to string (Backend uses UUIDs)
   ticketId: string;
   fullName: string;
-  age: number;
+  age: string | number; // ✅ Allow string to handle form inputs before conversion
   category: string;
   gender: string;
   phone: string;
@@ -12,29 +12,36 @@ export interface Ticket {
   area: string;
   parish: string;
   department?: string;
+  
+  // Medical & Emergency
   medicalConditions?: string;
   medications?: string;
   dietaryRestrictions?: string;
   emergencyContact: string;
   emergencyPhone: string;
   emergencyRelationship: string;
+  
+  // Parent
   parentName: string;
   parentEmail: string;
   parentPhone: string;
   parentRelationship: string;
+  
   status: 'pending' | 'approved' | 'rejected';
   registeredAt: string;
-  registeredBy?: string; // e.g., "Self" or "Coordinator Name"
-  registrationType: 'individual' | 'coordinator'; // New field for Admin tracking
-  paymentRef?: string; // New field for payment confirmation
+  registeredBy?: string; 
+  registrationType?: 'individual' | 'coordinator';
+  paymentRef?: string;
 }
 
 export interface User {
   id: string;
   username: string;
   role: 'admin' | 'coordinator';
-  province?: string; // Only for coordinators
-  name: string;
+  province?: string; 
+  name?: string; // Optional because backend sometimes sends 'first_name'/'last_name' instead
+  email?: string;
+  token?: string; // ✅ Added to fix the "Property token does not exist" error
 }
 
 export interface OperationResult {

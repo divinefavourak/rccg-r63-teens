@@ -5,6 +5,7 @@ from django.utils import timezone
 from decimal import Decimal
 import uuid
 from .models import Payment, TransactionLog
+from tickets.models import Ticket
 
 
 class PaystackService:
@@ -28,18 +29,6 @@ class PaystackService:
     def initialize_payment(self, payment_data):
         """
         Initialize a payment with Paystack
-        
-        Args:
-            payment_data: {
-                'email': 'customer@email.com',
-                'amount': 10000,  # in kobo (10000 = ₦100)
-                'reference': 'unique_reference',
-                'callback_url': 'https://your-callback-url.com',
-                'metadata': {}  # Additional data
-            }
-        
-        Returns:
-            dict: Paystack response
         """
         url = f"{self.base_url}/transaction/initialize"
         
@@ -70,12 +59,6 @@ class PaystackService:
     def verify_payment(self, reference):
         """
         Verify a payment with Paystack
-        
-        Args:
-            reference: Payment reference from Paystack
-        
-        Returns:
-            dict: Paystack verification response
         """
         url = f"{self.base_url}/transaction/verify/{reference}"
         
@@ -98,17 +81,6 @@ class PaystackService:
     def create_payment_link(self, payment_data):
         """
         Create a payment link for sharing
-        
-        Args:
-            payment_data: {
-                'amount': 10000,
-                'email': 'customer@email.com',
-                'reference': 'unique_ref',
-                'callback_url': 'https://...'
-            }
-        
-        Returns:
-            dict: Payment link data
         """
         url = f"{self.base_url}/transaction/initialize"
         
@@ -137,9 +109,6 @@ class PaystackService:
             transaction_reference: Paystack transaction reference
             amount: Amount to refund (in kobo). None for full refund.
             currency: Currency code
-        
-        Returns:
-            dict: Refund response
         """
         url = f"{self.base_url}/refund"
         
@@ -201,21 +170,13 @@ class PaymentService:
     
     def create_payment(self, ticket, user, request=None):
         """
-        Create a payment record and initialize Paystack payment
-        
-        Args:
-            ticket: Ticket instance
-            user: User making payment
-            request: HttpRequest object for metadata
-        
-        Returns:
-            tuple: (payment, paystack_response)
+        Create a payment record and initialize Paystack payment for a SINGLE ticket
         """
         # Generate reference
         reference = self.paystack.generate_reference()
         
-        # Calculate amount (in future, this could check for payment plans)
-        amount = Decimal('5000.00')  # Default amount: ₦5,000
+        # Calculate amount (₦3,000)
+        amount = Decimal('3000.00')
         
         # Create payment record
         payment = Payment.objects.create(
@@ -279,17 +240,85 @@ class PaymentService:
             # Mark payment as failed
             payment.mark_as_failed({'error': str(e)})
             raise
-    
+
+    def create_bulk_payment(self, tickets, user, request=None):
+        """
+        Create a single payment for MULTIPLE tickets (Bulk Registration)
+        """
+        reference = self.paystack.generate_reference()
+        
+        # Calculate total amount (₦3,000 per ticket)
+        unit_price = Decimal('3000.00')
+        total_amount = unit_price * len(tickets)
+        
+        # Create descriptions and metadata
+        ticket_refs = [t.ticket_id for t in tickets]
+        ticket_ids = [str(t.id) for t in tickets]
+        desc = f"Bulk Payment for {len(tickets)} tickets."
+        
+        # Create payment record (ticket is NULL for bulk, metadata holds the links)
+        payment = Payment.objects.create(
+            reference=reference,
+            amount=total_amount,
+            currency='NGN',
+            ticket=None, 
+            description=desc,
+            payer_email=user.email,
+            payer_name=user.full_name,
+            payer_phone=user.phone,
+            metadata={
+                'is_bulk': True,
+                'ticket_ids': ticket_ids,
+                'ticket_refs': ticket_refs,
+                'user_id': str(user.id),
+                'count': len(tickets)
+            },
+            ip_address=self._get_client_ip(request) if request else None,
+            user_agent=self._get_user_agent(request) if request else None
+        )
+        
+        # Initialize Paystack
+        callback_url = f"{settings.FRONTEND_URL}/payment/callback" if hasattr(settings, 'FRONTEND_URL') else ''
+        
+        paystack_data = {
+            'email': user.email,
+            'amount': int(total_amount * 100),
+            'reference': reference,
+            'callback_url': callback_url,
+            'metadata': {
+                'payment_id': str(payment.id),
+                'is_bulk': True,
+                'ticket_count': len(tickets),
+                'custom_fields': [
+                    {
+                        'display_name': "Payment Type",
+                        'variable_name': "payment_type",
+                        'value': "Bulk Registration"
+                    },
+                    {
+                        'display_name': "Quantity",
+                        'variable_name': "quantity",
+                        'value': len(tickets)
+                    }
+                ]
+            }
+        }
+        
+        try:
+            paystack_response = self.paystack.initialize_payment(paystack_data)
+            if paystack_response.get('status'):
+                payment.paystack_reference = paystack_response['data']['reference']
+                payment.save()
+                return payment, paystack_response
+            else:
+                raise Exception(f"Paystack error: {paystack_response.get('message', 'Unknown error')}")
+        except Exception as e:
+            payment.mark_as_failed({'error': str(e)})
+            raise
+
     def verify_and_complete_payment(self, reference, request=None):
         """
-        Verify payment with Paystack and complete the process
-        
-        Args:
-            reference: Payment reference
-            request: HttpRequest object
-        
-        Returns:
-            Payment: Updated payment object
+        Verify payment with Paystack and complete the process (Handles both Single and Bulk)
         """
         try:
             # Get payment
@@ -305,11 +334,22 @@ class PaymentService:
                     # Mark payment as successful
                     payment.mark_as_successful(data)
                     
-                    # Update ticket status if applicable
+                    # --- LOGIC FOR SINGLE TICKET ---
                     if payment.ticket:
-                        # Here you might want to auto-approve paid tickets
-                        # or trigger some other business logic
-                        pass
+                        payment.ticket.approve(payment.ticket.registered_by)
+                    
+                    # --- LOGIC FOR BULK TICKETS ---
+                    elif payment.metadata and payment.metadata.get('is_bulk'):
+                        ticket_ids = payment.metadata.get('ticket_ids', [])
+                        if ticket_ids:
+                            # Bulk approve all linked tickets
+                            # We use system auto-approval (None) or the payment user
+                            # Using update() for efficiency
+                            Ticket.objects.filter(id__in=ticket_ids).update(
+                                status=Ticket.Status.APPROVED,
+                                approved_at=timezone.now(),
+                                approved_by=None 
+                            )
                     
                     return payment
                 else:
@@ -327,17 +367,7 @@ class PaymentService:
     def handle_webhook(self, payload, signature):
         """
         Handle Paystack webhook
-        
-        Args:
-            payload: Webhook payload
-            signature: X-Paystack-Signature header
-        
-        Returns:
-            bool: True if webhook processed successfully
         """
-        # Verify signature (implement signature verification)
-        # For now, we'll trust the payload
-        
         event = payload.get('event')
         data = payload.get('data', {})
         
@@ -356,6 +386,17 @@ class PaymentService:
                 try:
                     payment = Payment.objects.get(reference=reference)
                     payment.mark_as_successful(data)
+                    
+                    # Handle ticket approval same as verify
+                    if payment.ticket:
+                        payment.ticket.approve(payment.ticket.registered_by)
+                    elif payment.metadata and payment.metadata.get('is_bulk'):
+                        ticket_ids = payment.metadata.get('ticket_ids', [])
+                        if ticket_ids:
+                            Ticket.objects.filter(id__in=ticket_ids).update(
+                                status=Ticket.Status.APPROVED,
+                                approved_at=timezone.now()
+                            )
                     return True
                 except Payment.DoesNotExist:
                     pass

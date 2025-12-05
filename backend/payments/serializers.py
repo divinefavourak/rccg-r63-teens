@@ -53,12 +53,15 @@ class PaymentSerializer(serializers.ModelSerializer):
 
 
 class InitializePaymentSerializer(serializers.Serializer):
-    """Serializer for initializing payment"""
-    ticket_id = serializers.UUIDField(required=True)
+    """Serializer for initializing payment (Single or Bulk)"""
+    ticket_id = serializers.UUIDField(required=False)
+    ticket_ids = serializers.ListField(child=serializers.UUIDField(), required=False)
     payment_plan_id = serializers.UUIDField(required=False, allow_null=True)
     
     def validate(self, data):
-        # Add validation logic here
+        # Ensure at least one ticket identifier is present
+        if not data.get('ticket_id') and not data.get('ticket_ids'):
+            raise serializers.ValidationError("Either ticket_id or ticket_ids is required.")
         return data
 
 

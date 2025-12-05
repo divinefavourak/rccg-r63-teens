@@ -45,10 +45,44 @@ interface Ticket {
 
 const TicketPreview = () => {
   const location = useLocation();
-  const state = location.state as { ticket?: Ticket };
-  
-  // Fallback sample ticket if accessed directly without state
-  const ticket = state?.ticket || {
+  const state = location.state as { ticket?: any };
+  const rawTicket = state?.ticket;
+
+  // --- DATA NORMALIZATION ---
+  // This converts backend snake_case to frontend camelCase
+  const ticket: Ticket = rawTicket ? {
+    ticketId: rawTicket.ticketId || rawTicket.ticket_id,
+    fullName: rawTicket.fullName || rawTicket.full_name,
+    age: rawTicket.age?.toString(),
+    category: rawTicket.category,
+    gender: rawTicket.gender,
+    phone: rawTicket.phone,
+    email: rawTicket.email,
+    province: rawTicket.province,
+    zone: rawTicket.zone,
+    area: rawTicket.area,
+    parish: rawTicket.parish,
+    department: rawTicket.department,
+    
+    // Map complex fields
+    medicalConditions: rawTicket.medicalConditions || rawTicket.medical_conditions,
+    medications: rawTicket.medications,
+    dietaryRestrictions: rawTicket.dietaryRestrictions || rawTicket.dietary_restrictions,
+    
+    // Emergency Contact
+    emergencyContact: rawTicket.emergencyContact || rawTicket.emergency_contact,
+    emergencyPhone: rawTicket.emergencyPhone || rawTicket.emergency_phone,
+    emergencyRelationship: rawTicket.emergencyRelationship || rawTicket.emergency_relationship,
+    
+    // Parent Info
+    parentName: rawTicket.parentName || rawTicket.parent_name,
+    parentEmail: rawTicket.parentEmail || rawTicket.parent_email,
+    parentPhone: rawTicket.parentPhone || rawTicket.parent_phone,
+    
+    status: rawTicket.status || 'pending',
+    registeredAt: rawTicket.registeredAt || rawTicket.registered_at || new Date().toISOString(),
+  } : {
+    // Fallback Mock Data (Only used if no data passed)
     ticketId: `R63T${Date.now()}`,
     fullName: "Sample User",
     age: "15",
@@ -66,7 +100,7 @@ const TicketPreview = () => {
     parentName: "Parent Name",
     parentEmail: "parent@example.com",
     parentPhone: "08000000000",
-    status: "pending" as const,
+    status: "pending",
     registeredAt: new Date().toISOString(),
   };
 
@@ -79,7 +113,7 @@ const TicketPreview = () => {
   };
 
   const getCategoryLabel = (cat: string) => {
-    return cat.replace(/_/g, ' ').toUpperCase();
+    return cat ? cat.replace(/_/g, ' ').toUpperCase() : '';
   };
 
   return (

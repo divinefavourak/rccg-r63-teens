@@ -39,17 +39,17 @@ class User(AbstractBaseUser, PermissionsMixin):
     class Role(models.TextChoices):
         ADMIN = 'admin', 'Administrator'
         COORDINATOR = 'coordinator', 'Coordinator'
+        INDIVIDUAL = 'individual', 'Individual'
     
     class Province(models.TextChoices):
-        # List of provinces in RCCG Region 63
-        PROVINCE_1 = 'province_1', 'Province 1'
-        PROVINCE_2 = 'province_2', 'Province 2'
-        PROVINCE_3 = 'province_3', 'Province 3'
-        PROVINCE_4 = 'province_4', 'Province 4'
-        PROVINCE_5 = 'province_5', 'Province 5'
-        PROVINCE_6 = 'province_6', 'Province 6'
-        PROVINCE_7 = 'province_7', 'Province 7'
-        PROVINCE_8 = 'province_8', 'Province 8'
+        # Updated to match frontend/src/constants/formFields.tsx
+        LAGOS_PROVINCE_9 = 'lagos_province_9', 'Lagos Province 9'
+        LAGOS_PROVINCE_28 = 'lagos_province_28', 'Lagos Province 28'
+        LAGOS_PROVINCE_69 = 'lagos_province_69', 'Lagos Province 69'
+        LAGOS_PROVINCE_84 = 'lagos_province_84', 'Lagos Province 84'
+        LAGOS_PROVINCE_86 = 'lagos_province_86', 'Lagos Province 86'
+        LAGOS_PROVINCE_104 = 'lagos_province_104', 'Lagos Province 104'
+        REGIONAL_HQ = 'regional_hq', 'Regional Headquarter'
     
     # Core identification
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useForm, SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast"; 
+import axios from "axios"; // Import axios directly for the silent login
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { 
@@ -16,6 +17,7 @@ import { ticketSchema, TicketFormData } from "../schemas/ticketSchema";
 import { useTicketStore } from "../store/ticketStore";
 import { ticketService } from "../services/ticketService";
 import { paymentService } from "../services/paymentService";
+import { useAuth } from "../hooks/useAuth"; // Import auth hook
 
 const STEP_FIELDS = {
   1: ['fullName', 'age', 'category', 'gender', 'phone', 'email'],
@@ -26,6 +28,7 @@ const STEP_FIELDS = {
 
 const TicketForm = () => {
   const navigate = useNavigate();
+  const { user } = useAuth(); // Get current logged in user (if any)
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const currentStep = useTicketStore((state) => state.currentStep);
@@ -78,7 +81,7 @@ const TicketForm = () => {
   }, [watchedValues, setFormData]);
 
   const nextStep = async () => {
-    // /@ts-expect-error - Keys are mapped correctly
+    // /@ts-expect-error - Keys are valid
     const fields = STEP_FIELDS[currentStep as keyof typeof STEP_FIELDS];
     const isStepValid = await trigger(fields);
     
@@ -93,25 +96,50 @@ const TicketForm = () => {
     window.scrollTo(0, 0);
   };
 
-  const onSubmit: SubmitHandler<TicketFormData> = async (data) => {
+ const onSubmit: SubmitHandler<TicketFormData> = async (data) => {
     setIsSubmitting(true);
     try {
-      // 1. Create the Ticket in the backend first
-      // The backend will assign an ID and status='pending'
-      const newTicket = await ticketService.createTicket(data);
+      let authToken = null;
+
+      // 1. Determine Auth Strategy (Keep this as is)
+      if (user) {
+        // Use existing user session if available
+        // Note: Adjust this based on your actual User type structure
+        authToken = (user as any).token || (user as any).access_token;
+      }
+      
+      if (!authToken) {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+        const publicUser = import.meta.env.VITE_PUBLIC_AGENT_USERNAME;
+        const publicPass = import.meta.env.VITE_PUBLIC_AGENT_PASSWORD;
+
+        if (!publicUser || !publicPass) {
+           throw new Error("Public registration configuration missing.");
+        }
+
+        const authResponse = await axios.post(`${apiUrl}/auth/login/`, {
+          username: publicUser,
+          password: publicPass
+        });
+        
+        authToken = authResponse.data.access;
+      }
+
+      // 2. Create Ticket (Keep this as is)
+      const newTicket = await ticketService.createTicket(data, authToken);
       
       if (!newTicket || !newTicket.id) {
         throw new Error("Failed to create ticket record.");
       }
 
-      // 2. Initialize Payment using the new Ticket ID
-      // The backend creates a transaction reference and returns the Paystack URL
-      const paymentData = await paymentService.initializePayment(newTicket.id);
+      // ---------------------------------------------------------
+      // 3. Initialize Payment (UPDATED LINE)
+      // Pass the authToken here so the backend knows who is asking
+      // ---------------------------------------------------------
+      const paymentData = await paymentService.initializePayment(newTicket.id, authToken);
 
-      // 3. Clear local store state before redirecting
       resetForm();
 
-      // 4. Redirect user to Paystack's authorization URL
       if (paymentData.authorization_url) {
         window.location.href = paymentData.authorization_url;
       } else {
@@ -128,6 +156,9 @@ const TicketForm = () => {
     }
   };
 
+  // ... (Keep the getErrorMessage, renderFormField, renderStepContent functions exactly as before)
+  // ... (Keep the return JSX structure exactly as before)
+  
   const getErrorMessage = (fieldName: string) => {
     return errors[fieldName as keyof TicketFormData]?.message;
   };
@@ -146,7 +177,7 @@ const TicketForm = () => {
       case 'select':
         return (
           <select {...register(field.name as keyof TicketFormData, registerOptions)} className={inputClasses}>
-            <option value="">Select...</option>
+             <option value="">Select...</option>
             {field.options.map((option: any) => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}

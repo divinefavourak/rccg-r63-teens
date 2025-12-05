@@ -20,6 +20,7 @@ api.interceptors.request.use((config) => {
         config.headers.Authorization = `Bearer ${user.token || user.access}`;
       }
     } catch (e) {
+      console.error("Error parsing user from localStorage", e);
       // Invalid JSON, ignore
     }
   }

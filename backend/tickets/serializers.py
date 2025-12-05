@@ -13,7 +13,6 @@ class TicketSerializer(serializers.ModelSerializer):
     approved_by_name = serializers.CharField(source='approved_by.get_display_name', read_only=True, allow_null=True)
     age_group = serializers.CharField(source='get_age_group', read_only=True)
     
-    # Convert UUID fields to strings
     id = serializers.UUIDField(format='hex_verbose', read_only=True)
     registered_by = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(),
@@ -48,21 +47,19 @@ class TicketSerializer(serializers.ModelSerializer):
     
     def validate(self, data):
         """Additional validation logic"""
-        # Age-category validation
         age = data.get('age', self.instance.age if self.instance else None)
         category = data.get('category', self.instance.category if self.instance else None)
         
         if age and category:
-            if category == Ticket.Category.PRE_TEENS and not (8 <= age <= 12):
-                raise serializers.ValidationError({
-                    'age': 'Pre-Teens must be between 8 and 12 years old.',
-                    'category': 'Category must match age range.'
-                })
+            # ✅ Added validation for new categories
+            if category == 'toddler' and not (1 <= age <= 5):
+                 raise serializers.ValidationError({'age': 'Toddlers must be between 1 and 5 years old.'})
+            elif category == 'children_6_8' and not (6 <= age <= 8):
+                 raise serializers.ValidationError({'age': 'Children must be between 6 and 8 years old.'})
+            elif category == Ticket.Category.PRE_TEENS and not (8 <= age <= 12):
+                raise serializers.ValidationError({'age': 'Pre-Teens must be between 8 and 12 years old.'})
             elif category == Ticket.Category.TEENS and not (13 <= age <= 19):
-                raise serializers.ValidationError({
-                    'age': 'Teens must be between 13 and 19 years old.',
-                    'category': 'Category must match age range.'
-                })
+                raise serializers.ValidationError({'age': 'Teens must be between 13 and 19 years old.'})
         
         return data
 
@@ -86,7 +83,7 @@ class TicketCreateSerializer(serializers.ModelSerializer):
             'category': {'required': True},
             'gender': {'required': True},
             'phone': {'required': True},
-            'email': {'required': True},
+            'email': {'required': False, 'allow_blank': True}, # ✅ Made email optional
             'province': {'required': True},
             'zone': {'required': True},
             'area': {'required': True},
@@ -101,13 +98,12 @@ class TicketCreateSerializer(serializers.ModelSerializer):
         }
     
     def validate_email(self, value):
-        """Validate email format"""
-        validator = EmailValidator()
-        validator(value)
+        if value:
+            validator = EmailValidator()
+            validator(value)
         return value
     
     def validate_parent_email(self, value):
-        """Validate parent email format"""
         validator = EmailValidator()
         validator(value)
         return value
@@ -139,7 +135,6 @@ class TicketStatusUpdateSerializer(serializers.Serializer):
         if not ticket or not user:
             raise serializers.ValidationError("Ticket and user context required.")
         
-        # Check if user can perform this status change
         if data['status'] == Ticket.Status.APPROVED and not user.is_admin:
             raise serializers.ValidationError("Only administrators can approve tickets.")
         
@@ -171,11 +166,10 @@ class BulkUploadCreateSerializer(serializers.Serializer):
     file = serializers.FileField()
     
     def validate_file(self, value):
-        """Validate uploaded file"""
         if not value.name.endswith('.csv'):
             raise serializers.ValidationError("Only CSV files are allowed.")
         
-        if value.size > 5 * 1024 * 1024:  # 5MB limit
+        if value.size > 5 * 1024 * 1024:
             raise serializers.ValidationError("File size must not exceed 5MB.")
         
         return value
@@ -203,27 +197,6 @@ class TicketAuditLogSerializer(serializers.ModelSerializer):
     def get_ticket_id_display(self, obj):
         return obj.ticket.ticket_id if obj.ticket else None
 
-# class DashboardStatsSerializer(serializers.Serializer):
-#     """Serializer for dashboard statistics"""
-#     total_tickets = serializers.IntegerField()
-#     pending_tickets = serializers.IntegerField()
-#     approved_tickets = serializers.IntegerField()
-#     rejected_tickets = serializers.IntegerField()
-    
-#     # By category
-#     pre_teens_count = serializers.IntegerField()
-#     teens_count = serializers.IntegerField()
-    
-#     # By gender
-#     male_count = serializers.IntegerField()
-#     female_count = serializers.IntegerField()
-    
-#     # By province
-#     province_stats = serializers.DictField()
-    
-#     # Recent activity
-#     recent_tickets = TicketSerializer(many=True)
-#     recent_activity = TicketAuditLogSerializer(many=True)
 
 class CheckInRecordSerializer(serializers.ModelSerializer):
     """Serializer for check-in records"""

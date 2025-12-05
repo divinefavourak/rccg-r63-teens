@@ -12,11 +12,14 @@ const LandingPage = lazy(() => import('./pages/LandingPage'));
 const TicketForm = lazy(() => import('./pages/TicketForm'));
 const TicketPreview = lazy(() => import('./pages/TicketPreview'));
 const AdminLogin = lazy(() => import('./pages/AdminLogin'));
+const AdminRegister = lazy(() => import('./pages/AdminRegister'));
+const RegisterCoordinator = lazy(() => import('./pages/RegisterCoordinator'));
 const AdminVerify = lazy(() => import('./pages/AdminVerify'));
 const CoordinatorLogin = lazy(() => import('./pages/CoordinatorLogin'));
 const CoordinatorDashboard = lazy(() => import('./pages/CoordinatorDashboard'));
 const BulkRegister = lazy(() => import('./pages/BulkRegister'));
 const NotFound = lazy(() => import('./pages/NotFound'));
+const PaymentCallback = lazy(() => import('./pages/PaymentCallback'));
 
 const Loading = () => (
   <div className="min-h-screen flex items-center justify-center bg-[#2b0303] dark:bg-[#1a0505] transition-colors duration-500">
@@ -77,7 +80,20 @@ function App() {
               path="/admin" 
               element={<ProtectedRoute allowedRoles={['admin']}><AdminVerify /></ProtectedRoute>} 
             />
-
+            <Route 
+  path="/admin/register-admin" 
+  element={
+    <ProtectedRoute allowedRoles={['admin']}>
+      <AdminRegister />
+    </ProtectedRoute>
+  } 
+/>
+<Route 
+  path="/admin/register-coordinator" 
+  element={<ProtectedRoute allowedRoles={['admin']}><RegisterCoordinator /></ProtectedRoute>} 
+/>
+            {/* Paystack Callback Route */}
+            <Route path="/payment/callback" element={<PaymentCallback />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>

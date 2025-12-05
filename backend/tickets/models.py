@@ -9,8 +9,13 @@ class Ticket(models.Model):
     """Ticket model for teen registrations"""
     
     class Category(models.TextChoices):
+        TODDLER = 'toddler', 'Toddler (1-5)'          # ✅ Added
+        CHILDREN = 'children_6_8', 'Children (6-8)'   # ✅ Added
         PRE_TEENS = 'pre_teens', 'Pre-Teens (8-12)'
         TEENS = 'teens', 'Teens (13-19)'
+        SUPER_TEENS = 'super_teens', 'Super Teens'    # ✅ Added
+        ALUMNI = 'alumni', 'Alumni'                   # ✅ Added
+        TEACHER = 'teacher', 'Teacher/Volunteer'      # ✅ Added
     
     class Gender(models.TextChoices):
         MALE = 'male', 'Male'
@@ -35,8 +40,8 @@ class Ticket(models.Model):
     full_name = models.CharField(max_length=255)
     age = models.IntegerField(
         validators=[
-            MinValueValidator(8, message="Age must be at least 8 years."),
-            MaxValueValidator(19, message="Age must not exceed 19 years.")
+            MinValueValidator(1, message="Age must be at least 1 year."), # ✅ Updated min age
+            MaxValueValidator(100, message="Age must not exceed 100 years.") # ✅ Updated max age
         ]
     )
     category = models.CharField(max_length=20, choices=Category.choices)
@@ -53,9 +58,10 @@ class Ticket(models.Model):
             )
         ]
     )
-    email = models.EmailField()
+    # ✅ Made email optional to match Bulk Registration form
+    email = models.EmailField(blank=True, null=True) 
     
-    # Church hierarchy (from PRD)
+    # Church hierarchy
     province = models.CharField(max_length=255, choices=User.Province.choices)
     zone = models.CharField(max_length=255)
     area = models.CharField(max_length=255)
@@ -103,7 +109,7 @@ class Ticket(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
-    # QR Code (for future implementation)
+    # QR Code
     qr_code = models.ImageField(upload_to='qr_codes/', null=True, blank=True)
     
     class Meta:
@@ -125,7 +131,6 @@ class Ticket(models.Model):
     def save(self, *args, **kwargs):
         """Generate ticket ID on first save"""
         if not self.ticket_id:
-            # Generate ticket ID format: TKT-YYYY-MM-XXXXX
             date_prefix = timezone.now().strftime('%Y%m')
             last_ticket = Ticket.objects.filter(
                 ticket_id__startswith=f'TKT-{date_prefix}-'
@@ -154,26 +159,23 @@ class Ticket(models.Model):
         return self.status == self.Status.REJECTED
     
     def approve(self, user):
-        """Approve this ticket"""
         self.status = self.Status.APPROVED
         self.approved_at = timezone.now()
         self.approved_by = user
         self.save()
     
     def reject(self, user, notes=''):
-        """Reject this ticket"""
         self.status = self.Status.REJECTED
         if notes:
             self.notes = notes
         self.save()
     
     def get_age_group(self):
-        """Get age group description"""
-        if 8 <= self.age <= 12:
-            return 'Pre-Teens'
-        elif 13 <= self.age <= 19:
-            return 'Teens'
-        return 'Unknown'
+        if self.age <= 5: return 'Toddler'
+        if 6 <= self.age <= 8: return 'Children'
+        if 8 <= self.age <= 12: return 'Pre-Teens'
+        elif 13 <= self.age <= 19: return 'Teens'
+        return 'Adult/Other'
 
 
 class BulkUpload(models.Model):
