@@ -16,8 +16,10 @@ api.interceptors.request.use((config) => {
     try {
       const user = JSON.parse(userStr);
       // Check if user object has a token property (adjust based on your actual login response)
-      if (user.token || user.access) {
-        config.headers.Authorization = `Bearer ${user.token || user.access}`;
+      const token = user.token || user.access;
+      
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (e) {
       console.error("Error parsing user from localStorage", e);

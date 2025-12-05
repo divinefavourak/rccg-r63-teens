@@ -10,13 +10,15 @@ import { Ticket } from "../types";
 import toast from "react-hot-toast";
 import { CHURCH_INFO_FIELDS } from "../constants/formFields";
 import { 
-  FaSearch, FaFilter, FaCheck, FaTimes, FaEye, FaDownload, 
+  FaSearch, FaCheck, FaTimes, FaEye, FaDownload, 
   FaUser, FaSignOutAlt, FaUsers, 
   FaCheckCircle, FaExclamationTriangle, FaEnvelope, FaPaperPlane, FaChartPie, FaUserTie
 } from "react-icons/fa";
 
 const AdminVerify = () => {
-  const { logout } = useAuth();
+  // ✅ 1. Destructure isAuthenticated from useAuth
+  const { user, logout, isAuthenticated } = useAuth();
+  
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -30,6 +32,7 @@ const AdminVerify = () => {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
   const [provinceStats, setProvinceStats] = useState<Record<string, number>>({});
+  
   const provinceOptions = CHURCH_INFO_FIELDS.find(field => field.name === 'province')?.options || [];
 
   const {
@@ -40,6 +43,9 @@ const AdminVerify = () => {
 
   useEffect(() => {
     const fetchTickets = async () => {
+      // ✅ 2. Security Check: Only fetch if authenticated
+      if (!isAuthenticated) return;
+
       try {
         setIsLoading(true);
         const data = await ticketService.getAllTickets();
@@ -57,7 +63,7 @@ const AdminVerify = () => {
       }
     };
     fetchTickets();
-  }, []);
+  }, [isAuthenticated]); // ✅ 3. Add isAuthenticated as dependency
 
   useEffect(() => {
     let result = tickets;
@@ -105,7 +111,7 @@ const AdminVerify = () => {
     return 0;
   });
 
-  const handleApprove = async (id: number) => {
+  const handleApprove = async (id: string) => { // Updated ID type to string
     try {
       setTickets(prev => prev.map(t => t.id === id ? { ...t, status: "approved" } : t));
       toast.success("Ticket Approved");
@@ -115,7 +121,7 @@ const AdminVerify = () => {
     }
   };
 
-  const handleReject = async (id: number) => {
+  const handleReject = async (id: string) => { // Updated ID type to string
     if(!window.confirm("Are you sure you want to reject this ticket?")) return;
     try {
       setTickets(prev => prev.map(t => t.id === id ? { ...t, status: "rejected" } : t));
@@ -305,7 +311,6 @@ const AdminVerify = () => {
         </motion.div>
       </div>
       <BulkEmailModal isOpen={showEmailModal} onClose={() => setShowEmailModal(false)} onSend={handleEmailSend} selectedCount={selectedTickets.size} totalCount={stats.total} pendingCount={stats.pending} approvedCount={stats.approved} />
-      {/* Detailed Modal omitted for brevity, logic remains same */}
       <Footer />
     </div>
   );

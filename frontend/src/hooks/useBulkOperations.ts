@@ -1,4 +1,3 @@
-// frontend/src/hooks/useBulkOperations.ts
 import { useState } from 'react';
 import { emailService } from '../utils/emailService';
 import { EVENT_DETAILS } from '../constants/eventDetails';
@@ -8,12 +7,11 @@ export const useBulkOperations = (
   tickets: Ticket[], 
   setTickets: React.Dispatch<React.SetStateAction<Ticket[]>>
 ) => {
-  // Explicitly type the state to allow number values (Ticket IDs)
-  const [selectedTickets, setSelectedTickets] = useState<Set<number>>(new Set());
+  // ✅ FIX 1: Change generic type from <number> to <string>
+  const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   
-  // FIX: Explicitly type this state so it can hold the result object or null
   const [operationResults, setOperationResults] = useState<OperationResult | null>(null);
 
   // Select all tickets
@@ -26,7 +24,8 @@ export const useBulkOperations = (
   };
 
   // Select individual ticket
-  const handleSelectTicket = (ticketId: number, checked: boolean) => {
+  // ✅ FIX 2: Change parameter type to string
+  const handleSelectTicket = (ticketId: string, checked: boolean) => {
     const newSelected = new Set(selectedTickets);
     if (checked) {
       newSelected.add(ticketId);
@@ -43,11 +42,9 @@ export const useBulkOperations = (
     setIsProcessing(true);
     setOperationResults(null);
 
-    // Filter to get the full ticket objects for the selected IDs
     const selectedTicketsData = tickets.filter(ticket => selectedTickets.has(ticket.id));
 
     try {
-      // Initialize results with the OperationResult interface
       let results: OperationResult = {
         action: bulkAction,
         total: selectedTickets.size,
@@ -63,7 +60,6 @@ export const useBulkOperations = (
             selectedTickets.has(ticket.id) ? { ...ticket, status: "approved" } : ticket
           ));
           
-          // Send approval emails
           const approvalResults = await emailService.sendBulkEmails(
             selectedTicketsData.map(t => ({ id: t.id, email: t.email, name: t.fullName })),
             emailService.templates.approval('Participant', 'BULK', EVENT_DETAILS).subject,
@@ -76,12 +72,10 @@ export const useBulkOperations = (
           break;
 
         case "reject":
-          // Update tickets status in local state
           setTickets(prev => prev.map(ticket =>
             selectedTickets.has(ticket.id) ? { ...ticket, status: "rejected" } : ticket
           ));
           
-          // Send rejection emails
           const rejectionResults = await emailService.sendBulkEmails(
             selectedTicketsData.map(t => ({ id: t.id, email: t.email, name: t.fullName })),
             emailService.templates.rejection('Participant', 'BULK', EVENT_DETAILS).subject,
@@ -94,7 +88,6 @@ export const useBulkOperations = (
           break;
 
         case "delete":
-          // Remove tickets from local state
           setTickets(prev => prev.filter(ticket => !selectedTickets.has(ticket.id)));
           
           results.successful = selectedTickets.size;
@@ -107,7 +100,6 @@ export const useBulkOperations = (
           break;
 
         case "send_reminder":
-          // Send reminder emails
           const reminderResults = await emailService.sendBulkEmails(
             selectedTicketsData.map(t => ({ id: t.id, email: t.email, name: t.fullName })),
             emailService.templates.reminder('Participant', 'BULK', EVENT_DETAILS).subject,
@@ -138,7 +130,6 @@ export const useBulkOperations = (
     }
   };
 
-  // Send custom email to selected tickets
   const sendCustomEmail = async (subject: string, message: string, recipientType = 'selected') => {
     setIsProcessing(true);
     setOperationResults(null);

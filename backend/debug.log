@@ -1830,3 +1830,9 @@ Bad Request: /api/auth/users/
 Bad Request: /api/auth/users/
 Unauthorized: /api/auth/users/
 Unauthorized: /api/auth/users/
+Unauthorized: /api/tickets/
+Unauthorized: /api/tickets/
+Unauthorized: /api/tickets/
+Unauthorized: /api/tickets/
+Unauthorized: /api/tickets/
+Bad Request: /api/auth/users/
