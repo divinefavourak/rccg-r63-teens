@@ -18,7 +18,7 @@ export interface UserData {
 class UserService {
   /**
    * Create a new user (Admin or Coordinator).
-   * Requires Admin privileges.
+   * Requires Admin privileges.yhh
    */
   async createUser(data: UserData) {
     // Backend validation: Admin cannot have a province
