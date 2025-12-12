@@ -9,10 +9,10 @@ import PhotoGallery from "../components/PhotoGallery"; // NEW
 import AdventCalendar from "../components/AdventCalendar"; // NEW
 import { CAMP_FEATURES, PACKING_LIST } from "../constants/eventDetails";
 import { generatePDF } from "../utils/pdfGenerator";
-import { 
-  FaPray, FaGamepad, FaTheaterMasks, FaUsers, 
-  FaInfoCircle, FaUser, FaUserTie, 
-  FaWhatsapp, FaTwitter, FaQuoteLeft, FaMapMarkerAlt, FaFilePdf, FaCheck 
+import {
+  FaPray, FaGamepad, FaTheaterMasks, FaUsers,
+  FaInfoCircle, FaUser, FaUserTie,
+  FaWhatsapp, FaTwitter, FaQuoteLeft, FaMapMarkerAlt, FaFilePdf, FaCheck
 } from "react-icons/fa";
 import { IconType } from "react-icons";
 
@@ -52,18 +52,18 @@ const LandingPage = () => {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#2b0303] text-gray-800 dark:text-white overflow-x-hidden relative transition-colors duration-500">
       <Navbar />
-      
+
       {/* Hero Section */}
       <section className="min-h-screen relative flex items-center justify-center px-6 pt-20 overflow-hidden" aria-label="Hero Section">
         <div className="absolute inset-0 z-0">
-          <img 
-            src="https://images.unsplash.com/photo-1517090504586-fde19ea6066f?q=80&w=2070&auto=format&fit=crop" 
-            alt="Teens gathered around a bonfire celebrating" 
+          <img
+            src="https://images.unsplash.com/photo-1517090504586-fde19ea6066f?q=80&w=2070&auto=format&fit=crop"
+            alt="Teens gathered around a bonfire celebrating"
             className="w-full h-full object-cover animate-pulse-slow"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-blue-900/80 via-[#2b0303]/80 to-[#0f0202] mix-blend-multiply"></div>
         </div>
-        
+
         <div className="relative z-10 text-center max-w-6xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: -20 }}
@@ -116,7 +116,7 @@ const LandingPage = () => {
                   Registration Now Open
                 </h2>
                 <p className="text-white/90 text-sm leading-relaxed">
-                  <strong>Individual & Coordinator registration is live!</strong> Secure your spot for the camp. 
+                  <strong>Individual & Coordinator registration is live!</strong> Secure your spot for the camp.
                   Registration fee: <span className="font-bold text-yellow-300 text-lg">₦3,000</span>.
                 </p>
               </div>
@@ -171,21 +171,21 @@ const LandingPage = () => {
               Time is Ticking
             </span>
           </motion.div>
-          
+
           <h2 className="text-4xl md:text-6xl font-black mb-12 text-white drop-shadow-lg">
             THE CAMP OPENS IN
           </h2>
-          
+
           <div className="mb-12 scale-110 md:scale-125 transform transition-transform">
             <Countdown />
           </div>
-          
+
           <div className="flex flex-col items-center gap-4 mt-16">
             <p className="text-yellow-400 font-bold uppercase tracking-widest text-sm">Tell a friend</p>
             <div className="flex gap-4">
-              <a 
-                href={`https://wa.me/?text=${shareText}`} 
-                target="_blank" 
+              <a
+                href={`https://wa.me/?text=${shareText}`}
+                target="_blank"
                 rel="noopener noreferrer"
                 className="bg-green-600 text-white p-4 rounded-full hover:bg-green-500 hover:scale-110 transition-all shadow-lg"
                 title="Share on WhatsApp"
@@ -193,9 +193,9 @@ const LandingPage = () => {
               >
                 <FaWhatsapp className="text-2xl" aria-hidden="true" />
               </a>
-              <a 
-                href={`https://twitter.com/intent/tweet?text=${shareText}`} 
-                target="_blank" 
+              <a
+                href={`https://twitter.com/intent/tweet?text=${shareText}`}
+                target="_blank"
                 rel="noopener noreferrer"
                 className="bg-black text-white p-4 rounded-full hover:bg-gray-900 hover:scale-110 transition-all shadow-lg border border-white/20"
                 title="Share on X"
@@ -216,9 +216,9 @@ const LandingPage = () => {
       {/* Schedule Section */}
       <section className="section-padding bg-gray-50 dark:bg-[#1a0505] transition-colors duration-500">
         <div className="container-custom">
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            whileInView={{ opacity: 1 }} 
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
             className="text-center mb-12"
           >
             <h2 className="text-3xl md:text-4xl font-black text-red-900 dark:text-white uppercase mb-4">Camp Schedule</h2>
@@ -241,7 +241,7 @@ const LandingPage = () => {
             </h2>
             <div className="w-24 h-1 bg-yellow-500 mx-auto rounded-full"></div>
           </motion.div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {CAMP_FEATURES.map((feature, index) => {
               const IconComponent = featureIcons[index];
@@ -277,23 +277,23 @@ const LandingPage = () => {
 
       {/* Packing List Section */}
       <section className="py-20 bg-yellow-50 dark:bg-yellow-900/10 border-y border-yellow-500/20">
-        <div className="container-custom">
+        <div className="container-custom px-6">
           <div className="flex flex-col md:flex-row items-center gap-12">
-            <div className="flex-1 text-left">
+            <div className="flex-1 text-left md:pl-10">
               <h2 className="text-3xl md:text-4xl font-black text-red-900 dark:text-white uppercase mb-6">
                 Ready to Camp?
               </h2>
               <p className="text-gray-600 dark:text-gray-300 text-lg mb-8">
                 Don't forget the essentials! We've prepared a checklist to ensure you have everything you need for a comfortable stay at Redemption City.
               </p>
-              <button 
+              <button
                 onClick={handleDownloadPackingList}
                 className="btn-primary px-8 py-4 flex items-center gap-3 shadow-xl"
               >
                 <FaFilePdf className="text-xl" /> <span>DOWNLOAD PACKING LIST</span>
               </button>
             </div>
-            
+
             <div id="packing-list-content" className="flex-1 bg-white dark:bg-black/40 p-8 rounded-3xl border-2 border-dashed border-gray-300 dark:border-white/20 w-full max-w-md mx-auto">
               <h3 className="text-xl font-bold text-gray-900 dark:text-yellow-400 mb-6 flex items-center gap-2 border-b border-gray-200 dark:border-white/10 pb-4">
                 <FaCheck className="text-green-500" /> What to Bring
@@ -322,7 +322,7 @@ const LandingPage = () => {
           <h2 className="text-3xl font-black text-center mb-12 text-red-900 dark:text-white uppercase">Voices from 2024</h2>
           <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
             {testimonials.map((t) => (
-              <motion.div 
+              <motion.div
                 key={t.id}
                 whileHover={{ scale: 1.02 }}
                 className="p-8 rounded-2xl bg-gray-50 dark:bg-black/20 border border-gray-100 dark:border-white/10 relative shadow-sm"
@@ -347,9 +347,9 @@ const LandingPage = () => {
       {/* FAQ Section */}
       <section className="section-padding bg-gray-50 dark:bg-[#1a0505]">
         <div className="container-custom">
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            whileInView={{ opacity: 1 }} 
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
             className="text-center mb-12"
           >
             <h2 className="text-3xl font-black text-red-900 dark:text-white uppercase mb-4">Frequently Asked Questions</h2>
@@ -368,13 +368,13 @@ const LandingPage = () => {
               <h3 className="font-bold text-gray-900 dark:text-white">Glory Arena, Redemption City</h3>
             </div>
             <div className="w-full h-64 md:h-80 rounded-2xl overflow-hidden grayscale hover:grayscale-0 transition-all duration-500">
-              <iframe 
-                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d253546.83191702416!2d3.167940886718751!3d6.810026100000021!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x103bc109f4c889d1%3A0xb1f3f83ca8b39cbe!2sGlory%20Arena!5e0!3m2!1sen!2sng!4v1764637960258!5m2!1sen!2sng" 
-                width="100%" 
-                height="100%" 
-                style={{ border: 0 }} 
-                allowFullScreen={true} 
-                loading="lazy" 
+              <iframe
+                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d253546.83191702416!2d3.167940886718751!3d6.810026100000021!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x103bc109f4c889d1%3A0xb1f3f83ca8b39cbe!2sGlory%20Arena!5e0!3m2!1sen!2sng!4v1764637960258!5m2!1sen!2sng"
+                width="100%"
+                height="100%"
+                style={{ border: 0 }}
+                allowFullScreen={true}
+                loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
                 title="Map to Redemption City"
               ></iframe>
