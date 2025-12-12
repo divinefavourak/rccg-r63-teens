@@ -35,7 +35,7 @@ const AdventCalendar = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-11 gap-4 max-w-7xl mx-auto">
+        <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-11 gap-2 sm:gap-3 md:gap-4 max-w-7xl mx-auto">
           {ADVENT_DAYS.map((item) => {
             const isUnlocked = item.day <= currentDay;
             const isCampDay = item.isCampDay;
@@ -52,7 +52,7 @@ const AdventCalendar = () => {
                 whileTap={isUnlocked ? { scale: 0.95 } : {}}
                 onClick={() => isUnlocked && setSelectedDay(item)}
                 className={`
-                  aspect-[4/5] rounded-2xl relative overflow-hidden cursor-pointer transition-all duration-500 flex flex-col items-center justify-center p-4 group shadow-xl
+                  aspect-[4/5] rounded-xl sm:rounded-2xl relative overflow-hidden cursor-pointer transition-all duration-500 flex flex-col items-center justify-center p-2 sm:p-3 md:p-4 group shadow-xl
                   ${isUnlocked
                     ? isCampDay
                       ? "bg-gradient-to-br from-yellow-300 via-yellow-500 to-yellow-700 border-2 border-yellow-200"
@@ -61,20 +61,20 @@ const AdventCalendar = () => {
                       ? "bg-gradient-to-br from-yellow-900/40 to-yellow-900/60 border-2 border-yellow-700/50 opacity-100" // Camp days locked
                       : "bg-gray-100 dark:bg-white/5 border-2 border-gray-200 dark:border-white/10 opacity-70 grayscale"
                   }
-                  ${isToday && "ring-4 ring-yellow-400 ring-offset-4 ring-offset-white dark:ring-offset-black z-10"}
+                  ${isToday && "ring-2 sm:ring-4 ring-yellow-400 ring-offset-2 sm:ring-offset-4 ring-offset-white dark:ring-offset-black z-10"}
                 `}
               >
                 {/* Card Content */}
                 <div className="relative z-10 flex flex-col items-center text-center w-full">
-                  <span className={`text-[10px] sm:text-xs font-black uppercase tracking-widest mb-1 ${isUnlocked ? (isCampDay ? "text-red-900" : "text-yellow-400") : "text-gray-400"}`}>
+                  <span className={`text-[8px] sm:text-[10px] md:text-xs font-black uppercase tracking-widest mb-0.5 sm:mb-1 ${isUnlocked ? (isCampDay ? "text-red-900" : "text-yellow-400") : "text-gray-400"}`}>
                     DEC
                   </span>
-                  <span className={`text-3xl sm:text-5xl font-black ${isUnlocked ? (isCampDay ? "text-red-950" : "text-white") : "text-gray-300"}`}>
+                  <span className={`text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black ${isUnlocked ? (isCampDay ? "text-red-950" : "text-white") : "text-gray-300"}`}>
                     {item.day}
                   </span>
 
                   {isUnlocked && (
-                    <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 absolute -bottom-8">
+                    <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 absolute -bottom-8 hidden sm:block">
                       <span className="text-[10px] font-bold bg-white/20 backdrop-blur-md px-2 py-1 rounded-full text-white uppercase tracking-wider">
                         View
                       </span>
@@ -83,9 +83,9 @@ const AdventCalendar = () => {
                 </div>
 
                 {/* Icons - Relocated to Top Right */}
-                {!isUnlocked && <FaLock className="absolute top-2 right-2 text-gray-500 text-[10px]" />}
-                {isUnlocked && !isCampDay && <FaGift className="absolute top-2 right-2 text-yellow-400 text-xs animate-bounce" />}
-                {isCampDay && <FaStar className={`absolute top-2 right-2 ${isUnlocked ? "text-red-600 animate-spin-slow" : "text-yellow-600/50"} text-xs`} />}
+                {!isUnlocked && <FaLock className="absolute top-1 right-1 sm:top-2 sm:right-2 text-gray-500 text-[8px] sm:text-[10px]" />}
+                {isUnlocked && !isCampDay && <FaGift className="absolute top-1 right-1 sm:top-2 sm:right-2 text-yellow-400 text-[10px] sm:text-xs animate-bounce" />}
+                {isCampDay && <FaStar className={`absolute top-1 right-1 sm:top-2 sm:right-2 ${isUnlocked ? "text-red-600 animate-spin-slow" : "text-yellow-600/50"} text-[10px] sm:text-xs`} />}
 
                 {/* Overlay for Camp Days */}
                 {isCampDay && (

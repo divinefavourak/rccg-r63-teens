@@ -4,7 +4,7 @@ import { CAMP_SCHEDULE } from "../constants/eventDetails";
 import { FaCalendarDay, FaChevronDown, FaClock } from "react-icons/fa";
 
 const Schedule = () => {
-  const [activeDay, setActiveDay] = useState<number | null>(0); // Default open Day 1
+  const [activeDay, setActiveDay] = useState<number | null>(null); // All collapsed by default
 
   return (
     <div className="max-w-4xl mx-auto px-4">
@@ -15,8 +15,8 @@ const Schedule = () => {
             whileTap={{ scale: 0.99 }}
             onClick={() => setActiveDay(activeDay === index ? null : index)}
             className={`w-full flex items-center justify-between p-6 rounded-2xl transition-all duration-300 border backdrop-blur-sm ${activeDay === index
-                ? "bg-gradient-to-r from-red-900/90 to-red-800/90 border-yellow-500 shadow-[0_0_15px_rgba(255,215,0,0.3)]"
-                : "bg-white/10 dark:bg-black/40 border-white/10 hover:border-yellow-500/50 hover:bg-white/15"
+              ? "bg-gradient-to-r from-red-900/90 to-red-800/90 border-yellow-500 shadow-[0_0_15px_rgba(255,215,0,0.3)]"
+              : "bg-white/10 dark:bg-black/40 border-white/10 hover:border-yellow-500/50 hover:bg-white/15"
               }`}
             aria-expanded={activeDay === index}
             aria-controls={`schedule-content-${index}`}
@@ -24,8 +24,8 @@ const Schedule = () => {
             <div className="flex items-center gap-5">
               <div
                 className={`p-4 rounded-xl shadow-inner ${activeDay === index
-                    ? "bg-yellow-500/20 text-yellow-400"
-                    : "bg-black/20 text-gray-400"
+                  ? "bg-yellow-500/20 text-yellow-400"
+                  : "bg-black/20 text-gray-400"
                   }`}
               >
                 <FaCalendarDay className="text-xl" />
@@ -52,8 +52,8 @@ const Schedule = () => {
             </div>
             <div
               className={`p-2 rounded-full transition-transform duration-300 ${activeDay === index
-                  ? "rotate-180 bg-white/10 text-white"
-                  : "text-gray-500"
+                ? "rotate-180 bg-white/10 text-white"
+                : "text-gray-500"
                 }`}
             >
               <FaChevronDown />
