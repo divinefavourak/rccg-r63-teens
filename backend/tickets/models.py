@@ -20,6 +20,7 @@ class Ticket(models.Model):
     class Gender(models.TextChoices):
         MALE = 'male', 'Male'
         FEMALE = 'female', 'Female'
+        NOT_SPECIFIED = 'not_specified', 'Not Specified'
     
     class Status(models.TextChoices):
         PENDING = 'pending', 'Pending'

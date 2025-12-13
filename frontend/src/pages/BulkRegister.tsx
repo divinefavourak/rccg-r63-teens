@@ -102,7 +102,7 @@ const BulkRegister = () => {
       if (counts.children > 0) pushTickets(counts.children, 'children_6_8', 'Child', 7);
       if (counts.teens > 0) pushTickets(counts.teens, 'teens', 'Teen', 15);
       if (counts.pre_teens > 0) pushTickets(counts.pre_teens, 'pre_teens', 'Pre-Teen', 11);
-      if (counts.teachers > 0) pushTickets(counts.teachers, 'teachers', 'Coordinator', 30);
+      if (counts.teachers > 0) pushTickets(counts.teachers, 'teacher', 'Coordinator', 30);
 
       // Batch creation logic (could be optimized with a bulk_create endpoint later)
       const createdTickets = [];
