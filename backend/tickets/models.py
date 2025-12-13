@@ -118,7 +118,7 @@ class Ticket(models.Model):
     qr_code = models.ImageField(upload_to='qr_codes/', null=True, blank=True)
 
     # Payment Information
-    proof_of_payment = models.ImageField(upload_to='payment_proofs/', null=True, blank=True)
+    proof_of_payment = models.FileField(upload_to='payment_proofs/', null=True, blank=True)
     payment_status = models.CharField(
         max_length=30,
         choices=PaymentStatus.choices,

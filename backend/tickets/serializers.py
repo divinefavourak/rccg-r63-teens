@@ -144,7 +144,7 @@ class TicketStatusUpdateSerializer(serializers.Serializer):
 
 class TicketPaymentUploadSerializer(serializers.ModelSerializer):
     """Serializer for uploading payment proof"""
-    proof_of_payment = serializers.ImageField(required=True)
+    proof_of_payment = serializers.FileField(required=True)
     
     class Meta:
         model = Ticket

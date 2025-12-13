@@ -5,20 +5,21 @@ import { useBulkOperations } from "../hooks/useBulkOperations";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import BulkEmailModal from "../components/BulkEmailModal";
+import TicketDetailsModal from "../components/TicketDetailsModal";
 import { ticketService } from "../services/ticketService";
 import { Ticket } from "../types";
 import toast from "react-hot-toast";
 import { CHURCH_INFO_FIELDS } from "../constants/formFields";
-import { 
-  FaSearch, FaCheck, FaTimes, FaEye, FaDownload, 
-  FaUser, FaSignOutAlt, FaUsers, 
+import {
+  FaSearch, FaCheck, FaTimes, FaEye, FaDownload,
+  FaUser, FaSignOutAlt, FaUsers,
   FaCheckCircle, FaExclamationTriangle, FaEnvelope, FaPaperPlane, FaChartPie, FaUserTie
 } from "react-icons/fa";
 
 const AdminVerify = () => {
   // ✅ 1. Destructure isAuthenticated from useAuth
   const { user, logout, isAuthenticated } = useAuth();
-  
+
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,7 +33,7 @@ const AdminVerify = () => {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
   const [provinceStats, setProvinceStats] = useState<Record<string, number>>({});
-  
+
   const provinceOptions = CHURCH_INFO_FIELDS.find(field => field.name === 'province')?.options || [];
 
   const {
@@ -122,7 +123,7 @@ const AdminVerify = () => {
   };
 
   const handleReject = async (id: string) => { // Updated ID type to string
-    if(!window.confirm("Are you sure you want to reject this ticket?")) return;
+    if (!window.confirm("Are you sure you want to reject this ticket?")) return;
     try {
       setTickets(prev => prev.map(t => t.id === id ? { ...t, status: "rejected" } : t));
       toast.success("Ticket Rejected");
@@ -287,8 +288,8 @@ const AdminVerify = () => {
                           <td className="p-4 font-mono text-xs text-gray-600">{ticket.ticketId}</td>
                           <td className="p-4 font-bold text-gray-900">{ticket.fullName}<div className="text-[10px] font-normal text-gray-500">By: {ticket.registeredBy || 'Self'}</div></td>
                           <td className="p-4">
-                            {ticket.registrationType === 'coordinator' ? 
-                              <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs font-bold border border-purple-200"><FaUserTie className="text-xs" /> Coordinator</span> : 
+                            {ticket.registrationType === 'coordinator' ?
+                              <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs font-bold border border-purple-200"><FaUserTie className="text-xs" /> Coordinator</span> :
                               <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-1 rounded text-xs font-bold border border-blue-200"><FaUser className="text-xs" /> Individual</span>
                             }
                           </td>
@@ -311,6 +312,19 @@ const AdminVerify = () => {
         </motion.div>
       </div>
       <BulkEmailModal isOpen={showEmailModal} onClose={() => setShowEmailModal(false)} onSend={handleEmailSend} selectedCount={selectedTickets.size} totalCount={stats.total} pendingCount={stats.pending} approvedCount={stats.approved} />
+
+      <TicketDetailsModal
+        ticket={selectedTicket}
+        onClose={() => setSelectedTicket(null)}
+        onApprove={async (id) => {
+          await handleApprove(id);
+          setSelectedTicket(null);
+        }}
+        onReject={async (id) => {
+          await handleReject(id);
+          setSelectedTicket(null);
+        }}
+      />
       <Footer />
     </div>
   );
