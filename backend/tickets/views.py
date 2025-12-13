@@ -77,7 +77,7 @@ class TicketViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(gender=gender_filter)
         
         # Apply role-based filtering
-        if user.role == User.Role.COORDINATOR:
+        if user.is_authenticated and user.role == User.Role.COORDINATOR:
             queryset = queryset.filter(province=user.province)
         
         return queryset
