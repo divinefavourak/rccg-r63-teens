@@ -8,7 +8,7 @@ import Schedule from "../components/Schedule";
 import FAQ from "../components/FAQ";
 import PhotoGallery from "../components/PhotoGallery"; // NEW
 import AdventCalendar from "../components/AdventCalendar"; // NEW
-import { CAMP_FEATURES, PACKING_LIST } from "../constants/eventDetails";
+import { CAMP_FEATURES, PACKING_LIST, EVENT_DETAILS } from "../constants/eventDetails";
 import { generatePDF } from "../utils/pdfGenerator";
 import {
   FaPray, FaGamepad, FaTheaterMasks, FaUsers,
@@ -17,6 +17,9 @@ import {
   FaInstagram, FaFacebookF
 } from "react-icons/fa";
 import { IconType } from "react-icons";
+import toast from "react-hot-toast";
+
+const SHARE_TEXT = `Register for ${EVENT_DETAILS.theme} Camp 2025! Don't miss this life-changing experience. Join us at ${EVENT_DETAILS.location}. Register now: https://r63teens.com`;
 
 const LandingPage = () => {
   const navigate = useNavigate();
@@ -220,7 +223,7 @@ const LandingPage = () => {
             <p className="text-yellow-400 font-bold uppercase tracking-widest text-sm">Tell a friend</p>
             <div className="flex gap-4">
               <a
-                href={`https://wa.me/?text=${shareText}`}
+                href={`https://wa.me/?text=${encodeURIComponent(SHARE_TEXT)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="bg-green-600 text-white p-4 rounded-full hover:bg-green-500 hover:scale-110 transition-all shadow-lg"
@@ -230,7 +233,7 @@ const LandingPage = () => {
                 <FaWhatsapp className="text-2xl" aria-hidden="true" />
               </a>
               <a
-                href={`https://twitter.com/intent/tweet?text=${shareText}`}
+                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(SHARE_TEXT)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="bg-black text-white p-4 rounded-full hover:bg-gray-900 hover:scale-110 transition-all shadow-lg border border-white/20"
@@ -239,18 +242,19 @@ const LandingPage = () => {
               >
                 <FaTwitter className="text-2xl" aria-hidden="true" />
               </a>
-              <a
-                href={`https://www.instagram.com/`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-gradient-to-tr from-yellow-500 via-red-500 to-purple-600 text-white p-4 rounded-full hover:scale-110 transition-all shadow-lg"
-                title="Share on Instagram"
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(SHARE_TEXT);
+                  toast.success("Link copied! Paste it on Instagram.");
+                }}
+                className="bg-gradient-to-tr from-yellow-500 via-red-500 to-purple-600 text-white p-4 rounded-full hover:scale-110 transition-all shadow-lg cursor-pointer"
+                title="Copy Link for Instagram"
                 aria-label="Share on Instagram"
               >
                 <FaInstagram className="text-2xl" aria-hidden="true" />
-              </a>
+              </button>
               <a
-                href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent("https://r63teens.com")}&quote=${shareText}`}
+                href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent("https://r63teens.com")}&quote=${encodeURIComponent(SHARE_TEXT)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="bg-blue-600 text-white p-4 rounded-full hover:bg-blue-500 hover:scale-110 transition-all shadow-lg"
