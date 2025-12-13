@@ -21,21 +21,27 @@ const PaymentPage = () => {
     const navigate = useNavigate();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
+    const [isSuccess, setIsSuccess] = useState(false);
 
-    // Get ticket data from navigation state
-    const { ticket } = location.state || {}; // { ticket: { id: "...", ticketId: "...", ... } }
+    // Get ticket data (handle both single and bulk)
+    const { ticket, tickets } = location.state || {};
+    const ticketList = tickets || (ticket ? [ticket] : []);
+    const mainTicket = ticketList[0];
+    const isBulk = ticketList.length > 1;
 
     useEffect(() => {
-        if (!ticket) {
+        if (ticketList.length === 0) {
             toast.error("No ticket found. Please register first.");
             navigate("/register");
         }
-    }, [ticket, navigate]);
+    }, [ticketList, navigate]);
 
     const { register, handleSubmit, formState: { errors } } = useForm();
 
+    const totalAmount = ticketList.length * 3000;
+
     const onSubmit = async (data: any) => {
-        if (!ticket?.id) return;
+        if (!mainTicket?.id) return;
 
         setIsSubmitting(true);
         const formData = new FormData();
@@ -44,31 +50,52 @@ const PaymentPage = () => {
         try {
             const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
-            // Use axios directly or add a method to ticketService
-            await axios.post(`${apiUrl}/tickets/${ticket.id}/upload_proof/`, formData, {
-                headers: {
-                    "Content-Type": "multipart/form-data",
-                },
-                onUploadProgress: (progressEvent) => {
-                    const percentCompleted = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 100));
-                    setUploadProgress(percentCompleted);
-                }
-            });
+            // Upload for ALL tickets
+            let completed = 0;
+            const total = ticketList.length;
+
+            for (const t of ticketList) {
+                // Re-append is not needed if we reuse formData, but for safety with some backends, we just send same payload
+                await axios.post(`${apiUrl}/tickets/${t.id}/upload_proof/`, formData, {
+                    headers: { "Content-Type": "multipart/form-data" }
+                });
+                completed++;
+                setUploadProgress(Math.round((completed / total) * 100));
+            }
 
             toast.success("Payment proof uploaded successfully!");
-            // Redirect to preview with updated status context if needed (though backend verification takes time)
-            navigate("/ticket-preview", { state: { ticket: { ...ticket, payment_status: 'verification_pending', status: 'pending' } } });
+            setIsSuccess(true);
 
         } catch (error: any) {
             console.error("Upload error:", error);
             toast.error(error.response?.data?.detail || "Failed to upload payment proof. Please try again.");
+            setUploadProgress(0);
         } finally {
             setIsSubmitting(false);
-            setUploadProgress(0);
         }
     };
 
-    if (!ticket) return null;
+    if (ticketList.length === 0) return null;
+
+    if (isSuccess) {
+        return (
+            <div className="min-h-screen bg-slate-50 dark:bg-[#2b0303] flex items-center justify-center p-6">
+                <div className="bg-white dark:bg-white/10 p-8 rounded-2xl shadow-xl text-center max-w-md w-full border border-gray-100 dark:border-white/10">
+                    <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl">
+                        ✓
+                    </div>
+                    <h2 className="text-2xl font-black mb-2 text-gray-900 dark:text-white">Submission Successful!</h2>
+                    <p className="text-gray-600 dark:text-gray-300 mb-6">
+                        We have received the proof of payment for <strong>{ticketList.length} candidate(s)</strong>.
+                        Your registration is now <strong>Pending Verification</strong>.
+                    </p>
+                    <button onClick={() => navigate('/')} className="w-full btn-primary py-3 rounded-xl font-bold">
+                        Return to Home
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-[#2b0303] text-gray-800 dark:text-white transition-colors duration-500">
@@ -84,17 +111,31 @@ const PaymentPage = () => {
                             COMPLETE <span className="text-yellow-500">PAYMENT</span>
                         </h1>
                         <p className="text-gray-600 dark:text-red-100/80 text-lg">
-                            Almost there! Please make a transfer to finalize your registration.
+                            Almost there! Please make a transfer to finalize {isBulk ? "bulk" : "your"} registration.
                         </p>
                     </div>
 
                     <div className="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl overflow-hidden p-8 md:p-12 relative">
 
                         {/* Ticket Summary */}
-                        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-500/30 rounded-xl p-6 mb-8 text-center">
-                            <p className="text-sm font-bold text-yellow-800 dark:text-yellow-400 uppercase tracking-widest mb-2">Registration for</p>
-                            <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-1">{ticket.full_name}</h2>
-                            <p className="text-lg font-mono text-gray-600 dark:text-gray-300">Ticket ID: <span className="font-bold text-red-600 dark:text-red-400">{ticket.ticketId || ticket.ticket_id}</span></p>
+                        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-500/30 rounded-xl p-6 mb-8">
+                            <div className="text-center mb-4">
+                                <p className="text-sm font-bold text-yellow-800 dark:text-yellow-400 uppercase tracking-widest mb-1">
+                                    {isBulk ? `Bulk Registration (${ticketList.length})` : "Registration for"}
+                                </p>
+                                {isBulk ? (
+                                    <div className="text-sm text-gray-600 dark:text-gray-300 max-h-32 overflow-y-auto mb-2">
+                                        {ticketList.map((t: any) => t.fullName || t.full_name).join(", ")}
+                                    </div>
+                                ) : (
+                                    <h2 className="text-2xl font-black text-gray-900 dark:text-white">{mainTicket.fullName || mainTicket.full_name}</h2>
+                                )}
+                            </div>
+
+                            <div className="border-t border-yellow-200 dark:border-yellow-500/30 pt-4 flex justify-between items-center">
+                                <span className="text-gray-600 dark:text-gray-400 font-bold">Total Amount:</span>
+                                <span className="text-2xl font-black text-gray-900 dark:text-white">₦{totalAmount.toLocaleString()}</span>
+                            </div>
                         </div>
 
                         <div className="grid md:grid-cols-2 gap-8 mb-8">
@@ -128,7 +169,8 @@ const PaymentPage = () => {
                                 <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/50 p-4 rounded-lg">
                                     <p className="text-sm text-red-800 dark:text-red-300 font-bold mb-1">🚨 IMPORTANT:</p>
                                     <p className="text-sm text-red-700 dark:text-red-200/80">
-                                        Use your Ticket ID <strong className="bg-white dark:bg-black/30 px-1 rounded">{ticket.ticketId || ticket.ticket_id}</strong> as the <span className="underline">Transfer Narration/Remark</span>.
+                                        Use Ticket ID <strong className="bg-white dark:bg-black/30 px-1 rounded">{mainTicket.ticketId || mainTicket.ticket_id}</strong> as the <span className="underline">Transfer Narration</span>.
+                                        {isBulk && <span className="block mt-1 text-xs opacity-80">(This covers all {ticketList.length} candidates)</span>}
                                     </p>
                                 </div>
                             </div>
@@ -154,9 +196,10 @@ const PaymentPage = () => {
                                         {errors.proof && <p className="text-red-500 text-sm mt-1">{String(errors.proof.message)}</p>}
                                     </div>
 
-                                    {uploadProgress > 0 && uploadProgress < 100 && (
+                                    {uploadProgress > 0 && (
                                         <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mb-4">
-                                            <div className="bg-yellow-600 h-2.5 rounded-full" style={{ width: `${uploadProgress}%` }}></div>
+                                            <div className="bg-yellow-600 h-2.5 rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
+                                            <p className="text-xs text-center mt-1 text-gray-500">{uploadProgress}% Uploaded</p>
                                         </div>
                                     )}
 
@@ -166,7 +209,7 @@ const PaymentPage = () => {
                                         disabled={isSubmitting}
                                         className="w-full btn-primary py-4 rounded-xl shadow-lg font-bold text-lg disabled:opacity-50 disabled:grayscale"
                                     >
-                                        {isSubmitting ? "Uploading..." : "Submit Proof of Payment"}
+                                        {isSubmitting ? (isBulk ? "Processing Batch..." : "Uploading...") : "Submit Proof of Payment"}
                                     </motion.button>
                                 </form>
 

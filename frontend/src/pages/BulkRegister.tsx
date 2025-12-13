@@ -17,21 +17,21 @@ const BulkRegister = () => {
   const { control, register, handleSubmit, watch } = useForm({
     defaultValues: {
       candidates: [
-        { 
-          fullName: "", 
-          age: "", 
-          gender: "male", 
-          category: "teens", 
-          phone: "", 
-          email: "", 
-          parish: "", 
+        {
+          fullName: "",
+          age: "",
+          gender: "male",
+          category: "teens",
+          phone: "",
+          email: "",
+          parish: "",
           department: "Teens",
-          parentName: "", 
-          parentPhone: "", 
-          parentEmail: "", 
+          parentName: "",
+          parentPhone: "",
+          parentEmail: "",
           parentRelationship: "Parent",
-          emergencyContact: "", 
-          emergencyPhone: "", 
+          emergencyContact: "",
+          emergencyPhone: "",
           emergencyRelationship: "Parent",
           medicalConditions: "None",
           medications: "None",
@@ -56,7 +56,7 @@ const BulkRegister = () => {
     try {
       // 1. Create ALL tickets first (Status will be Pending)
       const createdTickets = [];
-      
+
       for (const candidate of candidates) {
         const ticket = await ticketService.createTicket({
           ...candidate,
@@ -69,23 +69,18 @@ const BulkRegister = () => {
           photoConsent: true,
           registeredBy: user?.name || "Coordinator",
           registrationType: 'coordinator',
-          status: 'pending' 
+          status: 'pending'
         }, user?.token);
-        
+
         createdTickets.push(ticket);
       }
 
-      // 2. Collect IDs
-      const ticketIds = createdTickets.map(t => t.id);
-
-      // 3. Initialize Bulk Payment via Backend
-      const paymentData = await paymentService.initializeBulkPayment(ticketIds, user?.token);
-
-      // 4. Redirect to Paystack
-      if (paymentData.authorization_url) {
-        window.location.href = paymentData.authorization_url;
+      // 2. Redirect to Payment Page (Manual Flow)
+      if (createdTickets.length > 0) {
+        toast.success(`${createdTickets.length} tickets created successfully!`);
+        navigate("/payment", { state: { tickets: createdTickets } }); // Pass array of tickets
       } else {
-        throw new Error("No payment URL returned");
+        throw new Error("No tickets could be created.");
       }
 
     } catch (error: any) {
@@ -132,14 +127,14 @@ const BulkRegister = () => {
                       </button>
                     )}
                   </div>
-                  
+
                   <h4 className="font-bold text-yellow-600 dark:text-yellow-400 mb-6 text-sm border-b border-gray-100 dark:border-white/10 pb-2">CANDIDATE #{index + 1}</h4>
-                  
+
                   {/* Personal Details */}
                   <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-4">
                     <div className="col-span-1 md:col-span-2">
                       <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Full Name *</label>
-                      <input 
+                      <input
                         {...register(`candidates.${index}.fullName`, { required: true })}
                         className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none"
                         placeholder="Surname Firstname"
@@ -167,14 +162,14 @@ const BulkRegister = () => {
                     </div>
                     <div>
                       <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Phone</label>
-                      <input 
+                      <input
                         {...register(`candidates.${index}.phone`, { required: true })}
                         className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none"
                       />
                     </div>
                     <div className="col-span-1 md:col-span-2">
                       <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Email</label>
-                      <input 
+                      <input
                         type="email"
                         {...register(`candidates.${index}.email`)}
                         placeholder="Optional"
@@ -187,14 +182,14 @@ const BulkRegister = () => {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 pt-4 border-t border-gray-100 dark:border-white/5">
                     <div className="col-span-1 md:col-span-2">
                       <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Parish *</label>
-                      <input 
+                      <input
                         {...register(`candidates.${index}.parish`, { required: true })}
                         className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none"
                       />
                     </div>
                     <div>
                       <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Department</label>
-                      <input 
+                      <input
                         {...register(`candidates.${index}.department`)}
                         defaultValue="Teens"
                         className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none"
@@ -235,7 +230,7 @@ const BulkRegister = () => {
                       <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Emergency Phone *</label>
                       <input {...register(`candidates.${index}.emergencyPhone`, { required: true })} className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none" />
                     </div>
-                     <div>
+                    <div>
                       <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Medical Conditions</label>
                       <input {...register(`candidates.${index}.medicalConditions`)} className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none" placeholder="Optional" />
                     </div>
@@ -248,8 +243,8 @@ const BulkRegister = () => {
               <div className="max-w-7xl mx-auto flex justify-between items-center">
                 <button
                   type="button"
-                  onClick={() => append({ 
-                    fullName: "", age: "", gender: "male", category: "teens", 
+                  onClick={() => append({
+                    fullName: "", age: "", gender: "male", category: "teens",
                     phone: "", email: "", parish: "", department: "Teens",
                     parentName: "", parentPhone: "", parentEmail: "", parentRelationship: "Parent",
                     emergencyContact: "", emergencyPhone: "", emergencyRelationship: "Parent",
@@ -275,7 +270,7 @@ const BulkRegister = () => {
                 </div>
               </div>
             </div>
-            <div className="h-24"></div> 
+            <div className="h-24"></div>
           </form>
         </div>
       </div>
