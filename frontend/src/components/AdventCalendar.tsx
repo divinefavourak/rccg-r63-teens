@@ -4,12 +4,23 @@ import { FaLock, FaGift, FaStar, FaTimes, FaBible } from "react-icons/fa";
 import { ADVENT_DAYS } from "../constants/eventDetails";
 
 const AdventCalendar = () => {
-  // Use system date for real logic, but for this demo we assume "today" is Dec 12th as requested
-  // const today = new Date().getDate(); 
-  // const currentMonth = new Date().getMonth(); // 0-11, Dec is 11
+  const [currentDay, setCurrentDay] = useState(0);
 
-  // Hardcoded to 12 as per user instruction "Since today is 12th"
-  const currentDay = 12;
+  useEffect(() => {
+    // Calculate current day based on UTC time to ensure consistency across timezones
+    const now = new Date();
+    const currentMonth = now.getUTCMonth(); // 0-11, Dec is 11
+
+    // Logic: If in December, use UTC Date. If future, unlock all. If past (before Dec), lock all.
+    // For this specific event (Dec 2025), we focus on Month 11.
+    if (currentMonth === 11) {
+      setCurrentDay(now.getUTCDate());
+    } else if (currentMonth > 11 || now.getUTCFullYear() > 2025) {
+      setCurrentDay(31); // Unlock all if contest is over
+    } else {
+      setCurrentDay(0); // Lock all if strictly before December
+    }
+  }, []);
 
   const [selectedDay, setSelectedDay] = useState<typeof ADVENT_DAYS[0] | null>(null);
 
