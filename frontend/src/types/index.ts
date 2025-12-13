@@ -12,7 +12,7 @@ export interface Ticket {
   area: string;
   parish: string;
   department?: string;
-  
+
   // Medical & Emergency
   medicalConditions?: string;
   medications?: string;
@@ -20,25 +20,27 @@ export interface Ticket {
   emergencyContact: string;
   emergencyPhone: string;
   emergencyRelationship: string;
-  
+
   // Parent
   parentName: string;
   parentEmail: string;
   parentPhone: string;
   parentRelationship: string;
-  
+
   status: 'pending' | 'approved' | 'rejected';
   registeredAt: string;
-  registeredBy?: string; 
+  registeredBy?: string;
   registrationType?: 'individual' | 'coordinator';
   paymentRef?: string;
+  proof_of_payment?: string;
+  payment_status?: string;
 }
 
 export interface User {
   id: string;
   username: string;
   role: 'admin' | 'coordinator';
-  province?: string; 
+  province?: string;
   name?: string; // Optional because backend sometimes sends 'first_name'/'last_name' instead
   email?: string;
   token?: string; // ✅ Added to fix the "Property token does not exist" error

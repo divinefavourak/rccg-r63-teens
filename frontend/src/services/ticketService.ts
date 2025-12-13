@@ -62,7 +62,11 @@ const mapFromBackend = (data: any): Ticket => ({
   registeredAt: data.registered_at,
   // Backend serializer sends 'registered_by_name', fallback to 'Self'
   registeredBy: data.registered_by_name || 'Self',
-  registrationType: data.registered_by ? 'coordinator' : 'individual'
+  registrationType: data.registered_by ? 'coordinator' : 'individual',
+
+  // Payment Proof Logic
+  proof_of_payment: data.proof_of_payment,
+  payment_status: data.payment_status
 });
 
 class TicketService {

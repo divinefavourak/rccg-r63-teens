@@ -9,14 +9,18 @@ import toast from "react-hot-toast";
 import { ticketService } from "../services/ticketService";
 
 type CategoryCount = {
+  toddlers: number;
+  children: number;
   teens: number;
   pre_teens: number;
   teachers: number;
 };
 
 const CATEGORIES = [
-  { id: 'teens', label: 'Teens (13-19yrs)', defaultPrice: 3000 },
-  { id: 'pre_teens', label: 'Pre-Teens (10-12yrs)', defaultPrice: 3000 },
+  { id: 'toddlers', label: 'Toddlers (2-5 yrs)', defaultPrice: 3000 },
+  { id: 'children', label: 'Children (6-8 yrs)', defaultPrice: 3000 },
+  { id: 'pre_teens', label: 'Pre-Teens (9-12 yrs)', defaultPrice: 3000 }, // Adjusted to 9-12 per request
+  { id: 'teens', label: 'Teens (13-19 yrs)', defaultPrice: 3000 },
   { id: 'teachers', label: 'Coordinators / Teachers', defaultPrice: 3000 }
 ];
 
@@ -24,7 +28,7 @@ const BulkRegister = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [counts, setCounts] = useState<CategoryCount>({ teens: 0, pre_teens: 0, teachers: 0 });
+  const [counts, setCounts] = useState<CategoryCount>({ toddlers: 0, children: 0, teens: 0, pre_teens: 0, teachers: 0 });
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm({
     defaultValues: {
@@ -94,6 +98,8 @@ const BulkRegister = () => {
         }
       };
 
+      if (counts.toddlers > 0) pushTickets(counts.toddlers, 'toddler', 'Toddler', 3);
+      if (counts.children > 0) pushTickets(counts.children, 'children_6_8', 'Child', 7);
       if (counts.teens > 0) pushTickets(counts.teens, 'teens', 'Teen', 15);
       if (counts.pre_teens > 0) pushTickets(counts.pre_teens, 'pre_teens', 'Pre-Teen', 11);
       if (counts.teachers > 0) pushTickets(counts.teachers, 'teachers', 'Coordinator', 30);
