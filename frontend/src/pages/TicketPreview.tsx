@@ -5,7 +5,7 @@ import { QRCodeSVG } from "qrcode.react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { EVENT_DETAILS } from "../constants/eventDetails";
-import { generatePDF } from "../utils/pdfGenerator";
+import { generatePDF, generateImage } from "../utils/pdfGenerator";
 import { ticketService } from "../services/ticketService"; // Added service
 import toast from "react-hot-toast"; // Added toast
 import {
@@ -14,7 +14,8 @@ import {
   FaCheckCircle,
   FaMapMarkerAlt,
   FaUser,
-  FaPhone
+  FaPhone,
+  FaFileImage
 } from "react-icons/fa";
 import rccgLogo from "../assets/logo.jpg";
 import faithLogo from "../assets/faith_logo.jpg";
@@ -139,9 +140,14 @@ const TicketPreview = () => {
     window.print();
   };
 
-  const handleDownload = async () => {
+  const handleDownloadPDF = async () => {
     await generatePDF('ticket-card-content', `RCCG-Ticket-${ticket.ticketId}.pdf`);
   };
+
+  const handleDownloadImage = async () => {
+    await generateImage('ticket-card-content', `RCCG-Ticket-${ticket.ticketId}.png`);
+  };
+
 
   const getCategoryLabel = (cat: string) => {
     return cat ? cat.replace(/_/g, ' ').toUpperCase() : '';
@@ -179,6 +185,16 @@ const TicketPreview = () => {
             <div className="absolute inset-0 flex items-center justify-center opacity-5 pointer-events-none">
               <img src={rccgLogo} alt="" className="w-96 h-96 grayscale opacity-50" />
             </div>
+
+            {/* Visual Verified Overlay - Only for Approved Tickets */}
+            {ticket.status === 'approved' && (
+              <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none overflow-hidden">
+                <div className="opacity-20 transform -rotate-12">
+                  <FaCheckCircle className="text-[400px] text-green-600" />
+                </div>
+              </div>
+            )}
+
 
             <div className="relative z-10">
               {/* Header Section with Dual Logos */}
@@ -286,13 +302,13 @@ const TicketPreview = () => {
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row justify-center gap-4 mt-8">
             <button
-              onClick={handlePrint}
+              onClick={handleDownloadImage}
               className="px-8 py-3 bg-white dark:bg-white/10 text-gray-800 dark:text-white border border-gray-300 dark:border-white/20 rounded-xl hover:bg-gray-50 dark:hover:bg-white/20 transition-all font-bold flex items-center justify-center gap-2 shadow-sm"
             >
-              <FaPrint /> Print Ticket
+              <FaFileImage /> Download Image
             </button>
             <button
-              onClick={handleDownload}
+              onClick={handleDownloadPDF}
               className="btn-primary py-3 px-8 rounded-xl flex items-center justify-center gap-2 shadow-lg"
             >
               <FaDownload /> Download PDF

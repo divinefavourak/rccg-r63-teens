@@ -49,16 +49,20 @@ class TicketViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         
-        if not user.is_authenticated:
-            return Ticket.objects.none()
-        
-        queryset = Ticket.objects.all()
-        
         # Apply filters from query parameters
         status_filter = self.request.query_params.get('status')
         province_filter = self.request.query_params.get('province')
         category_filter = self.request.query_params.get('category')
         gender_filter = self.request.query_params.get('gender')
+        
+        # Allow public access for specific actions
+        if self.action in ['upload_proof', 'verify', 'qr_code', 'check_in']:
+            queryset = Ticket.objects.all()
+        elif not user.is_authenticated:
+            return Ticket.objects.none()
+        else:
+            queryset = Ticket.objects.all()
+        
         
         if status_filter:
             queryset = queryset.filter(status=status_filter)

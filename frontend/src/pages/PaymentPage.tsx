@@ -213,9 +213,12 @@ const PaymentPage = () => {
                                     </motion.button>
                                 </form>
 
-                                <div className="text-center pt-4">
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                                        Having trouble? <Link to="/contact" className="text-yellow-600 hover:underline">Contact Support</Link>
+                                <div className="text-center pt-8 border-t border-gray-100 dark:border-white/5 mt-6">
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                                        Need help? Contact <a href="mailto:region63juniorchurch@gmail.com" className="text-yellow-600 font-bold hover:underline">region63juniorchurch@gmail.com</a>
+                                    </p>
+                                    <p className="text-xs text-gray-400">
+                                        Please forward your payment proof to the email above if you experience any upload issues.
                                     </p>
                                 </div>
                             </div>
