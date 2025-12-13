@@ -10,9 +10,9 @@ import axios from "axios";
 
 // Using a placeholder Bank Details constant
 const BANK_DETAILS = {
-    bankName: "Guaranty Trust Bank (GTB)",
-    accountNumber: "0000000000",
-    accountName: "RCCG Region 63 Teens",
+    bankName: "Zenith Bank",
+    accountNumber: "1310850769",
+    accountName: "RCCG REGION 63 JUNIOR CHURCH",
     amount: "3,000"
 };
 
