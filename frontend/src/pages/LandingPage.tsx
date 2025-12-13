@@ -12,7 +12,8 @@ import { generatePDF } from "../utils/pdfGenerator";
 import {
   FaPray, FaGamepad, FaTheaterMasks, FaUsers,
   FaInfoCircle, FaUser, FaUserTie,
-  FaWhatsapp, FaTwitter, FaQuoteLeft, FaMapMarkerAlt, FaFilePdf, FaCheck
+  FaWhatsapp, FaTwitter, FaQuoteLeft, FaMapMarkerAlt, FaFilePdf, FaCheck,
+  FaInstagram, FaFacebookF
 } from "react-icons/fa";
 import { IconType } from "react-icons";
 
@@ -202,6 +203,26 @@ const LandingPage = () => {
                 aria-label="Share on X"
               >
                 <FaTwitter className="text-2xl" aria-hidden="true" />
+              </a>
+              <a
+                href={`https://www.instagram.com/`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-gradient-to-tr from-yellow-500 via-red-500 to-purple-600 text-white p-4 rounded-full hover:scale-110 transition-all shadow-lg"
+                title="Share on Instagram"
+                aria-label="Share on Instagram"
+              >
+                <FaInstagram className="text-2xl" aria-hidden="true" />
+              </a>
+              <a
+                href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent("https://r63teens.com")}&quote=${shareText}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-blue-600 text-white p-4 rounded-full hover:bg-blue-500 hover:scale-110 transition-all shadow-lg"
+                title="Share on Facebook"
+                aria-label="Share on Facebook"
+              >
+                <FaFacebookF className="text-2xl" aria-hidden="true" />
               </a>
             </div>
           </div>
