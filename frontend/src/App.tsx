@@ -36,74 +36,74 @@ const Loading = () => (
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <ScrollToTop />
-        <Snowfall />
-        <ChristmasDecorations />
-        <Toaster
-          position="top-center"
-          toastOptions={{
-            duration: 4000,
-            style: { background: '#1a0505', color: '#fff', border: '1px solid #8B0000', padding: '16px', borderRadius: '12px' },
-            success: { iconTheme: { primary: '#FFD700', secondary: '#1a0505' }, style: { border: '1px solid #FFD700' } },
-            error: { iconTheme: { primary: '#ef4444', secondary: '#fff' }, style: { border: '1px solid #ef4444' } },
-          }}
-        />
+    // <AuthProvider> - Removed duplicate (already in main.tsx)
+    <Router>
+      <ScrollToTop />
+      <Snowfall />
+      <ChristmasDecorations />
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          duration: 4000,
+          style: { background: '#1a0505', color: '#fff', border: '1px solid #8B0000', padding: '16px', borderRadius: '12px' },
+          success: { iconTheme: { primary: '#FFD700', secondary: '#1a0505' }, style: { border: '1px solid #FFD700' } },
+          error: { iconTheme: { primary: '#ef4444', secondary: '#fff' }, style: { border: '1px solid #ef4444' } },
+        }}
+      />
 
-        <Suspense fallback={<Loading />}>
-          <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/ticket-preview" element={<TicketPreview />} />
+      <Suspense fallback={<Loading />}>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/ticket-preview" element={<TicketPreview />} />
 
-            {/* PUBLIC REGISTRATION ROUTE */}
-            <Route path="/get-ticket" element={<TicketForm />} />
+          {/* PUBLIC REGISTRATION ROUTE */}
+          <Route path="/get-ticket" element={<TicketForm />} />
 
-            <Route path="/admin-login" element={<AdminLogin />} />
-            <Route path="/coordinator-login" element={<CoordinatorLogin />} />
+          <Route path="/admin-login" element={<AdminLogin />} />
+          <Route path="/coordinator-login" element={<CoordinatorLogin />} />
 
-            {/* Coordinator Routes */}
-            <Route
-              path="/coordinator/dashboard"
-              element={<ProtectedRoute allowedRoles={['coordinator']}><CoordinatorDashboard /></ProtectedRoute>}
-            />
-            <Route
-              path="/coordinator/bulk-register"
-              element={<ProtectedRoute allowedRoles={['coordinator']}><BulkRegister /></ProtectedRoute>}
-            />
-            <Route
-              path="/coordinator/single-register"
-              element={<ProtectedRoute allowedRoles={['coordinator']}><TicketForm /></ProtectedRoute>}
-            />
+          {/* Coordinator Routes */}
+          <Route
+            path="/coordinator/dashboard"
+            element={<ProtectedRoute allowedRoles={['coordinator']}><CoordinatorDashboard /></ProtectedRoute>}
+          />
+          <Route
+            path="/coordinator/bulk-register"
+            element={<ProtectedRoute allowedRoles={['coordinator']}><BulkRegister /></ProtectedRoute>}
+          />
+          <Route
+            path="/coordinator/single-register"
+            element={<ProtectedRoute allowedRoles={['coordinator']}><TicketForm /></ProtectedRoute>}
+          />
 
-            {/* Admin Routes */}
-            <Route
-              path="/admin"
-              element={<ProtectedRoute allowedRoles={['admin']}><AdminVerify /></ProtectedRoute>}
-            />
-            <Route
-              path="/admin/register-admin"
-              element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <AdminRegister />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/register-coordinator"
-              element={<ProtectedRoute allowedRoles={['admin']}><RegisterCoordinator /></ProtectedRoute>}
-            />
-            {/* Paystack Callback Route */}
-            <Route path="/payment/callback" element={<PaymentCallback />} />
-            <Route path="/payment" element={<PaymentPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Suspense>
+          {/* Admin Routes */}
+          <Route
+            path="/admin"
+            element={<ProtectedRoute allowedRoles={['admin']}><AdminVerify /></ProtectedRoute>}
+          />
+          <Route
+            path="/admin/register-admin"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminRegister />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/register-coordinator"
+            element={<ProtectedRoute allowedRoles={['admin']}><RegisterCoordinator /></ProtectedRoute>}
+          />
+          {/* Paystack Callback Route */}
+          <Route path="/payment/callback" element={<PaymentCallback />} />
+          <Route path="/payment" element={<PaymentPage />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
 
-        {/* Vercel Analytics Tracker */}
-        <Analytics />
-      </Router>
-    </AuthProvider>
+      {/* Vercel Analytics Tracker */}
+      <Analytics />
+    </Router>
+    // </AuthProvider >
   );
 }
 

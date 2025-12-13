@@ -1,4 +1,3 @@
-```typescript
 import { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -32,9 +31,9 @@ const BulkRegister = () => {
       coordinatorName: user?.name || "",
       coordinatorPhone: user?.phone || "",
       parish: user?.parish || "",
-      
+
       // Default bulk info to coordinator's known details where possible
-      email: user?.email || "", 
+      email: user?.email || "",
     }
   });
 
@@ -62,13 +61,13 @@ const BulkRegister = () => {
           ticketsToCreate.push({
             fullName: data.parish + " " + prefix + " Guest " + i, // e.g. "Glory Parish Teen Guest 1"
             age: age,
-            gender: 'not_specified', 
-            category: category, 
+            gender: 'not_specified',
+            category: category,
             phone: data.coordinatorPhone, // Use coordinator contact
             email: data.email,            // Use coordinator email
             parish: data.parish,
             department: "Bulk Registration",
-            
+
             // Coordinator info as Parent/Emergency for safety/contact tracing
             parentName: data.coordinatorName,
             parentPhone: data.coordinatorPhone,
@@ -77,7 +76,7 @@ const BulkRegister = () => {
             emergencyContact: data.coordinatorName,
             emergencyPhone: data.coordinatorPhone,
             emergencyRelationship: "Coordinator",
-            
+
             // Standard fields
             medicalConditions: "None",
             medications: "None",
@@ -101,7 +100,7 @@ const BulkRegister = () => {
 
       // Batch creation logic (could be optimized with a bulk_create endpoint later)
       const createdTickets = [];
-      
+
       // We'll create the first one to establish the batch ID context if we were doing that,
       // but here we just loop. For 100+ this might be slow client-side.
       // Ideally backend supports bulk. But for now we stick to current service logic.
@@ -134,7 +133,7 @@ const BulkRegister = () => {
       <Navbar />
       <div className="pt-28 pb-16 px-6">
         <div className="max-w-4xl mx-auto">
-          
+
           <div className="text-center mb-10">
             <h1 className="text-3xl md:text-5xl font-black uppercase text-red-900 dark:text-white mb-2">
               <span className="text-gold-3d">Bulk</span> Registration
@@ -145,17 +144,17 @@ const BulkRegister = () => {
           </div>
 
           <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-8">
-            
+
             {/* 1. Coordinator Details Section */}
             <div className="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl p-6 md:p-8 shadow-xl">
               <h3 className="text-xl font-bold border-b border-gray-100 dark:border-white/10 pb-4 mb-6 flex items-center gap-2">
                 <FaUsers className="text-yellow-600" /> Coordinator Details
               </h3>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-xs font-bold uppercase text-gray-500 dark:text-white/40 mb-2">Coordinator Name</label>
-                  <input 
+                  <input
                     {...register("coordinatorName", { required: "Name is required" })}
                     className="w-full p-3 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-xl"
                     placeholder="Enter full name"
@@ -164,16 +163,16 @@ const BulkRegister = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-bold uppercase text-gray-500 dark:text-white/40 mb-2">Phone Number</label>
-                  <input 
+                  <input
                     {...register("coordinatorPhone", { required: "Phone is required" })}
                     className="w-full p-3 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-xl"
                     placeholder="e.g. 08012345678"
                   />
                   {errors.coordinatorPhone && <p className="text-red-500 text-xs mt-1">{errors.coordinatorPhone.message as string}</p>}
                 </div>
-                 <div>
+                <div>
                   <label className="block text-xs font-bold uppercase text-gray-500 dark:text-white/40 mb-2">Parish</label>
-                  <input 
+                  <input
                     {...register("parish", { required: "Parish is required" })}
                     className="w-full p-3 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-xl"
                     placeholder="e.g. Glory Parish"
@@ -182,7 +181,7 @@ const BulkRegister = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-bold uppercase text-gray-500 dark:text-white/40 mb-2">Email (For Ticket Delivery)</label>
-                  <input 
+                  <input
                     {...register("email", { required: "Email is required" })}
                     type="email"
                     className="w-full p-3 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-xl"
@@ -195,9 +194,9 @@ const BulkRegister = () => {
 
             {/* 2. Category Counters Section */}
             <div className="bg-red-900 text-white rounded-2xl p-6 md:p-8 shadow-2xl relative overflow-hidden">
-               {/* Decorative background */}
+              {/* Decorative background */}
               <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-32 -mt-32"></div>
-              
+
               <h3 className="text-xl font-bold border-b border-white/20 pb-4 mb-6 flex items-center gap-2 relative z-10">
                 <FaCalculator className="text-yellow-400" /> Delegate Categories
               </h3>
@@ -209,10 +208,10 @@ const BulkRegister = () => {
                       <p className="font-bold text-lg">{cat.label}</p>
                       <p className="text-white/50 text-sm">₦3,000 per head</p>
                     </div>
-                    
+
                     <div className="flex items-center gap-4 bg-black/40 rounded-lg p-1">
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => updateCount(cat.id as keyof CategoryCount, -1)}
                         className="w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-md transition-colors"
                       >
@@ -221,8 +220,8 @@ const BulkRegister = () => {
                       <span className="text-2xl font-bold w-12 text-center tabular-nums">
                         {counts[cat.id as keyof CategoryCount]}
                       </span>
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => updateCount(cat.id as keyof CategoryCount, 1)}
                         className="w-10 h-10 flex items-center justify-center bg-yellow-600 hover:bg-yellow-500 text-white rounded-md transition-colors shadow-lg"
                       >
@@ -261,4 +260,3 @@ const BulkRegister = () => {
 };
 
 export default BulkRegister;
-```
