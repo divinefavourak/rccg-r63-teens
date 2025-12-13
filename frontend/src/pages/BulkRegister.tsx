@@ -1,92 +1,130 @@
+```typescript
 import { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { useNavigate } from "react-router-dom";
-import { useForm, useFieldArray } from "react-hook-form";
-import { FaTrash, FaPlus, FaCreditCard, FaCalculator } from "react-icons/fa";
+import { useForm } from "react-hook-form";
+import { FaPlus, FaMinus, FaCalculator, FaUsers, FaArrowRight } from "react-icons/fa";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import toast from "react-hot-toast";
 import { ticketService } from "../services/ticketService";
-import { paymentService } from "../services/paymentService";
+
+type CategoryCount = {
+  teens: number;
+  pre_teens: number;
+  teachers: number;
+};
+
+const CATEGORIES = [
+  { id: 'teens', label: 'Teens (13-19yrs)', defaultPrice: 3000 },
+  { id: 'pre_teens', label: 'Pre-Teens (10-12yrs)', defaultPrice: 3000 },
+  { id: 'teachers', label: 'Coordinators / Teachers', defaultPrice: 3000 }
+];
 
 const BulkRegister = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [counts, setCounts] = useState<CategoryCount>({ teens: 0, pre_teens: 0, teachers: 0 });
 
-  const { control, register, handleSubmit, watch } = useForm({
+  const { register, handleSubmit, watch, formState: { errors } } = useForm({
     defaultValues: {
-      candidates: [
-        {
-          fullName: "",
-          age: "",
-          gender: "male",
-          category: "teens",
-          phone: "",
-          email: "",
-          parish: "",
-          department: "Teens",
-          parentName: "",
-          parentPhone: "",
-          parentEmail: "",
-          parentRelationship: "Parent",
-          emergencyContact: "",
-          emergencyPhone: "",
-          emergencyRelationship: "Parent",
-          medicalConditions: "None",
-          medications: "None",
-          dietaryRestrictions: "None",
-        }
-      ]
+      coordinatorName: user?.name || "",
+      coordinatorPhone: user?.phone || "",
+      parish: user?.parish || "",
+      
+      // Default bulk info to coordinator's known details where possible
+      email: user?.email || "", 
     }
   });
 
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: "candidates"
-  });
+  const totalAttendees = Object.values(counts).reduce((a, b) => a + b, 0);
+  const totalAmount = totalAttendees * 3000;
 
-  const candidates = watch("candidates");
-  const totalAmount = candidates.length * 3000;
+  const updateCount = (category: keyof CategoryCount, delta: number) => {
+    setCounts(prev => ({
+      ...prev,
+      [category]: Math.max(0, prev[category] + delta)
+    }));
+  };
 
   const onFormSubmit = async (data: any) => {
-    if (candidates.length === 0) return toast.error("Add at least one candidate");
+    if (totalAttendees === 0) return toast.error("Please add at least one attendee.");
     setIsSubmitting(true);
 
     try {
-      // 1. Create ALL tickets first (Status will be Pending)
+      // Create Generic Tickets
+      const ticketsToCreate = [];
+
+      // Helper to push tickets
+      const pushTickets = (count: number, category: string, prefix: string, age: number) => {
+        for (let i = 1; i <= count; i++) {
+          ticketsToCreate.push({
+            fullName: `${ data.parish } ${ prefix } Guest ${ i } `, // e.g. "Glory Parish Teen Guest 1"
+            age: age,
+            gender: 'not_specified', 
+            category: category, 
+            phone: data.coordinatorPhone, // Use coordinator contact
+            email: data.email,            // Use coordinator email
+            parish: data.parish,
+            department: "Bulk Registration",
+            
+            // Coordinator info as Parent/Emergency for safety/contact tracing
+            parentName: data.coordinatorName,
+            parentPhone: data.coordinatorPhone,
+            parentEmail: data.email,
+            parentRelationship: "Coordinator",
+            emergencyContact: data.coordinatorName,
+            emergencyPhone: data.coordinatorPhone,
+            emergencyRelationship: "Coordinator",
+            
+            // Standard fields
+            medicalConditions: "None",
+            medications: "None",
+            dietaryRestrictions: "None",
+            province: user?.province || "lagos_province_9",
+            zone: "Coordinator Upload",
+            area: "Coordinator Upload",
+            parentConsent: true,
+            medicalConsent: true,
+            photoConsent: true,
+            registeredBy: user?.name || "Coordinator",
+            registrationType: 'coordinator',
+            status: 'pending'
+          });
+        }
+      };
+
+      if (counts.teens > 0) pushTickets(counts.teens, 'teens', 'Teen', 15);
+      if (counts.pre_teens > 0) pushTickets(counts.pre_teens, 'pre_teens', 'Pre-Teen', 11);
+      if (counts.teachers > 0) pushTickets(counts.teachers, 'teachers', 'Coordinator', 30);
+
+      // Batch creation logic (could be optimized with a bulk_create endpoint later)
       const createdTickets = [];
+      
+      // We'll create the first one to establish the batch ID context if we were doing that,
+      // but here we just loop. For 100+ this might be slow client-side.
+      // Ideally backend supports bulk. But for now we stick to current service logic.
+      // We will show a loading toast.
+      const loadingToast = toast.loading(`Generating ${ totalAttendees } tickets...`);
 
-      for (const candidate of candidates) {
-        const ticket = await ticketService.createTicket({
-          ...candidate,
-          age: parseInt(candidate.age),
-          province: user?.province || "lagos_province_9",
-          zone: "Coordinator Upload",
-          area: "Coordinator Upload",
-          parentConsent: true,
-          medicalConsent: true,
-          photoConsent: true,
-          registeredBy: user?.name || "Coordinator",
-          registrationType: 'coordinator',
-          status: 'pending'
-        }, user?.token);
-
+      for (const ticketData of ticketsToCreate) {
+        const ticket = await ticketService.createTicket(ticketData, user?.token);
         createdTickets.push(ticket);
       }
 
-      // 2. Redirect to Payment Page (Manual Flow)
+      toast.dismiss(loadingToast);
+
       if (createdTickets.length > 0) {
-        toast.success(`${createdTickets.length} tickets created successfully!`);
-        navigate("/payment", { state: { tickets: createdTickets } }); // Pass array of tickets
+        toast.success(`Generated ${ createdTickets.length } generic tickets!`);
+        navigate("/payment", { state: { tickets: createdTickets, isBulk: true } });
       } else {
-        throw new Error("No tickets could be created.");
+        throw new Error("Ticket generation failed.");
       }
 
     } catch (error: any) {
       console.error(error);
-      const msg = error.response?.data?.detail || "Registration failed. Please try again.";
-      toast.error(msg);
+      toast.error("Failed to generate tickets. Please try again.");
       setIsSubmitting(false);
     }
   };
@@ -95,187 +133,132 @@ const BulkRegister = () => {
     <div className="min-h-screen bg-slate-50 dark:bg-[#2b0303] text-gray-800 dark:text-white transition-colors duration-500">
       <Navbar />
       <div className="pt-28 pb-16 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col md:flex-row justify-between items-end mb-8 border-b border-gray-200 dark:border-white/10 pb-6">
-            <div>
-              <h1 className="text-3xl font-black uppercase">Bulk Registration</h1>
-              <p className="text-gray-500 dark:text-white/60">Province: <span className="text-yellow-600 font-bold">{user?.province?.replace(/_/g, ' ')}</span></p>
-            </div>
-            <button
-              type="button"
-              onClick={() => navigate(-1)}
-              className="px-6 py-3 border border-gray-300 rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 font-bold flex items-center gap-2 transition-colors"
-            >
-              Cancel Registration
-            </button>
-            <div className="bg-yellow-100 dark:bg-yellow-900/30 px-6 py-3 rounded-xl border border-yellow-500/30 mt-4 md:mt-0">
-              <p className="text-xs font-bold uppercase  text-yellow-700 dark:text-yellow-400">Total To Pay (₦3,000/head)</p>
-              <p className="text-2xl font-black flex items-center gap-2">
-                <FaCalculator className="text-lg" /> ₦{totalAmount.toLocaleString()}
-              </p>
-            </div>
+        <div className="max-w-4xl mx-auto">
+          
+          <div className="text-center mb-10">
+            <h1 className="text-3xl md:text-5xl font-black uppercase text-red-900 dark:text-white mb-2">
+              <span className="text-gold-3d">Bulk</span> Registration
+            </h1>
+            <p className="text-gray-600 dark:text-white/60 text-lg">
+              Quickly register your group by category.
+            </p>
           </div>
 
-          <form onSubmit={handleSubmit(onFormSubmit)}>
-            <div className="space-y-6">
-              {fields.map((field, index) => (
-                <div key={field.id} className="card p-6 relative group border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm rounded-xl">
-                  <div className="absolute top-4 right-4">
-                    {fields.length > 1 && (
-                      <button type="button" onClick={() => remove(index)} className="text-red-400 hover:text-red-600 p-2 transition-colors">
-                        <FaTrash />
-                      </button>
-                    )}
-                  </div>
-
-                  <h4 className="font-bold text-yellow-600 dark:text-yellow-400 mb-6 text-sm border-b border-gray-100 dark:border-white/10 pb-2">CANDIDATE #{index + 1}</h4>
-
-                  {/* Personal Details */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-4">
-                    <div className="col-span-1 md:col-span-2">
-                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Full Name *</label>
-                      <input
-                        {...register(`candidates.${index}.fullName`, { required: true })}
-                        className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none"
-                        placeholder="Surname Firstname"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Age *</label>
-                      <input type="number" {...register(`candidates.${index}.age`, { required: true })} className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none" />
-                    </div>
-                    <div>
-                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Gender *</label>
-                      <select {...register(`candidates.${index}.gender`)} className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none">
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Category *</label>
-                      <select {...register(`candidates.${index}.category`)} className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none">
-                        <option value="toddler">Toddler (1-5)</option>
-                        <option value="children_6_8">Children (6-8)</option>
-                        <option value="pre_teens">Pre-Teens (9-12)</option>
-                        <option value="teens">Teens (13-19)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Phone</label>
-                      <input
-                        {...register(`candidates.${index}.phone`, { required: true })}
-                        className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none"
-                      />
-                    </div>
-                    <div className="col-span-1 md:col-span-2">
-                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Email</label>
-                      <input
-                        type="email"
-                        {...register(`candidates.${index}.email`)}
-                        placeholder="Optional"
-                        className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Church Details */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 pt-4 border-t border-gray-100 dark:border-white/5">
-                    <div className="col-span-1 md:col-span-2">
-                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Parish *</label>
-                      <input
-                        {...register(`candidates.${index}.parish`, { required: true })}
-                        className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Department</label>
-                      <input
-                        {...register(`candidates.${index}.department`)}
-                        defaultValue="Teens"
-                        className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Parent Details (FIXED: Added Parent Email) */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 pt-4 border-t border-gray-100 dark:border-white/5">
-                    <div>
-                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Parent Name *</label>
-                      <input {...register(`candidates.${index}.parentName`, { required: true })} className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none" />
-                    </div>
-                    <div>
-                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Parent Email *</label>
-                      <input type="email" {...register(`candidates.${index}.parentEmail`, { required: true })} className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none" />
-                    </div>
-                    <div>
-                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Parent Phone *</label>
-                      <input {...register(`candidates.${index}.parentPhone`, { required: true })} className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none" />
-                    </div>
-                    <div>
-                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Parent Relationship</label>
-                      <select {...register(`candidates.${index}.parentRelationship`)} className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none">
-                        <option value="Parent">Parent</option>
-                        <option value="Guardian">Guardian</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Medical / Emergency */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-100 dark:border-white/5">
-                    <div>
-                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Emergency Contact *</label>
-                      <input {...register(`candidates.${index}.emergencyContact`, { required: true })} className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none" />
-                    </div>
-                    <div>
-                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Emergency Phone *</label>
-                      <input {...register(`candidates.${index}.emergencyPhone`, { required: true })} className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none" />
-                    </div>
-                    <div>
-                      <label className="text-xs uppercase font-bold opacity-60 mb-1 block">Medical Conditions</label>
-                      <input {...register(`candidates.${index}.medicalConditions`)} className="w-full p-2 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded outline-none" placeholder="Optional" />
-                    </div>
-                  </div>
+          <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-8">
+            
+            {/* 1. Coordinator Details Section */}
+            <div className="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl p-6 md:p-8 shadow-xl">
+              <h3 className="text-xl font-bold border-b border-gray-100 dark:border-white/10 pb-4 mb-6 flex items-center gap-2">
+                <FaUsers className="text-yellow-600" /> Coordinator Details
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-gray-500 dark:text-white/40 mb-2">Coordinator Name</label>
+                  <input 
+                    {...register("coordinatorName", { required: "Name is required" })}
+                    className="w-full p-3 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-xl"
+                    placeholder="Enter full name"
+                  />
+                  {errors.coordinatorName && <p className="text-red-500 text-xs mt-1">{errors.coordinatorName.message as string}</p>}
                 </div>
-              ))}
-            </div>
-
-            <div className="fixed bottom-0 left-0 w-full bg-white dark:bg-[#1a0505] border-t border-gray-200 dark:border-white/10 p-4 z-40 shadow-2xl">
-              <div className="max-w-7xl mx-auto flex justify-between items-center">
-                <button
-                  type="button"
-                  onClick={() => append({
-                    fullName: "", age: "", gender: "male", category: "teens",
-                    phone: "", email: "", parish: "", department: "Teens",
-                    parentName: "", parentPhone: "", parentEmail: "", parentRelationship: "Parent",
-                    emergencyContact: "", emergencyPhone: "", emergencyRelationship: "Parent",
-                    medicalConditions: "None", medications: "None", dietaryRestrictions: "None"
-                  })}
-                  className="px-6 py-3 border border-gray-300 rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 font-bold flex items-center gap-2"
-                >
-                  <FaPlus /> Add Candidate
-                </button>
-
-                <div className="flex items-center gap-4">
-                  <div className="text-right hidden md:block">
-                    <p className="text-xs text-gray-500">Candidates: {candidates.length}</p>
-                    <p className="font-bold text-lg">Total: ₦{totalAmount.toLocaleString()}</p>
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="btn-primary px-8 py-3 rounded-xl shadow-xl flex items-center gap-2"
-                  >
-                    {isSubmitting ? "Processing..." : <><FaCreditCard /> Pay & Register All</>}
-                  </button>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-gray-500 dark:text-white/40 mb-2">Phone Number</label>
+                  <input 
+                    {...register("coordinatorPhone", { required: "Phone is required" })}
+                    className="w-full p-3 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-xl"
+                    placeholder="e.g. 08012345678"
+                  />
+                  {errors.coordinatorPhone && <p className="text-red-500 text-xs mt-1">{errors.coordinatorPhone.message as string}</p>}
+                </div>
+                 <div>
+                  <label className="block text-xs font-bold uppercase text-gray-500 dark:text-white/40 mb-2">Parish</label>
+                  <input 
+                    {...register("parish", { required: "Parish is required" })}
+                    className="w-full p-3 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-xl"
+                    placeholder="e.g. Glory Parish"
+                  />
+                  {errors.parish && <p className="text-red-500 text-xs mt-1">{errors.parish.message as string}</p>}
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-gray-500 dark:text-white/40 mb-2">Email (For Ticket Delivery)</label>
+                  <input 
+                    {...register("email", { required: "Email is required" })}
+                    type="email"
+                    className="w-full p-3 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-xl"
+                    placeholder="coordinator@example.com"
+                  />
+                  {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message as string}</p>}
                 </div>
               </div>
             </div>
-            <div className="h-24"></div>
+
+            {/* 2. Category Counters Section */}
+            <div className="bg-red-900 text-white rounded-2xl p-6 md:p-8 shadow-2xl relative overflow-hidden">
+               {/* Decorative background */}
+              <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-32 -mt-32"></div>
+              
+              <h3 className="text-xl font-bold border-b border-white/20 pb-4 mb-6 flex items-center gap-2 relative z-10">
+                <FaCalculator className="text-yellow-400" /> Delegate Categories
+              </h3>
+
+              <div className="space-y-6 relative z-10">
+                {CATEGORIES.map(cat => (
+                  <div key={cat.id} className="flex items-center justify-between bg-black/20 p-4 rounded-xl border border-white/5">
+                    <div>
+                      <p className="font-bold text-lg">{cat.label}</p>
+                      <p className="text-white/50 text-sm">₦3,000 per head</p>
+                    </div>
+                    
+                    <div className="flex items-center gap-4 bg-black/40 rounded-lg p-1">
+                      <button 
+                        type="button" 
+                        onClick={() => updateCount(cat.id as keyof CategoryCount, -1)}
+                        className="w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-md transition-colors"
+                      >
+                        <FaMinus size={12} />
+                      </button>
+                      <span className="text-2xl font-bold w-12 text-center tabular-nums">
+                        {counts[cat.id as keyof CategoryCount]}
+                      </span>
+                      <button 
+                        type="button" 
+                        onClick={() => updateCount(cat.id as keyof CategoryCount, 1)}
+                        className="w-10 h-10 flex items-center justify-center bg-yellow-600 hover:bg-yellow-500 text-white rounded-md transition-colors shadow-lg"
+                      >
+                        <FaPlus size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Total Section */}
+              <div className="mt-8 pt-6 border-t border-white/20 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div className="text-center md:text-left">
+                  <p className="text-white/60 text-sm uppercase font-bold">Total Payable Amount</p>
+                  <p className="text-4xl font-black text-yellow-400">₦{totalAmount.toLocaleString()}</p>
+                  <p className="text-white/40 text-xs mt-1">{totalAttendees} Delegates</p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting || totalAttendees === 0}
+                  className="bg-white text-red-900 px-8 py-4 rounded-xl font-bold text-lg hover:bg-gray-100 transition-colors shadow-xl flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? "Generating Tickets..." : <>Proceed to Payment <FaArrowRight /></>}
+                </button>
+              </div>
+            </div>
+
           </form>
+
         </div>
       </div>
+      <Footer />
     </div>
   );
 };
 
 export default BulkRegister;
+```
