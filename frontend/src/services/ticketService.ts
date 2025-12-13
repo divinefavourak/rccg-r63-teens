@@ -45,7 +45,7 @@ const mapFromBackend = (data: any): Ticket => ({
   area: data.area,
   parish: data.parish,
   department: data.department,
-  
+
   // Optional / Complex fields
   medicalConditions: data.medical_conditions,
   medications: data.medications,
@@ -57,7 +57,7 @@ const mapFromBackend = (data: any): Ticket => ({
   parentEmail: data.parent_email,
   parentPhone: data.parent_phone,
   parentRelationship: data.parent_relationship,
-  
+
   status: data.status,
   registeredAt: data.registered_at,
   // Backend serializer sends 'registered_by_name', fallback to 'Self'
@@ -73,7 +73,7 @@ class TicketService {
     const response = await api.get('/tickets/');
     const results = response.data.results || response.data;
     // Map every ticket in the list to the correct format
-    return results.map(mapFromBackend); 
+    return results.map(mapFromBackend);
   }
 
   /**
@@ -91,7 +91,7 @@ class TicketService {
    */
   async createTicket(data: any, token?: string): Promise<Ticket> {
     const payload = mapToBackend(data);
-    
+
     const config = token ? {
       headers: { Authorization: `Bearer ${token}` }
     } : {};
@@ -106,6 +106,39 @@ class TicketService {
   async updateTicketStatus(id: string | number, status: 'approved' | 'rejected' | 'pending'): Promise<Ticket> {
     const response = await api.post(`/tickets/${id}/update-status/`, { status });
     return mapFromBackend(response.data);
+  }
+
+  /**
+   * Verify ticket status (Public)
+   */
+  async verifyTicket(ticketId: string): Promise<Ticket | null> {
+    try {
+      const response = await api.get(`/tickets/verify/?ticket_id=${ticketId}`);
+      if (response.data && response.data.ticket) {
+        // The verify endpoint structure is slightly different ({ valid: true, ticket: {...} })
+        // So we need to normalize it to our internal Ticket type
+        const t = response.data.ticket;
+        return {
+          ...t,
+          // Ensure fields match Ticket interface
+          id: t.id || t.ticket_id, // verify endpoint returns ticket_id
+          ticketId: t.ticket_id,
+          fullName: t.full_name,
+          registeredAt: t.registered_at,
+          registeredBy: t.registered_by || 'Self',
+          category: t.category,
+          gender: t.gender,
+          province: t.province,
+          parish: t.parish,
+          emergencyPhone: t.emergency_phone
+          // ... other fields might be missing in verify response, but these are enough for Preview
+        } as Ticket;
+      }
+      return null;
+    } catch (error) {
+      console.error("Verification error:", error);
+      return null;
+    }
   }
 }
 

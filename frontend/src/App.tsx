@@ -20,6 +20,7 @@ const CoordinatorDashboard = lazy(() => import('./pages/CoordinatorDashboard'));
 const BulkRegister = lazy(() => import('./pages/BulkRegister'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const PaymentCallback = lazy(() => import('./pages/PaymentCallback'));
+const PaymentPage = lazy(() => import('./pages/PaymentPage'));
 
 const Loading = () => (
   <div className="min-h-screen flex items-center justify-center bg-[#2b0303] dark:bg-[#1a0505] transition-colors duration-500">
@@ -40,7 +41,7 @@ function App() {
         <ScrollToTop />
         <Snowfall />
         <ChristmasDecorations />
-        <Toaster 
+        <Toaster
           position="top-center"
           toastOptions={{
             duration: 4000,
@@ -49,55 +50,56 @@ function App() {
             error: { iconTheme: { primary: '#ef4444', secondary: '#fff' }, style: { border: '1px solid #ef4444' } },
           }}
         />
-        
+
         <Suspense fallback={<Loading />}>
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/ticket-preview" element={<TicketPreview />} />
-            
+
             {/* PUBLIC REGISTRATION ROUTE */}
             <Route path="/get-ticket" element={<TicketForm />} />
-            
+
             <Route path="/admin-login" element={<AdminLogin />} />
             <Route path="/coordinator-login" element={<CoordinatorLogin />} />
-            
+
             {/* Coordinator Routes */}
-            <Route 
-              path="/coordinator/dashboard" 
-              element={<ProtectedRoute allowedRoles={['coordinator']}><CoordinatorDashboard /></ProtectedRoute>} 
+            <Route
+              path="/coordinator/dashboard"
+              element={<ProtectedRoute allowedRoles={['coordinator']}><CoordinatorDashboard /></ProtectedRoute>}
             />
-            <Route 
-              path="/coordinator/bulk-register" 
-              element={<ProtectedRoute allowedRoles={['coordinator']}><BulkRegister /></ProtectedRoute>} 
+            <Route
+              path="/coordinator/bulk-register"
+              element={<ProtectedRoute allowedRoles={['coordinator']}><BulkRegister /></ProtectedRoute>}
             />
-            <Route 
-              path="/coordinator/single-register" 
-              element={<ProtectedRoute allowedRoles={['coordinator']}><TicketForm /></ProtectedRoute>} 
+            <Route
+              path="/coordinator/single-register"
+              element={<ProtectedRoute allowedRoles={['coordinator']}><TicketForm /></ProtectedRoute>}
             />
 
             {/* Admin Routes */}
-            <Route 
-              path="/admin" 
-              element={<ProtectedRoute allowedRoles={['admin']}><AdminVerify /></ProtectedRoute>} 
+            <Route
+              path="/admin"
+              element={<ProtectedRoute allowedRoles={['admin']}><AdminVerify /></ProtectedRoute>}
             />
-            <Route 
-  path="/admin/register-admin" 
-  element={
-    <ProtectedRoute allowedRoles={['admin']}>
-      <AdminRegister />
-    </ProtectedRoute>
-  } 
-/>
-<Route 
-  path="/admin/register-coordinator" 
-  element={<ProtectedRoute allowedRoles={['admin']}><RegisterCoordinator /></ProtectedRoute>} 
-/>
+            <Route
+              path="/admin/register-admin"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminRegister />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/register-coordinator"
+              element={<ProtectedRoute allowedRoles={['admin']}><RegisterCoordinator /></ProtectedRoute>}
+            />
             {/* Paystack Callback Route */}
             <Route path="/payment/callback" element={<PaymentCallback />} />
+            <Route path="/payment" element={<PaymentPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
-        
+
         {/* Vercel Analytics Tracker */}
         <Analytics />
       </Router>

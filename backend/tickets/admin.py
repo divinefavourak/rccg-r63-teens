@@ -11,10 +11,10 @@ class TicketAdmin(admin.ModelAdmin):
     """Admin configuration for Ticket model"""
     list_display = (
         'ticket_id', 'full_name', 'age', 'category', 'gender',
-        'province', 'status', 'registered_at', 'registered_by'
+        'province', 'status', 'payment_status', 'proof_link', 'registered_at'
     )
     list_filter = (
-        'status', 'category', 'gender', 'province',
+        'status', 'payment_status', 'category', 'gender', 'province',
         'zone', 'area', 'registered_at'
     )
     search_fields = (
@@ -30,6 +30,9 @@ class TicketAdmin(admin.ModelAdmin):
     fieldsets = (
         ('Ticket Information', {
             'fields': ('ticket_id', 'status', 'notes', 'qr_code')
+        }),
+        ('Payment Information', {
+            'fields': ('payment_status', 'proof_of_payment')
         }),
         ('Personal Information', {
             'fields': ('full_name', 'age', 'date_of_birth', 'category', 'gender')
@@ -58,6 +61,13 @@ class TicketAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+    def proof_link(self, obj):
+        if obj.proof_of_payment:
+            from django.utils.html import format_html
+            return format_html('<a href="{}" target="_blank">View Proof</a>', obj.proof_of_payment.url)
+        return "-"
+    proof_link.short_description = "Proof of Payment"
     
     def export_to_excel(self, request, queryset):
         """Export selected tickets to Excel"""

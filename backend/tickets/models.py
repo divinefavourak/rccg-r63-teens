@@ -26,6 +26,11 @@ class Ticket(models.Model):
         APPROVED = 'approved', 'Approved'
         REJECTED = 'rejected', 'Rejected'
         CANCELLED = 'cancelled', 'Cancelled'
+
+    class PaymentStatus(models.TextChoices):
+        UNPAID = 'unpaid', 'Unpaid'
+        VERIFICATION_PENDING = 'verification_pending', 'Verification Pending'
+        PAID = 'paid', 'Paid'
     
     # Ticket identification
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -111,6 +116,14 @@ class Ticket(models.Model):
     
     # QR Code
     qr_code = models.ImageField(upload_to='qr_codes/', null=True, blank=True)
+
+    # Payment Information
+    proof_of_payment = models.ImageField(upload_to='payment_proofs/', null=True, blank=True)
+    payment_status = models.CharField(
+        max_length=30,
+        choices=PaymentStatus.choices,
+        default=PaymentStatus.UNPAID
+    )
     
     class Meta:
         ordering = ['-registered_at']

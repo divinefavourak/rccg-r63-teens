@@ -37,12 +37,13 @@ class TicketSerializer(serializers.ModelSerializer):
             'status', 'status_display', 'notes',
             'registered_at', 'registered_by', 'registered_by_name',
             'approved_at', 'approved_by', 'approved_by_name',
-            'created_at', 'updated_at', 'qr_code'
+            'created_at', 'updated_at', 'qr_code',
+            'payment_status', 'proof_of_payment'
         ]
         read_only_fields = [
             'id', 'ticket_id', 'registered_at', 'registered_by',
             'approved_at', 'approved_by', 'created_at', 'updated_at',
-            'qr_code'
+            'qr_code', 'payment_status', 'proof_of_payment'
         ]
     
     def validate(self, data):
@@ -139,6 +140,15 @@ class TicketStatusUpdateSerializer(serializers.Serializer):
             raise serializers.ValidationError("Only administrators can approve tickets.")
         
         return data
+
+
+class TicketPaymentUploadSerializer(serializers.ModelSerializer):
+    """Serializer for uploading payment proof"""
+    proof_of_payment = serializers.ImageField(required=True)
+    
+    class Meta:
+        model = Ticket
+        fields = ['proof_of_payment']
 
 
 class BulkUploadSerializer(serializers.ModelSerializer):

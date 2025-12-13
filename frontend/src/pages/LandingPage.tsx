@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
 import Countdown from "../components/Countdown";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -18,6 +19,16 @@ import {
 import { IconType } from "react-icons";
 
 const LandingPage = () => {
+  const navigate = useNavigate();
+  const [ticketId, setTicketId] = useState("");
+
+  const handleCheckStatus = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (ticketId.trim()) {
+      navigate(`/ticket-preview?ticket_id=${ticketId.trim()}`);
+    }
+  };
+
   const stats = [
     { number: "500+", label: "Children Expected" },
     { number: "3", label: "Days of Glory" },
@@ -156,6 +167,30 @@ const LandingPage = () => {
               </div>
             </Link>
           </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.2 }}
+            className="mt-10 relative z-20 max-w-md mx-auto"
+          >
+            <p className="text-white/60 text-xs uppercase font-bold tracking-widest mb-2">Already Registered?</p>
+            <form onSubmit={handleCheckStatus} className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Enter Ticket ID to Check Status"
+                className="w-full px-5 py-3 rounded-xl border border-white/20 bg-white/5 text-white placeholder-white/40 backdrop-blur-md focus:outline-none focus:ring-2 focus:ring-yellow-500 transition-all text-center md:text-left"
+                value={ticketId}
+                onChange={(e) => setTicketId(e.target.value)}
+              />
+              <button
+                type="submit"
+                className="bg-yellow-500 text-red-900 font-bold px-6 py-3 rounded-xl hover:bg-yellow-400 transition-all shadow-lg hover:shadow-yellow-500/20 whitespace-nowrap"
+              >
+                CHECK STATUS
+              </button>
+            </form>
+          </motion.div>
         </div>
       </section>
 
@@ -227,15 +262,15 @@ const LandingPage = () => {
             </div>
           </div>
         </div>
-      </section>
+      </section >
 
       {/* NEW: Advent Calendar Teaser */}
-      <section className="bg-white dark:bg-[#2b0303] transition-colors duration-500">
+      < section className="bg-white dark:bg-[#2b0303] transition-colors duration-500" >
         <AdventCalendar />
-      </section>
+      </section >
 
       {/* Schedule Section */}
-      <section className="section-padding bg-gray-50 dark:bg-[#1a0505] transition-colors duration-500">
+      < section className="section-padding bg-gray-50 dark:bg-[#1a0505] transition-colors duration-500" >
         <div className="container-custom">
           <motion.div
             initial={{ opacity: 0 }}
@@ -247,10 +282,10 @@ const LandingPage = () => {
           </motion.div>
           <Schedule />
         </div>
-      </section>
+      </section >
 
       {/* Features Section */}
-      <section className="section-padding bg-red-50 dark:bg-[#2b0303] transition-colors duration-500">
+      < section className="section-padding bg-red-50 dark:bg-[#2b0303] transition-colors duration-500" >
         <div className="container-custom">
           <motion.div
             initial={{ opacity: 0 }}
@@ -289,15 +324,15 @@ const LandingPage = () => {
             })}
           </div>
         </div>
-      </section>
+      </section >
 
       {/* NEW: Photo Gallery */}
-      <section className="bg-white dark:bg-[#1a0505] transition-colors duration-500">
+      < section className="bg-white dark:bg-[#1a0505] transition-colors duration-500" >
         <PhotoGallery />
-      </section>
+      </section >
 
       {/* Packing List Section */}
-      <section className="py-20 bg-yellow-50 dark:bg-yellow-900/10 border-y border-yellow-500/20">
+      < section className="py-20 bg-yellow-50 dark:bg-yellow-900/10 border-y border-yellow-500/20" >
         <div className="container-custom px-6">
           <div className="flex flex-col md:flex-row items-center gap-12">
             <div className="flex-1 text-left md:pl-10">
@@ -335,10 +370,10 @@ const LandingPage = () => {
             </div>
           </div>
         </div>
-      </section>
+      </section >
 
       {/* Testimonials Section */}
-      <section className="py-20 bg-white dark:bg-[#2b0303] border-t border-yellow-500/10">
+      < section className="py-20 bg-white dark:bg-[#2b0303] border-t border-yellow-500/10" >
         <div className="container-custom">
           <h2 className="text-3xl font-black text-center mb-12 text-red-900 dark:text-white uppercase">Voices from 2024</h2>
           <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
@@ -363,10 +398,10 @@ const LandingPage = () => {
             ))}
           </div>
         </div>
-      </section>
+      </section >
 
       {/* FAQ Section */}
-      <section className="section-padding bg-gray-50 dark:bg-[#1a0505]">
+      < section className="section-padding bg-gray-50 dark:bg-[#1a0505]" >
         <div className="container-custom">
           <motion.div
             initial={{ opacity: 0 }}
@@ -378,10 +413,10 @@ const LandingPage = () => {
           </motion.div>
           <FAQ />
         </div>
-      </section>
+      </section >
 
       {/* Location Map Section */}
-      <section className="py-12 bg-white dark:bg-[#2b0303] border-t border-gray-200 dark:border-white/5">
+      < section className="py-12 bg-white dark:bg-[#2b0303] border-t border-gray-200 dark:border-white/5" >
         <div className="container-custom">
           <div className="bg-white dark:bg-white/5 p-4 rounded-3xl shadow-xl border border-gray-200 dark:border-white/10">
             <div className="flex items-center gap-2 mb-4 px-2">
@@ -402,10 +437,10 @@ const LandingPage = () => {
             </div>
           </div>
         </div>
-      </section>
+      </section >
 
       <Footer />
-    </div>
+    </div >
   );
 };
 

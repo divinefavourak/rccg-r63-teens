@@ -17,7 +17,7 @@ from .serializers import (
     TicketSerializer, TicketCreateSerializer, TicketUpdateSerializer,
     TicketStatusUpdateSerializer, BulkUploadSerializer,
     BulkUploadCreateSerializer, TicketAuditLogSerializer,
-    CheckInRecordSerializer
+    CheckInRecordSerializer, TicketPaymentUploadSerializer
 )
 from .permissions import TicketPermission, CanApproveTicket
 from .utils import UUIDEncoder, convert_uuid_to_string
@@ -183,6 +183,32 @@ class TicketViewSet(viewsets.ModelViewSet):
                 ticket=ticket,
                 old_values={'status': old_status},
                 new_values={'status': new_status},
+                ip_address=self.get_client_ip(),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')
+            )
+            
+            return Response(TicketSerializer(ticket).data)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'], permission_classes=[permissions.AllowAny], parser_classes=[MultiPartParser, FormParser])
+    def upload_proof(self, request, pk=None):
+        """Upload proof of payment"""
+        ticket = self.get_object()
+        serializer = TicketPaymentUploadSerializer(ticket, data=request.data, partial=True)
+        
+        if serializer.is_valid():
+            ticket = serializer.save()
+            ticket.payment_status = Ticket.PaymentStatus.VERIFICATION_PENDING
+            ticket.status = Ticket.Status.PENDING # Ensure it's not approved yet
+            ticket.save()
+            
+            # Create audit log
+            TicketAuditLog.objects.create(
+                user=request.user if request.user.is_authenticated else None,
+                action='update', # Using generic update or could add PAYMENT_UPLOAD
+                ticket=ticket,
+                new_values={'payment_status': 'verification_pending'},
                 ip_address=self.get_client_ip(),
                 user_agent=request.META.get('HTTP_USER_AGENT', '')
             )
