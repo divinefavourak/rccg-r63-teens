@@ -60,7 +60,7 @@ const BulkRegister = () => {
       const pushTickets = (count: number, category: string, prefix: string, age: number) => {
         for (let i = 1; i <= count; i++) {
           ticketsToCreate.push({
-            fullName: `${ data.parish } ${ prefix } Guest ${ i } `, // e.g. "Glory Parish Teen Guest 1"
+            fullName: data.parish + " " + prefix + " Guest " + i, // e.g. "Glory Parish Teen Guest 1"
             age: age,
             gender: 'not_specified', 
             category: category, 
@@ -106,7 +106,7 @@ const BulkRegister = () => {
       // but here we just loop. For 100+ this might be slow client-side.
       // Ideally backend supports bulk. But for now we stick to current service logic.
       // We will show a loading toast.
-      const loadingToast = toast.loading(`Generating ${ totalAttendees } tickets...`);
+      const loadingToast = toast.loading("Generating " + totalAttendees + " tickets...");
 
       for (const ticketData of ticketsToCreate) {
         const ticket = await ticketService.createTicket(ticketData, user?.token);
@@ -116,7 +116,7 @@ const BulkRegister = () => {
       toast.dismiss(loadingToast);
 
       if (createdTickets.length > 0) {
-        toast.success(`Generated ${ createdTickets.length } generic tickets!`);
+        toast.success("Generated " + createdTickets.length + " generic tickets!");
         navigate("/payment", { state: { tickets: createdTickets, isBulk: true } });
       } else {
         throw new Error("Ticket generation failed.");
