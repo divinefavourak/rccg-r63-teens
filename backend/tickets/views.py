@@ -21,7 +21,7 @@ from .serializers import (
 )
 from .permissions import TicketPermission, CanApproveTicket
 from .utils import UUIDEncoder, convert_uuid_to_string
-from .services import QRCodeService, PDFService
+from .services import QRCodeService, PDFService, EmailService
 from users.permissions import IsAdmin, IsCoordinator, ProvinceAccessPermission
 
 User = get_user_model()
@@ -107,6 +107,13 @@ class TicketViewSet(viewsets.ModelViewSet):
             user_agent=request.META.get('HTTP_USER_AGENT', '')
         )
         
+        # Send confirmation email
+        try:
+            EmailService.send_ticket_confirmation(ticket)
+        except Exception as e:
+            # Log error but don't fail the request
+            print(f"Failed to send confirmation email: {e}")
+
         # Return the full ticket data using the main serializer
         serializer = TicketSerializer(ticket)
         headers = self.get_success_headers(serializer.data)
@@ -190,6 +197,12 @@ class TicketViewSet(viewsets.ModelViewSet):
                 ip_address=self.get_client_ip(),
                 user_agent=request.META.get('HTTP_USER_AGENT', '')
             )
+            
+            # Send status update email
+            try:
+                EmailService.send_status_update(ticket, old_status, new_status)
+            except Exception as e:
+                print(f"Failed to send status update email: {e}")
             
             return Response(TicketSerializer(ticket).data)
         
@@ -669,6 +682,13 @@ class BulkUploadView(generics.CreateAPIView, generics.ListAPIView):
                         ip_address=self.get_client_ip(self.request),
                         user_agent=self.request.META.get('HTTP_USER_AGENT', '')
                     )
+                    
+                    # Send confirmation email
+                    try:
+                        EmailService.send_ticket_confirmation(ticket)
+                    except Exception as e:
+                        errors.append(f"Row {i}: Email failed - {str(e)}")
+                        # Don't fail the row just because email failed, but log it
                     
                     successful += 1
                 else:
