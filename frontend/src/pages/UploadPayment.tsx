@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
+import axios from 'axios';
 import { FaUpload, FaFileInvoice, FaCheckCircle } from 'react-icons/fa';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import { ticketService } from '../services/ticketService';
 
 // Get API URL from environment variables, fallback to the render URL if missing
-// NOTE: Make sure your VITE_API_URL in .env does NOT have a trailing slash
 const API_URL = import.meta.env.VITE_API_URL || 'https://rccg-r63-teens-backend.onrender.com/api';
 
 const UploadPayment = () => {
@@ -46,52 +47,42 @@ const UploadPayment = () => {
         setUploading(true);
 
         try {
+            // Step 1: Verify/find the ticket to get its UUID
+            const ticket = await ticketService.verifyTicket(ticketId.trim());
+
+            if (!ticket || !ticket.id) {
+                toast.error('Ticket not found. Please check the ticket ID and try again.');
+                setUploading(false);
+                return;
+            }
+
+            // Step 2: Upload using the same endpoint as PaymentPage (by UUID)
             const formData = new FormData();
-            formData.append('ticket_id', ticketId.trim());
             formData.append('proof_of_payment', selectedFile);
 
-            console.log(`Uploading to: ${API_URL}/tickets/upload_proof_by_ticket_id/`);
+            await axios.post(`${API_URL}/tickets/${ticket.id}/upload_proof/`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
 
-            // USE FETCH instead of axios/api to avoid sending Authorization headers
-            // This ensures the request is treated as "Public"
-            const response = await fetch(
-                `${API_URL}/tickets/upload_proof_by_ticket_id/`,
-                {
-                    method: 'POST',
-                    body: formData,
-                    // Do NOT add Authorization headers here
-                }
-            );
+            toast.success('✅ Payment proof uploaded successfully! Awaiting verification.');
 
-            // Handle Response
-            if (response.ok) {
-                const data = await response.json();
-                console.log("Upload success:", data);
+            // Reset form
+            const savedTicketId = ticketId.trim();
+            setTicketId('');
+            setSelectedFile(null);
 
-                toast.success('✅ Payment proof uploaded successfully! Awaiting verification.');
+            // Navigate to ticket preview after 2 seconds
+            setTimeout(() => {
+                navigate(`/ticket-preview?ticket_id=${savedTicketId}`);
+            }, 2000);
 
-                // Reset form
-                setTicketId('');
-                setSelectedFile(null);
-
-                // Navigate to ticket preview after 2 seconds
-                setTimeout(() => {
-                    navigate(`/ticket-preview?ticket_id=${ticketId.trim()}`);
-                }, 2000);
+        } catch (error: any) {
+            console.error('Upload error:', error);
+            if (error.response?.status === 404) {
+                toast.error('Ticket not found. Please check the ticket ID.');
             } else {
-                // Try to parse error as JSON, fallback to text if it's HTML (the '<' error)
-                const text = await response.text();
-                try {
-                    const errorJson = JSON.parse(text);
-                    toast.error(errorJson.error || 'Failed to upload payment proof');
-                } catch {
-                    console.error("Non-JSON error response:", text);
-                    toast.error(`Upload failed (Status ${response.status}). See console for details.`);
-                }
+                toast.error(error.response?.data?.detail || error.response?.data?.error || 'Failed to upload payment proof. Please try again.');
             }
-        } catch (error) {
-            console.error('Upload network error:', error);
-            toast.error('Network error. Failed to upload payment proof.');
         } finally {
             setUploading(false);
         }
