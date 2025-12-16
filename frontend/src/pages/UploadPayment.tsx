@@ -5,7 +5,10 @@ import toast from 'react-hot-toast';
 import { FaUpload, FaFileInvoice, FaCheckCircle } from 'react-icons/fa';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-import { api } from '../services/api'; // Import the shared API configuration
+
+// Get API URL from environment variables, fallback to the render URL if missing
+// NOTE: Make sure your VITE_API_URL in .env does NOT have a trailing slash
+const API_URL = import.meta.env.VITE_API_URL || 'https://rccg-r63-teens-backend.onrender.com/api';
 
 const UploadPayment = () => {
     const navigate = useNavigate();
@@ -47,26 +50,48 @@ const UploadPayment = () => {
             formData.append('ticket_id', ticketId.trim());
             formData.append('proof_of_payment', selectedFile);
 
-            // CHANGED: Use the shared 'api' instance instead of fetch
-            // This ensures we use the correct Base URL from api.ts
-            // axios automatically sets the Content-Type for FormData
-            await api.post('/tickets/upload_proof_by_ticket_id/', formData);
+            console.log(`Uploading to: ${API_URL}/tickets/upload_proof_by_ticket_id/`);
 
-            toast.success('✅ Payment proof uploaded successfully! Awaiting verification.');
+            // USE FETCH instead of axios/api to avoid sending Authorization headers
+            // This ensures the request is treated as "Public"
+            const response = await fetch(
+                `${API_URL}/tickets/upload_proof_by_ticket_id/`,
+                {
+                    method: 'POST',
+                    body: formData,
+                    // Do NOT add Authorization headers here
+                }
+            );
 
-            // Reset form
-            setTicketId('');
-            setSelectedFile(null);
+            // Handle Response
+            if (response.ok) {
+                const data = await response.json();
+                console.log("Upload success:", data);
+                
+                toast.success('✅ Payment proof uploaded successfully! Awaiting verification.');
 
-            // Navigate to ticket preview after 2 seconds
-            setTimeout(() => {
-                navigate(`/ticket-preview?ticket_id=${ticketId.trim()}`);
-            }, 2000);
+                // Reset form
+                setTicketId('');
+                setSelectedFile(null);
 
-        } catch (error: any) {
-            console.error('Upload error:', error);
-            const errorMessage = error.response?.data?.error || 'Failed to upload payment proof';
-            toast.error(errorMessage);
+                // Navigate to ticket preview after 2 seconds
+                setTimeout(() => {
+                    navigate(`/ticket-preview?ticket_id=${ticketId.trim()}`);
+                }, 2000);
+            } else {
+                // Try to parse error as JSON, fallback to text if it's HTML (the '<' error)
+                const text = await response.text();
+                try {
+                    const errorJson = JSON.parse(text);
+                    toast.error(errorJson.error || 'Failed to upload payment proof');
+                } catch {
+                    console.error("Non-JSON error response:", text);
+                    toast.error(`Upload failed (Status ${response.status}). See console for details.`);
+                }
+            }
+        } catch (error) {
+            console.error('Upload network error:', error);
+            toast.error('Network error. Failed to upload payment proof.');
         } finally {
             setUploading(false);
         }
@@ -75,13 +100,12 @@ const UploadPayment = () => {
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-[#2b0303] transition-colors duration-500">
             
-            {/* --- DEBUG BOX START --- */}
-            {/* This will help you see if the URL is correct on your mobile */}
-            <div style={{ padding: '20px', background: 'yellow', color: 'black', fontWeight: 'bold', textAlign: 'center', zIndex: 9999, position: 'relative' }}>
+            {/* --- DEBUG BOX (Remove this after it works) --- */}
+            <div style={{ padding: '15px', background: 'yellow', color: 'black', fontWeight: 'bold', textAlign: 'center', zIndex: 9999, position: 'relative' }}>
                 DEBUG MODE <br />
-                API URL: {api.defaults.baseURL || "UNDEFINED"}
+                Target URL: {API_URL}
             </div>
-            {/* --- DEBUG BOX END --- */}
+            {/* ----------------------------------------------- */}
 
             <Navbar />
 
