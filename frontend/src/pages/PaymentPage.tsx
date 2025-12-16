@@ -50,18 +50,12 @@ const PaymentPage = () => {
         try {
             const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
-            // Upload for ALL tickets
-            let completed = 0;
-            const total = ticketList.length;
-
-            for (const t of ticketList) {
-                // Re-append is not needed if we reuse formData, but for safety with some backends, we just send same payload
-                await axios.post(`${apiUrl}/tickets/${t.id}/upload_proof/`, formData, {
-                    headers: { "Content-Type": "multipart/form-data" }
-                });
-                completed++;
-                setUploadProgress(Math.round((completed / total) * 100));
-            }
+            // For bulk registrations, only upload proof for the coordinator's ticket (main ticket)
+            // This single proof covers all tickets in the batch
+            await axios.post(`${apiUrl}/tickets/${mainTicket.id}/upload_proof/`, formData, {
+                headers: { "Content-Type": "multipart/form-data" }
+            });
+            setUploadProgress(100);
 
             toast.success("Payment proof uploaded successfully!");
             setIsSuccess(true);

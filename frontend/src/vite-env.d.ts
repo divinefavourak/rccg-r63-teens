@@ -4,6 +4,8 @@ declare module '*.JPG' {
   export default value;
 }
 
+declare module '*.jpg';
+
 
 interface ImportMetaEnv {
 

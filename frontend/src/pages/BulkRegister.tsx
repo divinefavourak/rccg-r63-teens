@@ -104,32 +104,35 @@ const BulkRegister = () => {
       if (counts.pre_teens > 0) pushTickets(counts.pre_teens, 'pre_teens', 'Pre-Teen', 11);
       if (counts.teachers > 0) pushTickets(counts.teachers, 'teacher', 'Coordinator', 30);
 
-      // Batch creation logic (could be optimized with a bulk_create endpoint later)
-      const createdTickets = [];
+      // Show loading toast
+      const loadingToast = toast.loading(`Creating ${totalAttendees} tickets...`);
 
-      // We'll create the first one to establish the batch ID context if we were doing that,
-      // but here we just loop. For 100+ this might be slow client-side.
-      // Ideally backend supports bulk. But for now we stick to current service logic.
-      // We will show a loading toast.
-      const loadingToast = toast.loading("Generating " + totalAttendees + " tickets...");
-
-      for (const ticketData of ticketsToCreate) {
-        const ticket = await ticketService.createTicket(ticketData, user?.token);
-        createdTickets.push(ticket);
-      }
+      // Use the optimized bulk create endpoint (single request instead of N requests)
+      const result = await ticketService.bulkCreateTickets(
+        ticketsToCreate,
+        data.coordinatorName,
+        data.email,
+        user?.token
+      );
 
       toast.dismiss(loadingToast);
 
-      if (createdTickets.length > 0) {
-        toast.success("Generated " + createdTickets.length + " generic tickets!");
-        navigate("/payment", { state: { tickets: createdTickets, isBulk: true } });
+      if (result.created_count > 0) {
+        // Email is sent automatically by the backend
+        if (result.failed_count > 0) {
+          toast.success(`${result.created_count} tickets created! (${result.failed_count} failed)`);
+        } else {
+          toast.success(`${result.created_count} tickets registered! Confirmation email sent.`);
+        }
+
+        navigate("/payment", { state: { tickets: result.tickets, isBulk: true } });
       } else {
-        throw new Error("Ticket generation failed.");
+        throw new Error("Ticket generation failed. Please check your data and try again.");
       }
 
     } catch (error: any) {
       console.error(error);
-      toast.error("Failed to generate tickets. Please try again.");
+      toast.error(error.message || "Failed to generate tickets. Please try again.");
       setIsSubmitting(false);
     }
   };

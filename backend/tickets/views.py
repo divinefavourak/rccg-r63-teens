@@ -17,7 +17,8 @@ from .serializers import (
     TicketSerializer, TicketCreateSerializer, TicketUpdateSerializer,
     TicketStatusUpdateSerializer, BulkUploadSerializer,
     BulkUploadCreateSerializer, TicketAuditLogSerializer,
-    CheckInRecordSerializer, TicketPaymentUploadSerializer
+    CheckInRecordSerializer, TicketPaymentUploadSerializer,
+    BulkActionSerializer
 )
 from .permissions import TicketPermission, CanApproveTicket
 from .utils import UUIDEncoder, convert_uuid_to_string
@@ -26,11 +27,19 @@ from users.permissions import IsAdmin, IsCoordinator, ProvinceAccessPermission
 
 User = get_user_model()
 
+from rest_framework.pagination import PageNumberPagination
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
 class TicketViewSet(viewsets.ModelViewSet):
     """ViewSet for Ticket management"""
     queryset = Ticket.objects.all()
     serializer_class = TicketSerializer
     permission_classes = [TicketPermission]
+    pagination_class = StandardResultsSetPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = [
         'full_name', 'ticket_id', 'email', 'phone',
@@ -38,6 +47,36 @@ class TicketViewSet(viewsets.ModelViewSet):
     ]
     ordering_fields = ['registered_at', 'full_name', 'age', 'status']
     ordering = ['-registered_at']
+
+    def get_permissions(self):
+        """Allow public access for specific actions"""
+        if self.action in ['create', 'verify', 'upload_proof', 'qr_code', 'check_in']:
+            return [permissions.AllowAny()]
+        return [TicketPermission()]
+
+    def get_authenticators(self):
+        """
+        Return authenticators for this view.
+        
+        IMPORTANT: We do NOT skip authentication for POST/create anymore.
+        We want authentication to run so that coordinators with valid tokens
+        get properly identified (registered_by gets set correctly).
+        
+        The AllowAny permission in get_permissions() handles allowing
+        unauthenticated users - authentication failure won't block them.
+        
+        We only skip auth for truly public endpoints where we don't care
+        who the user is at all.
+        """
+        # For public read-only endpoints, skip auth to avoid 401 on expired tokens
+        path = getattr(self.request, 'path_info', '') if hasattr(self, 'request') else ''
+        public_paths = ['verify', 'qr_code']
+        if any(p in path for p in public_paths):
+            return []
+        
+        # For all other endpoints (including create), use normal authentication
+        # This allows coordinators to be identified when they provide a token
+        return super().get_authenticators()
     
     def get_serializer_class(self):
         if self.action == 'create':
@@ -88,18 +127,21 @@ class TicketViewSet(viewsets.ModelViewSet):
         create_serializer = self.get_serializer(data=request.data)
         create_serializer.is_valid(raise_exception=True)
         
+        # Determine registered_by (None for anonymous/public registrations)
+        registered_by = request.user if request.user.is_authenticated else None
+        
         # Create the ticket
         ticket = create_serializer.save(
-            registered_by=request.user,
+            registered_by=registered_by,
             registered_at=timezone.now()
         )
         
-        # Create audit log
+        # Create audit log (only if user is authenticated)
         ticket_data = TicketSerializer(ticket).data
         ticket_data = convert_uuid_to_string(ticket_data)
         
         TicketAuditLog.objects.create(
-            user=request.user,
+            user=registered_by,  # Will be None for public registrations
             action=TicketAuditLog.ActionType.CREATE,
             ticket=ticket,
             new_values=ticket_data,
@@ -107,12 +149,17 @@ class TicketViewSet(viewsets.ModelViewSet):
             user_agent=request.META.get('HTTP_USER_AGENT', '')
         )
         
-        # Send confirmation email
-        try:
-            EmailService.send_ticket_confirmation(ticket)
-        except Exception as e:
-            # Log error but don't fail the request
-            print(f"Failed to send confirmation email: {e}")
+        # Check if we should skip individual email (for bulk registrations)
+        skip_email = request.data.get('skip_email', False)
+        
+        # Send confirmation email only if not skipped
+        # Coordinators doing bulk registration should skip and use the bulk email endpoint
+        if not skip_email:
+            try:
+                EmailService.send_ticket_confirmation(ticket)
+            except Exception as e:
+                # Log error but don't fail the request
+                print(f"Failed to send confirmation email: {e}")
 
         # Return the full ticket data using the main serializer
         serializer = TicketSerializer(ticket)
@@ -234,6 +281,47 @@ class TicketViewSet(viewsets.ModelViewSet):
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny], parser_classes=[MultiPartParser, FormParser])
+    def upload_proof_by_ticket_id(self, request):
+        """Upload proof of payment using ticket_id (for verification page)"""
+        ticket_id = request.data.get('ticket_id')
+        
+        if not ticket_id:
+            return Response(
+                {'error': 'ticket_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            ticket = Ticket.objects.get(ticket_id=ticket_id)
+        except Ticket.DoesNotExist:
+            return Response(
+                {'error': 'Ticket not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = TicketPaymentUploadSerializer(ticket, data=request.data, partial=True)
+        
+        if serializer.is_valid():
+            ticket = serializer.save()
+            ticket.payment_status = Ticket.PaymentStatus.VERIFICATION_PENDING
+            ticket.status = Ticket.Status.PENDING
+            ticket.save()
+            
+            # Create audit log
+            TicketAuditLog.objects.create(
+                user=request.user if request.user.is_authenticated else None,
+                action='update',
+                ticket=ticket,
+                new_values={'payment_status': 'verification_pending'},
+                ip_address=self.get_client_ip(),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')
+            )
+            
+            return Response(TicketSerializer(ticket).data)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
     @action(detail=False, methods=['get'])
     def export(self, request):
         """Export tickets as CSV"""
@@ -284,6 +372,29 @@ class TicketViewSet(viewsets.ModelViewSet):
         else:
             ip = self.request.META.get('REMOTE_ADDR')
         return ip
+    
+    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny])
+    def verify(self, request):
+        """Verify ticket status by ticket_id (public endpoint)"""
+        ticket_id = request.query_params.get('ticket_id')
+        
+        if not ticket_id:
+            return Response(
+                {'error': 'ticket_id parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            ticket = Ticket.objects.get(ticket_id=ticket_id)
+            return Response({
+                'valid': True,
+                'ticket': TicketSerializer(ticket).data
+            })
+        except Ticket.DoesNotExist:
+            return Response(
+                {'valid': False, 'error': 'Ticket not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
     
     @action(detail=True, methods=['get'])
     def qr_code(self, request, pk=None):
@@ -363,154 +474,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         
         return response
     
-    @action(detail=False, methods=['get', 'post'], permission_classes=[permissions.AllowAny])
-    def verify(self, request):
-        """
-        Verify a ticket by QR code, ticket ID, or verification code
-        
-        This endpoint is public and can be used by scanners/check-in staff
-        """
-        # Get verification method from query params or request data
-        if request.method == 'GET':
-            verification_code = request.query_params.get('code')
-            ticket_id = request.query_params.get('ticket_id')
-            qr_data = request.query_params.get('qr_data')
-        else:  # POST
-            verification_code = request.data.get('code')
-            ticket_id = request.data.get('ticket_id')
-            qr_data = request.data.get('qr_data')
-        
-        # Determine which method to use
-        if qr_data:
-            # Parse QR code data
-            # Format: RCCG_TICKET:{ticket_id}:{full_name}:{status}
-            try:
-                if qr_data.startswith('RCCG_TICKET:'):
-                    parts = qr_data.split(':')
-                    if len(parts) >= 2:
-                        ticket_identifier = parts[1]
-                        # Try to find by ticket_id
-                        try:
-                            ticket = Ticket.objects.get(ticket_id=ticket_identifier)
-                        except Ticket.DoesNotExist:
-                            # Try by UUID
-                            try:
-                                ticket = Ticket.objects.get(id=ticket_identifier)
-                            except (Ticket.DoesNotExist, ValueError):
-                                return Response(
-                                    {'valid': False, 'error': 'Ticket not found'},
-                                    status=status.HTTP_404_NOT_FOUND
-                                )
-                    else:
-                        return Response(
-                            {'valid': False, 'error': 'Invalid QR code format'},
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
-                else:
-                    # Try to parse as ticket ID directly
-                    try:
-                        ticket = Ticket.objects.get(ticket_id=qr_data)
-                    except Ticket.DoesNotExist:
-                        try:
-                            ticket = Ticket.objects.get(id=qr_data)
-                        except (Ticket.DoesNotExist, ValueError):
-                            return Response(
-                                {'valid': False, 'error': 'Invalid QR code'},
-                                status=status.HTTP_404_NOT_FOUND
-                            )
-            except Exception as e:
-                return Response(
-                    {'valid': False, 'error': f'Error parsing QR code: {str(e)}'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        
-        elif verification_code:
-            # Parse verification code (format: RCCG-{ticket_id})
-            if verification_code.startswith('RCCG-'):
-                ticket_id_from_code = verification_code[5:]  # Remove 'RCCG-'
-                try:
-                    ticket = Ticket.objects.get(ticket_id=ticket_id_from_code)
-                except Ticket.DoesNotExist:
-                    return Response(
-                        {'valid': False, 'error': 'Invalid verification code'},
-                        status=status.HTTP_404_NOT_FOUND
-                    )
-            else:
-                # Try direct ticket ID
-                try:
-                    ticket = Ticket.objects.get(ticket_id=verification_code)
-                except Ticket.DoesNotExist:
-                    return Response(
-                        {'valid': False, 'error': 'Invalid verification code'},
-                        status=status.HTTP_404_NOT_FOUND
-                    )
-        
-        elif ticket_id:
-            # Find by ticket ID (could be ticket_id or UUID)
-            try:
-                ticket = Ticket.objects.get(ticket_id=ticket_id)
-            except Ticket.DoesNotExist:
-                try:
-                    ticket = Ticket.objects.get(id=ticket_id)
-                except (Ticket.DoesNotExist, ValueError):
-                    return Response(
-                        {'valid': False, 'error': 'Ticket not found'},
-                        status=status.HTTP_404_NOT_FOUND
-                    )
-        
-        else:
-            return Response(
-                {'valid': False, 'error': 'No verification method provided. Use code, ticket_id, or qr_data parameter.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Check if ticket is approved
-        if ticket.status != Ticket.Status.APPROVED:
-            return Response({
-                'valid': False,
-                'error': 'Ticket not approved',
-                'ticket_id': ticket.ticket_id,
-                'full_name': ticket.full_name,
-                'status': ticket.status,
-                'status_display': ticket.get_status_display(),
-                'suggestion': 'This ticket needs to be approved before it can be used.'
-            })
-        
-        # Check if ticket has already been used (if you have a check-in system)
-        # For now, we'll just return success
-        
-        # Create check-in record (if implementing check-in tracking)
-        # CheckInRecord.objects.create(ticket=ticket, checked_in_by=user, checked_in_at=timezone.now())
-        
-        return Response({
-            'valid': True,
-            'ticket': {
-                'ticket_id': ticket.ticket_id,
-                'full_name': ticket.full_name,
-                'age': ticket.age,
-                'category': ticket.category,
-                'category_display': ticket.get_category_display(),
-                'gender': ticket.gender,
-                'gender_display': ticket.get_gender_display(),
-                'province': ticket.province,
-                'zone': ticket.zone,
-                'area': ticket.area,
-                'parish': ticket.parish,
-                'registered_at': ticket.registered_at,
-                'registered_by': ticket.registered_by.get_display_name() if ticket.registered_by else '',
-                'approved_at': ticket.approved_at,
-                'approved_by': ticket.approved_by.get_display_name() if ticket.approved_by else '',
-                'medical_conditions': ticket.medical_conditions,
-                'dietary_restrictions': ticket.dietary_restrictions,
-                'parent_name': ticket.parent_name,
-                'parent_phone': ticket.parent_phone,
-                'emergency_contact': ticket.emergency_contact,
-                'emergency_phone': ticket.emergency_phone
-            },
-            'verification_time': timezone.now().isoformat(),
-            'message': 'Ticket is valid and approved'
-        })
-    
+
     @action(detail=True, methods=['post'])
     def check_in(self, request, pk=None):
         """
@@ -574,6 +538,228 @@ class TicketViewSet(viewsets.ModelViewSet):
             }
         })
 
+
+    @action(detail=False, methods=['post'])
+    def bulk_action(self, request):
+        """Perform bulk actions on tickets"""
+        serializer = BulkActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        ticket_ids = serializer.validated_data['ticket_ids']
+        action = serializer.validated_data['action']
+        subject = serializer.validated_data.get('subject')
+        message = serializer.validated_data.get('message')
+        
+        # Get tickets
+        queryset = self.filter_queryset(self.get_queryset())
+        tickets = queryset.filter(id__in=ticket_ids)
+        
+        results = {
+            'successful': [],
+            'failed': []
+        }
+        
+        for ticket in tickets:
+            try:
+                ticket_id_str = str(ticket.id)
+                
+                if action == 'approve':
+                    old_status = ticket.status
+                    ticket.status = Ticket.Status.APPROVED
+                    ticket.approved_at = timezone.now()
+                    ticket.approved_by = request.user
+                    ticket.save()
+                    
+                    try:
+                        EmailService.send_status_update(ticket, old_status, Ticket.Status.APPROVED)
+                    except Exception as e:
+                        print(f"Email failed: {e}")
+                        
+                elif action == 'reject':
+                    old_status = ticket.status
+                    ticket.status = Ticket.Status.REJECTED
+                    ticket.save()
+                    
+                    try:
+                        EmailService.send_status_update(ticket, old_status, Ticket.Status.REJECTED)
+                    except Exception as e:
+                        print(f"Email failed: {e}")
+                    
+                elif action == 'send_email':
+                    EmailService.send_custom_email(ticket, subject, message)
+                    
+                elif action == 'delete':
+                    ticket.delete()
+                
+                results['successful'].append(ticket_id_str)
+                
+            except Exception as e:
+                results['failed'].append({'id': str(ticket.id), 'error': str(e)})
+        
+        return Response(results)
+
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
+    def bulk_create(self, request):
+        """
+        Create multiple tickets in a single request (optimized for bulk registration).
+        
+        Request body:
+        {
+            "tickets": [
+                { "full_name": "...", "age": 15, ... },
+                { "full_name": "...", "age": 12, ... },
+                ...
+            ],
+            "coordinator_name": "John Doe",  # For consolidated email
+            "coordinator_email": "john@example.com"
+        }
+        
+        Returns:
+        {
+            "success": true,
+            "created_count": 10,
+            "tickets": [ { ticket data }, ... ],
+            "failed": [ { "index": 0, "error": "..." }, ... ]
+        }
+        """
+        tickets_data = request.data.get('tickets', [])
+        coordinator_name = request.data.get('coordinator_name', 'Coordinator')
+        coordinator_email = request.data.get('coordinator_email')
+        
+        if not tickets_data:
+            return Response(
+                {'error': 'No tickets provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not isinstance(tickets_data, list):
+            return Response(
+                {'error': 'tickets must be an array'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Determine registered_by
+        registered_by = request.user if request.user.is_authenticated else None
+        registered_at = timezone.now()
+        
+        created_tickets = []
+        failed_tickets = []
+        
+        # Use a transaction for atomicity and performance
+        with transaction.atomic():
+            for index, ticket_data in enumerate(tickets_data):
+                try:
+                    # Validate using the create serializer
+                    serializer = TicketCreateSerializer(data=ticket_data)
+                    if serializer.is_valid():
+                        # Create ticket
+                        ticket = serializer.save(
+                            registered_by=registered_by,
+                            registered_at=registered_at
+                        )
+                        created_tickets.append(ticket)
+                    else:
+                        failed_tickets.append({
+                            'index': index,
+                            'errors': serializer.errors
+                        })
+                except Exception as e:
+                    failed_tickets.append({
+                        'index': index,
+                        'error': str(e)
+                    })
+        
+        # Create a single audit log for the bulk operation
+        if created_tickets and registered_by:
+            TicketAuditLog.objects.create(
+                user=registered_by,
+                action=TicketAuditLog.ActionType.BULK_UPLOAD,
+                ticket=created_tickets[0],  # Reference first ticket
+                new_values={
+                    'bulk_count': len(created_tickets),
+                    'ticket_ids': [t.ticket_id for t in created_tickets]
+                },
+                ip_address=self.get_client_ip(),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')
+            )
+        
+        # Send consolidated confirmation email if coordinator email provided
+        if created_tickets and coordinator_email:
+            try:
+                EmailService.send_bulk_ticket_confirmation(
+                    tickets=created_tickets,
+                    coordinator_name=coordinator_name,
+                    coordinator_email=coordinator_email
+                )
+            except Exception as e:
+                print(f"Failed to send bulk confirmation email: {e}")
+        
+        # Serialize the created tickets
+        response_data = {
+            'success': True,
+            'created_count': len(created_tickets),
+            'failed_count': len(failed_tickets),
+            'tickets': TicketSerializer(created_tickets, many=True).data,
+            'failed': failed_tickets
+        }
+        
+        return Response(response_data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
+    def send_bulk_confirmation(self, request):
+        """
+        Send a single consolidated confirmation email to a coordinator
+        containing all their bulk-registered ticket IDs.
+        
+        Request body:
+        {
+            "ticket_ids": ["uuid1", "uuid2", ...],
+            "coordinator_name": "John Doe",
+            "coordinator_email": "john@example.com"
+        }
+        """
+        ticket_ids = request.data.get('ticket_ids', [])
+        coordinator_name = request.data.get('coordinator_name', 'Coordinator')
+        coordinator_email = request.data.get('coordinator_email')
+        
+        if not ticket_ids:
+            return Response(
+                {'error': 'ticket_ids is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not coordinator_email:
+            return Response(
+                {'error': 'coordinator_email is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get the tickets
+        tickets = Ticket.objects.filter(id__in=ticket_ids)
+        
+        if not tickets.exists():
+            return Response(
+                {'error': 'No tickets found with the provided IDs'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Send the bulk confirmation email
+        try:
+            EmailService.send_bulk_ticket_confirmation(
+                tickets=list(tickets),
+                coordinator_name=coordinator_name,
+                coordinator_email=coordinator_email
+            )
+            return Response({
+                'success': True,
+                'message': f'Bulk confirmation email sent to {coordinator_email}',
+                'ticket_count': tickets.count()
+            })
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to send email: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class BulkUploadView(generics.CreateAPIView, generics.ListAPIView):
     """View for bulk upload operations"""

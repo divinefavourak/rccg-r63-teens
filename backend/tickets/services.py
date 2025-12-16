@@ -96,6 +96,51 @@ class EmailService:
         )
     
     @staticmethod
+    def send_bulk_ticket_confirmation(tickets, coordinator_name, coordinator_email):
+        """
+        Send a single consolidated confirmation email to a coordinator
+        containing all the ticket IDs they registered.
+        
+        Args:
+            tickets: List of Ticket objects that were created
+            coordinator_name: Name of the coordinator
+            coordinator_email: Email of the coordinator
+        """
+        if not tickets or not coordinator_email:
+            return
+        
+        ticket_count = len(tickets)
+        subject = f"RCCG R63 Teens - Bulk Registration Confirmation ({ticket_count} Tickets)"
+        
+        # Group tickets by category for better organization
+        tickets_by_category = {}
+        for ticket in tickets:
+            category = ticket.get_category_display()
+            if category not in tickets_by_category:
+                tickets_by_category[category] = []
+            tickets_by_category[category].append(ticket)
+        
+        context = {
+            'coordinator_name': coordinator_name,
+            'ticket_count': ticket_count,
+            'tickets': tickets,
+            'tickets_by_category': tickets_by_category,
+            'registered_at': tickets[0].registered_at if tickets else None,
+        }
+        
+        html_message = render_to_string('emails/bulk_ticket_confirmation.html', context)
+        plain_message = strip_tags(html_message)
+        
+        send_mail(
+            subject=subject,
+            message=plain_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[coordinator_email],
+            html_message=html_message,
+            fail_silently=False,
+        )
+    
+    @staticmethod
     def send_payment_confirmation(payment):
         """Send payment confirmation email"""
         subject = f"RCCG R63 Teens - Payment Confirmation: {payment.reference}"
@@ -141,6 +186,20 @@ class EmailService:
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[ticket.email, ticket.parent_email],
             html_message=html_message,
+            fail_silently=False,
+        )
+    
+    @staticmethod
+    def send_custom_email(ticket, subject, message_content):
+        """Send custom email to ticket holder with personalization"""
+        # Personalize the message with recipient's name
+        personalized_message = f"Dear {ticket.full_name},\n\n{message_content}\n\nBest regards,\nRCCG Region 63 Junior Church Team"
+        
+        send_mail(
+            subject=subject,
+            message=personalized_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[ticket.email],
             fail_silently=False,
         )
         
