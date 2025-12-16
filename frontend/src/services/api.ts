@@ -8,7 +8,7 @@ export const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
-
+alert("API URL is: " + API_URL);
 // Add interceptor to inject token if available
 api.interceptors.request.use((config) => {
   const userStr = localStorage.getItem('rccg_user');
