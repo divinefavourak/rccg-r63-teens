@@ -72,6 +72,7 @@ const UploadPayment = () => {
         } catch (error) {
             console.error('Upload error:', error);
             toast.error('Failed to upload payment proof. Please try again.');
+alert("Error: " + JSON.stringify(error));
         } finally {
             setUploading(false);
         }
