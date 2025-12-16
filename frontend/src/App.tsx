@@ -12,11 +12,17 @@ const LandingPage = lazy(() => import('./pages/LandingPage'));
 const TicketForm = lazy(() => import('./pages/TicketForm'));
 const TicketPreview = lazy(() => import('./pages/TicketPreview'));
 const AdminLogin = lazy(() => import('./pages/AdminLogin'));
+const AdminRegister = lazy(() => import('./pages/AdminRegister'));
+const RegisterCoordinator = lazy(() => import('./pages/RegisterCoordinator'));
 const AdminVerify = lazy(() => import('./pages/AdminVerify'));
 const CoordinatorLogin = lazy(() => import('./pages/CoordinatorLogin'));
 const CoordinatorDashboard = lazy(() => import('./pages/CoordinatorDashboard'));
 const BulkRegister = lazy(() => import('./pages/BulkRegister'));
 const NotFound = lazy(() => import('./pages/NotFound'));
+const PaymentCallback = lazy(() => import('./pages/PaymentCallback'));
+const PaymentPage = lazy(() => import('./pages/PaymentPage'));
+const UploadPayment = lazy(() => import('./pages/UploadPayment'));
+const CheckTicketStatus = lazy(() => import('./pages/TicketNotFound')); // File still named TicketNotFound.tsx but exports CheckTicketStatus
 
 const Loading = () => (
   <div className="min-h-screen flex items-center justify-center bg-[#2b0303] dark:bg-[#1a0505] transition-colors duration-500">
@@ -32,60 +38,76 @@ const Loading = () => (
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <ScrollToTop />
-        <Snowfall />
-        <ChristmasDecorations />
-        <Toaster 
-          position="top-center"
-          toastOptions={{
-            duration: 4000,
-            style: { background: '#1a0505', color: '#fff', border: '1px solid #8B0000', padding: '16px', borderRadius: '12px' },
-            success: { iconTheme: { primary: '#FFD700', secondary: '#1a0505' }, style: { border: '1px solid #FFD700' } },
-            error: { iconTheme: { primary: '#ef4444', secondary: '#fff' }, style: { border: '1px solid #ef4444' } },
-          }}
-        />
-        
-        <Suspense fallback={<Loading />}>
-          <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/ticket-preview" element={<TicketPreview />} />
-            
-            {/* PUBLIC REGISTRATION ROUTE */}
-            <Route path="/get-ticket" element={<TicketForm />} />
-            
-            <Route path="/admin-login" element={<AdminLogin />} />
-            <Route path="/coordinator-login" element={<CoordinatorLogin />} />
-            
-            {/* Coordinator Routes */}
-            <Route 
-              path="/coordinator/dashboard" 
-              element={<ProtectedRoute allowedRoles={['coordinator']}><CoordinatorDashboard /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/coordinator/bulk-register" 
-              element={<ProtectedRoute allowedRoles={['coordinator']}><BulkRegister /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/coordinator/single-register" 
-              element={<ProtectedRoute allowedRoles={['coordinator']}><TicketForm /></ProtectedRoute>} 
-            />
+    // <AuthProvider> - Removed duplicate (already in main.tsx)
+    <Router>
+      <ScrollToTop />
+      <Snowfall />
+      <ChristmasDecorations />
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          duration: 4000,
+          style: { background: '#1a0505', color: '#fff', border: '1px solid #8B0000', padding: '16px', borderRadius: '12px' },
+          success: { iconTheme: { primary: '#FFD700', secondary: '#1a0505' }, style: { border: '1px solid #FFD700' } },
+          error: { iconTheme: { primary: '#ef4444', secondary: '#fff' }, style: { border: '1px solid #ef4444' } },
+        }}
+      />
 
-            {/* Admin Routes */}
-            <Route 
-              path="/admin" 
-              element={<ProtectedRoute allowedRoles={['admin']}><AdminVerify /></ProtectedRoute>} 
-            />
+      <Suspense fallback={<Loading />}>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/ticket-preview" element={<TicketPreview />} />
+          <Route path="/upload-payment" element={<UploadPayment />} />
+          <Route path="/ticket-not-found" element={<CheckTicketStatus />} />
 
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Suspense>
-        
-        {/* Vercel Analytics Tracker */}
-        <Analytics />
-      </Router>
-    </AuthProvider>
+          {/* PUBLIC REGISTRATION ROUTE */}
+          <Route path="/get-ticket" element={<TicketForm />} />
+
+          <Route path="/admin-login" element={<AdminLogin />} />
+          <Route path="/coordinator-login" element={<CoordinatorLogin />} />
+
+          {/* Coordinator Routes */}
+          <Route
+            path="/coordinator/dashboard"
+            element={<ProtectedRoute allowedRoles={['coordinator']}><CoordinatorDashboard /></ProtectedRoute>}
+          />
+          <Route
+            path="/coordinator/bulk-register"
+            element={<ProtectedRoute allowedRoles={['coordinator']}><BulkRegister /></ProtectedRoute>}
+          />
+          <Route
+            path="/coordinator/single-register"
+            element={<ProtectedRoute allowedRoles={['coordinator']}><TicketForm /></ProtectedRoute>}
+          />
+
+          {/* Admin Routes */}
+          <Route
+            path="/admin"
+            element={<ProtectedRoute allowedRoles={['admin']}><AdminVerify /></ProtectedRoute>}
+          />
+          <Route
+            path="/admin/register-admin"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminRegister />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/register-coordinator"
+            element={<ProtectedRoute allowedRoles={['admin']}><RegisterCoordinator /></ProtectedRoute>}
+          />
+          {/* Paystack Callback Route */}
+          <Route path="/payment/callback" element={<PaymentCallback />} />
+          <Route path="/payment" element={<PaymentPage />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
+
+      {/* Vercel Analytics Tracker */}
+      <Analytics />
+    </Router>
+    // </AuthProvider >
   );
 }
 

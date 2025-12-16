@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import axios from 'axios';
 import { User } from '../types';
 
 interface AuthContextType {
@@ -11,16 +12,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock Database
-const COORDINATORS: User[] = [
-  { id: 'c1', username: 'lp9@faithtribe', role: 'coordinator', province: 'Lagos Province 9', name: 'Pst. LP 9 Coord' },
-  { id: 'c2', username: 'lp28@faithtribe', role: 'coordinator', province: 'Lagos Province 28', name: 'Pst. LP 28 Coord' },
-  { id: 'c3', username: 'lp69@faithtribe', role: 'coordinator', province: 'Lagos Province 69', name: 'Pst. LP 69 Coord' },
-  { id: 'c4', username: 'lp84@faithtribe', role: 'coordinator', province: 'Lagos Province 84', name: 'Pst. LP 84 Coord' },
-  { id: 'c5', username: 'lp86@faithtribe', role: 'coordinator', province: 'Lagos Province 86', name: 'Pst. LP 86 Coord' },
-  { id: 'c6', username: 'lp104@faithtribe', role: 'coordinator', province: 'Lagos Province 104', name: 'Pst. LP 104 Coord' },
-  { id: 'c7', username: 'regionalhq@faithtribe', role: 'coordinator', province: 'Regional HQ', name: 'Pst. Regional HQ Coord' },
-];
+// Use the Vite environment variable for the API URL
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -32,9 +25,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (storedUser) {
       try {
         const parsedUser = JSON.parse(storedUser);
-        if (parsedUser && parsedUser.role) {
+        // Ensure the user has a token before setting state
+        if (parsedUser && (parsedUser.token || parsedUser.access)) {
           setUser(parsedUser);
         } else {
+          // Invalid user data, clear it
           localStorage.removeItem("rccg_user");
         }
       } catch (e) {
@@ -45,28 +40,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const login = async (username: string, password: string): Promise<boolean> => {
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Fake delay
+    try {
+      // Call the real Backend Login Endpoint
+      const response = await axios.post(`${API_URL}/auth/login/`, {
+        username,
+        password
+      });
 
-    // 1. Check Admin
-    if (username === "admin@rccg63" && password === "R63Teens2025!") {
-      const adminUser: User = { id: 'admin', username, role: 'admin', name: 'Regional Admin' };
-      saveUser(adminUser);
+      // The backend returns { access, refresh, user: { ... } }
+      const { access, refresh, user: userData } = response.data;
+      
+      // Merge the token into the user object so we can use it later
+      const userWithToken: User = {
+        ...userData,
+        token: access, // ✅ CRITICAL: Save the token here!
+        refreshToken: refresh
+      };
+
+      // Save to LocalStorage and State
+      localStorage.setItem("rccg_user", JSON.stringify(userWithToken));
+      setUser(userWithToken);
+      
       return true;
+    } catch (error) {
+      console.error("Login failed:", error);
+      return false;
     }
-
-    // 2. Check Coordinators
-    const coordinator = COORDINATORS.find(c => c.username === username.toLowerCase());
-    if (coordinator && password === "faithtribe2025") {
-      saveUser(coordinator);
-      return true;
-    }
-
-    return false;
-  };
-
-  const saveUser = (userData: User) => {
-    localStorage.setItem("rccg_user", JSON.stringify(userData));
-    setUser(userData);
   };
 
   const logout = () => {

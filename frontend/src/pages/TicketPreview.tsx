@@ -1,91 +1,213 @@
 import { motion } from "framer-motion";
-import { useLocation, Link } from "react-router-dom";
+import { useLocation, Link, useNavigate, useSearchParams } from "react-router-dom"; // Added hooks
+import { useEffect, useState } from "react"; // Added hooks
 import { QRCodeSVG } from "qrcode.react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { EVENT_DETAILS } from "../constants/eventDetails";
-import { generatePDF } from "../utils/pdfGenerator";
-import { 
-  FaDownload, 
-  FaPrint, 
+import { generatePDF, generateImage } from "../utils/pdfGenerator";
+import { ticketService } from "../services/ticketService"; // Added service
+import toast from "react-hot-toast"; // Added toast
+import {
+  FaDownload,
+  FaPrint,
   FaCheckCircle,
   FaMapMarkerAlt,
   FaUser,
-  FaPhone
+  FaPhone,
+  FaFileImage,
+  FaUpload
 } from "react-icons/fa";
 import rccgLogo from "../assets/logo.jpg";
 import faithLogo from "../assets/faith_logo.jpg";
 
-// Define interface for Ticket
-interface Ticket {
-  ticketId: string;
-  fullName: string;
-  age: string;
-  category: string;
-  gender: string;
-  phone: string;
-  email: string;
-  province: string;
-  zone: string;
-  area: string;
-  parish: string;
-  department?: string;
-  medicalConditions?: string;
-  medications?: string;
-  dietaryRestrictions?: string;
-  emergencyContact: string;
-  emergencyPhone: string;
-  emergencyRelationship: string;
-  parentName: string;
-  parentEmail: string;
-  parentPhone: string;
-  status: 'pending' | 'approved' | 'rejected';
-  registeredAt: string;
-}
+import { Ticket } from "../types"; // Import shared type
+
+// Local interface removed to avoid conflicts
 
 const TicketPreview = () => {
   const location = useLocation();
-  const state = location.state as { ticket?: Ticket };
-  
-  // Fallback sample ticket if accessed directly without state
-  const ticket = state?.ticket || {
-    ticketId: `R63T${Date.now()}`,
-    fullName: "Sample User",
-    age: "15",
-    category: "teens",
-    gender: "male",
-    phone: "+234 800 123 4567",
-    email: "sample@example.com",
-    province: "Lagos Province 9",
-    zone: "Zone 1",
-    area: "Area 1",
-    parish: "RCCG Glory Tabernacle",
-    emergencyContact: "Parent Name",
-    emergencyPhone: "08000000000",
-    emergencyRelationship: "Parent",
-    parentName: "Parent Name",
-    parentEmail: "parent@example.com",
-    parentPhone: "08000000000",
-    status: "pending" as const,
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [ticketData, setTicketData] = useState<Ticket | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [uploadingPayment, setUploadingPayment] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  // Initialize from State or URL
+  useEffect(() => {
+    const init = async () => {
+      const stateTicket = location.state?.ticket;
+
+      if (stateTicket) {
+        // Data passed from previous page
+        setTicketData(normalizeTicket(stateTicket));
+        setLoading(false);
+      } else {
+        // Try fetching from URL param
+        const ticketIdFromUrl = searchParams.get('ticket_id') || searchParams.get('id');
+
+        if (ticketIdFromUrl) {
+          try {
+            const fetchedTicket = await ticketService.verifyTicket(ticketIdFromUrl);
+            if (fetchedTicket) {
+              if (fetchedTicket.status === 'approved') {
+                setTicketData(fetchedTicket);
+              } else {
+                // Redirect to status dashboard for non-approved tickets
+                navigate(`/ticket-not-found?ticket_id=${ticketIdFromUrl}`);
+              }
+            } else {
+              toast.error("Ticket not found. Please check your ticket ID.");
+            }
+          } catch (error) {
+            console.error("Fetch error:", error);
+            toast.error("Could not fetch ticket details.");
+          }
+        }
+        setLoading(false);
+      }
+    };
+
+    init();
+  }, [location.state, searchParams]);
+
+  const rawTicket = location.state?.ticket; // Keep for fallback ref if needed
+
+  // Normalized ticket object to use in render
+  // If loading, show null (or spinner). If not loading and no data, show fallback/mock or redirect.
+  // Ideally, we shouldn't show mock data in production unless dev mode.
+  // For now, consistent with previous code, we'll keep the mock feedback if absolutely nothing found,
+  // OR we can render a "Not Found" state.
+
+  const ticket: Ticket = ticketData || {
+    // Only use this fallback if we are NOT loading and HAVE NO data
+    ticketId: "DEMO-TICKET",
+    fullName: "Loading...",
+    age: "0",
+    category: "",
+    gender: "",
+    phone: "",
+    email: "",
+    province: "",
+    zone: "",
+    area: "",
+    parish: "",
+    emergencyContact: "",
+    emergencyPhone: "",
+    emergencyRelationship: "",
+    parentName: "",
+    parentEmail: "",
+    parentPhone: "",
+    parentRelationship: "",
+    status: 'pending',
     registeredAt: new Date().toISOString(),
+    id: "temp-id-fallback"
   };
+
+  // Helper to normalize backend data to Ticket interface (moved inside or kept outside)
+  const normalizeTicket = (raw: any): Ticket => {
+    // If it's already normalized (from service), return it
+    if (raw.ticketId) return raw;
+
+    return {
+      ticketId: raw.ticketId || raw.ticket_id,
+      fullName: raw.fullName || raw.full_name,
+      age: raw.age?.toString(),
+      category: raw.category,
+      gender: raw.gender,
+      phone: raw.phone,
+      email: raw.email,
+      province: raw.province,
+      zone: raw.zone,
+      area: raw.area,
+      parish: raw.parish,
+      department: raw.department,
+      medicalConditions: raw.medicalConditions || raw.medical_conditions,
+      medications: raw.medications,
+      dietaryRestrictions: raw.dietaryRestrictions || raw.dietary_restrictions,
+      emergencyContact: raw.emergencyContact || raw.emergency_contact,
+      emergencyPhone: raw.emergencyPhone || raw.emergency_phone,
+      emergencyRelationship: raw.emergencyRelationship || raw.emergency_relationship,
+      parentName: raw.parentName || raw.parent_name,
+      parentEmail: raw.parentEmail || raw.parent_email,
+      parentPhone: raw.parentPhone || raw.parent_phone,
+      parentRelationship: raw.parentRelationship || raw.parent_relationship || "Parent",
+      status: raw.status || 'pending',
+      registeredAt: raw.registeredAt || raw.registered_at || new Date().toISOString(),
+      id: raw.id || raw._id || "temp-id-normalized",
+    };
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#2b0303]">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-yellow-500"></div>
+      </div>
+    );
+  }
 
   const handlePrint = () => {
     window.print();
   };
 
-  const handleDownload = async () => {
+  const handleDownloadPDF = async () => {
     await generatePDF('ticket-card-content', `RCCG-Ticket-${ticket.ticketId}.pdf`);
   };
 
+  const handleDownloadImage = async () => {
+    await generateImage('ticket-card-content', `RCCG-Ticket-${ticket.ticketId}.png`);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+    }
+  };
+
+  const handleUploadPayment = async () => {
+    if (!selectedFile || !ticket.ticketId) {
+      toast.error("Please select a file to upload");
+      return;
+    }
+
+    setUploadingPayment(true);
+    try {
+      const formData = new FormData();
+      formData.append('ticket_id', ticket.ticketId);
+      formData.append('proof_of_payment', selectedFile);
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://rccg-r63-teens-backend.onrender.com/api'}/tickets/upload_proof_by_ticket_id/`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const updatedTicket = await response.json();
+        setTicketData(updatedTicket);
+        toast.success("Payment proof uploaded successfully! Awaiting verification.");
+        setSelectedFile(null);
+      } else {
+        const error = await response.json();
+        toast.error(error.error || "Failed to upload payment proof");
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast.error("Failed to upload payment proof");
+    } finally {
+      setUploadingPayment(false);
+    }
+  };
+
+
   const getCategoryLabel = (cat: string) => {
-    return cat.replace(/_/g, ' ').toUpperCase();
+    return cat ? cat.replace(/_/g, ' ').toUpperCase() : '';
   };
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#2b0303] transition-colors duration-500">
       <Navbar />
-      
+
       <div className="pt-28 pb-16 px-6">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
@@ -103,17 +225,27 @@ const TicketPreview = () => {
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.3 }}
-            id="ticket-card-content" 
+            id="ticket-card-content"
             className="relative bg-gradient-to-br from-[#fffbeb] to-[#f3e5ab] text-[#2b0303] rounded-3xl overflow-hidden shadow-2xl border-4 border-yellow-600/50 p-8 max-w-4xl mx-auto"
           >
             {/* Ornate Corner Designs (CSS only) */}
             <div className="absolute top-0 left-0 w-24 h-24 border-t-[8px] border-l-[8px] border-yellow-600/30 rounded-tl-3xl"></div>
             <div className="absolute bottom-0 right-0 w-24 h-24 border-b-[8px] border-r-[8px] border-yellow-600/30 rounded-br-3xl"></div>
-            
+
             {/* Watermark Logo */}
             <div className="absolute inset-0 flex items-center justify-center opacity-5 pointer-events-none">
               <img src={rccgLogo} alt="" className="w-96 h-96 grayscale opacity-50" />
             </div>
+
+            {/* Visual Verified Overlay - Only for Approved Tickets */}
+            {ticket.status === 'approved' && (
+              <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none overflow-hidden">
+                <div className="opacity-20 transform -rotate-12">
+                  <FaCheckCircle className="text-[400px] text-green-600" />
+                </div>
+              </div>
+            )}
+
 
             <div className="relative z-10">
               {/* Header Section with Dual Logos */}
@@ -130,10 +262,9 @@ const TicketPreview = () => {
                     <p className="text-yellow-700 font-bold tracking-widest text-xs md:text-sm mt-1">{EVENT_DETAILS.theme}</p>
                   </div>
                 </div>
-                
-                <div className={`px-6 py-2 rounded-full border-2 font-bold uppercase tracking-wider text-sm ${
-                  ticket.status === 'approved' ? 'border-green-600 text-green-800 bg-green-100' : 'border-yellow-600 text-yellow-900 bg-yellow-100'
-                }`}>
+
+                <div className={`px-6 py-2 rounded-full border-2 font-bold uppercase tracking-wider text-sm ${ticket.status === 'approved' ? 'border-green-600 text-green-800 bg-green-100' : 'border-yellow-600 text-yellow-900 bg-yellow-100'
+                  }`}>
                   {ticket.status}
                 </div>
               </div>
@@ -141,7 +272,7 @@ const TicketPreview = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {/* QR Code Section */}
                 <div className="bg-white p-4 rounded-xl shadow-inner border border-[#2b0303]/10 flex flex-col items-center justify-center order-2 md:order-1">
-                  <QRCodeSVG 
+                  <QRCodeSVG
                     value={JSON.stringify({ id: ticket.ticketId, name: ticket.fullName })}
                     size={160}
                     level="H"
@@ -219,16 +350,60 @@ const TicketPreview = () => {
             </ul>
           </div>
 
+          {/* Payment Upload Section - Only show if payment is unpaid */}
+          {(ticket.payment_status === 'unpaid' || !ticket.payment_status) && ticket.ticketId !== "DEMO-TICKET" && (
+            <div className="mt-8 bg-yellow-50 border border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-500/30 rounded-xl p-6 shadow-sm">
+              <h4 className="font-bold text-yellow-800 dark:text-yellow-400 mb-3 flex items-center gap-2">
+                <FaUpload className="text-xl" /> Upload Payment Proof
+              </h4>
+              <p className="text-sm text-yellow-700 dark:text-yellow-200/80 mb-4">
+                Have you made payment? Upload your receipt or proof of payment here for verification.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={handleFileChange}
+                  className="block w-full text-sm text-gray-700 dark:text-gray-200 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-yellow-100 file:text-yellow-700 hover:file:bg-yellow-200 dark:file:bg-yellow-800 dark:file:text-yellow-100"
+                />
+                <button
+                  onClick={handleUploadPayment}
+                  disabled={!selectedFile || uploadingPayment}
+                  className={`px-6 py-2 rounded-lg font-bold whitespace-nowrap flex items-center gap-2 ${!selectedFile || uploadingPayment
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-yellow-600 text-white hover:bg-yellow-700'
+                    }`}
+                >
+                  {uploadingPayment ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <FaUpload /> Upload
+                    </>
+                  )}
+                </button>
+              </div>
+              {selectedFile && (
+                <p className="text-sm text-yellow-700 dark:text-yellow-200/80 mt-2">
+                  Selected: {selectedFile.name}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row justify-center gap-4 mt-8">
-            <button 
-              onClick={handlePrint} 
+            <button
+              onClick={handleDownloadImage}
               className="px-8 py-3 bg-white dark:bg-white/10 text-gray-800 dark:text-white border border-gray-300 dark:border-white/20 rounded-xl hover:bg-gray-50 dark:hover:bg-white/20 transition-all font-bold flex items-center justify-center gap-2 shadow-sm"
             >
-              <FaPrint /> Print Ticket
+              <FaFileImage /> Download Image
             </button>
-            <button 
-              onClick={handleDownload} 
+            <button
+              onClick={handleDownloadPDF}
               className="btn-primary py-3 px-8 rounded-xl flex items-center justify-center gap-2 shadow-lg"
             >
               <FaDownload /> Download PDF

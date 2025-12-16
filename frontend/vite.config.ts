@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
-    historyApiFallback: true, // Crucial for local dev SPA routing
+     // Crucial for local dev SPA routing
   },
   build: {
     outDir: 'dist',

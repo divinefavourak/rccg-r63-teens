@@ -3,17 +3,21 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm, SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import toast from "react-hot-toast"; 
+import toast from "react-hot-toast";
+import axios from "axios"; // Import axios directly for the silent login
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-import { 
-  PERSONAL_INFO_FIELDS, 
-  CHURCH_INFO_FIELDS, 
-  MEDICAL_INFO_FIELDS, 
-  PARENT_INFO_FIELDS 
+import {
+  PERSONAL_INFO_FIELDS,
+  CHURCH_INFO_FIELDS,
+  MEDICAL_INFO_FIELDS,
+  PARENT_INFO_FIELDS
 } from "../constants/formFields";
 import { ticketSchema, TicketFormData } from "../schemas/ticketSchema";
 import { useTicketStore } from "../store/ticketStore";
+import { ticketService } from "../services/ticketService";
+import { paymentService } from "../services/paymentService";
+import { useAuth } from "../hooks/useAuth"; // Import auth hook
 
 const STEP_FIELDS = {
   1: ['fullName', 'age', 'category', 'gender', 'phone', 'email'],
@@ -24,8 +28,9 @@ const STEP_FIELDS = {
 
 const TicketForm = () => {
   const navigate = useNavigate();
+  const { user } = useAuth(); // Get current logged in user (if any)
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   const currentStep = useTicketStore((state) => state.currentStep);
   const setCurrentStep = useTicketStore((state) => state.setCurrentStep);
   const setFormData = useTicketStore((state) => state.setFormData);
@@ -66,7 +71,7 @@ const TicketForm = () => {
       parentConsent: false,
       medicalConsent: false,
       photoConsent: false,
-      ...savedData 
+      ...savedData
     } as any
   });
 
@@ -75,56 +80,11 @@ const TicketForm = () => {
     setFormData(watchedValues);
   }, [watchedValues, setFormData]);
 
-  // --- PAYSTACK CONFIGURATION ---
-  const config = {
-    reference: (new Date()).getTime().toString(),
-    email: watchedValues.email || "user@example.com",
-    amount: 3000 * 100, // ₦3,000 in kobo
-    publicKey: 'pk_test_241ed76659d67e941a1008604b95645d80db23a8', // REPLACE WITH YOUR PUBLIC KEY
-  };
-
-  const initializePayment = usePaystackPayment(config);
-
-  const onSuccess = (reference: any) => {
-    completeRegistration(reference);
-  };
-
-  const onClose = () => {
-    setIsSubmitting(false);
-    toast.error("Payment cancelled. Registration not complete.");
-  };
-
-  const completeRegistration = async (paymentReference: any) => {
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      const ticketData = {
-        ...watchedValues,
-        ticketId: `R63T${Date.now()}`,
-        status: 'approved', // Auto-approve
-        registeredAt: new Date().toISOString(),
-        paymentRef: paymentReference.reference,
-        registeredBy: 'Self',
-        registrationType: 'individual', // Mark as individual
-        province: watchedValues.province
-      };
-
-      resetForm();
-      navigate('/ticket-preview', { state: { ticket: ticketData } });
-      toast.success("Registration Successful! See you at camp.");
-    } catch (error) {
-      toast.error("Error saving ticket details.");
-      console.error(error);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const nextStep = async () => {
     // /@ts-expect-error - Keys are valid
     const fields = STEP_FIELDS[currentStep as keyof typeof STEP_FIELDS];
     const isStepValid = await trigger(fields);
-    
+
     if (isStepValid) {
       setCurrentStep(currentStep + 1);
       window.scrollTo(0, 0);
@@ -136,10 +96,60 @@ const TicketForm = () => {
     window.scrollTo(0, 0);
   };
 
-  const onSubmit: SubmitHandler<TicketFormData> = (data) => {
+  const onSubmit: SubmitHandler<TicketFormData> = async (data) => {
     setIsSubmitting(true);
-    initializePayment({ onSuccess, onClose });
+    try {
+      let authToken = null;
+
+      // 1. Determine Auth Strategy (Keep this as is)
+      if (user) {
+        // Use existing user session if available
+        // Note: Adjust this based on your actual User type structure
+        authToken = (user as any).token || (user as any).access_token;
+      }
+
+      if (!authToken) {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+        const publicUser = import.meta.env.VITE_PUBLIC_AGENT_USERNAME;
+        const publicPass = import.meta.env.VITE_PUBLIC_AGENT_PASSWORD;
+
+        if (!publicUser || !publicPass) {
+          throw new Error("Public registration configuration missing.");
+        }
+
+        const authResponse = await axios.post(`${apiUrl}/auth/login/`, {
+          username: publicUser,
+          password: publicPass
+        });
+
+        authToken = authResponse.data.access;
+      }
+
+      // 2. Create Ticket (Keep this as is)
+      const newTicket = await ticketService.createTicket(data, authToken);
+
+      if (!newTicket || !newTicket.id) {
+        throw new Error("Failed to create ticket record.");
+      }
+
+      // ---------------------------------------------------------
+      // 3. Redirect to Payment Page (UPDATED)
+      // ---------------------------------------------------------
+      resetForm();
+      navigate("/payment", { state: { ticket: newTicket } });
+
+    } catch (error: any) {
+      console.error("Registration error:", error);
+      const errorMsg = error.response?.data?.detail ||
+        error.response?.data?.error ||
+        "Registration failed. Please try again.";
+      toast.error(errorMsg);
+      setIsSubmitting(false);
+    }
   };
+
+  // ... (Keep the getErrorMessage, renderFormField, renderStepContent functions exactly as before)
+  // ... (Keep the return JSX structure exactly as before)
 
   const getErrorMessage = (fieldName: string) => {
     return errors[fieldName as keyof TicketFormData]?.message;
@@ -159,6 +169,7 @@ const TicketForm = () => {
       case 'select':
         return (
           <select {...register(field.name as keyof TicketFormData, registerOptions)} className={inputClasses}>
+            <option value="">Select...</option>
             {field.options.map((option: any) => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
@@ -192,11 +203,11 @@ const TicketForm = () => {
     return (
       <motion.div key={currentStep} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }} className="space-y-6">
         <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-6 font-['Impact'] tracking-wide">{title}</h3>
-        
+
         {currentStep === 4 && (
           <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-500/30 rounded-xl p-6 mb-6">
             <h4 className="font-bold text-yellow-800 dark:text-yellow-400 mb-2 flex items-center gap-2"><span className="text-xl">⚠️</span> Payment Required:</h4>
-            <p className="text-yellow-700 dark:text-yellow-200/80 text-sm">A fee of <strong>₦3,000</strong> is required. You will be redirected to a secure payment gateway.</p>
+            <p className="text-yellow-700 dark:text-yellow-200/80 text-sm">A fee of <strong>₦3,000</strong> is required. You will be redirected to complete your payment via Bank Transfer.</p>
           </div>
         )}
 
@@ -250,7 +261,7 @@ const TicketForm = () => {
               {renderStepContent()}
               <div className="flex justify-between mt-12 pt-8 border-t border-gray-200 dark:border-white/10">
                 {currentStep > 1 ? <button type="button" onClick={prevStep} disabled={isSubmitting} className="px-8 py-3 border border-gray-300 dark:border-white/20 text-gray-600 dark:text-white/70 rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 transition-colors font-bold disabled:opacity-50">← BACK</button> : <div></div>}
-                {currentStep < 4 ? <button type="button" onClick={nextStep} className="btn-primary px-10 py-3 rounded-xl shadow-lg flex items-center gap-2">NEXT STEP →</button> : 
+                {currentStep < 4 ? <button type="button" onClick={nextStep} className="btn-primary px-10 py-3 rounded-xl shadow-lg flex items-center gap-2">NEXT STEP →</button> :
                   <motion.button type="submit" disabled={isSubmitting} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="btn-primary px-12 py-3 rounded-xl shadow-xl disabled:opacity-70 disabled:grayscale flex items-center gap-2">
                     {isSubmitting ? "PROCESSING..." : "PAY ₦3,000 & REGISTER 💳"}
                   </motion.button>

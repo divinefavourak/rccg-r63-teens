@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaLock, FaUser, FaEye, FaEyeSlash, FaChurch } from "react-icons/fa";
+import { FaLock, FaUser, FaEye, FaEyeSlash } from "react-icons/fa";
 import { useAuth } from "../hooks/useAuth";
 import toast from "react-hot-toast";
 import rccgLogo from "../assets/logo.jpg";
@@ -15,10 +15,15 @@ const AdminLogin = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  if (isAuthenticated) {
-    navigate('/admin', { replace: true });
-    return null;
-  }
+  // ✅ FIX: Move navigation inside useEffect
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/admin', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+
+  // Prevent rendering the form if already authenticated (optional)
+  if (isAuthenticated) return null;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -33,7 +38,7 @@ const AdminLogin = () => {
       const success = await login(formData.username, formData.password);
       if (success) {
         toast.success("Welcome back, Admin!");
-        setTimeout(() => navigate('/admin', { replace: true }), 500);
+        // Navigation will be handled by the useEffect above when isAuthenticated becomes true
       } else {
         toast.error("Access Denied. Check credentials.");
       }
@@ -58,19 +63,19 @@ const AdminLogin = () => {
       >
         <div className="glass-effect rounded-2xl shadow-2xl p-8 border border-yellow-500/30">
           <div className="text-center mb-8">
-          <motion.div
-  initial={{ scale: 0 }}
-  animate={{ scale: 1 }}
-  transition={{ delay: 0.2 }}
-  className="flex justify-center items-center -space-x-4 mb-6"
->
-  <div className="w-20 h-20 rounded-full border-4 border-red-900 shadow-xl overflow-hidden bg-white z-10">
-    <img src={rccgLogo} alt="RCCG Logo" className="w-full h-full object-cover" />
-  </div>
-  <div className="w-20 h-20 rounded-full border-4 border-red-900 shadow-xl overflow-hidden bg-white z-0">
-    <img src={faithLogo} alt="Faith Tribe Logo" className="w-full h-full object-cover" />
-  </div>
-</motion.div>
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.2 }}
+              className="flex justify-center items-center -space-x-4 mb-6"
+            >
+              <div className="w-20 h-20 rounded-full border-4 border-red-900 shadow-xl overflow-hidden bg-white z-10">
+                <img src={rccgLogo} alt="RCCG Logo" className="w-full h-full object-cover" />
+              </div>
+              <div className="w-20 h-20 rounded-full border-4 border-red-900 shadow-xl overflow-hidden bg-white z-0">
+                <img src={faithLogo} alt="Faith Tribe Logo" className="w-full h-full object-cover" />
+              </div>
+            </motion.div>
             <h1 className="text-3xl font-black text-white mb-1 tracking-tight">
               ADMIN <span className="text-yellow-400">PORTAL</span>
             </h1>

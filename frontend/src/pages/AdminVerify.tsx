@@ -5,31 +5,46 @@ import { useBulkOperations } from "../hooks/useBulkOperations";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import BulkEmailModal from "../components/BulkEmailModal";
+import TicketDetailsModal from "../components/TicketDetailsModal";
 import { ticketService } from "../services/ticketService";
 import { Ticket } from "../types";
 import toast from "react-hot-toast";
 import { CHURCH_INFO_FIELDS } from "../constants/formFields";
-import { 
-  FaSearch, FaFilter, FaCheck, FaTimes, FaEye, FaDownload, 
-  FaUser, FaSignOutAlt, FaUsers, 
-  FaCheckCircle, FaExclamationTriangle, FaEnvelope, FaPaperPlane, FaChartPie, FaUserTie
+import {
+  FaSearch, FaCheck, FaTimes, FaEye, FaDownload,
+  FaUser, FaSignOutAlt, FaUsers,
+  FaCheckCircle, FaExclamationTriangle, FaEnvelope, FaPaperPlane, FaChartPie, FaUserTie,
+  FaChevronLeft, FaChevronRight
 } from "react-icons/fa";
 
 const AdminVerify = () => {
-  const { logout } = useAuth();
+  console.log("AdminVerify updated version");
+  const { user, logout, isAuthenticated } = useAuth();
+
   const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Filters & Pagination
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [provinceFilter, setProvinceFilter] = useState("all");
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [sortField, setSortField] = useState<keyof Ticket>("registeredAt");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [showEmailModal, setShowEmailModal] = useState(false);
-  const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
-  const [provinceStats, setProvinceStats] = useState<Record<string, number>>({});
+  const [provinceStats, setProvinceStats] = useState<Record<string, { total: number; pending: number; approved: number; rejected: number }>>({});
+  const [dashboardStats, setDashboardStats] = useState<{
+    pending_tickets: number;
+    approved_tickets: number;
+    rejected_tickets: number;
+  } | null>(null);
+
   const provinceOptions = CHURCH_INFO_FIELDS.find(field => field.name === 'province')?.options || [];
 
   const {
@@ -38,54 +53,64 @@ const AdminVerify = () => {
     handleSelectAll, handleSelectTicket, handleBulkAction, sendCustomEmail
   } = useBulkOperations(tickets, setTickets);
 
+  // Fetch dashboard stats (province totals for ALL tickets)
+  const fetchDashboardStats = async () => {
+    try {
+      const stats = await ticketService.getDashboardStats();
+      setProvinceStats(stats.province_stats || {});
+      setDashboardStats({
+        pending_tickets: stats.pending_tickets,
+        approved_tickets: stats.approved_tickets,
+        rejected_tickets: stats.rejected_tickets,
+      });
+    } catch (error) {
+      console.error("Failed to fetch dashboard stats:", error);
+    }
+  };
+
+  const fetchTickets = async () => {
+    if (!isAuthenticated) return;
+
+    try {
+      setIsLoading(true);
+      // Fetch paginated data with filters
+      const response = await ticketService.getAllTickets(currentPage, searchTerm, {
+        status: statusFilter,
+        category: categoryFilter,
+        province: provinceFilter
+      });
+
+      setTickets(response.results);
+      setTotalItems(response.count);
+      setTotalPages(Math.ceil(response.count / 20));
+
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to load tickets");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch dashboard stats on mount
   useEffect(() => {
-    const fetchTickets = async () => {
-      try {
-        setIsLoading(true);
-        const data = await ticketService.getAllTickets();
-        setTickets(data);
-        const pStats: Record<string, number> = {};
-        data.forEach(t => {
-          const p = t.province || "Unknown";
-          pStats[p] = (pStats[p] || 0) + 1;
-        });
-        setProvinceStats(pStats);
-      } catch (error) {
-        toast.error("Failed to load tickets");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchTickets();
-  }, []);
+    if (isAuthenticated) {
+      fetchDashboardStats();
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
-    let result = tickets;
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      result = result.filter(ticket =>
-        ticket.fullName.toLowerCase().includes(term) ||
-        ticket.ticketId.toLowerCase().includes(term) ||
-        ticket.email.toLowerCase().includes(term) ||
-        ticket.parish.toLowerCase().includes(term) ||
-        ticket.province.toLowerCase().includes(term)
-      );
-    }
-    if (statusFilter !== "all") result = result.filter(ticket => ticket.status === statusFilter);
-    if (categoryFilter !== "all") result = result.filter(ticket => ticket.category === categoryFilter);
-    if (provinceFilter !== "all") {
-      const normalize = (str: string) => str.toLowerCase().replace(/_/g, ' ').replace(/\s/g, '');
-      const filter = normalize(provinceFilter);
-      result = result.filter(ticket => normalize(ticket.province).includes(filter));
-    }
-    setFilteredTickets(result);
-    setStats({
-      total: tickets.length,
-      pending: tickets.filter(t => t.status === 'pending').length,
-      approved: tickets.filter(t => t.status === 'approved').length,
-      rejected: tickets.filter(t => t.status === 'rejected').length
-    });
-  }, [tickets, searchTerm, statusFilter, categoryFilter, provinceFilter]);
+    const timer = setTimeout(() => {
+      fetchTickets();
+    }, 500); // Debounce search/filter
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, currentPage, searchTerm, statusFilter, categoryFilter, provinceFilter]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, categoryFilter, provinceFilter]);
+
 
   const handleSort = (field: keyof Ticket) => {
     if (sortField === field) {
@@ -96,7 +121,8 @@ const AdminVerify = () => {
     }
   };
 
-  const sortedTickets = [...filteredTickets].sort((a, b) => {
+  // Client-side sort of CURRENT PAGE
+  const sortedTickets = [...tickets].sort((a, b) => {
     const aValue = a[sortField];
     const bValue = b[sortField];
     if (aValue === undefined || bValue === undefined) return 0;
@@ -105,7 +131,7 @@ const AdminVerify = () => {
     return 0;
   });
 
-  const handleApprove = async (id: number) => {
+  const handleApprove = async (id: string) => {
     try {
       setTickets(prev => prev.map(t => t.id === id ? { ...t, status: "approved" } : t));
       toast.success("Ticket Approved");
@@ -115,8 +141,8 @@ const AdminVerify = () => {
     }
   };
 
-  const handleReject = async (id: number) => {
-    if(!window.confirm("Are you sure you want to reject this ticket?")) return;
+  const handleReject = async (id: string) => {
+    if (!window.confirm("Are you sure you want to reject this ticket?")) return;
     try {
       setTickets(prev => prev.map(t => t.id === id ? { ...t, status: "rejected" } : t));
       toast.success("Ticket Rejected");
@@ -134,7 +160,7 @@ const AdminVerify = () => {
 
   const exportToCSV = () => {
     const headers = ["Ticket ID", "Name", "Source", "Age", "Category", "Province", "Church", "Status", "Registered By"];
-    const csvData = filteredTickets.map(ticket => [
+    const csvData = tickets.map(ticket => [
       ticket.ticketId,
       `"${ticket.fullName}"`,
       ticket.registrationType || 'individual',
@@ -151,9 +177,9 @@ const AdminVerify = () => {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `regional-report-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `report_page_${currentPage}.csv`;
     a.click();
-    toast.success("Report Downloaded!");
+    toast.success("Page Report Downloaded!");
   };
 
   const getStatusColor = (status: string) => {
@@ -165,11 +191,18 @@ const AdminVerify = () => {
     }
   };
 
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <Navbar />
       <div className="pt-28 pb-16 px-6">
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-7xl mx-auto">
+          {/* Header */}
           <div className="flex flex-col lg:flex-row justify-between items-end mb-8 border-b border-gray-200 pb-6">
             <div>
               <h4 className="text-sm font-bold text-blue-600 uppercase tracking-widest mb-1">REGIONAL HEADQUARTERS</h4>
@@ -182,39 +215,57 @@ const AdminVerify = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            {[
-              { label: "Total Registered", value: stats.total, color: "text-blue-600", bg: "bg-white", border: "border-gray-200" },
-              { label: "Pending Review", value: stats.pending, color: "text-yellow-600", bg: "bg-white", border: "border-gray-200" },
-              { label: "Approved", value: stats.approved, color: "text-green-600", bg: "bg-white", border: "border-gray-200" },
-              { label: "Provinces Active", value: Object.keys(provinceStats).length, color: "text-purple-600", bg: "bg-white", border: "border-gray-200" },
-            ].map((stat) => (
-              <div key={stat.label} className={`${stat.bg} border ${stat.border} rounded-xl p-6 shadow-sm`}>
-                <p className={`text-3xl font-black ${stat.color} mb-1`}>{stat.value}</p>
-                <p className="text-gray-500 text-xs uppercase font-bold tracking-widest">{stat.label}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="mb-8 bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><FaChartPie className="text-blue-500" /> Province Breakdown</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {Object.entries(provinceStats).map(([province, count]) => (
-                <div key={province} className="bg-gray-50 p-3 rounded-lg border border-gray-100 flex justify-between items-center">
-                  <span className="text-sm text-gray-600 truncate mr-2 font-medium capitalize">{province.replace(/_/g, ' ')}</span>
-                  <span className="font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-xs">{count}</span>
-                </div>
-              ))}
+          {/* Key Metrics - From Dashboard API */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <p className="text-3xl font-black text-blue-600 mb-1">{totalItems}</p>
+              <p className="text-gray-500 text-xs uppercase font-bold tracking-widest">Total Tickets</p>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <p className="text-3xl font-black text-purple-600 mb-1">{Object.keys(provinceStats).length}</p>
+              <p className="text-gray-500 text-xs uppercase font-bold tracking-widest">Provinces</p>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <p className="text-3xl font-black text-yellow-600 mb-1">{dashboardStats?.pending_tickets ?? '-'}</p>
+              <p className="text-gray-500 text-xs uppercase font-bold tracking-widest">Pending</p>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <p className="text-3xl font-black text-green-600 mb-1">{dashboardStats?.approved_tickets ?? '-'}</p>
+              <p className="text-gray-500 text-xs uppercase font-bold tracking-widest">Approved</p>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <p className="text-3xl font-black text-red-600 mb-1">{dashboardStats?.rejected_tickets ?? '-'}</p>
+              <p className="text-gray-500 text-xs uppercase font-bold tracking-widest">Rejected</p>
             </div>
           </div>
 
-          {operationResults && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className={`mb-6 p-4 rounded-lg border flex justify-between items-center ${operationResults.failed > 0 ? "bg-red-50 border-red-200 text-red-800" : "bg-green-50 border-green-200 text-green-800"}`}>
-              <div className="flex items-center space-x-3">{operationResults.failed > 0 ? <FaExclamationTriangle /> : <FaCheckCircle />}<div><h4 className="font-bold">{operationResults.action.toUpperCase()} COMPLETED</h4><p className="text-sm opacity-80">{operationResults.successful} successful, {operationResults.failed} failed</p></div></div>
-              <button onClick={() => setOperationResults(null)} className="opacity-60 hover:opacity-100"><FaTimes /></button>
-            </motion.div>
+          {/* Province Breakdown */}
+          {Object.keys(provinceStats).length > 0 && (
+            <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm">
+              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <FaChartPie className="text-purple-600" /> Province Breakdown
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {Object.entries(provinceStats)
+                  .sort((a, b) => b[1].total - a[1].total) // Sort by total (highest first)
+                  .map(([province, stats]) => {
+                    const label = provinceOptions.find(p => p.value === province)?.label || province.replace(/_/g, ' ');
+                    return (
+                      <div key={province} className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-lg px-4 py-3 hover:bg-gray-100 transition-colors">
+                        <span className="text-sm font-medium text-gray-700 capitalize truncate" title={label}>{label}</span>
+                        <div className="flex items-center gap-2 ml-2 shrink-0">
+                          <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded font-bold" title="Pending">{stats.pending}</span>
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded font-bold" title="Approved">{stats.approved}</span>
+                          <span className="text-lg font-black text-purple-600">{stats.total}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
           )}
 
+          {/* Filters & Actions */}
           <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm">
             <div className="flex flex-col md:flex-row gap-4 mb-6">
               <div className="relative flex-1">
@@ -240,7 +291,6 @@ const AdminVerify = () => {
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="pt-4 border-t border-gray-100 flex flex-wrap gap-4 justify-between items-center">
                 <div className="flex items-center space-x-2 bg-blue-50 px-3 py-1 rounded-lg"><FaUsers className="text-blue-600" /><span className="font-bold text-blue-800 text-sm">{selectedTickets.size} selected</span></div>
                 <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold uppercase text-gray-400 hidden sm:inline">Apply to selected:</span>
                   <div className="flex gap-2">
                     <button onClick={() => setBulkAction('approve')} className="bg-green-100 text-green-700 px-3 py-2 rounded-lg text-xs font-bold hover:bg-green-200 transition-colors">Approve</button>
                     <button onClick={() => setBulkAction('reject')} className="bg-red-100 text-red-700 px-3 py-2 rounded-lg text-xs font-bold hover:bg-red-200 transition-colors">Reject</button>
@@ -281,8 +331,8 @@ const AdminVerify = () => {
                           <td className="p-4 font-mono text-xs text-gray-600">{ticket.ticketId}</td>
                           <td className="p-4 font-bold text-gray-900">{ticket.fullName}<div className="text-[10px] font-normal text-gray-500">By: {ticket.registeredBy || 'Self'}</div></td>
                           <td className="p-4">
-                            {ticket.registrationType === 'coordinator' ? 
-                              <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs font-bold border border-purple-200"><FaUserTie className="text-xs" /> Coordinator</span> : 
+                            {ticket.registrationType === 'coordinator' ?
+                              <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs font-bold border border-purple-200"><FaUserTie className="text-xs" /> Coordinator</span> :
                               <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-1 rounded text-xs font-bold border border-blue-200"><FaUser className="text-xs" /> Individual</span>
                             }
                           </td>
@@ -301,11 +351,46 @@ const AdminVerify = () => {
                 </table>
               )}
             </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="p-4 border-t border-gray-200 flex justify-between items-center bg-gray-50">
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors flex items-center gap-2"
+                >
+                  <FaChevronLeft /> Previous
+                </button>
+                <div className="text-sm text-gray-600 font-medium">
+                  Page <span className="text-gray-900">{currentPage}</span> of <span className="text-gray-900">{totalPages}</span>
+                </div>
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors flex items-center gap-2"
+                >
+                  Next <FaChevronRight />
+                </button>
+              </div>
+            )}
           </div>
         </motion.div>
       </div>
-      <BulkEmailModal isOpen={showEmailModal} onClose={() => setShowEmailModal(false)} onSend={handleEmailSend} selectedCount={selectedTickets.size} totalCount={stats.total} pendingCount={stats.pending} approvedCount={stats.approved} />
-      {/* Detailed Modal omitted for brevity, logic remains same */}
+      <BulkEmailModal isOpen={showEmailModal} onClose={() => setShowEmailModal(false)} onSend={handleEmailSend} selectedCount={selectedTickets.size} totalCount={totalItems} pendingCount={0} approvedCount={0} />
+
+      <TicketDetailsModal
+        ticket={selectedTicket}
+        onClose={() => setSelectedTicket(null)}
+        onApprove={async (id) => {
+          await handleApprove(id);
+          setSelectedTicket(null);
+        }}
+        onReject={async (id) => {
+          await handleReject(id);
+          setSelectedTicket(null);
+        }}
+      />
       <Footer />
     </div>
   );
