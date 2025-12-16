@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { FaUpload, FaFileInvoice, FaCheckCircle } from 'react-icons/fa';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import { api } from '../services/api'; // Import the shared API configuration
 
 const UploadPayment = () => {
     const navigate = useNavigate();
@@ -46,32 +47,26 @@ const UploadPayment = () => {
             formData.append('ticket_id', ticketId.trim());
             formData.append('proof_of_payment', selectedFile);
 
-            const response = await fetch(
-                `${import.meta.env.VITE_API_URL || 'https://rccg-r63-teens-backend.onrender.com/api'}/tickets/upload_proof_by_ticket_id/`,
-                {
-                    method: 'POST',
-                    body: formData,
-                }
-            );
+            // CHANGED: Use the shared 'api' instance instead of fetch
+            // This ensures we use the correct Base URL from api.ts
+            // axios automatically sets the Content-Type for FormData
+            await api.post('/tickets/upload_proof_by_ticket_id/', formData);
 
-            if (response.ok) {
-                toast.success('✅ Payment proof uploaded successfully! Awaiting verification.');
+            toast.success('✅ Payment proof uploaded successfully! Awaiting verification.');
 
-                // Reset form
-                setTicketId('');
-                setSelectedFile(null);
+            // Reset form
+            setTicketId('');
+            setSelectedFile(null);
 
-                // Navigate to ticket preview after 2 seconds
-                setTimeout(() => {
-                    navigate(`/ticket-preview?ticket_id=${ticketId.trim()}`);
-                }, 2000);
-            } else {
-                const error = await response.json();
-                toast.error(error.error || 'Failed to upload payment proof');
-            }
-        } catch (error) {
+            // Navigate to ticket preview after 2 seconds
+            setTimeout(() => {
+                navigate(`/ticket-preview?ticket_id=${ticketId.trim()}`);
+            }, 2000);
+
+        } catch (error: any) {
             console.error('Upload error:', error);
-            toast.error('Failed to upload payment proof. Please try again.');
+            const errorMessage = error.response?.data?.error || 'Failed to upload payment proof';
+            toast.error(errorMessage);
         } finally {
             setUploading(false);
         }
@@ -79,6 +74,15 @@ const UploadPayment = () => {
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-[#2b0303] transition-colors duration-500">
+            
+            {/* --- DEBUG BOX START --- */}
+            {/* This will help you see if the URL is correct on your mobile */}
+            <div style={{ padding: '20px', background: 'yellow', color: 'black', fontWeight: 'bold', textAlign: 'center', zIndex: 9999, position: 'relative' }}>
+                DEBUG MODE <br />
+                API URL: {api.defaults.baseURL || "UNDEFINED"}
+            </div>
+            {/* --- DEBUG BOX END --- */}
+
             <Navbar />
 
             <div className="pt-28 pb-16 px-6">
