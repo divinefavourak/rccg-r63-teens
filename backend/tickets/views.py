@@ -68,9 +68,9 @@ class TicketViewSet(viewsets.ModelViewSet):
         We only skip auth for truly public endpoints where we don't care
         who the user is at all.
         """
-        # For public read-only endpoints, skip auth to avoid 401 on expired tokens
+        # For public endpoints, skip auth to avoid 401 on expired/invalid tokens
         path = getattr(self.request, 'path_info', '') if hasattr(self, 'request') else ''
-        public_paths = ['verify', 'qr_code']
+        public_paths = ['verify', 'qr_code', 'upload_proof', 'upload_proof_by_ticket_id', 'bulk_create', 'send_bulk_confirmation']
         if any(p in path for p in public_paths):
             return []
         

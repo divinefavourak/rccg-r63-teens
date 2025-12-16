@@ -67,7 +67,7 @@ const UploadPayment = () => {
             if (response.ok) {
                 const data = await response.json();
                 console.log("Upload success:", data);
-                
+
                 toast.success('✅ Payment proof uploaded successfully! Awaiting verification.');
 
                 // Reset form
@@ -99,14 +99,6 @@ const UploadPayment = () => {
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-[#2b0303] transition-colors duration-500">
-            
-            {/* --- DEBUG BOX (Remove this after it works) --- */}
-            <div style={{ padding: '15px', background: 'yellow', color: 'black', fontWeight: 'bold', textAlign: 'center', zIndex: 9999, position: 'relative' }}>
-                DEBUG MODE <br />
-                Target URL: {API_URL}
-            </div>
-            {/* ----------------------------------------------- */}
-
             <Navbar />
 
             <div className="pt-28 pb-16 px-6">
@@ -196,8 +188,8 @@ const UploadPayment = () => {
                                 type="submit"
                                 disabled={!ticketId.trim() || !selectedFile || uploading}
                                 className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all transform hover:scale-105 ${!ticketId.trim() || !selectedFile || uploading
-                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed scale-100'
-                                        : 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white shadow-lg hover:shadow-xl'
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed scale-100'
+                                    : 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white shadow-lg hover:shadow-xl'
                                     }`}
                             >
                                 {uploading ? (

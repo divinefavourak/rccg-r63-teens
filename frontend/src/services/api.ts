@@ -8,7 +8,7 @@ export const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
-alert("API URL is: " + API_URL);
+
 // Add interceptor to inject token if available
 api.interceptors.request.use((config) => {
   const userStr = localStorage.getItem('rccg_user');
@@ -17,7 +17,7 @@ api.interceptors.request.use((config) => {
       const user = JSON.parse(userStr);
       // Check if user object has a token property (adjust based on your actual login response)
       const token = user.token || user.access;
-      
+
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
