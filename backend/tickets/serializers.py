@@ -9,7 +9,7 @@ class TicketSerializer(serializers.ModelSerializer):
     category_display = serializers.CharField(source='get_category_display', read_only=True)
     gender_display = serializers.CharField(source='get_gender_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
-    registered_by_name = serializers.CharField(source='registered_by.get_display_name', read_only=True)
+    registered_by_name = serializers.CharField(source='registered_by.get_display_name', read_only=True, allow_null=True)
     approved_by_name = serializers.CharField(source='approved_by.get_display_name', read_only=True, allow_null=True)
     age_group = serializers.CharField(source='get_age_group', read_only=True)
     
