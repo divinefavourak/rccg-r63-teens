@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ticket Approved</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        .logo {
+            max-width: 100px;
+            height: auto;
+            margin-bottom: 20px;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .content {
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        .h1 {
+            color: #1a237e;
+            font-size: 24px;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 16px;
+            margin-bottom: 30px;
+        }
+
+        .ticket-card {
+            background: linear-gradient(to right, #f8f9fa, #ffffff);
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 25px;
+            margin: 30px 0;
+            text-align: left;
+            position: relative;
+        }
+
+        .ticket-row {
+            margin-bottom: 15px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .ticket-row:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #888;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .status-badge {
+            background-color: #4CAF50;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            display: inline-block;
+            margin-top: 5px;
+        }
+
+        .button {
+            display: inline-block;
+            background-color: #1a237e;
+            color: white;
+            text-decoration: none;
+            padding: 15px 30px;
+            border-radius: 30px;
+            font-weight: 600;
+            margin-top: 20px;
+            transition: background-color 0.3s;
+        }
+
+        .footer {
+            background-color: #fafafa;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+            border-top: 1px solid #eee;
+        }
+
+        .social-links {
+            margin: 15px 0;
+        }
+
+        .social-link {
+            display: inline-block;
+            margin: 0 10px;
+            color: #1a237e;
+            text-decoration: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <!-- Logo will be embedded via CID -->
+            {% if logo_cid %}
+            <img src="cid:{{ logo_cid }}" alt="RCCG Logo" class="logo">
+            {% else %}
+            <!-- Fallback if CID fails -->
+            <div style="font-size: 24px; font-weight: bold; margin-bottom: 20px;">RCCG TEENS</div>
+            {% endif %}
+            <h1>Registration Approved!</h1>
+            <p style="margin: 0; opacity: 0.9;">Get ready for an amazing experience</p>
+        </div>
+
+        <div class="content">
+            <p class="h1">Hello, {{ full_name }}</p>
+            <p class="subtitle">We are excited to inform you that your registration for the <strong>RCCG R63 Teens
+                    Event</strong> has been approved.</p>
+
+            <div class="ticket-card">
+                <div class="ticket-row">
+                    <span class="label">Ticket ID</span>
+                    <div class="value">{{ ticket_id }}</div>
+                </div>
+                <div class="ticket-row">
+                    <span class="label">Category</span>
+                    <div class="value">{{ category }}</div>
+                </div>
+                <div class="ticket-row">
+                    <span class="label">Status</span>
+                    <div><span class="status-badge">APPROVED</span></div>
+                </div>
+                {% if qr_code_url %}
+                <div class="ticket-row" style="text-align: center; margin-top: 20px; border: none;">
+                    <img src="{{ qr_code_url }}" alt="QR Code" style="width: 150px; height: 150px;">
+                    <div style="font-size: 11px; color: #999; margin-top: 5px;">Present this QR code at the entrance
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <p>Please keep this ticket safe. You will need to present your Ticket ID or QR code at the venue entrance.
+            </p>
+
+            <a href="#" class="button">View My Ticket</a>
+        </div>
+
+        <div class="footer">
+            <p>&copy; {% now "Y" %} RCCG Region 63 Teens. All rights reserved.</p>
+            <p>If you have any questions, please contact your parish coordinator.</p>
+        </div>
+    </div>
+</body>
+
+</html>
