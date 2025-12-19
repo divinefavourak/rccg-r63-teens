@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Registration Approved!</title>
+    <title>Welcome to December Campout!</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
 
@@ -47,7 +47,7 @@
 
         .header h1 {
             color: #FFD700;
-            font-size: 28px;
+            font-size: 26px;
             font-weight: 800;
             margin: 0 0 10px 0;
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
@@ -60,16 +60,11 @@
             font-size: 14px;
         }
 
-        .approved-badge {
-            display: inline-block;
-            background: linear-gradient(to bottom, #FFD700, #B8860B);
-            color: #8B0000;
-            font-weight: 800;
-            font-size: 20px;
-            padding: 12px 30px;
-            border-radius: 30px;
-            margin: 20px 0;
-            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+        .theme-badge {
+            color: #FFD700;
+            font-weight: 700;
+            margin-top: 8px;
+            font-size: 12px;
         }
 
         .content {
@@ -87,60 +82,44 @@
         .message {
             color: #cccccc;
             font-size: 16px;
-            line-height: 1.6;
-            margin-bottom: 30px;
+            line-height: 1.7;
+            margin-bottom: 25px;
         }
 
-        .ticket-card {
+        .highlight-box {
             background: linear-gradient(135deg, #2b0303 0%, #1a0505 100%);
             border: 2px solid #FFD700;
             border-radius: 16px;
             padding: 25px;
-            margin: 20px 0;
-        }
-
-        .ticket-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 12px 0;
-            border-bottom: 1px solid rgba(255, 215, 0, 0.2);
-        }
-
-        .ticket-row:last-child {
-            border-bottom: none;
-        }
-
-        .label {
-            color: #FFD700;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: 600;
-        }
-
-        .value {
-            color: #ffffff;
-            font-weight: 700;
-            font-size: 16px;
-        }
-
-        .qr-section {
-            text-align: center;
-            padding: 30px;
-            background: #ffffff;
-            border-radius: 16px;
             margin: 25px 0;
         }
 
-        .qr-code {
-            width: 180px;
-            height: 180px;
-            margin: 0 auto 15px;
+        .highlight-title {
+            color: #FFD700;
+            font-weight: 700;
+            font-size: 16px;
+            margin-bottom: 15px;
         }
 
-        .qr-caption {
-            color: #666666;
-            font-size: 12px;
+        .feature-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .feature-item {
+            color: #ffffff;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 215, 0, 0.1);
+            font-size: 15px;
+        }
+
+        .feature-item:last-child {
+            border-bottom: none;
+        }
+
+        .feature-icon {
+            margin-right: 10px;
         }
 
         .cta-button {
@@ -188,49 +167,36 @@
                 <img src="{{ faith_logo_url }}" alt="Faith Tribe Logo" class="logo">
                 {% endif %}
             </div>
-            <h1>🎉 YOU'RE APPROVED!</h1>
+            <h1>🎄 WELCOME TO THE CAMPOUT!</h1>
             <p>RCCG Region 63 December Campout 2025</p>
-            <p style="color: #FFD700; font-weight: 700; margin-top: 8px;">Theme: THE PRICELESS GIFT</p>
+            <p class="theme-badge">Theme: THE PRICELESS GIFT</p>
         </div>
 
         <div class="content">
             <p class="greeting">Hello, {{ full_name }}! 👋</p>
 
             <p class="message">
-                Great news! Your registration for the <strong>RCCG R63 Teens Event</strong> has been
-                <strong style="color: #FFD700;">APPROVED</strong>. We can't wait to see you there!
+                🎉 Welcome to the <strong>RCCG Region 63 December Campout 2025!</strong>
             </p>
 
-            <div class="approved-badge">✅ APPROVED</div>
+            <p class="message">
+                We're thrilled to have you join us for this life-changing experience.
+                Get ready to discover <strong style="color: #FFD700;">THE PRICELESS GIFT</strong> - Jesus Christ!
+            </p>
 
-            <div class="ticket-card">
-                <div class="ticket-row">
-                    <span class="label">Ticket ID</span>
-                    <span class="value">{{ ticket_id }}</span>
-                </div>
-                <div class="ticket-row">
-                    <span class="label">Name</span>
-                    <span class="value">{{ full_name }}</span>
-                </div>
-                <div class="ticket-row">
-                    <span class="label">Category</span>
-                    <span class="value">{{ category }}</span>
-                </div>
-                <div class="ticket-row">
-                    <span class="label">Status</span>
-                    <span class="value" style="color: #4CAF50;">APPROVED</span>
-                </div>
+            <div class="highlight-box">
+                <p class="highlight-title">🎁 What Awaits You:</p>
+                <ul class="feature-list">
+                    <li class="feature-item"><span class="feature-icon">🙏</span> Powerful worship sessions</li>
+                    <li class="feature-item"><span class="feature-icon">📖</span> Engaging Bible studies</li>
+                    <li class="feature-item"><span class="feature-icon">🎮</span> Fun activities and games</li>
+                    <li class="feature-item"><span class="feature-icon">🔥</span> Life-changing encounters with God</li>
+                    <li class="feature-item"><span class="feature-icon">🎁</span> The celebration of Christ!</li>
+                </ul>
             </div>
-
-            {% if qr_code_base64 %}
-            <div class="qr-section">
-                <img src="data:image/png;base64,{{ qr_code_base64 }}" alt="QR Code" class="qr-code">
-                <p class="qr-caption">Present this QR code at the venue entrance</p>
-            </div>
-            {% endif %}
 
             <p class="message" style="text-align: center;">
-                Please save this email and your Ticket ID. You'll need to present it at the event entrance.
+                Mark your calendar and prepare your heart for an unforgettable experience!
             </p>
 
             <div style="text-align: center;">
@@ -243,7 +209,7 @@
         <div class="footer">
             <p class="social-text">RCCG Region 63 Junior Church</p>
             <p>&copy; {% now "Y" %} All rights reserved.</p>
-            <p>For inquiries, contact your parish coordinator.</p>
+            <p>See you at the camp! 🎄</p>
         </div>
     </div>
 </body>

@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Registration Approved!</title>
+    <title>Payment Reminder</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
 
@@ -47,7 +47,7 @@
 
         .header h1 {
             color: #FFD700;
-            font-size: 28px;
+            font-size: 26px;
             font-weight: 800;
             margin: 0 0 10px 0;
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
@@ -58,18 +58,6 @@
             opacity: 0.9;
             margin: 0;
             font-size: 14px;
-        }
-
-        .approved-badge {
-            display: inline-block;
-            background: linear-gradient(to bottom, #FFD700, #B8860B);
-            color: #8B0000;
-            font-weight: 800;
-            font-size: 20px;
-            padding: 12px 30px;
-            border-radius: 30px;
-            margin: 20px 0;
-            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
         }
 
         .content {
@@ -87,8 +75,28 @@
         .message {
             color: #cccccc;
             font-size: 16px;
-            line-height: 1.6;
-            margin-bottom: 30px;
+            line-height: 1.7;
+            margin-bottom: 25px;
+        }
+
+        .alert-box {
+            background: linear-gradient(135deg, #ff6b6b22, #ff4d4d11);
+            border: 2px solid #ff6b6b;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 25px 0;
+            text-align: center;
+        }
+
+        .alert-icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+        }
+
+        .alert-text {
+            color: #ff6b6b;
+            font-weight: 700;
+            font-size: 18px;
         }
 
         .ticket-card {
@@ -124,23 +132,46 @@
             font-size: 16px;
         }
 
-        .qr-section {
-            text-align: center;
-            padding: 30px;
-            background: #ffffff;
-            border-radius: 16px;
+        .steps-box {
+            background: #2b0303;
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            border-radius: 12px;
+            padding: 25px;
             margin: 25px 0;
         }
 
-        .qr-code {
-            width: 180px;
-            height: 180px;
-            margin: 0 auto 15px;
+        .steps-title {
+            color: #FFD700;
+            font-weight: 700;
+            font-size: 16px;
+            margin-bottom: 15px;
         }
 
-        .qr-caption {
-            color: #666666;
-            font-size: 12px;
+        .step {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            align-items: flex-start;
+        }
+
+        .step-number {
+            background: linear-gradient(to bottom, #FFD700, #B8860B);
+            color: #8B0000;
+            font-weight: 800;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 14px;
+        }
+
+        .step-text {
+            color: #cccccc;
+            font-size: 14px;
+            line-height: 1.5;
         }
 
         .cta-button {
@@ -149,7 +180,7 @@
             color: #8B0000;
             text-decoration: none;
             font-weight: 800;
-            padding: 16px 40px;
+            padding: 18px 50px;
             border-radius: 30px;
             font-size: 16px;
             box-shadow: 0 4px 0 #8B6914;
@@ -188,20 +219,24 @@
                 <img src="{{ faith_logo_url }}" alt="Faith Tribe Logo" class="logo">
                 {% endif %}
             </div>
-            <h1>🎉 YOU'RE APPROVED!</h1>
+            <h1>⏰ PAYMENT REMINDER</h1>
             <p>RCCG Region 63 December Campout 2025</p>
-            <p style="color: #FFD700; font-weight: 700; margin-top: 8px;">Theme: THE PRICELESS GIFT</p>
+            <p style="color: #FFD700; font-weight: 600; margin-top: 5px; font-size: 12px;">Theme: THE PRICELESS GIFT</p>
         </div>
 
         <div class="content">
             <p class="greeting">Hello, {{ full_name }}! 👋</p>
 
             <p class="message">
-                Great news! Your registration for the <strong>RCCG R63 Teens Event</strong> has been
-                <strong style="color: #FFD700;">APPROVED</strong>. We can't wait to see you there!
+                We noticed you haven't uploaded your proof of payment yet.
+                Please complete this step to finalize your registration for the
+                <strong>RCCG R63 Teens Event</strong>.
             </p>
 
-            <div class="approved-badge">✅ APPROVED</div>
+            <div class="alert-box">
+                <div class="alert-icon">⚠️</div>
+                <p class="alert-text">Payment Proof Required</p>
+            </div>
 
             <div class="ticket-card">
                 <div class="ticket-row">
@@ -213,31 +248,51 @@
                     <span class="value">{{ full_name }}</span>
                 </div>
                 <div class="ticket-row">
-                    <span class="label">Category</span>
-                    <span class="value">{{ category }}</span>
-                </div>
-                <div class="ticket-row">
                     <span class="label">Status</span>
-                    <span class="value" style="color: #4CAF50;">APPROVED</span>
+                    <span class="value" style="color: #ff9800;">PENDING PAYMENT</span>
                 </div>
             </div>
 
-            {% if qr_code_base64 %}
-            <div class="qr-section">
-                <img src="data:image/png;base64,{{ qr_code_base64 }}" alt="QR Code" class="qr-code">
-                <p class="qr-caption">Present this QR code at the venue entrance</p>
-            </div>
-            {% endif %}
+            <div class="steps-box">
+                <p class="steps-title">📋 How to Upload Your Payment Proof:</p>
 
-            <p class="message" style="text-align: center;">
-                Please save this email and your Ticket ID. You'll need to present it at the event entrance.
-            </p>
+                <div class="step">
+                    <span class="step-number">1</span>
+                    <span class="step-text">Click the <strong>"Upload Payment"</strong> button below</span>
+                </div>
+
+                <div class="step">
+                    <span class="step-number">2</span>
+                    <span class="step-text">Enter your <strong>Ticket ID</strong>: <code
+                            style="background: #FFD700; color: #8B0000; padding: 2px 8px; border-radius: 4px; font-weight: bold;">{{ ticket_id }}</code></span>
+                </div>
+
+                <div class="step">
+                    <span class="step-number">3</span>
+                    <span class="step-text">Select your payment receipt image (JPG, PNG, or PDF - max 5MB)</span>
+                </div>
+
+                <div class="step">
+                    <span class="step-number">4</span>
+                    <span class="step-text">Click <strong>"Upload"</strong> and wait for confirmation</span>
+                </div>
+
+                <div class="step">
+                    <span class="step-number">5</span>
+                    <span class="step-text">Our team will verify your payment and approve your ticket</span>
+                </div>
+            </div>
 
             <div style="text-align: center;">
-                <a href="{{ frontend_url }}/ticket-preview?ticket_id={{ ticket_id }}" class="cta-button">
-                    VIEW MY TICKET
+                <a href="{{ frontend_url }}/upload-payment" class="cta-button">
+                    📤 UPLOAD PAYMENT PROOF
                 </a>
             </div>
+
+            <p class="message" style="text-align: center; font-size: 14px; margin-top: 30px;">
+                If you've already made payment, please upload your proof as soon as possible
+                to secure your spot at the event!
+            </p>
         </div>
 
         <div class="footer">

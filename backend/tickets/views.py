@@ -50,7 +50,7 @@ class TicketViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         """Allow public access for specific actions"""
-        if self.action in ['create', 'verify', 'upload_proof', 'qr_code', 'check_in']:
+        if self.action in ['create', 'verify', 'upload_proof', 'qr_code', 'check_in', 'bulk_create', 'send_bulk_confirmation']:
             return [permissions.AllowAny()]
         return [TicketPermission()]
 
@@ -247,7 +247,10 @@ class TicketViewSet(viewsets.ModelViewSet):
             
             # Send status update email
             try:
-                EmailService.send_status_update(ticket, old_status, new_status)
+                if new_status == Ticket.Status.APPROVED:
+                    EmailService.send_ticket_approved(ticket)
+                else:
+                    EmailService.send_status_update(ticket, old_status, new_status)
             except Exception as e:
                 print(f"Failed to send status update email: {e}")
             
@@ -571,7 +574,7 @@ class TicketViewSet(viewsets.ModelViewSet):
                     ticket.save()
                     
                     try:
-                        EmailService.send_status_update(ticket, old_status, Ticket.Status.APPROVED)
+                        EmailService.send_ticket_approved(ticket)
                     except Exception as e:
                         print(f"Email failed: {e}")
                         
@@ -587,6 +590,25 @@ class TicketViewSet(viewsets.ModelViewSet):
                     
                 elif action == 'send_email':
                     EmailService.send_custom_email(ticket, subject, message)
+                
+                # Template-based email actions
+                elif action == 'welcome_email':
+                    try:
+                        EmailService.send_welcome_email(ticket)
+                    except Exception as e:
+                        print(f"Welcome email failed: {e}")
+                
+                elif action == 'payment_reminder':
+                    try:
+                        EmailService.send_payment_reminder(ticket)
+                    except Exception as e:
+                        print(f"Payment reminder failed: {e}")
+                
+                elif action == 'final_instructions':
+                    try:
+                        EmailService.send_final_instructions(ticket)
+                    except Exception as e:
+                        print(f"Final instructions email failed: {e}")
                     
                 elif action == 'delete':
                     ticket.delete()

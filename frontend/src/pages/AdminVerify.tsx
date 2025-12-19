@@ -158,6 +158,35 @@ const AdminVerify = () => {
     toast.success("Emails sent successfully!");
   };
 
+  const handleTemplateSend = async (templateAction: string, recipients: string) => {
+    try {
+      // Determine which ticket IDs to send to based on recipients
+      let ticketIds: string[] = [];
+
+      if (recipients === 'selected') {
+        ticketIds = Array.from(selectedTickets);
+      } else {
+        // For other recipient types, we need to send to the appropriate tickets
+        // The backend bulk_action will handle all selected IDs
+        ticketIds = Array.from(selectedTickets);
+      }
+
+      if (ticketIds.length === 0) {
+        toast.error("No recipients selected");
+        return;
+      }
+
+      // Call the bulk action API with the template action
+      await ticketService.performBulkAction(ticketIds, templateAction);
+
+      setShowEmailModal(false);
+      toast.success(`${templateAction.replace('_', ' ')} sent to ${ticketIds.length} recipients!`);
+    } catch (error) {
+      console.error("Template send failed:", error);
+      toast.error("Failed to send template email");
+    }
+  };
+
   const exportToCSV = () => {
     const headers = ["Ticket ID", "Name", "Source", "Age", "Category", "Province", "Church", "Status", "Registered By"];
     const csvData = tickets.map(ticket => [
@@ -377,7 +406,16 @@ const AdminVerify = () => {
           </div>
         </motion.div>
       </div>
-      <BulkEmailModal isOpen={showEmailModal} onClose={() => setShowEmailModal(false)} onSend={handleEmailSend} selectedCount={selectedTickets.size} totalCount={totalItems} pendingCount={0} approvedCount={0} />
+      <BulkEmailModal
+        isOpen={showEmailModal}
+        onClose={() => setShowEmailModal(false)}
+        onSend={handleEmailSend}
+        onSendTemplate={handleTemplateSend}
+        selectedCount={selectedTickets.size}
+        totalCount={totalItems}
+        pendingCount={dashboardStats?.pending_tickets ?? 0}
+        approvedCount={dashboardStats?.approved_tickets ?? 0}
+      />
 
       <TicketDetailsModal
         ticket={selectedTicket}

@@ -239,7 +239,10 @@ class BulkActionSerializer(serializers.Serializer):
         ('approve', 'Approve'),
         ('reject', 'Reject'),
         ('send_email', 'Send Email'),
-        ('delete', 'Delete')
+        ('delete', 'Delete'),
+        ('welcome_email', 'Welcome Email'),
+        ('payment_reminder', 'Payment Reminder'),
+        ('final_instructions', 'Final Instructions')
     ])
     subject = serializers.CharField(required=False, allow_blank=True)
     message = serializers.CharField(required=False, allow_blank=True)

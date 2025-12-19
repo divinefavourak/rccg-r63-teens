@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Registration Approved!</title>
+    <title>Ticket Status Update</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
 
@@ -38,8 +38,8 @@
         }
 
         .logo {
-            width: 70px;
-            height: 70px;
+            width: 60px;
+            height: 60px;
             border-radius: 50%;
             border: 3px solid #FFD700;
             object-fit: cover;
@@ -47,10 +47,9 @@
 
         .header h1 {
             color: #FFD700;
-            font-size: 28px;
+            font-size: 24px;
             font-weight: 800;
             margin: 0 0 10px 0;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
         }
 
         .header p {
@@ -60,25 +59,13 @@
             font-size: 14px;
         }
 
-        .approved-badge {
-            display: inline-block;
-            background: linear-gradient(to bottom, #FFD700, #B8860B);
-            color: #8B0000;
-            font-weight: 800;
-            font-size: 20px;
-            padding: 12px 30px;
-            border-radius: 30px;
-            margin: 20px 0;
-            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
-        }
-
         .content {
             padding: 40px 30px;
             background: #1a0505;
         }
 
         .greeting {
-            font-size: 22px;
+            font-size: 20px;
             font-weight: 700;
             color: #ffffff;
             margin-bottom: 15px;
@@ -88,7 +75,49 @@
             color: #cccccc;
             font-size: 16px;
             line-height: 1.6;
-            margin-bottom: 30px;
+            margin-bottom: 25px;
+        }
+
+        .status-change {
+            text-align: center;
+            padding: 30px;
+            margin: 25px 0;
+        }
+
+        .status-old {
+            color: #888888;
+            font-size: 14px;
+            text-decoration: line-through;
+            margin-bottom: 10px;
+        }
+
+        .status-arrow {
+            font-size: 30px;
+            color: #FFD700;
+            margin: 10px 0;
+        }
+
+        .status-new {
+            display: inline-block;
+            font-size: 18px;
+            font-weight: 800;
+            padding: 12px 30px;
+            border-radius: 30px;
+        }
+
+        .status-approved {
+            background: linear-gradient(to bottom, #4CAF50, #2E7D32);
+            color: white;
+        }
+
+        .status-rejected {
+            background: linear-gradient(to bottom, #f44336, #c62828);
+            color: white;
+        }
+
+        .status-pending {
+            background: linear-gradient(to bottom, #ff9800, #e65100);
+            color: white;
         }
 
         .ticket-card {
@@ -121,39 +150,6 @@
         .value {
             color: #ffffff;
             font-weight: 700;
-            font-size: 16px;
-        }
-
-        .qr-section {
-            text-align: center;
-            padding: 30px;
-            background: #ffffff;
-            border-radius: 16px;
-            margin: 25px 0;
-        }
-
-        .qr-code {
-            width: 180px;
-            height: 180px;
-            margin: 0 auto 15px;
-        }
-
-        .qr-caption {
-            color: #666666;
-            font-size: 12px;
-        }
-
-        .cta-button {
-            display: inline-block;
-            background: linear-gradient(to bottom, #FFD700, #B8860B);
-            color: #8B0000;
-            text-decoration: none;
-            font-weight: 800;
-            padding: 16px 40px;
-            border-radius: 30px;
-            font-size: 16px;
-            box-shadow: 0 4px 0 #8B6914;
-            margin: 20px 0;
         }
 
         .footer {
@@ -188,20 +184,26 @@
                 <img src="{{ faith_logo_url }}" alt="Faith Tribe Logo" class="logo">
                 {% endif %}
             </div>
-            <h1>🎉 YOU'RE APPROVED!</h1>
+            <h1>📋 STATUS UPDATE</h1>
             <p>RCCG Region 63 December Campout 2025</p>
-            <p style="color: #FFD700; font-weight: 700; margin-top: 8px;">Theme: THE PRICELESS GIFT</p>
+            <p style="color: #FFD700; font-weight: 600; margin-top: 5px; font-size: 12px;">Theme: THE PRICELESS GIFT</p>
         </div>
 
         <div class="content">
             <p class="greeting">Hello, {{ full_name }}! 👋</p>
 
             <p class="message">
-                Great news! Your registration for the <strong>RCCG R63 Teens Event</strong> has been
-                <strong style="color: #FFD700;">APPROVED</strong>. We can't wait to see you there!
+                Your ticket status has been updated.
             </p>
 
-            <div class="approved-badge">✅ APPROVED</div>
+            <div class="status-change">
+                <p class="status-old">{{ old_status|title }}</p>
+                <div class="status-arrow">⬇️</div>
+                <div
+                    class="status-new {% if new_status == 'approved' %}status-approved{% elif new_status == 'rejected' %}status-rejected{% else %}status-pending{% endif %}">
+                    {{ new_status|upper }}
+                </div>
+            </div>
 
             <div class="ticket-card">
                 <div class="ticket-row">
@@ -212,32 +214,23 @@
                     <span class="label">Name</span>
                     <span class="value">{{ full_name }}</span>
                 </div>
-                <div class="ticket-row">
-                    <span class="label">Category</span>
-                    <span class="value">{{ category }}</span>
-                </div>
-                <div class="ticket-row">
-                    <span class="label">Status</span>
-                    <span class="value" style="color: #4CAF50;">APPROVED</span>
-                </div>
             </div>
 
-            {% if qr_code_base64 %}
-            <div class="qr-section">
-                <img src="data:image/png;base64,{{ qr_code_base64 }}" alt="QR Code" class="qr-code">
-                <p class="qr-caption">Present this QR code at the venue entrance</p>
-            </div>
-            {% endif %}
-
-            <p class="message" style="text-align: center;">
-                Please save this email and your Ticket ID. You'll need to present it at the event entrance.
+            {% if new_status == 'approved' %}
+            <p class="message" style="color: #4CAF50; text-align: center;">
+                🎉 <strong>Congratulations!</strong> Your registration has been approved.
+                See you at the event!
             </p>
-
-            <div style="text-align: center;">
-                <a href="{{ frontend_url }}/ticket-preview?ticket_id={{ ticket_id }}" class="cta-button">
-                    VIEW MY TICKET
-                </a>
-            </div>
+            {% elif new_status == 'rejected' %}
+            <p class="message" style="color: #f44336; text-align: center;">
+                Unfortunately, your registration was not approved.
+                Please contact your parish coordinator for more information.
+            </p>
+            {% else %}
+            <p class="message" style="text-align: center;">
+                Your ticket is being processed. You will be notified of any further updates.
+            </p>
+            {% endif %}
         </div>
 
         <div class="footer">
