@@ -1,12 +1,12 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
-import { FaTimes, FaEnvelope } from "react-icons/fa";
-import { EVENT_DETAILS } from "../constants/eventDetails";
+import { FaTimes, FaEnvelope, FaGift, FaClock, FaClipboardList, FaPaperPlane } from "react-icons/fa";
 
 interface BulkEmailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSend: (subject: string, message: string, recipients: string) => void;
+  onSendTemplate: (templateAction: string, recipients: string) => void;
   selectedCount: number;
   totalCount: number;
   pendingCount: number;
@@ -19,26 +19,24 @@ interface EmailData {
   recipients: string;
 }
 
-const BulkEmailModal = ({ 
-  isOpen, 
-  onClose, 
-  onSend, 
-  selectedCount, 
-  totalCount, 
-  pendingCount, 
-  approvedCount 
+const BulkEmailModal = ({
+  isOpen,
+  onClose,
+  onSend,
+  onSendTemplate,
+  selectedCount,
+  totalCount,
+  pendingCount,
+  approvedCount
 }: BulkEmailModalProps) => {
   const [emailData, setEmailData] = useState<EmailData>({
     subject: "",
     message: "",
     recipients: "selected"
   });
+  const [showCustom, setShowCustom] = useState(false);
 
-  // Early return must be AFTER all hooks (useState)
-  // However, for a modal that conditionally renders, we usually put the condition inside the return
-  // or use AnimatePresence. Moving hooks above the if(!isOpen) check is safer.
-  
-  if (!isOpen) return null; 
+  if (!isOpen) return null;
 
   const getRecipientsCount = () => {
     switch (emailData.recipients) {
@@ -50,39 +48,43 @@ const BulkEmailModal = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleCustomSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!emailData.subject.trim() || !emailData.message.trim()) return;
-    
+
     onSend(emailData.subject, emailData.message, emailData.recipients);
     setEmailData({ subject: "", message: "", recipients: "selected" });
+    setShowCustom(false);
   };
 
-  const predefinedTemplates = [
+  const handleTemplateClick = (templateAction: string) => {
+    if (getRecipientsCount() === 0) return;
+    onSendTemplate(templateAction, emailData.recipients);
+  };
+
+  const templateButtons = [
     {
+      action: "welcome_email",
       name: "Welcome Email",
-      subject: "Welcome to RCCG Region 63 Teens Camp!",
-      message: `Dear {name},\n\nWelcome to the RCCG Region 63 Teens Camp! We're excited to have you join us for this amazing experience.\n\nGet ready for:\n• Powerful worship sessions\n• Engaging workshops\n• Fun activities and games\n• Life-changing encounters\n\nSee you at the camp!\n\nBlessings,\nRCCG Region 63 Team`
+      description: "Send a welcome message with event details",
+      icon: <FaGift className="text-2xl" />,
+      color: "from-green-500 to-emerald-600"
     },
     {
+      action: "payment_reminder",
       name: "Payment Reminder",
-      subject: "Payment Reminder - RCCG Teens Camp",
-      message: `Dear {name},\n\nThis is a friendly reminder about your camp registration payment.\n\nPlease complete your payment at your earliest convenience to secure your spot.\n\nPayment Details:\n• Amount: ₦3,000\n• Please proceed to the payment portal to complete your transaction if you haven't done so.\n\nIf you've already made payment, please disregard this message.\n\nThank you!\nRCCG Region 63 Team`
+      description: "Remind to upload proof of payment",
+      icon: <FaClock className="text-2xl" />,
+      color: "from-yellow-500 to-orange-500"
     },
     {
+      action: "final_instructions",
       name: "Final Instructions",
-      subject: "Final Instructions - Camp Preparation",
-      message: `Dear {name},\n\nThe camp is almost here! Here are some final instructions:\n\nWhat to Bring:\n• Bible and notebook\n• Comfortable clothing\n• Toiletries\n• Bedding (if required)\n• Any medications\n\nArrival: Please arrive by 9:00 AM\nLocation: ${EVENT_DETAILS.location}\n\nWe can't wait to see you!\n\nRCCG Region 63 Team`
+      description: "Send checklist and arrival info",
+      icon: <FaClipboardList className="text-2xl" />,
+      color: "from-blue-500 to-indigo-600"
     }
   ];
-
-  const applyTemplate = (template: { subject: string; message: string }) => {
-    setEmailData(prev => ({
-      ...prev,
-      subject: template.subject,
-      message: template.message
-    }));
-  };
 
   return (
     <AnimatePresence>
@@ -94,81 +96,133 @@ const BulkEmailModal = ({
           className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
         >
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-2xl font-bold text-gray-800">Send Bulk Email</h3>
+            <h3 className="text-2xl font-bold text-gray-800">📧 Send Bulk Email</h3>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
               <FaTimes className="w-6 h-6" />
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Recipients</label>
-              <select
-                value={emailData.recipients}
-                onChange={(e) => setEmailData(prev => ({ ...prev, recipients: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              >
-                <option value="selected">Selected Tickets ({selectedCount})</option>
-                <option value="pending">All Pending ({pendingCount})</option>
-                <option value="approved">All Approved ({approvedCount})</option>
-                <option value="all">All Participants ({totalCount})</option>
-              </select>
-            </div>
+          {/* Recipients Selector */}
+          <div className="mb-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Recipients</label>
+            <select
+              value={emailData.recipients}
+              onChange={(e) => setEmailData(prev => ({ ...prev, recipients: e.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+            >
+              <option value="selected">Selected Tickets ({selectedCount})</option>
+              <option value="pending">All Pending ({pendingCount})</option>
+              <option value="approved">All Approved ({approvedCount})</option>
+              <option value="all">All Participants ({totalCount})</option>
+            </select>
+            <p className="text-sm text-gray-500 mt-1">
+              Will send to <strong>{getRecipientsCount()}</strong> recipient(s)
+            </p>
+          </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Quick Templates</label>
-              <div className="flex gap-2">
-                {predefinedTemplates.map((template, index) => (
-                  <button
-                    key={index}
-                    type="button"
-                    onClick={() => applyTemplate(template)}
-                    className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded border border-gray-300"
-                  >
-                    {template.name}
-                  </button>
-                ))}
+          {!showCustom ? (
+            <>
+              {/* Template Buttons */}
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  Quick Templates (Premium HTML Design)
+                </label>
+                <div className="grid gap-3">
+                  {templateButtons.map((template) => (
+                    <button
+                      key={template.action}
+                      type="button"
+                      onClick={() => handleTemplateClick(template.action)}
+                      disabled={getRecipientsCount() === 0}
+                      className={`flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r ${template.color} text-white hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                        {template.icon}
+                      </div>
+                      <div className="text-left">
+                        <p className="font-bold">{template.name}</p>
+                        <p className="text-sm opacity-90">{template.description}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Subject</label>
-              <input
-                type="text"
-                value={emailData.subject}
-                onChange={(e) => setEmailData(prev => ({ ...prev, subject: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Message</label>
-              <textarea
-                value={emailData.message}
-                onChange={(e) => setEmailData(prev => ({ ...prev, message: e.target.value }))}
-                rows={5}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                required
-              />
-            </div>
-
-            <div className="flex space-x-4 pt-4 border-t border-gray-200">
+              {/* Custom Email Option */}
+              <div className="border-t pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowCustom(true)}
+                  className="w-full flex items-center justify-center gap-2 py-3 px-6 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-gray-400 hover:text-gray-700 transition-colors"
+                >
+                  <FaPaperPlane /> Write Custom Email
+                </button>
+              </div>
+            </>
+          ) : (
+            /* Custom Email Form */
+            <form onSubmit={handleCustomSubmit} className="space-y-4">
               <button
-                type="submit"
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-lg font-semibold flex items-center justify-center gap-2"
+                type="button"
+                onClick={() => setShowCustom(false)}
+                className="text-sm text-blue-600 hover:text-blue-800"
               >
-                <FaEnvelope /> Send Email
+                ← Back to Templates
               </button>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Subject</label>
+                <input
+                  type="text"
+                  value={emailData.subject}
+                  onChange={(e) => setEmailData(prev => ({ ...prev, subject: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  placeholder="Enter email subject..."
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Message</label>
+                <textarea
+                  value={emailData.message}
+                  onChange={(e) => setEmailData(prev => ({ ...prev, message: e.target.value }))}
+                  rows={5}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  placeholder="Enter email message..."
+                  required
+                />
+              </div>
+
+              <div className="flex space-x-4 pt-4">
+                <button
+                  type="submit"
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-lg font-semibold flex items-center justify-center gap-2"
+                >
+                  <FaEnvelope /> Send Custom Email
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-3 px-6 rounded-lg font-semibold"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
+
+          {!showCustom && (
+            <div className="flex justify-end mt-4">
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-3 px-6 rounded-lg font-semibold"
+                className="bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-6 rounded-lg font-semibold"
               >
-                Cancel
+                Close
               </button>
             </div>
-          </form>
+          )}
         </motion.div>
       </div>
     </AnimatePresence>

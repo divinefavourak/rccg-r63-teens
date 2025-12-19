@@ -21,6 +21,8 @@ const BulkRegister = lazy(() => import('./pages/BulkRegister'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const PaymentCallback = lazy(() => import('./pages/PaymentCallback'));
 const PaymentPage = lazy(() => import('./pages/PaymentPage'));
+const UploadPayment = lazy(() => import('./pages/UploadPayment'));
+const CheckTicketStatus = lazy(() => import('./pages/TicketNotFound')); // File still named TicketNotFound.tsx but exports CheckTicketStatus
 
 const Loading = () => (
   <div className="min-h-screen flex items-center justify-center bg-[#2b0303] dark:bg-[#1a0505] transition-colors duration-500">
@@ -55,6 +57,8 @@ function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/ticket-preview" element={<TicketPreview />} />
+          <Route path="/upload-payment" element={<UploadPayment />} />
+          <Route path="/ticket-not-found" element={<CheckTicketStatus />} />
 
           {/* PUBLIC REGISTRATION ROUTE */}
           <Route path="/get-ticket" element={<TicketForm />} />

@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Registration Confirmation</title>
+    <title>Registration Approved!</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
 
@@ -38,8 +38,8 @@
         }
 
         .logo {
-            width: 60px;
-            height: 60px;
+            width: 70px;
+            height: 70px;
             border-radius: 50%;
             border: 3px solid #FFD700;
             object-fit: cover;
@@ -47,9 +47,10 @@
 
         .header h1 {
             color: #FFD700;
-            font-size: 24px;
+            font-size: 28px;
             font-weight: 800;
             margin: 0 0 10px 0;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
         }
 
         .header p {
@@ -59,13 +60,25 @@
             font-size: 14px;
         }
 
+        .approved-badge {
+            display: inline-block;
+            background: linear-gradient(to bottom, #FFD700, #B8860B);
+            color: #8B0000;
+            font-weight: 800;
+            font-size: 20px;
+            padding: 12px 30px;
+            border-radius: 30px;
+            margin: 20px 0;
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+        }
+
         .content {
             padding: 40px 30px;
             background: #1a0505;
         }
 
         .greeting {
-            font-size: 20px;
+            font-size: 22px;
             font-weight: 700;
             color: #ffffff;
             margin-bottom: 15px;
@@ -75,18 +88,7 @@
             color: #cccccc;
             font-size: 16px;
             line-height: 1.6;
-            margin-bottom: 25px;
-        }
-
-        .pending-badge {
-            display: inline-block;
-            background: linear-gradient(to bottom, #ff9800, #e65100);
-            color: #ffffff;
-            font-weight: 800;
-            font-size: 16px;
-            padding: 12px 30px;
-            border-radius: 30px;
-            margin: 20px 0;
+            margin-bottom: 30px;
         }
 
         .ticket-card {
@@ -119,27 +121,39 @@
         .value {
             color: #ffffff;
             font-weight: 700;
+            font-size: 16px;
         }
 
-        .info-box {
-            background: #2b0303;
-            border: 1px solid rgba(255, 215, 0, 0.3);
-            border-radius: 12px;
-            padding: 20px;
+        .qr-section {
+            text-align: center;
+            padding: 30px;
+            background: #ffffff;
+            border-radius: 16px;
             margin: 25px 0;
         }
 
-        .info-title {
-            color: #FFD700;
-            font-weight: 700;
-            font-size: 14px;
-            margin-bottom: 10px;
+        .qr-code {
+            width: 180px;
+            height: 180px;
+            margin: 0 auto 15px;
         }
 
-        .info-text {
-            color: #aaaaaa;
-            font-size: 14px;
-            line-height: 1.6;
+        .qr-caption {
+            color: #666666;
+            font-size: 12px;
+        }
+
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(to bottom, #FFD700, #B8860B);
+            color: #8B0000;
+            text-decoration: none;
+            font-weight: 800;
+            padding: 16px 40px;
+            border-radius: 30px;
+            font-size: 16px;
+            box-shadow: 0 4px 0 #8B6914;
+            margin: 20px 0;
         }
 
         .footer {
@@ -174,22 +188,20 @@
                 <img src="{{ faith_logo_url }}" alt="Faith Tribe Logo" class="logo">
                 {% endif %}
             </div>
-            <h1>✅ REGISTRATION RECEIVED</h1>
+            <h1>🎉 YOU'RE APPROVED!</h1>
             <p>RCCG Region 63 December Campout 2025</p>
-            <p style="color: #FFD700; font-weight: 600; margin-top: 5px; font-size: 12px;">Theme: THE PRICELESS GIFT</p>
+            <p style="color: #FFD700; font-weight: 700; margin-top: 8px;">Theme: THE PRICELESS GIFT</p>
         </div>
 
         <div class="content">
             <p class="greeting">Hello, {{ full_name }}! 👋</p>
 
             <p class="message">
-                Thank you for registering for the <strong>RCCG R63 Teens Event</strong>!
-                Your registration has been received and is pending approval.
+                Great news! Your registration for the <strong>RCCG R63 Teens Event</strong> has been
+                <strong style="color: #FFD700;">APPROVED</strong>. We can't wait to see you there!
             </p>
 
-            <div style="text-align: center;">
-                <div class="pending-badge">⏳ PENDING APPROVAL</div>
-            </div>
+            <div class="approved-badge">✅ APPROVED</div>
 
             <div class="ticket-card">
                 <div class="ticket-row">
@@ -205,25 +217,33 @@
                     <span class="value">{{ category }}</span>
                 </div>
                 <div class="ticket-row">
-                    <span class="label">Registered</span>
-                    <span class="value">{{ registered_at|date:"F d, Y H:i" }}</span>
+                    <span class="label">Status</span>
+                    <span class="value" style="color: #4CAF50;">APPROVED</span>
                 </div>
             </div>
 
-            <div class="info-box">
-                <p class="info-title">📋 What's Next?</p>
-                <p class="info-text">
-                    Your registration will be reviewed by the administrator.
-                    You will receive another email once your ticket is approved.
-                    Please keep your Ticket ID safe for future reference.
-                </p>
+            {% if qr_code_base64 %}
+            <div class="qr-section">
+                <img src="data:image/png;base64,{{ qr_code_base64 }}" alt="QR Code" class="qr-code">
+                <p class="qr-caption">Present this QR code at the venue entrance</p>
+            </div>
+            {% endif %}
+
+            <p class="message" style="text-align: center;">
+                Please save this email and your Ticket ID. You'll need to present it at the event entrance.
+            </p>
+
+            <div style="text-align: center;">
+                <a href="{{ frontend_url }}/ticket-preview?ticket_id={{ ticket_id }}" class="cta-button">
+                    VIEW MY TICKET
+                </a>
             </div>
         </div>
 
         <div class="footer">
             <p class="social-text">RCCG Region 63 Junior Church</p>
             <p>&copy; {% now "Y" %} All rights reserved.</p>
-            <p>This is an automated email. Please do not reply.</p>
+            <p>For inquiries, contact your parish coordinator.</p>
         </div>
     </div>
 </body>

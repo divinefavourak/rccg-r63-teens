@@ -1,17 +1,18 @@
 import { useState } from 'react';
 import { emailService } from '../utils/emailService';
+import { ticketService } from '../services/ticketService';
 import { EVENT_DETAILS } from '../constants/eventDetails';
 import { Ticket, OperationResult } from '../types';
 
 export const useBulkOperations = (
-  tickets: Ticket[], 
+  tickets: Ticket[],
   setTickets: React.Dispatch<React.SetStateAction<Ticket[]>>
 ) => {
   // ✅ FIX 1: Change generic type from <number> to <string>
   const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  
+
   const [operationResults, setOperationResults] = useState<OperationResult | null>(null);
 
   // Select all tickets
@@ -53,44 +54,59 @@ export const useBulkOperations = (
         details: []
       };
 
+      const ticketIds = Array.from(selectedTickets);
+
       switch (bulkAction) {
         case "approve":
-          // Update tickets status in local state
           setTickets(prev => prev.map(ticket =>
             selectedTickets.has(ticket.id) ? { ...ticket, status: "approved" } : ticket
           ));
-          
-          const approvalResults = await emailService.sendBulkEmails(
-            selectedTicketsData.map(t => ({ id: t.id, email: t.email, name: t.fullName })),
-            emailService.templates.approval('Participant', 'BULK', EVENT_DETAILS).subject,
-            emailService.templates.approval('Participant', 'BULK', EVENT_DETAILS).message
-          );
-          
-          results.successful = approvalResults.successful;
-          results.failed = approvalResults.failed;
-          results.details = approvalResults.results;
+
+          const approvalResponse = await ticketService.performBulkAction(ticketIds, 'approve');
+
+          results.successful = approvalResponse.successful.length;
+          results.failed = approvalResponse.failed.length;
+          results.details = [
+            ...approvalResponse.successful.map((id: string) => {
+              const t = selectedTicketsData.find(x => x.id === id);
+              return { success: true, recipient: t?.email, name: t?.fullName };
+            }),
+            ...approvalResponse.failed.map((f: any) => {
+              const t = selectedTicketsData.find(x => x.id === f.id);
+              return { success: false, recipient: t?.email, name: t?.fullName, error: f.error };
+            })
+          ];
           break;
 
         case "reject":
           setTickets(prev => prev.map(ticket =>
             selectedTickets.has(ticket.id) ? { ...ticket, status: "rejected" } : ticket
           ));
-          
-          const rejectionResults = await emailService.sendBulkEmails(
-            selectedTicketsData.map(t => ({ id: t.id, email: t.email, name: t.fullName })),
-            emailService.templates.rejection('Participant', 'BULK', EVENT_DETAILS).subject,
-            emailService.templates.rejection('Participant', 'BULK', EVENT_DETAILS).message
-          );
-          
-          results.successful = rejectionResults.successful;
-          results.failed = rejectionResults.failed;
-          results.details = rejectionResults.results;
+
+          const rejectionResponse = await ticketService.performBulkAction(ticketIds, 'reject');
+
+          results.successful = rejectionResponse.successful.length;
+          results.failed = rejectionResponse.failed.length;
+          results.details = [
+            ...rejectionResponse.successful.map((id: string) => {
+              const t = selectedTicketsData.find(x => x.id === id);
+              return { success: true, recipient: t?.email, name: t?.fullName };
+            }),
+            ...rejectionResponse.failed.map((f: any) => {
+              const t = selectedTicketsData.find(x => x.id === f.id);
+              return { success: false, recipient: t?.email, name: t?.fullName, error: f.error };
+            })
+          ];
           break;
 
         case "delete":
           setTickets(prev => prev.filter(ticket => !selectedTickets.has(ticket.id)));
-          
-          results.successful = selectedTickets.size;
+
+          // Call backend delete
+          const deleteResponse = await ticketService.performBulkAction(ticketIds, 'delete');
+
+          results.successful = deleteResponse.successful.length;
+          results.failed = deleteResponse.failed.length;
           results.details = selectedTicketsData.map(t => ({
             success: true,
             recipient: t.email,
@@ -100,15 +116,26 @@ export const useBulkOperations = (
           break;
 
         case "send_reminder":
-          const reminderResults = await emailService.sendBulkEmails(
-            selectedTicketsData.map(t => ({ id: t.id, email: t.email, name: t.fullName })),
-            emailService.templates.reminder('Participant', 'BULK', EVENT_DETAILS).subject,
-            emailService.templates.reminder('Participant', 'BULK', EVENT_DETAILS).message
+          const template = emailService.templates.reminder('Participant', 'BULK', EVENT_DETAILS);
+          const reminderResponse = await ticketService.performBulkAction(
+            ticketIds,
+            'send_email',
+            template.subject,
+            template.message
           );
-          
-          results.successful = reminderResults.successful;
-          results.failed = reminderResults.failed;
-          results.details = reminderResults.results;
+
+          results.successful = reminderResponse.successful.length;
+          results.failed = reminderResponse.failed.length;
+          results.details = [
+            ...reminderResponse.successful.map((id: string) => {
+              const t = selectedTicketsData.find(x => x.id === id);
+              return { success: true, recipient: t?.email, name: t?.fullName };
+            }),
+            ...reminderResponse.failed.map((f: any) => {
+              const t = selectedTicketsData.find(x => x.id === f.id);
+              return { success: false, recipient: t?.email, name: t?.fullName, error: f.error };
+            })
+          ];
           break;
       }
 
@@ -135,7 +162,7 @@ export const useBulkOperations = (
     setOperationResults(null);
 
     let recipients: Ticket[] = [];
-    
+
     switch (recipientType) {
       case 'selected':
         recipients = tickets.filter(t => selectedTickets.has(t.id));
@@ -152,18 +179,26 @@ export const useBulkOperations = (
     }
 
     try {
-      const results = await emailService.sendBulkEmails(
-        recipients.map(t => ({ id: t.id, email: t.email, name: t.fullName })),
-        subject,
-        message
-      );
+      // Map ticket objects to IDs
+      const ticketIds = recipients.map(t => t.id);
+
+      const response = await ticketService.performBulkAction(ticketIds, 'send_email', subject, message);
 
       setOperationResults({
         action: 'custom_email',
         total: recipients.length,
-        successful: results.successful,
-        failed: results.failed,
-        details: results.results
+        successful: response.successful.length,
+        failed: response.failed.length,
+        details: [
+          ...response.successful.map((id: string) => {
+            const t = recipients.find(x => x.id === id);
+            return { success: true, recipient: t?.email, name: t?.fullName };
+          }),
+          ...response.failed.map((f: any) => {
+            const t = recipients.find(x => x.id === f.id);
+            return { success: false, recipient: t?.email, name: t?.fullName, error: f.error };
+          })
+        ]
       });
 
     } catch (error: any) {

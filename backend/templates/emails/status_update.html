@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Registration Confirmation</title>
+    <title>Ticket Status Update</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
 
@@ -78,15 +78,46 @@
             margin-bottom: 25px;
         }
 
-        .pending-badge {
+        .status-change {
+            text-align: center;
+            padding: 30px;
+            margin: 25px 0;
+        }
+
+        .status-old {
+            color: #888888;
+            font-size: 14px;
+            text-decoration: line-through;
+            margin-bottom: 10px;
+        }
+
+        .status-arrow {
+            font-size: 30px;
+            color: #FFD700;
+            margin: 10px 0;
+        }
+
+        .status-new {
             display: inline-block;
-            background: linear-gradient(to bottom, #ff9800, #e65100);
-            color: #ffffff;
+            font-size: 18px;
             font-weight: 800;
-            font-size: 16px;
             padding: 12px 30px;
             border-radius: 30px;
-            margin: 20px 0;
+        }
+
+        .status-approved {
+            background: linear-gradient(to bottom, #4CAF50, #2E7D32);
+            color: white;
+        }
+
+        .status-rejected {
+            background: linear-gradient(to bottom, #f44336, #c62828);
+            color: white;
+        }
+
+        .status-pending {
+            background: linear-gradient(to bottom, #ff9800, #e65100);
+            color: white;
         }
 
         .ticket-card {
@@ -121,27 +152,6 @@
             font-weight: 700;
         }
 
-        .info-box {
-            background: #2b0303;
-            border: 1px solid rgba(255, 215, 0, 0.3);
-            border-radius: 12px;
-            padding: 20px;
-            margin: 25px 0;
-        }
-
-        .info-title {
-            color: #FFD700;
-            font-weight: 700;
-            font-size: 14px;
-            margin-bottom: 10px;
-        }
-
-        .info-text {
-            color: #aaaaaa;
-            font-size: 14px;
-            line-height: 1.6;
-        }
-
         .footer {
             background: #0d0202;
             padding: 30px;
@@ -174,7 +184,7 @@
                 <img src="{{ faith_logo_url }}" alt="Faith Tribe Logo" class="logo">
                 {% endif %}
             </div>
-            <h1>✅ REGISTRATION RECEIVED</h1>
+            <h1>📋 STATUS UPDATE</h1>
             <p>RCCG Region 63 December Campout 2025</p>
             <p style="color: #FFD700; font-weight: 600; margin-top: 5px; font-size: 12px;">Theme: THE PRICELESS GIFT</p>
         </div>
@@ -183,12 +193,16 @@
             <p class="greeting">Hello, {{ full_name }}! 👋</p>
 
             <p class="message">
-                Thank you for registering for the <strong>RCCG R63 Teens Event</strong>!
-                Your registration has been received and is pending approval.
+                Your ticket status has been updated.
             </p>
 
-            <div style="text-align: center;">
-                <div class="pending-badge">⏳ PENDING APPROVAL</div>
+            <div class="status-change">
+                <p class="status-old">{{ old_status|title }}</p>
+                <div class="status-arrow">⬇️</div>
+                <div
+                    class="status-new {% if new_status == 'approved' %}status-approved{% elif new_status == 'rejected' %}status-rejected{% else %}status-pending{% endif %}">
+                    {{ new_status|upper }}
+                </div>
             </div>
 
             <div class="ticket-card">
@@ -200,30 +214,29 @@
                     <span class="label">Name</span>
                     <span class="value">{{ full_name }}</span>
                 </div>
-                <div class="ticket-row">
-                    <span class="label">Category</span>
-                    <span class="value">{{ category }}</span>
-                </div>
-                <div class="ticket-row">
-                    <span class="label">Registered</span>
-                    <span class="value">{{ registered_at|date:"F d, Y H:i" }}</span>
-                </div>
             </div>
 
-            <div class="info-box">
-                <p class="info-title">📋 What's Next?</p>
-                <p class="info-text">
-                    Your registration will be reviewed by the administrator.
-                    You will receive another email once your ticket is approved.
-                    Please keep your Ticket ID safe for future reference.
-                </p>
-            </div>
+            {% if new_status == 'approved' %}
+            <p class="message" style="color: #4CAF50; text-align: center;">
+                🎉 <strong>Congratulations!</strong> Your registration has been approved.
+                See you at the event!
+            </p>
+            {% elif new_status == 'rejected' %}
+            <p class="message" style="color: #f44336; text-align: center;">
+                Unfortunately, your registration was not approved.
+                Please contact your parish coordinator for more information.
+            </p>
+            {% else %}
+            <p class="message" style="text-align: center;">
+                Your ticket is being processed. You will be notified of any further updates.
+            </p>
+            {% endif %}
         </div>
 
         <div class="footer">
             <p class="social-text">RCCG Region 63 Junior Church</p>
             <p>&copy; {% now "Y" %} All rights reserved.</p>
-            <p>This is an automated email. Please do not reply.</p>
+            <p>For inquiries, contact your parish coordinator.</p>
         </div>
     </div>
 </body>

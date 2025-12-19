@@ -227,3 +227,27 @@ class CheckInRecordSerializer(serializers.ModelSerializer):
         read_only_fields = [
             'id', 'checked_in_at', 'ip_address', 'user_agent'
         ]
+
+
+class BulkActionSerializer(serializers.Serializer):
+    """Serializer for bulk actions on tickets"""
+    ticket_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        allow_empty=False
+    )
+    action = serializers.ChoiceField(choices=[
+        ('approve', 'Approve'),
+        ('reject', 'Reject'),
+        ('send_email', 'Send Email'),
+        ('delete', 'Delete'),
+        ('welcome_email', 'Welcome Email'),
+        ('payment_reminder', 'Payment Reminder'),
+        ('final_instructions', 'Final Instructions')
+    ])
+    subject = serializers.CharField(required=False, allow_blank=True)
+    message = serializers.CharField(required=False, allow_blank=True)
+    
+    def validate(self, data):
+        if data['action'] == 'send_email' and not (data.get('subject') and data.get('message')):
+            raise serializers.ValidationError("Subject and message are required for sending emails.")
+        return data

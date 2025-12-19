@@ -15,7 +15,8 @@ import {
   FaMapMarkerAlt,
   FaUser,
   FaPhone,
-  FaFileImage
+  FaFileImage,
+  FaUpload
 } from "react-icons/fa";
 import rccgLogo from "../assets/logo.jpg";
 import faithLogo from "../assets/faith_logo.jpg";
@@ -30,6 +31,8 @@ const TicketPreview = () => {
   const [searchParams] = useSearchParams();
   const [ticketData, setTicketData] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
+  const [uploadingPayment, setUploadingPayment] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   // Initialize from State or URL
   useEffect(() => {
@@ -48,10 +51,14 @@ const TicketPreview = () => {
           try {
             const fetchedTicket = await ticketService.verifyTicket(ticketIdFromUrl);
             if (fetchedTicket) {
-              setTicketData(fetchedTicket);
+              if (fetchedTicket.status === 'approved') {
+                setTicketData(fetchedTicket);
+              } else {
+                // Redirect to status dashboard for non-approved tickets
+                navigate(`/ticket-not-found?ticket_id=${ticketIdFromUrl}`);
+              }
             } else {
-              toast.error("Ticket not found.");
-              // Don't navigate away immediately, let user see error or use fallback
+              toast.error("Ticket not found. Please check your ticket ID.");
             }
           } catch (error) {
             console.error("Fetch error:", error);
@@ -92,8 +99,10 @@ const TicketPreview = () => {
     parentName: "",
     parentEmail: "",
     parentPhone: "",
+    parentRelationship: "",
     status: 'pending',
     registeredAt: new Date().toISOString(),
+    id: "temp-id-fallback"
   };
 
   // Helper to normalize backend data to Ticket interface (moved inside or kept outside)
@@ -123,8 +132,10 @@ const TicketPreview = () => {
       parentName: raw.parentName || raw.parent_name,
       parentEmail: raw.parentEmail || raw.parent_email,
       parentPhone: raw.parentPhone || raw.parent_phone,
+      parentRelationship: raw.parentRelationship || raw.parent_relationship || "Parent",
       status: raw.status || 'pending',
       registeredAt: raw.registeredAt || raw.registered_at || new Date().toISOString(),
+      id: raw.id || raw._id || "temp-id-normalized",
     };
   };
 
@@ -146,6 +157,46 @@ const TicketPreview = () => {
 
   const handleDownloadImage = async () => {
     await generateImage('ticket-card-content', `RCCG-Ticket-${ticket.ticketId}.png`);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+    }
+  };
+
+  const handleUploadPayment = async () => {
+    if (!selectedFile || !ticket.ticketId) {
+      toast.error("Please select a file to upload");
+      return;
+    }
+
+    setUploadingPayment(true);
+    try {
+      const formData = new FormData();
+      formData.append('ticket_id', ticket.ticketId);
+      formData.append('proof_of_payment', selectedFile);
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://rccg-r63-teens-backend.onrender.com/api'}/tickets/upload_proof_by_ticket_id/`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const updatedTicket = await response.json();
+        setTicketData(updatedTicket);
+        toast.success("Payment proof uploaded successfully! Awaiting verification.");
+        setSelectedFile(null);
+      } else {
+        const error = await response.json();
+        toast.error(error.error || "Failed to upload payment proof");
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast.error("Failed to upload payment proof");
+    } finally {
+      setUploadingPayment(false);
+    }
   };
 
 
@@ -298,6 +349,50 @@ const TicketPreview = () => {
               </li>
             </ul>
           </div>
+
+          {/* Payment Upload Section - Only show if payment is unpaid */}
+          {(ticket.payment_status === 'unpaid' || !ticket.payment_status) && ticket.ticketId !== "DEMO-TICKET" && (
+            <div className="mt-8 bg-yellow-50 border border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-500/30 rounded-xl p-6 shadow-sm">
+              <h4 className="font-bold text-yellow-800 dark:text-yellow-400 mb-3 flex items-center gap-2">
+                <FaUpload className="text-xl" /> Upload Payment Proof
+              </h4>
+              <p className="text-sm text-yellow-700 dark:text-yellow-200/80 mb-4">
+                Have you made payment? Upload your receipt or proof of payment here for verification.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={handleFileChange}
+                  className="block w-full text-sm text-gray-700 dark:text-gray-200 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-yellow-100 file:text-yellow-700 hover:file:bg-yellow-200 dark:file:bg-yellow-800 dark:file:text-yellow-100"
+                />
+                <button
+                  onClick={handleUploadPayment}
+                  disabled={!selectedFile || uploadingPayment}
+                  className={`px-6 py-2 rounded-lg font-bold whitespace-nowrap flex items-center gap-2 ${!selectedFile || uploadingPayment
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-yellow-600 text-white hover:bg-yellow-700'
+                    }`}
+                >
+                  {uploadingPayment ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <FaUpload /> Upload
+                    </>
+                  )}
+                </button>
+              </div>
+              {selectedFile && (
+                <p className="text-sm text-yellow-700 dark:text-yellow-200/80 mt-2">
+                  Selected: {selectedFile.name}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row justify-center gap-4 mt-8">

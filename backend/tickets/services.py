@@ -71,6 +71,138 @@ class EmailService:
     """Service for sending emails"""
     
     @staticmethod
+    def send_ticket_approved(ticket):
+        """Send ticket approval email with QR code and premium design"""
+        from django.core.mail import EmailMultiAlternatives
+        import os
+        
+        subject = f"🎉 You're Approved! RCCG R63 December Campout - {ticket.ticket_id}"
+        
+        # Get QR code as base64
+        qr_code_base64 = None
+        try:
+            qr_code_base64 = QRCodeService.get_qr_code_base64(ticket)
+        except Exception as e:
+            print(f"Failed to generate QR code: {e}")
+        
+        # Use FRONTEND_URL from settings, with reliable production fallback
+        frontend_url = getattr(settings, 'FRONTEND_URL', None) or 'https://rccg-r63-juniorchurch.vercel.app'
+        
+        context = {
+            'ticket': ticket,
+            'full_name': ticket.full_name,
+            'ticket_id': ticket.ticket_id,
+            'category': ticket.get_category_display(),
+            'qr_code_base64': qr_code_base64,
+            'frontend_url': frontend_url,
+            'logo_url': 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/logo.jpg',
+            'faith_logo_url': 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/faith_logo.jpg',
+        }
+        
+        html_message = render_to_string('emails/ticket_approved.html', context)
+        plain_message = strip_tags(html_message)
+        
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=plain_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[ticket.email]
+        )
+        msg.attach_alternative(html_message, "text/html")
+        msg.send(fail_silently=False)
+    
+    @staticmethod
+    def send_payment_reminder(ticket):
+        """Send payment reminder email with upload instructions"""
+        from django.core.mail import EmailMultiAlternatives
+        
+        subject = f"⏰ Payment Reminder - R63 December Campout - {ticket.ticket_id}"
+        
+        frontend_url = getattr(settings, 'FRONTEND_URL', None) or 'https://rccg-r63-juniorchurch.vercel.app'
+        
+        context = {
+            'ticket': ticket,
+            'full_name': ticket.full_name,
+            'ticket_id': ticket.ticket_id,
+            'frontend_url': frontend_url,
+            'logo_url': 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/logo.jpg',
+            'faith_logo_url': 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/faith_logo.jpg',
+        }
+        
+        html_message = render_to_string('emails/payment_reminder.html', context)
+        plain_message = strip_tags(html_message)
+        
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=plain_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[ticket.email]
+        )
+        msg.attach_alternative(html_message, "text/html")
+        msg.send(fail_silently=False)
+    
+    @staticmethod
+    def send_welcome_email(ticket):
+        """Send welcome email with event details"""
+        from django.core.mail import EmailMultiAlternatives
+        
+        subject = f"🎄 Welcome to R63 December Campout - THE PRICELESS GIFT!"
+        
+        frontend_url = getattr(settings, 'FRONTEND_URL', None) or 'https://rccg-r63-juniorchurch.vercel.app'
+        
+        context = {
+            'ticket': ticket,
+            'full_name': ticket.full_name,
+            'ticket_id': ticket.ticket_id,
+            'frontend_url': frontend_url,
+            'logo_url': 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/logo.jpg',
+            'faith_logo_url': 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/faith_logo.jpg',
+        }
+        
+        html_message = render_to_string('emails/welcome_email.html', context)
+        plain_message = strip_tags(html_message)
+        
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=plain_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[ticket.email]
+        )
+        msg.attach_alternative(html_message, "text/html")
+        msg.send(fail_silently=False)
+    
+    @staticmethod
+    def send_final_instructions(ticket, event_location="Redemption City"):
+        """Send final instructions email before the event"""
+        from django.core.mail import EmailMultiAlternatives
+        
+        subject = f"📋 Final Instructions - R63 December Campout"
+        
+        frontend_url = getattr(settings, 'FRONTEND_URL', None) or 'https://rccg-r63-juniorchurch.vercel.app'
+        
+        context = {
+            'ticket': ticket,
+            'full_name': ticket.full_name,
+            'ticket_id': ticket.ticket_id,
+            'event_location': event_location,
+            'frontend_url': frontend_url,
+            'logo_url': 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/logo.jpg',
+            'faith_logo_url': 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/faith_logo.jpg',
+        }
+        
+        html_message = render_to_string('emails/final_instructions.html', context)
+        plain_message = strip_tags(html_message)
+        
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=plain_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[ticket.email]
+        )
+        msg.attach_alternative(html_message, "text/html")
+        msg.send(fail_silently=False)
+    
+    @staticmethod
     def send_ticket_confirmation(ticket):
         """Send ticket confirmation email"""
         subject = f"RCCG R63 Teens - Ticket Confirmation: {ticket.ticket_id}"
@@ -91,6 +223,51 @@ class EmailService:
             message=plain_message,
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[ticket.email, ticket.parent_email],
+            html_message=html_message,
+            fail_silently=False,
+        )
+    
+    @staticmethod
+    def send_bulk_ticket_confirmation(tickets, coordinator_name, coordinator_email):
+        """
+        Send a single consolidated confirmation email to a coordinator
+        containing all the ticket IDs they registered.
+        
+        Args:
+            tickets: List of Ticket objects that were created
+            coordinator_name: Name of the coordinator
+            coordinator_email: Email of the coordinator
+        """
+        if not tickets or not coordinator_email:
+            return
+        
+        ticket_count = len(tickets)
+        subject = f"RCCG R63 Teens - Bulk Registration Confirmation ({ticket_count} Tickets)"
+        
+        # Group tickets by category for better organization
+        tickets_by_category = {}
+        for ticket in tickets:
+            category = ticket.get_category_display()
+            if category not in tickets_by_category:
+                tickets_by_category[category] = []
+            tickets_by_category[category].append(ticket)
+        
+        context = {
+            'coordinator_name': coordinator_name,
+            'ticket_count': ticket_count,
+            'tickets': tickets,
+            'tickets_by_category': tickets_by_category,
+            'registered_at': tickets[0].registered_at if tickets else None,
+        }
+        
+        html_message = render_to_string('emails/bulk_ticket_confirmation.html', context)
+        plain_message = strip_tags(html_message)
+        
+        send_mail(
+            subject=subject,
+            message=plain_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[coordinator_email],
             html_message=html_message,
             fail_silently=False,
         )
@@ -141,6 +318,20 @@ class EmailService:
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[ticket.email, ticket.parent_email],
             html_message=html_message,
+            fail_silently=False,
+        )
+    
+    @staticmethod
+    def send_custom_email(ticket, subject, message_content):
+        """Send custom email to ticket holder with personalization"""
+        # Personalize the message with recipient's name
+        personalized_message = f"Dear {ticket.full_name},\n\n{message_content}\n\nBest regards,\nRCCG Region 63 Junior Church Team"
+        
+        send_mail(
+            subject=subject,
+            message=personalized_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[ticket.email],
             fail_silently=False,
         )
         

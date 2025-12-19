@@ -27,6 +27,4 @@ urlpatterns = [
          views.TicketViewSet.as_view({'post': 'update_status'}), 
          name='ticket_update_status'),
     
-    # Verification endpoint (public)
-    path('verify/', views.TicketViewSet.as_view({'get': 'verify', 'post': 'verify'}), name='verify_ticket'),
 ]

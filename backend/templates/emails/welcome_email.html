@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Registration Confirmation</title>
+    <title>Welcome to December Campout!</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
 
@@ -38,8 +38,8 @@
         }
 
         .logo {
-            width: 60px;
-            height: 60px;
+            width: 70px;
+            height: 70px;
             border-radius: 50%;
             border: 3px solid #FFD700;
             object-fit: cover;
@@ -47,9 +47,10 @@
 
         .header h1 {
             color: #FFD700;
-            font-size: 24px;
+            font-size: 26px;
             font-weight: 800;
             margin: 0 0 10px 0;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
         }
 
         .header p {
@@ -59,13 +60,20 @@
             font-size: 14px;
         }
 
+        .theme-badge {
+            color: #FFD700;
+            font-weight: 700;
+            margin-top: 8px;
+            font-size: 12px;
+        }
+
         .content {
             padding: 40px 30px;
             background: #1a0505;
         }
 
         .greeting {
-            font-size: 20px;
+            font-size: 22px;
             font-weight: 700;
             color: #ffffff;
             margin-bottom: 15px;
@@ -74,72 +82,57 @@
         .message {
             color: #cccccc;
             font-size: 16px;
-            line-height: 1.6;
+            line-height: 1.7;
             margin-bottom: 25px;
         }
 
-        .pending-badge {
-            display: inline-block;
-            background: linear-gradient(to bottom, #ff9800, #e65100);
-            color: #ffffff;
-            font-weight: 800;
-            font-size: 16px;
-            padding: 12px 30px;
-            border-radius: 30px;
-            margin: 20px 0;
-        }
-
-        .ticket-card {
+        .highlight-box {
             background: linear-gradient(135deg, #2b0303 0%, #1a0505 100%);
             border: 2px solid #FFD700;
             border-radius: 16px;
             padding: 25px;
-            margin: 20px 0;
-        }
-
-        .ticket-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 12px 0;
-            border-bottom: 1px solid rgba(255, 215, 0, 0.2);
-        }
-
-        .ticket-row:last-child {
-            border-bottom: none;
-        }
-
-        .label {
-            color: #FFD700;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: 600;
-        }
-
-        .value {
-            color: #ffffff;
-            font-weight: 700;
-        }
-
-        .info-box {
-            background: #2b0303;
-            border: 1px solid rgba(255, 215, 0, 0.3);
-            border-radius: 12px;
-            padding: 20px;
             margin: 25px 0;
         }
 
-        .info-title {
+        .highlight-title {
             color: #FFD700;
             font-weight: 700;
-            font-size: 14px;
-            margin-bottom: 10px;
+            font-size: 16px;
+            margin-bottom: 15px;
         }
 
-        .info-text {
-            color: #aaaaaa;
-            font-size: 14px;
-            line-height: 1.6;
+        .feature-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .feature-item {
+            color: #ffffff;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 215, 0, 0.1);
+            font-size: 15px;
+        }
+
+        .feature-item:last-child {
+            border-bottom: none;
+        }
+
+        .feature-icon {
+            margin-right: 10px;
+        }
+
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(to bottom, #FFD700, #B8860B);
+            color: #8B0000;
+            text-decoration: none;
+            font-weight: 800;
+            padding: 16px 40px;
+            border-radius: 30px;
+            font-size: 16px;
+            box-shadow: 0 4px 0 #8B6914;
+            margin: 20px 0;
         }
 
         .footer {
@@ -174,56 +167,49 @@
                 <img src="{{ faith_logo_url }}" alt="Faith Tribe Logo" class="logo">
                 {% endif %}
             </div>
-            <h1>✅ REGISTRATION RECEIVED</h1>
+            <h1>🎄 WELCOME TO THE CAMPOUT!</h1>
             <p>RCCG Region 63 December Campout 2025</p>
-            <p style="color: #FFD700; font-weight: 600; margin-top: 5px; font-size: 12px;">Theme: THE PRICELESS GIFT</p>
+            <p class="theme-badge">Theme: THE PRICELESS GIFT</p>
         </div>
 
         <div class="content">
             <p class="greeting">Hello, {{ full_name }}! 👋</p>
 
             <p class="message">
-                Thank you for registering for the <strong>RCCG R63 Teens Event</strong>!
-                Your registration has been received and is pending approval.
+                🎉 Welcome to the <strong>RCCG Region 63 December Campout 2025!</strong>
+            </p>
+
+            <p class="message">
+                We're thrilled to have you join us for this life-changing experience.
+                Get ready to discover <strong style="color: #FFD700;">THE PRICELESS GIFT</strong> - Jesus Christ!
+            </p>
+
+            <div class="highlight-box">
+                <p class="highlight-title">🎁 What Awaits You:</p>
+                <ul class="feature-list">
+                    <li class="feature-item"><span class="feature-icon">🙏</span> Powerful worship sessions</li>
+                    <li class="feature-item"><span class="feature-icon">📖</span> Engaging Bible studies</li>
+                    <li class="feature-item"><span class="feature-icon">🎮</span> Fun activities and games</li>
+                    <li class="feature-item"><span class="feature-icon">🔥</span> Life-changing encounters with God</li>
+                    <li class="feature-item"><span class="feature-icon">🎁</span> The celebration of Christ!</li>
+                </ul>
+            </div>
+
+            <p class="message" style="text-align: center;">
+                Mark your calendar and prepare your heart for an unforgettable experience!
             </p>
 
             <div style="text-align: center;">
-                <div class="pending-badge">⏳ PENDING APPROVAL</div>
-            </div>
-
-            <div class="ticket-card">
-                <div class="ticket-row">
-                    <span class="label">Ticket ID</span>
-                    <span class="value">{{ ticket_id }}</span>
-                </div>
-                <div class="ticket-row">
-                    <span class="label">Name</span>
-                    <span class="value">{{ full_name }}</span>
-                </div>
-                <div class="ticket-row">
-                    <span class="label">Category</span>
-                    <span class="value">{{ category }}</span>
-                </div>
-                <div class="ticket-row">
-                    <span class="label">Registered</span>
-                    <span class="value">{{ registered_at|date:"F d, Y H:i" }}</span>
-                </div>
-            </div>
-
-            <div class="info-box">
-                <p class="info-title">📋 What's Next?</p>
-                <p class="info-text">
-                    Your registration will be reviewed by the administrator.
-                    You will receive another email once your ticket is approved.
-                    Please keep your Ticket ID safe for future reference.
-                </p>
+                <a href="{{ frontend_url }}/ticket-preview?ticket_id={{ ticket_id }}" class="cta-button">
+                    VIEW MY TICKET
+                </a>
             </div>
         </div>
 
         <div class="footer">
             <p class="social-text">RCCG Region 63 Junior Church</p>
             <p>&copy; {% now "Y" %} All rights reserved.</p>
-            <p>This is an automated email. Please do not reply.</p>
+            <p>See you at the camp! 🎄</p>
         </div>
     </div>
 </body>
