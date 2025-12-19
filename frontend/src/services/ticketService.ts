@@ -105,6 +105,21 @@ class TicketService {
   }
 
   /**
+   * Create multiple tickets at once (Bulk)
+   */
+  async createBulkTickets(data: any[], token?: string): Promise<Ticket[]> {
+    const payload = data.map(mapToBackend);
+
+    const config = token ? {
+      headers: { Authorization: `Bearer ${token}` }
+    } : {};
+
+    const response = await api.post('/tickets/bulk-create/', payload, config);
+    const results = response.data;
+    return results.map(mapFromBackend);
+  }
+
+  /**
    * Update ticket status (Admin only)
    */
   async updateTicketStatus(id: string | number, status: 'approved' | 'rejected' | 'pending'): Promise<Ticket> {

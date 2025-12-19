@@ -111,6 +111,40 @@ class TicketViewSet(viewsets.ModelViewSet):
         serializer = TicketSerializer(ticket)
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    @action(detail=False, methods=['post'], url_path='bulk-create')
+    def bulk_create(self, request, *args, **kwargs):
+        """
+        Create multiple tickets in a single transaction.
+        Optimized for bulk uploads to avoid rate limiting and HTTP overhead.
+        """
+        create_serializer = self.get_serializer(data=request.data, many=True)
+        create_serializer.is_valid(raise_exception=True)
+        
+        created_tickets = []
+        
+        try:
+            with transaction.atomic():
+                for ticket_data in create_serializer.validated_data:
+                    # We manually instantiate and save to trigger the custom ID generation method
+                    ticket = Ticket(**ticket_data)
+                    ticket.registered_by = request.user
+                    ticket.registered_at = timezone.now()
+                    ticket.save()
+                    created_tickets.append(ticket)
+                
+                # Create a single audit log for the batch (optional, or per ticket)
+                # For now, let's just log the first request IP to avoid spamming logs excessively
+                # or we can rely on the fact that they are created.
+                
+                # If we want to return full data for all, we can.
+                response_serializer = TicketSerializer(created_tickets, many=True)
+                return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response(
+                {'error': f'Bulk creation failed: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
     
     # def perform_create(self, serializer):
     #     """Create a ticket with the current user as registered_by"""

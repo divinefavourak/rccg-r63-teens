@@ -104,19 +104,11 @@ const BulkRegister = () => {
       if (counts.pre_teens > 0) pushTickets(counts.pre_teens, 'pre_teens', 'Pre-Teen', 11);
       if (counts.teachers > 0) pushTickets(counts.teachers, 'teacher', 'Coordinator', 30);
 
-      // Batch creation logic (could be optimized with a bulk_create endpoint later)
-      const createdTickets = [];
+      // Batch creation logic
+      const loadingToast = toast.loading("Processing batch of " + totalAttendees + " tickets...");
 
-      // We'll create the first one to establish the batch ID context if we were doing that,
-      // but here we just loop. For 100+ this might be slow client-side.
-      // Ideally backend supports bulk. But for now we stick to current service logic.
-      // We will show a loading toast.
-      const loadingToast = toast.loading("Generating " + totalAttendees + " tickets...");
-
-      for (const ticketData of ticketsToCreate) {
-        const ticket = await ticketService.createTicket(ticketData, user?.token);
-        createdTickets.push(ticket);
-      }
+      // Use the new bulk create endpoint
+      const createdTickets = await ticketService.createBulkTickets(ticketsToCreate, user?.token);
 
       toast.dismiss(loadingToast);
 
