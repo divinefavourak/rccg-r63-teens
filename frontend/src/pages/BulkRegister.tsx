@@ -13,30 +13,26 @@ type CategoryCount = {
   children: number;
   teens: number;
   pre_teens: number;
-  teachers: number;
 };
 
 const CATEGORIES = [
   { id: 'toddlers', label: 'Toddlers (2-5 yrs)', defaultPrice: 3000 },
   { id: 'children', label: 'Children (6-8 yrs)', defaultPrice: 3000 },
-  { id: 'pre_teens', label: 'Pre-Teens (9-12 yrs)', defaultPrice: 3000 }, // Adjusted to 9-12 per request
-  { id: 'teens', label: 'Teens (13-19 yrs)', defaultPrice: 3000 },
-  { id: 'teachers', label: 'Coordinators / Teachers', defaultPrice: 3000 }
+  { id: 'pre_teens', label: 'Pre-Teens (9-12 yrs)', defaultPrice: 3000 },
+  { id: 'teens', label: 'Teens (13-19 yrs)', defaultPrice: 3000 }
 ];
 
 const BulkRegister = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [counts, setCounts] = useState<CategoryCount>({ toddlers: 0, children: 0, teens: 0, pre_teens: 0, teachers: 0 });
+  const [counts, setCounts] = useState<CategoryCount>({ toddlers: 0, children: 0, teens: 0, pre_teens: 0 });
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm({
     defaultValues: {
       coordinatorName: user?.name || "",
       coordinatorPhone: user?.phone || "",
       parish: user?.parish || "",
-
-      // Default bulk info to coordinator's known details where possible
       email: user?.email || "",
     }
   });
@@ -48,6 +44,14 @@ const BulkRegister = () => {
     setCounts(prev => ({
       ...prev,
       [category]: Math.max(0, prev[category] + delta)
+    }));
+  };
+
+  const setManualCount = (category: keyof CategoryCount, value: string) => {
+    const num = parseInt(value) || 0;
+    setCounts(prev => ({
+      ...prev,
+      [category]: Math.max(0, num)
     }));
   };
 
@@ -63,16 +67,14 @@ const BulkRegister = () => {
       const pushTickets = (count: number, category: string, prefix: string, age: number) => {
         for (let i = 1; i <= count; i++) {
           ticketsToCreate.push({
-            fullName: data.parish + " " + prefix + " Guest " + i, // e.g. "Glory Parish Teen Guest 1"
+            fullName: data.parish + " " + prefix + " Guest " + i,
             age: age,
             gender: 'not_specified',
             category: category,
-            phone: data.coordinatorPhone, // Use coordinator contact
-            email: data.email,            // Use coordinator email
+            phone: data.coordinatorPhone,
+            email: data.email,
             parish: data.parish,
             department: "Bulk Registration",
-
-            // Coordinator info as Parent/Emergency for safety/contact tracing
             parentName: data.coordinatorName,
             parentPhone: data.coordinatorPhone,
             parentEmail: data.email,
@@ -80,8 +82,6 @@ const BulkRegister = () => {
             emergencyContact: data.coordinatorName,
             emergencyPhone: data.coordinatorPhone,
             emergencyRelationship: "Coordinator",
-
-            // Standard fields
             medicalConditions: "None",
             medications: "None",
             dietaryRestrictions: "None",
@@ -102,12 +102,11 @@ const BulkRegister = () => {
       if (counts.children > 0) pushTickets(counts.children, 'children_6_8', 'Child', 7);
       if (counts.teens > 0) pushTickets(counts.teens, 'teens', 'Teen', 15);
       if (counts.pre_teens > 0) pushTickets(counts.pre_teens, 'pre_teens', 'Pre-Teen', 11);
-      if (counts.teachers > 0) pushTickets(counts.teachers, 'teacher', 'Coordinator', 30);
 
       // Show loading toast
       const loadingToast = toast.loading(`Creating ${totalAttendees} tickets...`);
 
-      // Use the optimized bulk create endpoint (single request instead of N requests)
+      // Use the optimized bulk create endpoint
       const result = await ticketService.bulkCreateTickets(
         ticketsToCreate,
         data.coordinatorName,
@@ -118,13 +117,11 @@ const BulkRegister = () => {
       toast.dismiss(loadingToast);
 
       if (result.created_count > 0) {
-        // Email is sent automatically by the backend
         if (result.failed_count > 0) {
           toast.success(`${result.created_count} tickets created! (${result.failed_count} failed)`);
         } else {
           toast.success(`${result.created_count} tickets registered! Confirmation email sent.`);
         }
-
         navigate("/payment", { state: { tickets: result.tickets, isBulk: true } });
       } else {
         throw new Error("Ticket generation failed. Please check your data and try again.");
@@ -218,7 +215,7 @@ const BulkRegister = () => {
                       <p className="text-white/50 text-sm">₦3,000 per head</p>
                     </div>
 
-                    <div className="flex items-center gap-4 bg-black/40 rounded-lg p-1">
+                    <div className="flex items-center gap-2 bg-black/40 rounded-lg p-1">
                       <button
                         type="button"
                         onClick={() => updateCount(cat.id as keyof CategoryCount, -1)}
@@ -226,9 +223,15 @@ const BulkRegister = () => {
                       >
                         <FaMinus size={12} />
                       </button>
-                      <span className="text-2xl font-bold w-12 text-center tabular-nums">
-                        {counts[cat.id as keyof CategoryCount]}
-                      </span>
+
+                      <input
+                        type="number"
+                        min="0"
+                        value={counts[cat.id as keyof CategoryCount] || ''}
+                        onChange={(e) => setManualCount(cat.id as keyof CategoryCount, e.target.value)}
+                        className="w-16 h-10 text-center bg-transparent border-none text-2xl font-bold text-white focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+
                       <button
                         type="button"
                         onClick={() => updateCount(cat.id as keyof CategoryCount, 1)}
