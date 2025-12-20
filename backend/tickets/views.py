@@ -744,121 +744,69 @@ class TicketViewSet(viewsets.ModelViewSet):
         
         tickets_to_create = []
         
-        # Calculate Starting Ticket ID (Critical optimization)
-        # Instead of querying DB 177 times, we query ONCE.
-        date_prefix = timezone.now().strftime('%Y%m')
-        prefix = f'TKT-{date_prefix}-'
-        
-        # We need to lock or at least get the specific last one carefully
-        # For simplicity and speed in this context, we fetch last.
-        # Note: Race conditions are possible in high concurrency, but rare here.
-        with transaction.atomic():
-            last_ticket = Ticket.objects.filter(
-                ticket_id__startswith=prefix
-            ).select_for_update().order_by('ticket_id').last()
-
-            start_num = 1
-            if last_ticket:
-                try:
-                    if coordinator_email:
-                        ticket_data['parent_email'] = coordinator_email
-                        ticket_data['parent_name'] = coordinator_name
-                        ticket_data['parent_relationship'] = 'Coordinator'
-                        if 'email' not in ticket_data or not ticket_data['email']:
-                            ticket_data['email'] = coordinator_email
-
-                    # Validate using the create serializer
-                    serializer = TicketCreateSerializer(data=ticket_data)
-                    if serializer.is_valid():
-                        # Create ticket
-                        ticket = serializer.save(
-                            registered_by=registered_by,
-                            registered_at=registered_at
-                        )
-                        created_tickets.append(ticket)
-                    else:
-                        failed_tickets.append({
-                            'index': index,
-                            'errors': serializer.errors
-                        })
-                except Exception as e:
-                    failed_tickets.append({
-                        'index': index,
-                        'error': str(e)
-                    })
-        
-        # Create a single audit log for the bulk operation
-        if created_tickets and registered_by:
-            TicketAuditLog.objects.create(
-                user=registered_by,
-                action=TicketAuditLog.ActionType.BULK_UPLOAD,
-                ticket=created_tickets[0],  # Reference first ticket
-                new_values={
-                    'bulk_count': len(created_tickets),
-                    'ticket_ids': [t.ticket_id for t in created_tickets]
-                },
-                ip_address=self.get_client_ip(),
-                user_agent=request.META.get('HTTP_USER_AGENT', '')
-            )
-        
-        # Send consolidated confirmation email if coordinator email provided
-        if created_tickets and coordinator_email:
-                    parts = last_ticket.ticket_id.split('-')
-                    if len(parts) >= 3:
-                        start_num = int(parts[-1]) + 1
-                except (ValueError, IndexError):
-                    pass
-            
-            # Prepare objects
-            for index, valid_data in enumerate(serializer.validated_data):
-                current_num = start_num + index
-                new_ticket_id = f'{prefix}{current_num:05d}'
+        try:
+            with transaction.atomic():
+                # Calculate Starting Ticket ID (Critical optimization)
+                date_prefix = timezone.now().strftime('%Y%m')
+                prefix = f'TKT-{date_prefix}-'
                 
-                ticket = Ticket(
-                    ticket_id=new_ticket_id,
-                    registered_by=registered_by,
-                    registered_at=registered_at,
-                    **valid_data
-                )
-                tickets_to_create.append(ticket)
-            
-            # Bulk Insert (1 Query)
-            Ticket.objects.bulk_create(tickets_to_create)
-            
-            # Fetch back or use the objects (Django populates IDs on Postgres, but maybe not others)
-            # Re-fetching is safer if we need the UUIDs, or we can trust they are created.
-            # Since we manually set ticket_id, we know them.
-        
-        # Create Audit Log (Optimized: One log for batch)
-        if tickets_to_create and registered_by:
-            first_ticket = tickets_to_create[0]
-             # Get the actual object from DB to ensure we have the UUID if needed,
-             # though for audit log purely by reference we might need it.
-             # models.Index(fields=['ticket_id']) exists, so fast lookup.
-            try:
-                # Just logging the operation details
-                TicketAuditLog.objects.create(
-                    user=registered_by,
-                    action=TicketAuditLog.ActionType.BULK_UPLOAD,
-                    # We can't easily link to all tickets properly in one ForeignKey
-                    # So we link to the first one as representative or separate logic
-                    ticket=None, # Linking to None or first if retrieved
-                    new_values={
-                        'bulk_count': len(tickets_to_create),
-                        'start_ticket_id': tickets_to_create[0].ticket_id,
-                        'end_ticket_id': tickets_to_create[-1].ticket_id
-                    },
-                    ip_address=self.get_client_ip(),
-                    user_agent=request.META.get('HTTP_USER_AGENT', '')
-                )
-            except Exception as e:
-                print(f"Audit log failed: {e}")
+                # Lock the latest ticket to prevent race conditions
+                last_ticket = Ticket.objects.filter(
+                    ticket_id__startswith=prefix
+                ).select_for_update().order_by('ticket_id').last()
+
+                start_num = 1
+                if last_ticket:
+                    try:
+                        parts = last_ticket.ticket_id.split('-')
+                        if len(parts) >= 3:
+                            start_num = int(parts[-1]) + 1
+                    except (ValueError, IndexError):
+                        pass
+                
+                # Prepare objects
+                for index, valid_data in enumerate(serializer.validated_data):
+                    current_num = start_num + index
+                    new_ticket_id = f'{prefix}{current_num:05d}'
+                    
+                    ticket = Ticket(
+                        ticket_id=new_ticket_id,
+                        registered_by=registered_by,
+                        registered_at=registered_at,
+                        **valid_data
+                    )
+                    tickets_to_create.append(ticket)
+                
+                # Bulk Insert
+                Ticket.objects.bulk_create(tickets_to_create)
+                
+                # Create Audit Log (One log for batch)
+                if tickets_to_create and registered_by:
+                    try:
+                        TicketAuditLog.objects.create(
+                            user=registered_by,
+                            action=TicketAuditLog.ActionType.BULK_UPLOAD,
+                            ticket=None, 
+                            new_values={
+                                'bulk_count': len(tickets_to_create),
+                                'start_ticket_id': tickets_to_create[0].ticket_id,
+                                'end_ticket_id': tickets_to_create[-1].ticket_id
+                            },
+                            ip_address=self.get_client_ip(),
+                            user_agent=request.META.get('HTTP_USER_AGENT', '')
+                        )
+                    except Exception as e:
+                        print(f"Audit log failed: {e}")
+
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to create tickets: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
         # Send Consolidated Email
         if tickets_to_create and coordinator_email:
             try:
-                # We need to pass objects that have context like 'get_category_display' working.
-                # The bulk_created instances behave like normal instances mostly.
                 EmailService.send_bulk_ticket_confirmation(
                     tickets=tickets_to_create,
                     coordinator_name=coordinator_name,
@@ -867,8 +815,6 @@ class TicketViewSet(viewsets.ModelViewSet):
             except Exception as e:
                 print(f"Failed to send bulk confirmation email: {e}")
 
-        # Return Success
-        # We return the list of created tickets. Serializer expects instances.
         return Response({
             'success': True,
             'created_count': len(tickets_to_create),
