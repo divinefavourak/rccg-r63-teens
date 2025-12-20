@@ -4,74 +4,115 @@
     <style>
         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
         .container { max-width: 700px; margin: 0 auto; padding: 20px; }
-        .header { background: linear-gradient(135deg, #8B0000 0%, #B22222 100%); color: white; padding: 25px; text-align: center; border-radius: 10px 10px 0 0; }
-        .header h1 { margin: 0; font-size: 24px; }
-        .header h2 { margin: 10px 0 0; font-size: 16px; font-weight: normal; opacity: 0.9; }
-        .content { padding: 25px; background-color: #f9f9f9; }
-        .summary-box { background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%); color: #333; padding: 20px; border-radius: 10px; text-align: center; margin-bottom: 20px; }
-        .summary-box h3 { margin: 0; font-size: 32px; font-weight: bold; }
-        .summary-box p { margin: 5px 0 0; font-size: 14px; }
-        .category-section { background-color: white; border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin: 15px 0; }
-        .category-section h4 { margin: 0 0 10px; color: #8B0000; border-bottom: 2px solid #FFD700; padding-bottom: 5px; }
-        .ticket-list { margin: 0; padding: 0; list-style: none; }
-        .ticket-list li { padding: 8px 12px; background-color: #f5f5f5; margin: 5px 0; border-radius: 5px; font-family: monospace; font-size: 14px; display: flex; justify-content: space-between; }
-        .ticket-id { font-weight: bold; color: #333; }
-        .ticket-name { color: #666; font-family: Arial, sans-serif; }
-        .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; padding: 20px; background-color: #eee; border-radius: 0 0 10px 10px; }
-        .note { background-color: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 8px; margin-top: 20px; }
-        .note strong { color: #856404; }
+        .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
+        .content { padding: 20px; background-color: #f9f9f9; }
+        .summary-box { background-color: white; border: 1px solid #ddd; padding: 15px; margin: 15px 0; }
+        .ticket-count { font-size: 24px; font-weight: bold; color: #4CAF50; text-align: center; }
+        .category-section { background-color: #f0f8ff; padding: 15px; margin: 10px 0; border-left: 4px solid #4CAF50; }
+        .ticket-list { background-color: white; padding: 10px; margin: 5px 0; border: 1px solid #eee; }
+        .ticket-item { padding: 8px; border-bottom: 1px solid #f0f0f0; }
+        .ticket-item:last-child { border-bottom: none; }
+        .next-steps { background-color: #E8F5E8; padding: 15px; margin: 15px 0; border-left: 4px solid #4CAF50; }
+        .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+        .coordinator-info { background-color: #FFF3E0; padding: 15px; margin: 15px 0; border-left: 4px solid #FF9800; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎉 RCCG R63 Junior Church</h1>
+            <h1>RCCG R63 Teens Event</h1>
             <h2>Bulk Registration Confirmation</h2>
         </div>
         
         <div class="content">
-            <p>Dear <strong>{{ coordinator_name }}</strong>,</p>
+            <p>Dear {{ coordinator_name }},</p>
             
-            <p>Your bulk registration has been received successfully!</p>
+            <p>Thank you for completing the bulk registration for the RCCG Region 63 Teens Event! All registrations have been processed successfully.</p>
             
             <div class="summary-box">
-                <h3>{{ ticket_count }}</h3>
-                <p>Tickets Registered</p>
+                <h3>Registration Summary:</h3>
+                <div class="ticket-count">{{ ticket_count }} Tickets Registered</div>
+                <p><strong>Registration Date:</strong> {{ registered_at|date:"F d, Y H:i" }}</p>
+                <p><strong>Coordinator:</strong> {{ coordinator_name }}</p>
             </div>
-            
-            <p><strong>Registration Date:</strong> {{ registered_at|date:"F d, Y H:i" }}</p>
             
             {% for category, category_tickets in tickets_by_category.items %}
-            <div class="category-section">
-                <h4>{{ category }} ({{ category_tickets|length }})</h4>
-                <ul class="ticket-list">
-                    {% for ticket in category_tickets %}
-                    <li>
-                        <span class="ticket-id">{{ ticket.ticket_id }}</span>
-                        <span class="ticket-name">{{ ticket.full_name }}</span>
-                    </li>
-                    {% endfor %}
-                </ul>
-            </div>
+                <div class="category-section">
+                    <h3>{{ category }} ({{ category_tickets|length }} ticket{{ category_tickets|length|pluralize }})</h3>
+                    <div class="ticket-list">
+                        {% for ticket in category_tickets %}
+                            <div class="ticket-item">
+                                <strong>{{ ticket.ticket_id }}</strong> - {{ ticket.full_name }} ({{ ticket.age }} years)
+                                {% if ticket.gender != 'not_specified' %}
+                                    - {{ ticket.get_gender_display }}
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
             {% endfor %}
             
-            <div class="note">
-                <strong>⚠️ Important:</strong>
+            <div class="coordinator-info">
+                <h3>Coordinator Responsibilities:</h3>
                 <ul>
-                    <li>All tickets are currently <strong>pending approval</strong> by the administrator.</li>
-                    <li>You will receive another email once payment is verified and tickets are approved.</li>
-                    <li>Please save this email for your records as it contains all your ticket IDs.</li>
+                    <li><strong>Payment Processing:</strong> You are responsible for collecting and processing payments for all registered participants</li>
+                    <li><strong>Communication:</strong> Please inform all participants about their registration status and next steps</li>
+                    <li><strong>Documentation:</strong> Keep records of all payments and participant information</li>
+                    <li><strong>Updates:</strong> Notify participants of any event updates or changes</li>
                 </ul>
             </div>
             
-            <p>Thank you for registering your group for the Faith Tribe CAMP event!</p>
+            <div class="next-steps">
+                <h3>Next Steps:</h3>
+                <ul>
+                    <li><strong>Payment Collection:</strong> Collect ₦3,000 from each participant</li>
+                    <li><strong>Bulk Payment:</strong> Make a single payment of ₦{{ ticket_count|mul:3000|floatformat:0 }} for all {{ ticket_count }} tickets</li>
+                    <li><strong>Payment Options:</strong>
+                        <ul>
+                            <li>Online payment via the registration portal</li>
+                            <li>Bank transfer (contact admin for details)</li>
+                            <li>Upload payment receipt for verification</li>
+                        </ul>
+                    </li>
+                    <li><strong>Ticket Distribution:</strong> Once payment is confirmed, download and distribute individual tickets to participants</li>
+                    <li><strong>Event Preparation:</strong> Ensure all participants have their tickets and understand event requirements</li>
+                </ul>
+            </div>
+            
+            <div class="summary-box">
+                <h3>Important Information:</h3>
+                <ul>
+                    <li>All registrations are currently <strong>PENDING APPROVAL</strong></li>
+                    <li>Tickets will be automatically approved upon payment confirmation</li>
+                    <li>Each participant will need their individual ticket for event entry</li>
+                    <li>Keep this email as proof of bulk registration</li>
+                    <li>Contact the admin team if you encounter any issues</li>
+                </ul>
+            </div>
+            
+            <div class="summary-box">
+                <h3>Registered Participants Summary:</h3>
+                {% for ticket in tickets %}
+                    <div style="display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #eee;">
+                        <span><strong>{{ ticket.ticket_id }}</strong></span>
+                        <span>{{ ticket.full_name }}</span>
+                        <span>{{ ticket.get_category_display }}</span>
+                        <span>{{ ticket.age }}yrs</span>
+                    </div>
+                {% endfor %}
+            </div>
+            
+            <p>Thank you for your leadership in organizing this registration. Your efforts help make this event possible for our teens!</p>
+            
+            <p>If you have any questions about the registration process or need assistance, please contact the admin team.</p>
             
             <p>Best regards,<br>
-            <strong>RCCG Region 63 Junior Church Team</strong></p>
+            RCCG R63 Teens Event Team</p>
         </div>
         
         <div class="footer">
             <p>This is an automated email. Please do not reply.</p>
+            <p>For support, contact your regional coordinator or admin team.</p>
             <p>© {% now "Y" %} RCCG Region 63. All rights reserved.</p>
         </div>
     </div>

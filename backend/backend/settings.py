@@ -26,9 +26,9 @@ load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',') if os.getenv('ALLOWED_HOSTS') else ['*']
 
 
 # Application definition
@@ -159,6 +159,15 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# File upload settings
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024   # 10MB
+FILE_UPLOAD_PERMISSIONS = 0o644
+
+# Allowed file types for payment receipts
+ALLOWED_RECEIPT_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png', '.gif']
+MAX_RECEIPT_SIZE = 5 * 1024 * 1024  # 5MB
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -221,14 +230,45 @@ SIMPLE_JWT = {
 # CORS Settings
 CORS_ALLOW_ALL_ORIGINS = True
 
-# Email Settings
-EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
-EMAIL_HOST = os.getenv('EMAIL_HOST', default='smtp.gmail.com')
-EMAIL_PORT = os.getenv('EMAIL_PORT', default=587)
-EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', default=True)
+# Email Settings - Production Ready
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
+
+# Support multiple email providers
+if os.getenv('EMAIL_PROVIDER') == 'sendgrid':
+    EMAIL_HOST = 'smtp.sendgrid.net'
+    EMAIL_PORT = 587
+    EMAIL_USE_TLS = True
+    EMAIL_USE_SSL = False
+elif os.getenv('EMAIL_PROVIDER') == 'mailgun':
+    EMAIL_HOST = 'smtp.mailgun.org'
+    EMAIL_PORT = 587
+    EMAIL_USE_TLS = True
+    EMAIL_USE_SSL = False
+elif os.getenv('EMAIL_PROVIDER') == 'ses':
+    EMAIL_BACKEND = 'django_ses.SESBackend'
+    AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+    AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+    AWS_SES_REGION_NAME = os.getenv('AWS_SES_REGION_NAME', 'us-east-1')
+    AWS_SES_REGION_ENDPOINT = f'email.{AWS_SES_REGION_NAME}.amazonaws.com'
+else:
+    # Default to Gmail/Generic SMTP
+    EMAIL_HOST = os.getenv('EMAIL_HOST', default='smtp.gmail.com')
+    EMAIL_PORT = int(os.getenv('EMAIL_PORT', default=587))
+    EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', default='True').lower() == 'true'
+    EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', default='False').lower() == 'true'
+
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', default='noreply@r63teens.com')
+SERVER_EMAIL = os.getenv('SERVER_EMAIL', default=DEFAULT_FROM_EMAIL)
+EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', default=30))
+EMAIL_SUBJECT_PREFIX = '[R63 Teens] '
+
+# Email validation
+if not EMAIL_HOST_USER and EMAIL_BACKEND == 'django.core.mail.backends.smtp.EmailBackend':
+    import warnings
+    warnings.warn('EMAIL_HOST_USER not set. Email functionality may not work.')
+
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 
 # PayStack payment gateway

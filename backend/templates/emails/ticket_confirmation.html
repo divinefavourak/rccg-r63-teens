@@ -7,33 +7,84 @@
         .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
         .content { padding: 20px; background-color: #f9f9f9; }
         .ticket-info { background-color: white; border: 1px solid #ddd; padding: 15px; margin: 15px 0; }
+        .status-badge { padding: 5px 10px; border-radius: 5px; display: inline-block; font-weight: bold; }
+        .status-pending { background-color: #FFC107; color: #333; }
+        .status-approved { background-color: #4CAF50; color: white; }
+        .status-rejected { background-color: #F44336; color: white; }
         .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+        .next-steps { background-color: #E3F2FD; padding: 15px; margin: 15px 0; border-left: 4px solid #2196F3; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>RCCG R63 Teens Event</h1>
-            <h2>Ticket Registration Confirmation</h2>
+            <h2>Registration Confirmation</h2>
         </div>
         
         <div class="content">
             <p>Dear {{ full_name }},</p>
             
-            <p>Your ticket registration has been received successfully!</p>
+            <p>Thank you for registering for the RCCG Region 63 Teens Event! Your registration has been received successfully.</p>
             
             <div class="ticket-info">
-                <h3>Ticket Details:</h3>
+                <h3>Registration Details:</h3>
                 <p><strong>Ticket ID:</strong> {{ ticket_id }}</p>
-                <p><strong>Full Name:</strong> {{ full_name }}</p>
+                <p><strong>Full Name:</strong> {{ ticket.full_name }}</p>
+                <p><strong>Age:</strong> {{ ticket.age }} years</p>
                 <p><strong>Category:</strong> {{ category }}</p>
+                <p><strong>Gender:</strong> {{ ticket.get_gender_display }}</p>
                 <p><strong>Registration Date:</strong> {{ registered_at|date:"F d, Y H:i" }}</p>
-                <p><strong>Status:</strong> Pending Approval</p>
+                <p><strong>Status:</strong> 
+                    <span class="status-badge {% if ticket.status == 'approved' %}status-approved{% elif ticket.status == 'rejected' %}status-rejected{% else %}status-pending{% endif %}">
+                        {{ ticket.get_status_display }}
+                    </span>
+                </p>
             </div>
             
-            <p>Your ticket is currently pending approval by the administrator. You will receive another email once your ticket is approved.</p>
+            <div class="ticket-info">
+                <h3>Church Information:</h3>
+                <p><strong>Province:</strong> {{ ticket.province }}</p>
+                <p><strong>Zone:</strong> {{ ticket.zone }}</p>
+                <p><strong>Area:</strong> {{ ticket.area }}</p>
+                <p><strong>Parish:</strong> {{ ticket.parish }}</p>
+                {% if ticket.department %}
+                    <p><strong>Department:</strong> {{ ticket.department }}</p>
+                {% endif %}
+            </div>
             
-            <p>Please keep this email for your records.</p>
+            <div class="next-steps">
+                <h3>What's Next?</h3>
+                <ul>
+                    {% if ticket.status == 'pending' %}
+                        <li>Your registration is currently under review</li>
+                        <li>You will receive another email once your registration is approved</li>
+                        <li>Payment instructions will be provided upon approval</li>
+                    {% elif ticket.status == 'approved' %}
+                        <li>Your registration has been approved!</li>
+                        <li>Proceed to make payment to secure your spot</li>
+                        <li>You can download your ticket after payment confirmation</li>
+                    {% elif ticket.status == 'rejected' %}
+                        <li>Unfortunately, your registration was not approved</li>
+                        <li>Please contact your province coordinator for more information</li>
+                    {% endif %}
+                    <li>Keep this email for your records</li>
+                    <li>Contact your province coordinator if you have any questions</li>
+                </ul>
+            </div>
+            
+            <div class="ticket-info">
+                <h3>Emergency Contact Information:</h3>
+                <p><strong>Emergency Contact:</strong> {{ ticket.emergency_contact }}</p>
+                <p><strong>Emergency Phone:</strong> {{ ticket.emergency_phone }}</p>
+                <p><strong>Relationship:</strong> {{ ticket.emergency_relationship }}</p>
+                <p><strong>Parent/Guardian:</strong> {{ ticket.parent_name }}</p>
+                <p><strong>Parent Phone:</strong> {{ ticket.parent_phone }}</p>
+            </div>
+            
+            <p>If you have any questions about your registration, please contact your province coordinator.</p>
+            
+            <p>We look forward to seeing you at the event!</p>
             
             <p>Best regards,<br>
             RCCG R63 Teens Team</p>

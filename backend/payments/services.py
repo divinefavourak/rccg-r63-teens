@@ -4,6 +4,7 @@ from django.conf import settings
 from django.utils import timezone
 from decimal import Decimal
 import uuid
+from django.db.models import Count
 from .models import Payment, TransactionLog
 from tickets.models import Ticket
 
@@ -351,6 +352,14 @@ class PaymentService:
                                 approved_by=None 
                             )
                     
+                    # Send payment confirmation email
+                    try:
+                        from tickets.services import EmailService
+                        EmailService.send_payment_confirmation(payment)
+                    except Exception as e:
+                        # Log email error but don't fail the payment
+                        print(f"Failed to send payment confirmation email: {e}")
+                    
                     return payment
                 else:
                     # Payment failed or abandoned
@@ -397,6 +406,14 @@ class PaymentService:
                                 status=Ticket.Status.APPROVED,
                                 approved_at=timezone.now()
                             )
+                    
+                    # Send payment confirmation email
+                    try:
+                        from tickets.services import EmailService
+                        EmailService.send_payment_confirmation(payment)
+                    except Exception as e:
+                        print(f"Failed to send payment confirmation email: {e}")
+                    
                     return True
                 except Payment.DoesNotExist:
                     pass
