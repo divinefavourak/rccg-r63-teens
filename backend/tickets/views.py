@@ -304,14 +304,23 @@ class TicketViewSet(viewsets.ModelViewSet):
                 user_agent=request.META.get('HTTP_USER_AGENT', '')
             )
             
-            # Send status update email
+            # Send status update email in background thread
             try:
+                import threading
                 if new_status == Ticket.Status.APPROVED:
-                    EmailService.send_ticket_approved(ticket)
+                    threading.Thread(
+                        target=EmailService.send_ticket_approved,
+                        args=(ticket,),
+                        daemon=True
+                    ).start()
                 else:
-                    EmailService.send_status_update(ticket, old_status, new_status)
+                    threading.Thread(
+                        target=EmailService.send_status_update,
+                        args=(ticket, old_status, new_status),
+                        daemon=True
+                    ).start()
             except Exception as e:
-                print(f"Failed to send status update email: {e}")
+                print(f"Failed to queue status update email: {e}")
             
             return Response(TicketSerializer(ticket).data)
         
@@ -647,9 +656,14 @@ class TicketViewSet(viewsets.ModelViewSet):
                             }
                         updated_tickets_by_coordinator[ticket.parent_email]['tickets'].append(ticket)
                     else:
-                        # Send individual email if no coordinator
+                        # Send individual email if no coordinator (in background)
                         try:
-                            EmailService.send_ticket_approved(ticket)
+                            import threading
+                            threading.Thread(
+                                target=EmailService.send_ticket_approved,
+                                args=(ticket,),
+                                daemon=True
+                            ).start()
                         except Exception as e:
                             print(f"Email failed: {e}")
                         
@@ -668,29 +682,57 @@ class TicketViewSet(viewsets.ModelViewSet):
                         updated_tickets_by_coordinator[ticket.parent_email]['tickets'].append(ticket)
                     else:
                         try:
-                            EmailService.send_status_update(ticket, old_status, Ticket.Status.REJECTED)
+                            import threading
+                            threading.Thread(
+                                target=EmailService.send_status_update,
+                                args=(ticket, old_status, Ticket.Status.REJECTED),
+                                daemon=True
+                            ).start()
                         except Exception as e:
                             print(f"Email failed: {e}")
                     
                 elif action == 'send_email':
-                    EmailService.send_custom_email(ticket, subject, message)
+                    try:
+                        import threading
+                        threading.Thread(
+                            target=EmailService.send_custom_email,
+                            args=(ticket, subject, message),
+                            daemon=True
+                        ).start()
+                    except Exception as e:
+                        print(f"Email failed: {e}")
                 
                 # Template-based email actions (Still sent individually as they are personalized content)
                 elif action == 'welcome_email':
                     try:
-                        EmailService.send_welcome_email(ticket)
+                        import threading
+                        threading.Thread(
+                            target=EmailService.send_welcome_email,
+                            args=(ticket,),
+                            daemon=True
+                        ).start()
                     except Exception as e:
                         print(f"Welcome email failed: {e}")
                 
                 elif action == 'payment_reminder':
                     try:
-                        EmailService.send_payment_reminder(ticket)
+                        import threading
+                        threading.Thread(
+                            target=EmailService.send_payment_reminder,
+                            args=(ticket,),
+                            daemon=True
+                        ).start()
                     except Exception as e:
                         print(f"Payment reminder failed: {e}")
                 
                 elif action == 'final_instructions':
                     try:
-                        EmailService.send_final_instructions(ticket)
+                        import threading
+                        threading.Thread(
+                            target=EmailService.send_final_instructions,
+                            args=(ticket,),
+                            daemon=True
+                        ).start()
                     except Exception as e:
                         print(f"Final instructions email failed: {e}")
                     
@@ -702,16 +744,16 @@ class TicketViewSet(viewsets.ModelViewSet):
             except Exception as e:
                 results['failed'].append({'id': str(ticket.id), 'error': str(e)})
         
-        # Send batch emails for coordinators
+        # Send batch emails for coordinators (in background)
         for email, data in updated_tickets_by_coordinator.items():
             try:
                 if action in ['approve', 'reject']:
-                    EmailService.send_batch_status_update(
-                        tickets=data['tickets'],
-                        status=action,
-                        coordinator_name=data['name'],
-                        coordinator_email=email
-                    )
+                    import threading
+                    threading.Thread(
+                        target=EmailService.send_batch_status_update,
+                        args=(data['tickets'], action, data['name'], email),
+                        daemon=True
+                    ).start()
             except Exception as e:
                 print(f"Batch email to {email} failed: {e}")
         
@@ -813,16 +855,17 @@ class TicketViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-        # Send Consolidated Email
+        # Send Consolidated Email (in background)
         if tickets_to_create and coordinator_email:
             try:
-                EmailService.send_bulk_ticket_confirmation(
-                    tickets=tickets_to_create,
-                    coordinator_name=coordinator_name,
-                    coordinator_email=coordinator_email
-                )
+                import threading
+                threading.Thread(
+                    target=EmailService.send_bulk_ticket_confirmation,
+                    args=(tickets_to_create, coordinator_name, coordinator_email),
+                    daemon=True
+                ).start()
             except Exception as e:
-                print(f"Failed to send bulk confirmation email: {e}")
+                print(f"Failed to queue bulk confirmation email: {e}")
 
         return Response({
             'success': True,
@@ -870,21 +913,22 @@ class TicketViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Send the bulk confirmation email
+        # Send the bulk confirmation email (in background)
         try:
-            EmailService.send_bulk_ticket_confirmation(
-                tickets=list(tickets),
-                coordinator_name=coordinator_name,
-                coordinator_email=coordinator_email
-            )
+            import threading
+            threading.Thread(
+                target=EmailService.send_bulk_ticket_confirmation,
+                args=(list(tickets), coordinator_name, coordinator_email),
+                daemon=True
+            ).start()
             return Response({
                 'success': True,
-                'message': f'Bulk confirmation email sent to {coordinator_email}',
+                'message': f'Bulk confirmation email queued for {coordinator_email}',
                 'ticket_count': tickets.count()
             })
         except Exception as e:
             return Response(
-                {'error': f'Failed to send email: {str(e)}'},
+                {'error': f'Failed to queue email: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
