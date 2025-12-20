@@ -61,14 +61,163 @@ class QRCodeService:
     
 #  EMAIL SERVICE
     
-from django.core.mail import send_mail
+#  EMAIL SERVICE
+    
+from django.core.mail import send_mail, EmailMultiAlternatives
 from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class EmailService:
-    """Service for sending emails"""
+    """Service for sending emails via Brevo"""
+    
+    @staticmethod
+    def _send_email_safely(subject, html_content, recipients, fail_silently=True):
+        """
+        Helper method to send emails with proper error handling
+        
+        Args:
+            subject: Email subject
+            html_content: HTML email content
+            recipients: List of recipient emails
+            fail_silently: Whether to suppress errors
+        
+        Returns:
+            bool: True if sent successfully, False otherwise
+        """
+        try:
+            plain_message = strip_tags(html_content)
+            
+            msg = EmailMultiAlternatives(
+                subject=subject,
+                body=plain_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=recipients
+            )
+            msg.attach_alternative(html_content, "text/html")
+            msg.send(fail_silently=fail_silently)
+            
+            logger.info(f"Email sent successfully: {subject} to {recipients}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to send email '{subject}' to {recipients}: {str(e)}")
+            if not fail_silently:
+                raise
+            return False
+    
+    @staticmethod
+    def send_ticket_approved(ticket):
+        """Send ticket approval email with QR code and premium design"""
+        subject = f"🎉 You're Approved! RCCG R63 December Campout - {ticket.ticket_id}"
+        
+        # Get QR code as base64
+        qr_code_base64 = None
+        try:
+            from .qr_service import QRCodeService  # Import here to avoid circular imports
+            qr_code_base64 = QRCodeService.get_qr_code_base64(ticket)
+        except Exception as e:
+            logger.error(f"Failed to generate QR code for ticket {ticket.ticket_id}: {e}")
+        
+        # Use FRONTEND_URL from settings, with reliable production fallback
+        frontend_url = getattr(settings, 'FRONTEND_URL', None) or 'https://rccg-r63-juniorchurch.vercel.app'
+        
+        context = {
+            'ticket': ticket,
+            'full_name': ticket.full_name,
+            'ticket_id': ticket.ticket_id,
+            'category': ticket.get_category_display(),
+            'qr_code_base64': qr_code_base64,
+            'frontend_url': frontend_url,
+            'logo_url': 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/logo.jpg',
+            'faith_logo_url': 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/faith_logo.jpg',
+        }
+        
+        html_message = render_to_string('emails/ticket_approved.html', context)
+        
+        # Build recipient list
+        recipients = [ticket.email]
+        if ticket.parent_email and ticket.parent_email != ticket.email:
+            recipients.append(ticket.parent_email)
+        
+        return EmailService._send_email_safely(subject, html_message, recipients)
+    
+    @staticmethod
+    def send_payment_reminder(ticket):
+        """Send payment reminder email with upload instructions"""
+        subject = f"⏰ Payment Reminder - R63 December Campout - {ticket.ticket_id}"
+        
+        frontend_url = getattr(settings, 'FRONTEND_URL', None) or 'https://rccg-r63-juniorchurch.vercel.app'
+        
+        context = {
+            'ticket': ticket,
+            'full_name': ticket.full_name,
+            'ticket_id': ticket.ticket_id,
+            'frontend_url': frontend_url,
+            'logo_url': 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/logo.jpg',
+            'faith_logo_url': 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/faith_logo.jpg',
+        }
+        
+        html_message = render_to_string('emails/payment_reminder.html', context)
+        
+        recipients = [ticket.email]
+        if ticket.parent_email and ticket.parent_email != ticket.email:
+            recipients.append(ticket.parent_email)
+        
+        return EmailService._send_email_safely(subject, html_message, recipients)
+    
+    @staticmethod
+    def send_welcome_email(ticket):
+        """Send welcome email with event details"""
+        subject = f"🎄 Welcome to R63 December Campout - THE PRICELESS GIFT!"
+        
+        frontend_url = getattr(settings, 'FRONTEND_URL', None) or 'https://rccg-r63-juniorchurch.vercel.app'
+        
+        context = {
+            'ticket': ticket,
+            'full_name': ticket.full_name,
+            'ticket_id': ticket.ticket_id,
+            'frontend_url': frontend_url,
+            'logo_url': 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/logo.jpg',
+            'faith_logo_url': 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/faith_logo.jpg',
+        }
+        
+        html_message = render_to_string('emails/welcome_email.html', context)
+        
+        recipients = [ticket.email]
+        if ticket.parent_email and ticket.parent_email != ticket.email:
+            recipients.append(ticket.parent_email)
+        
+        return EmailService._send_email_safely(subject, html_message, recipients)
+    
+    @staticmethod
+    def send_final_instructions(ticket, event_location="Redemption City"):
+        """Send final instructions email before the event"""
+        subject = f"📋 Final Instructions - R63 December Campout"
+        
+        frontend_url = getattr(settings, 'FRONTEND_URL', None) or 'https://rccg-r63-juniorchurch.vercel.app'
+        
+        context = {
+            'ticket': ticket,
+            'full_name': ticket.full_name,
+            'ticket_id': ticket.ticket_id,
+            'event_location': event_location,
+            'frontend_url': frontend_url,
+            'logo_url': 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/logo.jpg',
+            'faith_logo_url': 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/faith_logo.jpg',
+        }
+        
+        html_message = render_to_string('emails/final_instructions.html', context)
+        
+        recipients = [ticket.email]
+        if ticket.parent_email and ticket.parent_email != ticket.email:
+            recipients.append(ticket.parent_email)
+        
+        return EmailService._send_email_safely(subject, html_message, recipients)
     
     @staticmethod
     def send_ticket_confirmation(ticket):
@@ -84,17 +233,36 @@ class EmailService:
         }
         
         html_message = render_to_string('emails/ticket_confirmation.html', context)
-        plain_message = strip_tags(html_message)
         
-        send_mail(
-            subject=subject,
-            message=plain_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[ticket.email, ticket.parent_email],
-            html_message=html_message,
-            fail_silently=False,
-        )
+        recipients = [ticket.email]
+        if ticket.parent_email and ticket.parent_email != ticket.email:
+            recipients.append(ticket.parent_email)
+        
+        return EmailService._send_email_safely(subject, html_message, recipients)
     
+    @staticmethod
+    def send_batch_status_update(tickets, status, coordinator_name=None, coordinator_email=None):
+        """
+        Send a consolidated status update for multiple tickets.
+        Only sends to coordinator/parent email.
+        """
+        if not tickets or not coordinator_email:
+            logger.warning("Cannot send batch status update: missing tickets or coordinator email")
+            return False
+            
+        subject = f"RCCG R63 Teens - Batch Status Update: {status.upper()}"
+        
+        context = {
+            'tickets': tickets,
+            'status': status,
+            'coordinator_name': coordinator_name or 'Coordinator',
+            'ticket_count': len(tickets)
+        }
+        
+        html_message = render_to_string('emails/batch_status_update.html', context)
+        
+        return EmailService._send_email_safely(subject, html_message, [coordinator_email])
+
     @staticmethod
     def send_bulk_ticket_confirmation(tickets, coordinator_name, coordinator_email):
         """
@@ -107,7 +275,8 @@ class EmailService:
             coordinator_email: Email of the coordinator
         """
         if not tickets or not coordinator_email:
-            return
+            logger.warning("Cannot send bulk ticket confirmation: missing tickets or coordinator email")
+            return False
         
         ticket_count = len(tickets)
         subject = f"RCCG R63 Teens - Bulk Registration Confirmation ({ticket_count} Tickets)"
@@ -129,16 +298,8 @@ class EmailService:
         }
         
         html_message = render_to_string('emails/bulk_ticket_confirmation.html', context)
-        plain_message = strip_tags(html_message)
         
-        send_mail(
-            subject=subject,
-            message=plain_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[coordinator_email],
-            html_message=html_message,
-            fail_silently=False,
-        )
+        return EmailService._send_email_safely(subject, html_message, [coordinator_email])
     
     @staticmethod
     def send_payment_confirmation(payment):
@@ -153,16 +314,8 @@ class EmailService:
         }
         
         html_message = render_to_string('emails/payment_confirmation.html', context)
-        plain_message = strip_tags(html_message)
         
-        send_mail(
-            subject=subject,
-            message=plain_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[payment.payer_email],
-            html_message=html_message,
-            fail_silently=False,
-        )
+        return EmailService._send_email_safely(subject, html_message, [payment.payer_email])
     
     @staticmethod
     def send_status_update(ticket, old_status, new_status):
@@ -178,30 +331,34 @@ class EmailService:
         }
         
         html_message = render_to_string('emails/status_update.html', context)
-        plain_message = strip_tags(html_message)
         
-        send_mail(
-            subject=subject,
-            message=plain_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[ticket.email, ticket.parent_email],
-            html_message=html_message,
-            fail_silently=False,
-        )
+        recipients = [ticket.email]
+        if ticket.parent_email and ticket.parent_email != ticket.email:
+            recipients.append(ticket.parent_email)
+        
+        return EmailService._send_email_safely(subject, html_message, recipients)
     
     @staticmethod
     def send_custom_email(ticket, subject, message_content):
         """Send custom email to ticket holder with personalization"""
-        # Personalize the message with recipient's name
-        personalized_message = f"Dear {ticket.full_name},\n\n{message_content}\n\nBest regards,\nRCCG Region 63 Junior Church Team"
+        # Create HTML version
+        html_content = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <p>Dear {ticket.full_name},</p>
+            <div style="margin: 20px 0;">
+                {message_content.replace('\n', '<br>')}
+            </div>
+            <p>Best regards,<br>RCCG Region 63 Junior Church Team</p>
+        </body>
+        </html>
+        """
         
-        send_mail(
-            subject=subject,
-            message=personalized_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[ticket.email],
-            fail_silently=False,
-        )
+        recipients = [ticket.email]
+        if ticket.parent_email and ticket.parent_email != ticket.email:
+            recipients.append(ticket.parent_email)
+
+        return EmailService._send_email_safely(subject, html_content, recipients)
         
 # PDF SERVICE
         

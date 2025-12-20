@@ -2,9 +2,14 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
+import axios from 'axios';
 import { FaUpload, FaFileInvoice, FaCheckCircle } from 'react-icons/fa';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import { ticketService } from '../services/ticketService';
+
+// Get API URL from environment variables, fallback to the render URL if missing
+const API_URL = import.meta.env.VITE_API_URL || 'https://rccg-r63-teens-backend.onrender.com/api';
 
 const UploadPayment = () => {
     const navigate = useNavigate();
@@ -42,36 +47,42 @@ const UploadPayment = () => {
         setUploading(true);
 
         try {
+            // Step 1: Verify/find the ticket to get its UUID
+            const ticket = await ticketService.verifyTicket(ticketId.trim());
+
+            if (!ticket || !ticket.id) {
+                toast.error('Ticket not found. Please check the ticket ID and try again.');
+                setUploading(false);
+                return;
+            }
+
+            // Step 2: Upload using the same endpoint as PaymentPage (by UUID)
             const formData = new FormData();
-            formData.append('ticket_id', ticketId.trim());
             formData.append('proof_of_payment', selectedFile);
 
-            const response = await fetch(
-                `${import.meta.env.VITE_API_URL || 'https://rccg-r63-teens-backend.onrender.com/api'}/tickets/upload_proof_by_ticket_id/`,
-                {
-                    method: 'POST',
-                    body: formData,
-                }
-            );
+            await axios.post(`${API_URL}/tickets/${ticket.id}/upload_proof/`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
 
-            if (response.ok) {
-                toast.success('✅ Payment proof uploaded successfully! Awaiting verification.');
+            toast.success('✅ Payment proof uploaded successfully! Awaiting verification.');
 
-                // Reset form
-                setTicketId('');
-                setSelectedFile(null);
+            // Reset form
+            const savedTicketId = ticketId.trim();
+            setTicketId('');
+            setSelectedFile(null);
 
-                // Navigate to ticket preview after 2 seconds
-                setTimeout(() => {
-                    navigate(`/ticket-preview?ticket_id=${ticketId.trim()}`);
-                }, 2000);
-            } else {
-                const error = await response.json();
-                toast.error(error.error || 'Failed to upload payment proof');
-            }
-        } catch (error) {
+            // Navigate to ticket preview after 2 seconds
+            setTimeout(() => {
+                navigate(`/ticket-preview?ticket_id=${savedTicketId}`);
+            }, 2000);
+
+        } catch (error: any) {
             console.error('Upload error:', error);
-            toast.error('Failed to upload payment proof. Please try again.');
+            if (error.response?.status === 404) {
+                toast.error('Ticket not found. Please check the ticket ID.');
+            } else {
+                toast.error(error.response?.data?.detail || error.response?.data?.error || 'Failed to upload payment proof. Please try again.');
+            }
         } finally {
             setUploading(false);
         }
@@ -168,8 +179,8 @@ const UploadPayment = () => {
                                 type="submit"
                                 disabled={!ticketId.trim() || !selectedFile || uploading}
                                 className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all transform hover:scale-105 ${!ticketId.trim() || !selectedFile || uploading
-                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed scale-100'
-                                        : 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white shadow-lg hover:shadow-xl'
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed scale-100'
+                                    : 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white shadow-lg hover:shadow-xl'
                                     }`}
                             >
                                 {uploading ? (

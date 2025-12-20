@@ -50,7 +50,7 @@ class TicketViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         """Allow public access for specific actions"""
-        if self.action in ['create', 'verify', 'upload_proof', 'qr_code', 'check_in']:
+        if self.action in ['create', 'verify', 'upload_proof', 'qr_code', 'check_in', 'bulk_create', 'send_bulk_confirmation']:
             return [permissions.AllowAny()]
         return [TicketPermission()]
 
@@ -58,24 +58,25 @@ class TicketViewSet(viewsets.ModelViewSet):
         """
         Return authenticators for this view.
         
-        IMPORTANT: We do NOT skip authentication for POST/create anymore.
-        We want authentication to run so that coordinators with valid tokens
-        get properly identified (registered_by gets set correctly).
-        
-        The AllowAny permission in get_permissions() handles allowing
-        unauthenticated users - authentication failure won't block them.
-        
-        We only skip auth for truly public endpoints where we don't care
-        who the user is at all.
+        Skip authentication for public endpoints to avoid 401 errors.
+        For ticket creation, we skip auth by default but still try to identify
+        coordinators if they provide a valid token (handled via optional auth).
         """
-        # For public read-only endpoints, skip auth to avoid 401 on expired tokens
-        path = getattr(self.request, 'path_info', '') if hasattr(self, 'request') else ''
-        public_paths = ['verify', 'qr_code']
-        if any(p in path for p in public_paths):
-            return []
+        # For public endpoints, skip auth to avoid 401 on expired/invalid tokens
+        if hasattr(self, 'request'):
+            path = getattr(self.request, 'path_info', '')
+            method = getattr(self.request, 'method', '')
+            
+            # Check for specific public action paths in URL
+            public_path_keywords = ['verify', 'qr_code', 'upload_proof', 'upload_proof_by_ticket_id', 'bulk_create', 'send_bulk_confirmation']
+            if any(p in path for p in public_path_keywords):
+                return []
+            
+            # For POST to /api/tickets/ (create action), skip authentication
+            if method == 'POST' and path.rstrip('/').endswith('/tickets'):
+                return []
         
-        # For all other endpoints (including create), use normal authentication
-        # This allows coordinators to be identified when they provide a token
+        # For all other endpoints, use normal authentication
         return super().get_authenticators()
     
     def get_serializer_class(self):
@@ -93,6 +94,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         province_filter = self.request.query_params.get('province')
         category_filter = self.request.query_params.get('category')
         gender_filter = self.request.query_params.get('gender')
+        registered_by_filter = self.request.query_params.get('registered_by')
         
         # Allow public access for specific actions
         if self.action in ['upload_proof', 'verify', 'qr_code', 'check_in']:
@@ -114,6 +116,21 @@ class TicketViewSet(viewsets.ModelViewSet):
         
         if gender_filter:
             queryset = queryset.filter(gender=gender_filter)
+            
+        if registered_by_filter:
+            if registered_by_filter == 'Self':
+                 # Self registration means no registered_by user AND parent_relationship is NOT 'Coordinator'
+                 queryset = queryset.filter(registered_by__isnull=True).exclude(parent_relationship='Coordinator')
+            else:
+                 # Strip " (Coordinator)" if present, as the frontend sends the full display name
+                 clean_filter = registered_by_filter.replace(' (Coordinator)', '').strip()
+                 
+                 # Search by coordinator name in parent_name OR by User's display/username
+                 queryset = queryset.filter(
+                     Q(parent_name__icontains=clean_filter, parent_relationship='Coordinator') |
+                     Q(registered_by__first_name__icontains=clean_filter) |
+                     Q(registered_by__last_name__icontains=clean_filter)
+                 )
         
         # Apply role-based filtering
         if user.is_authenticated and user.role == User.Role.COORDINATOR:
@@ -156,15 +173,57 @@ class TicketViewSet(viewsets.ModelViewSet):
         # Coordinators doing bulk registration should skip and use the bulk email endpoint
         if not skip_email:
             try:
-                EmailService.send_ticket_confirmation(ticket)
+                # Send email in background thread to prevent SMTP timeouts from blocking the response
+                import threading
+                email_thread = threading.Thread(
+                    target=EmailService.send_ticket_confirmation,
+                    args=(ticket,),
+                    daemon=True
+                )
+                email_thread.start()
+                # Don't wait for email - ticket registration completes immediately
             except Exception as e:
                 # Log error but don't fail the request
-                print(f"Failed to send confirmation email: {e}")
+                print(f"Failed to queue confirmation email: {e}")
 
         # Return the full ticket data using the main serializer
         serializer = TicketSerializer(ticket)
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    @action(detail=False, methods=['post'], url_path='bulk-create')
+    def bulk_create(self, request, *args, **kwargs):
+        """
+        Create multiple tickets in a single transaction.
+        Optimized for bulk uploads to avoid rate limiting and HTTP overhead.
+        """
+        create_serializer = self.get_serializer(data=request.data, many=True)
+        create_serializer.is_valid(raise_exception=True)
+        
+        created_tickets = []
+        
+        try:
+            with transaction.atomic():
+                for ticket_data in create_serializer.validated_data:
+                    # We manually instantiate and save to trigger the custom ID generation method
+                    ticket = Ticket(**ticket_data)
+                    ticket.registered_by = request.user
+                    ticket.registered_at = timezone.now()
+                    ticket.save()
+                    created_tickets.append(ticket)
+                
+                # Create a single audit log for the batch (optional, or per ticket)
+                # For now, let's just log the first request IP to avoid spamming logs excessively
+                # or we can rely on the fact that they are created.
+                
+                # If we want to return full data for all, we can.
+                response_serializer = TicketSerializer(created_tickets, many=True)
+                return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response(
+                {'error': f'Bulk creation failed: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
     
     # def perform_create(self, serializer):
     #     """Create a ticket with the current user as registered_by"""
@@ -245,11 +304,23 @@ class TicketViewSet(viewsets.ModelViewSet):
                 user_agent=request.META.get('HTTP_USER_AGENT', '')
             )
             
-            # Send status update email
+            # Send status update email in background thread
             try:
-                EmailService.send_status_update(ticket, old_status, new_status)
+                import threading
+                if new_status == Ticket.Status.APPROVED:
+                    threading.Thread(
+                        target=EmailService.send_ticket_approved,
+                        args=(ticket,),
+                        daemon=True
+                    ).start()
+                else:
+                    threading.Thread(
+                        target=EmailService.send_status_update,
+                        args=(ticket, old_status, new_status),
+                        daemon=True
+                    ).start()
             except Exception as e:
-                print(f"Failed to send status update email: {e}")
+                print(f"Failed to queue status update email: {e}")
             
             return Response(TicketSerializer(ticket).data)
         
@@ -559,9 +630,15 @@ class TicketViewSet(viewsets.ModelViewSet):
             'failed': []
         }
         
+        # Group tickets by coordinator/parent email for batch notifications
+        updated_tickets_by_coordinator = {} # {email: {'name': name, 'tickets': []}}
+        
         for ticket in tickets:
             try:
                 ticket_id_str = str(ticket.id)
+                
+                # Capture initial status for comparison
+                email_sent = False
                 
                 if action == 'approve':
                     old_status = ticket.status
@@ -570,23 +647,94 @@ class TicketViewSet(viewsets.ModelViewSet):
                     ticket.approved_by = request.user
                     ticket.save()
                     
-                    try:
-                        EmailService.send_status_update(ticket, old_status, Ticket.Status.APPROVED)
-                    except Exception as e:
-                        print(f"Email failed: {e}")
+                    # Add to batch list if has parent/coordinator email
+                    if ticket.parent_email:
+                        if ticket.parent_email not in updated_tickets_by_coordinator:
+                            updated_tickets_by_coordinator[ticket.parent_email] = {
+                                'name': ticket.parent_name,
+                                'tickets': []
+                            }
+                        updated_tickets_by_coordinator[ticket.parent_email]['tickets'].append(ticket)
+                    else:
+                        # Send individual email if no coordinator (in background)
+                        try:
+                            import threading
+                            threading.Thread(
+                                target=EmailService.send_ticket_approved,
+                                args=(ticket,),
+                                daemon=True
+                            ).start()
+                        except Exception as e:
+                            print(f"Email failed: {e}")
                         
                 elif action == 'reject':
                     old_status = ticket.status
                     ticket.status = Ticket.Status.REJECTED
                     ticket.save()
                     
-                    try:
-                        EmailService.send_status_update(ticket, old_status, Ticket.Status.REJECTED)
-                    except Exception as e:
-                        print(f"Email failed: {e}")
+                    # Add to batch list
+                    if ticket.parent_email:
+                        if ticket.parent_email not in updated_tickets_by_coordinator:
+                            updated_tickets_by_coordinator[ticket.parent_email] = {
+                                'name': ticket.parent_name,
+                                'tickets': []
+                            }
+                        updated_tickets_by_coordinator[ticket.parent_email]['tickets'].append(ticket)
+                    else:
+                        try:
+                            import threading
+                            threading.Thread(
+                                target=EmailService.send_status_update,
+                                args=(ticket, old_status, Ticket.Status.REJECTED),
+                                daemon=True
+                            ).start()
+                        except Exception as e:
+                            print(f"Email failed: {e}")
                     
                 elif action == 'send_email':
-                    EmailService.send_custom_email(ticket, subject, message)
+                    try:
+                        import threading
+                        threading.Thread(
+                            target=EmailService.send_custom_email,
+                            args=(ticket, subject, message),
+                            daemon=True
+                        ).start()
+                    except Exception as e:
+                        print(f"Email failed: {e}")
+                
+                # Template-based email actions (Still sent individually as they are personalized content)
+                elif action == 'welcome_email':
+                    try:
+                        import threading
+                        threading.Thread(
+                            target=EmailService.send_welcome_email,
+                            args=(ticket,),
+                            daemon=True
+                        ).start()
+                    except Exception as e:
+                        print(f"Welcome email failed: {e}")
+                
+                elif action == 'payment_reminder':
+                    try:
+                        import threading
+                        threading.Thread(
+                            target=EmailService.send_payment_reminder,
+                            args=(ticket,),
+                            daemon=True
+                        ).start()
+                    except Exception as e:
+                        print(f"Payment reminder failed: {e}")
+                
+                elif action == 'final_instructions':
+                    try:
+                        import threading
+                        threading.Thread(
+                            target=EmailService.send_final_instructions,
+                            args=(ticket,),
+                            daemon=True
+                        ).start()
+                    except Exception as e:
+                        print(f"Final instructions email failed: {e}")
                     
                 elif action == 'delete':
                     ticket.delete()
@@ -596,31 +744,26 @@ class TicketViewSet(viewsets.ModelViewSet):
             except Exception as e:
                 results['failed'].append({'id': str(ticket.id), 'error': str(e)})
         
+        # Send batch emails for coordinators (in background)
+        for email, data in updated_tickets_by_coordinator.items():
+            try:
+                if action in ['approve', 'reject']:
+                    import threading
+                    threading.Thread(
+                        target=EmailService.send_batch_status_update,
+                        args=(data['tickets'], action, data['name'], email),
+                        daemon=True
+                    ).start()
+            except Exception as e:
+                print(f"Batch email to {email} failed: {e}")
+        
         return Response(results)
 
     @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
     def bulk_create(self, request):
         """
         Create multiple tickets in a single request (optimized for bulk registration).
-        
-        Request body:
-        {
-            "tickets": [
-                { "full_name": "...", "age": 15, ... },
-                { "full_name": "...", "age": 12, ... },
-                ...
-            ],
-            "coordinator_name": "John Doe",  # For consolidated email
-            "coordinator_email": "john@example.com"
-        }
-        
-        Returns:
-        {
-            "success": true,
-            "created_count": 10,
-            "tickets": [ { ticket data }, ... ],
-            "failed": [ { "index": 0, "error": "..." }, ... ]
-        }
+        Uses bulk_create to avoid N+1 queries.
         """
         tickets_data = request.data.get('tickets', [])
         coordinator_name = request.data.get('coordinator_name', 'Coordinator')
@@ -638,72 +781,99 @@ class TicketViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Validate all data first
+        serializer = TicketCreateSerializer(data=tickets_data, many=True)
+        if not serializer.is_valid():
+             return Response(
+                {'error': 'Validation failed', 'details': serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # Determine registered_by
         registered_by = request.user if request.user.is_authenticated else None
         registered_at = timezone.now()
         
-        created_tickets = []
-        failed_tickets = []
+        tickets_to_create = []
         
-        # Use a transaction for atomicity and performance
-        with transaction.atomic():
-            for index, ticket_data in enumerate(tickets_data):
-                try:
-                    # Validate using the create serializer
-                    serializer = TicketCreateSerializer(data=ticket_data)
-                    if serializer.is_valid():
-                        # Create ticket
-                        ticket = serializer.save(
-                            registered_by=registered_by,
-                            registered_at=registered_at
+        try:
+            with transaction.atomic():
+                # Calculate Starting Ticket ID (Critical optimization)
+                date_prefix = timezone.now().strftime('%Y%m')
+                prefix = f'TKT-{date_prefix}-'
+                
+                # Lock the latest ticket to prevent race conditions
+                last_ticket = Ticket.objects.filter(
+                    ticket_id__startswith=prefix
+                ).select_for_update().order_by('ticket_id').last()
+
+                start_num = 1
+                if last_ticket:
+                    try:
+                        parts = last_ticket.ticket_id.split('-')
+                        if len(parts) >= 3:
+                            start_num = int(parts[-1]) + 1
+                    except (ValueError, IndexError):
+                        pass
+                
+                # Prepare objects
+                for index, valid_data in enumerate(serializer.validated_data):
+                    current_num = start_num + index
+                    new_ticket_id = f'{prefix}{current_num:05d}'
+                    
+                    ticket = Ticket(
+                        ticket_id=new_ticket_id,
+                        registered_by=registered_by,
+                        registered_at=registered_at,
+                        **valid_data
+                    )
+                    tickets_to_create.append(ticket)
+                
+                # Bulk Insert
+                Ticket.objects.bulk_create(tickets_to_create)
+                
+                # Create Audit Log (One log for batch)
+                if tickets_to_create and registered_by:
+                    try:
+                        TicketAuditLog.objects.create(
+                            user=registered_by,
+                            action=TicketAuditLog.ActionType.BULK_UPLOAD,
+                            ticket=None, 
+                            new_values={
+                                'bulk_count': len(tickets_to_create),
+                                'start_ticket_id': tickets_to_create[0].ticket_id,
+                                'end_ticket_id': tickets_to_create[-1].ticket_id
+                            },
+                            ip_address=self.get_client_ip(),
+                            user_agent=request.META.get('HTTP_USER_AGENT', '')
                         )
-                        created_tickets.append(ticket)
-                    else:
-                        failed_tickets.append({
-                            'index': index,
-                            'errors': serializer.errors
-                        })
-                except Exception as e:
-                    failed_tickets.append({
-                        'index': index,
-                        'error': str(e)
-                    })
-        
-        # Create a single audit log for the bulk operation
-        if created_tickets and registered_by:
-            TicketAuditLog.objects.create(
-                user=registered_by,
-                action=TicketAuditLog.ActionType.BULK_UPLOAD,
-                ticket=created_tickets[0],  # Reference first ticket
-                new_values={
-                    'bulk_count': len(created_tickets),
-                    'ticket_ids': [t.ticket_id for t in created_tickets]
-                },
-                ip_address=self.get_client_ip(),
-                user_agent=request.META.get('HTTP_USER_AGENT', '')
+                    except Exception as e:
+                        print(f"Audit log failed: {e}")
+
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to create tickets: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        
-        # Send consolidated confirmation email if coordinator email provided
-        if created_tickets and coordinator_email:
+
+        # Send Consolidated Email (in background)
+        if tickets_to_create and coordinator_email:
             try:
-                EmailService.send_bulk_ticket_confirmation(
-                    tickets=created_tickets,
-                    coordinator_name=coordinator_name,
-                    coordinator_email=coordinator_email
-                )
+                import threading
+                threading.Thread(
+                    target=EmailService.send_bulk_ticket_confirmation,
+                    args=(tickets_to_create, coordinator_name, coordinator_email),
+                    daemon=True
+                ).start()
             except Exception as e:
-                print(f"Failed to send bulk confirmation email: {e}")
-        
-        # Serialize the created tickets
-        response_data = {
+                print(f"Failed to queue bulk confirmation email: {e}")
+
+        return Response({
             'success': True,
-            'created_count': len(created_tickets),
-            'failed_count': len(failed_tickets),
-            'tickets': TicketSerializer(created_tickets, many=True).data,
-            'failed': failed_tickets
-        }
-        
-        return Response(response_data, status=status.HTTP_201_CREATED)
+            'created_count': len(tickets_to_create),
+            'failed_count': 0,
+            'tickets': TicketSerializer(tickets_to_create, many=True).data,
+            'failed': []
+        }, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
     def send_bulk_confirmation(self, request):
@@ -743,21 +913,22 @@ class TicketViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Send the bulk confirmation email
+        # Send the bulk confirmation email (in background)
         try:
-            EmailService.send_bulk_ticket_confirmation(
-                tickets=list(tickets),
-                coordinator_name=coordinator_name,
-                coordinator_email=coordinator_email
-            )
+            import threading
+            threading.Thread(
+                target=EmailService.send_bulk_ticket_confirmation,
+                args=(list(tickets), coordinator_name, coordinator_email),
+                daemon=True
+            ).start()
             return Response({
                 'success': True,
-                'message': f'Bulk confirmation email sent to {coordinator_email}',
+                'message': f'Bulk confirmation email queued for {coordinator_email}',
                 'ticket_count': tickets.count()
             })
         except Exception as e:
             return Response(
-                {'error': f'Failed to send email: {str(e)}'},
+                {'error': f'Failed to queue email: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to December Campout!</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #1a0505 0%, #2b0303 100%);
+            color: #ffffff;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #1a0505;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #8B0000 0%, #660000 100%);
+            padding: 40px 20px;
+            text-align: center;
+            border-bottom: 4px solid #FFD700;
+        }
+
+        .logos {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .logo {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 3px solid #FFD700;
+            object-fit: cover;
+        }
+
+        .header h1 {
+            color: #FFD700;
+            font-size: 26px;
+            font-weight: 800;
+            margin: 0 0 10px 0;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .header p {
+            color: #ffffff;
+            opacity: 0.9;
+            margin: 0;
+            font-size: 14px;
+        }
+
+        .theme-badge {
+            color: #FFD700;
+            font-weight: 700;
+            margin-top: 8px;
+            font-size: 12px;
+        }
+
+        .content {
+            padding: 40px 30px;
+            background: #1a0505;
+        }
+
+        .greeting {
+            font-size: 22px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 15px;
+        }
+
+        .message {
+            color: #cccccc;
+            font-size: 16px;
+            line-height: 1.7;
+            margin-bottom: 25px;
+        }
+
+        .highlight-box {
+            background: linear-gradient(135deg, #2b0303 0%, #1a0505 100%);
+            border: 2px solid #FFD700;
+            border-radius: 16px;
+            padding: 25px;
+            margin: 25px 0;
+        }
+
+        .highlight-title {
+            color: #FFD700;
+            font-weight: 700;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        .feature-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .feature-item {
+            color: #ffffff;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 215, 0, 0.1);
+            font-size: 15px;
+        }
+
+        .feature-item:last-child {
+            border-bottom: none;
+        }
+
+        .feature-icon {
+            margin-right: 10px;
+        }
+
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(to bottom, #FFD700, #B8860B);
+            color: #8B0000;
+            text-decoration: none;
+            font-weight: 800;
+            padding: 16px 40px;
+            border-radius: 30px;
+            font-size: 16px;
+            box-shadow: 0 4px 0 #8B6914;
+            margin: 20px 0;
+        }
+
+        .footer {
+            background: #0d0202;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid rgba(255, 215, 0, 0.2);
+        }
+
+        .footer p {
+            color: #888888;
+            font-size: 12px;
+            margin: 5px 0;
+        }
+
+        .social-text {
+            color: #FFD700;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logos">
+                {% if logo_url %}
+                <img src="{{ logo_url }}" alt="RCCG Logo" class="logo">
+                {% endif %}
+                {% if faith_logo_url %}
+                <img src="{{ faith_logo_url }}" alt="Faith Tribe Logo" class="logo">
+                {% endif %}
+            </div>
+            <h1>🎄 WELCOME TO THE CAMPOUT!</h1>
+            <p>RCCG Region 63 December Campout 2025</p>
+            <p class="theme-badge">Theme: THE PRICELESS GIFT</p>
+        </div>
+
+        <div class="content">
+            <p class="greeting">Hello, {{ full_name }}! 👋</p>
+
+            <p class="message">
+                🎉 Welcome to the <strong>RCCG Region 63 December Campout 2025!</strong>
+            </p>
+
+            <p class="message">
+                We're thrilled to have you join us for this life-changing experience.
+                Get ready to discover <strong style="color: #FFD700;">THE PRICELESS GIFT</strong> - Jesus Christ!
+            </p>
+
+            <div class="highlight-box">
+                <p class="highlight-title">🎁 What Awaits You:</p>
+                <ul class="feature-list">
+                    <li class="feature-item"><span class="feature-icon">🙏</span> Powerful worship sessions</li>
+                    <li class="feature-item"><span class="feature-icon">📖</span> Engaging Bible studies</li>
+                    <li class="feature-item"><span class="feature-icon">🎮</span> Fun activities and games</li>
+                    <li class="feature-item"><span class="feature-icon">🔥</span> Life-changing encounters with God</li>
+                    <li class="feature-item"><span class="feature-icon">🎁</span> The celebration of Christ!</li>
+                </ul>
+            </div>
+
+            <p class="message" style="text-align: center;">
+                Mark your calendar and prepare your heart for an unforgettable experience!
+            </p>
+
+            <div style="text-align: center;">
+                <a href="{{ frontend_url }}/ticket-preview?ticket_id={{ ticket_id }}" class="cta-button">
+                    VIEW MY TICKET
+                </a>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p class="social-text">RCCG Region 63 Junior Church</p>
+            <p>&copy; {% now "Y" %} All rights reserved.</p>
+            <p>See you at the camp! 🎄</p>
+        </div>
+    </div>
+</body>
+
+</html>

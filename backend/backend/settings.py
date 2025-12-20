@@ -230,44 +230,28 @@ SIMPLE_JWT = {
 # CORS Settings
 CORS_ALLOW_ALL_ORIGINS = True
 
-# Email Settings - Production Ready
-EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
+# Email Configuration - Brevo
+MAILING = True
 
-# Support multiple email providers
-if os.getenv('EMAIL_PROVIDER') == 'sendgrid':
-    EMAIL_HOST = 'smtp.sendgrid.net'
+if MAILING:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = 'smtp-relay.brevo.com'
     EMAIL_PORT = 587
     EMAIL_USE_TLS = True
     EMAIL_USE_SSL = False
-elif os.getenv('EMAIL_PROVIDER') == 'mailgun':
-    EMAIL_HOST = 'smtp.mailgun.org'
-    EMAIL_PORT = 587
-    EMAIL_USE_TLS = True
-    EMAIL_USE_SSL = False
-elif os.getenv('EMAIL_PROVIDER') == 'ses':
-    EMAIL_BACKEND = 'django_ses.SESBackend'
-    AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
-    AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
-    AWS_SES_REGION_NAME = os.getenv('AWS_SES_REGION_NAME', 'us-east-1')
-    AWS_SES_REGION_ENDPOINT = f'email.{AWS_SES_REGION_NAME}.amazonaws.com'
+    EMAIL_HOST_USER = os.environ.get('BREVO_SMTP_USER', '')
+    EMAIL_HOST_PASSWORD = os.environ.get('BREVO_SMTP_KEY', '')
+    EMAIL_TIMEOUT = 30
+    DEFAULT_FROM_EMAIL = os.environ.get('BREVO_SMTP_USER', 'noreply@r63teens.com')
+    SERVER_EMAIL = DEFAULT_FROM_EMAIL
+    EMAIL_SUBJECT_PREFIX = '[R63 Teens] '
 else:
-    # Default to Gmail/Generic SMTP
-    EMAIL_HOST = os.getenv('EMAIL_HOST', default='smtp.gmail.com')
-    EMAIL_PORT = int(os.getenv('EMAIL_PORT', default=587))
-    EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', default='True').lower() == 'true'
-    EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', default='False').lower() == 'true'
-
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', default='')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', default='noreply@r63teens.com')
-SERVER_EMAIL = os.getenv('SERVER_EMAIL', default=DEFAULT_FROM_EMAIL)
-EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', default=30))
-EMAIL_SUBJECT_PREFIX = '[R63 Teens] '
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # Email validation
-if not EMAIL_HOST_USER and EMAIL_BACKEND == 'django.core.mail.backends.smtp.EmailBackend':
+if not EMAIL_HOST_PASSWORD and EMAIL_BACKEND == 'django.core.mail.backends.smtp.EmailBackend':
     import warnings
-    warnings.warn('EMAIL_HOST_USER not set. Email functionality may not work.')
+    warnings.warn('BREVO_SMTP_KEY not set. Email functionality will not work.')
 
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 

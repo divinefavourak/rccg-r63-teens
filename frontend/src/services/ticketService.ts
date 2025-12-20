@@ -80,7 +80,7 @@ class TicketService {
   async getAllTickets(
     page = 1,
     search = '',
-    filters?: { status?: string, category?: string, province?: string }
+    filters?: { status?: string, category?: string, province?: string, registered_by?: string }
   ): Promise<{ results: Ticket[], count: number }> {
     let query = `/tickets/?page=${page}&search=${search}`;
 
@@ -88,6 +88,7 @@ class TicketService {
       if (filters.status && filters.status !== 'all') query += `&status=${filters.status}`;
       if (filters.category && filters.category !== 'all') query += `&category=${filters.category}`;
       if (filters.province && filters.province !== 'all') query += `&province=${encodeURIComponent(filters.province)}`;
+      if (filters.registered_by && filters.registered_by !== 'all') query += `&registered_by=${encodeURIComponent(filters.registered_by)}`;
     }
 
     const response = await api.get(query);
@@ -193,6 +194,8 @@ class TicketService {
     return mapFromBackend(response.data);
   }
 
+
+
   /**
    * Update ticket status (Admin only)
    */
@@ -262,7 +265,7 @@ class TicketService {
   /**
    * Perform bulk action on tickets
    */
-  async performBulkAction(ticketIds: string[], action: 'approve' | 'reject' | 'send_email' | 'delete', subject?: string, message?: string) {
+  async performBulkAction(ticketIds: string[], action: 'approve' | 'reject' | 'send_email' | 'delete' | 'welcome_email' | 'payment_reminder' | 'final_instructions', subject?: string, message?: string) {
     const payload = {
       ticket_ids: ticketIds,
       action,

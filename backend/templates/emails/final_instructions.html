@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Final Instructions</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #1a0505 0%, #2b0303 100%);
+            color: #ffffff;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #1a0505;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #8B0000 0%, #660000 100%);
+            padding: 40px 20px;
+            text-align: center;
+            border-bottom: 4px solid #FFD700;
+        }
+
+        .logos {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .logo {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 3px solid #FFD700;
+            object-fit: cover;
+        }
+
+        .header h1 {
+            color: #FFD700;
+            font-size: 26px;
+            font-weight: 800;
+            margin: 0 0 10px 0;
+        }
+
+        .header p {
+            color: #ffffff;
+            opacity: 0.9;
+            margin: 0;
+            font-size: 14px;
+        }
+
+        .theme-badge {
+            color: #FFD700;
+            font-weight: 700;
+            margin-top: 8px;
+            font-size: 12px;
+        }
+
+        .content {
+            padding: 40px 30px;
+            background: #1a0505;
+        }
+
+        .greeting {
+            font-size: 22px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 15px;
+        }
+
+        .message {
+            color: #cccccc;
+            font-size: 16px;
+            line-height: 1.7;
+            margin-bottom: 25px;
+        }
+
+        .info-card {
+            background: linear-gradient(135deg, #2b0303 0%, #1a0505 100%);
+            border: 2px solid #FFD700;
+            border-radius: 16px;
+            padding: 25px;
+            margin: 20px 0;
+        }
+
+        .info-title {
+            color: #FFD700;
+            font-weight: 700;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        .checklist {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .checklist-item {
+            color: #ffffff;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 215, 0, 0.1);
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+        }
+
+        .checklist-item:last-child {
+            border-bottom: none;
+        }
+
+        .check-icon {
+            color: #4CAF50;
+            margin-right: 12px;
+            font-size: 18px;
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 215, 0, 0.2);
+        }
+
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+
+        .detail-label {
+            color: #FFD700;
+            font-size: 12px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .detail-value {
+            color: #ffffff;
+            font-weight: 700;
+        }
+
+        .highlight-text {
+            background: linear-gradient(135deg, #4CAF5022, #4CAF5011);
+            border: 2px solid #4CAF50;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin: 25px 0;
+        }
+
+        .highlight-text p {
+            color: #4CAF50;
+            font-weight: 700;
+            font-size: 16px;
+            margin: 0;
+        }
+
+        .footer {
+            background: #0d0202;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid rgba(255, 215, 0, 0.2);
+        }
+
+        .footer p {
+            color: #888888;
+            font-size: 12px;
+            margin: 5px 0;
+        }
+
+        .social-text {
+            color: #FFD700;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logos">
+                {% if logo_url %}
+                <img src="{{ logo_url }}" alt="RCCG Logo" class="logo">
+                {% endif %}
+                {% if faith_logo_url %}
+                <img src="{{ faith_logo_url }}" alt="Faith Tribe Logo" class="logo">
+                {% endif %}
+            </div>
+            <h1>📋 FINAL INSTRUCTIONS</h1>
+            <p>RCCG Region 63 December Campout 2025</p>
+            <p class="theme-badge">Theme: THE PRICELESS GIFT</p>
+        </div>
+
+        <div class="content">
+            <p class="greeting">Hello, {{ full_name }}! 👋</p>
+
+            <p class="message">
+                The <strong>December Campout</strong> is almost here! 🎄
+                Here are your final instructions to prepare for an amazing experience.
+            </p>
+
+            <div class="info-card">
+                <p class="info-title">📦 What to Bring:</p>
+                <ul class="checklist">
+                    <li class="checklist-item"><span class="check-icon">✓</span> Bible and notebook</li>
+                    <li class="checklist-item"><span class="check-icon">✓</span> Comfortable clothing</li>
+                    <li class="checklist-item"><span class="check-icon">✓</span> Toiletries and personal items</li>
+                    <li class="checklist-item"><span class="check-icon">✓</span> Bedding (if required)</li>
+                    <li class="checklist-item"><span class="check-icon">✓</span> Any medications you need</li>
+                    <li class="checklist-item"><span class="check-icon">✓</span> An open heart to receive!</li>
+                </ul>
+            </div>
+
+            <div class="info-card">
+                <p class="info-title">📍 Event Details:</p>
+                <div class="detail-row">
+                    <span class="detail-label">Arrival Time</span>
+                    <span class="detail-value">9:00 AM</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Location</span>
+                    <span class="detail-value">{{ event_location }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Your Ticket ID</span>
+                    <span class="detail-value">{{ ticket_id }}</span>
+                </div>
+            </div>
+
+            <!-- Google Maps Embed -->
+            <div class="info-card" style="padding: 0; overflow: hidden;">
+                <iframe
+                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d253546.83191702416!2d3.167940886718751!3d6.810026100000021!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x103bc109f4c889d1%3A0xb1f3f83ca8b39cbe!2sGlory%20Arena!5e0!3m2!1sen!2sng!4v1764637960258!5m2!1sen!2sng"
+                    width="100%" height="300" style="border:0; border-radius: 14px;" allowfullscreen="" loading="lazy"
+                    referrerpolicy="no-referrer-when-downgrade"></iframe>
+            </div>
+
+            <div class="highlight-text">
+                <p>🎁 Remember: You are coming to discover<br>THE PRICELESS GIFT - Jesus Christ!</p>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p class="social-text">RCCG Region 63 Junior Church</p>
+            <p>&copy; {% now "Y" %} All rights reserved.</p>
+            <p>We can't wait to see you! 🎄</p>
+        </div>
+    </div>
+</body>
+
+</html>
