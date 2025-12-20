@@ -93,6 +93,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         province_filter = self.request.query_params.get('province')
         category_filter = self.request.query_params.get('category')
         gender_filter = self.request.query_params.get('gender')
+        registered_by_filter = self.request.query_params.get('registered_by')
         
         # Allow public access for specific actions
         if self.action in ['upload_proof', 'verify', 'qr_code', 'check_in']:
@@ -114,6 +115,21 @@ class TicketViewSet(viewsets.ModelViewSet):
         
         if gender_filter:
             queryset = queryset.filter(gender=gender_filter)
+            
+        if registered_by_filter:
+            if registered_by_filter == 'Self':
+                 # Self registration means no registered_by user AND parent_relationship is NOT 'Coordinator'
+                 queryset = queryset.filter(registered_by__isnull=True).exclude(parent_relationship='Coordinator')
+            else:
+                 # Strip " (Coordinator)" if present, as the frontend sends the full display name
+                 clean_filter = registered_by_filter.replace(' (Coordinator)', '').strip()
+                 
+                 # Search by coordinator name in parent_name OR by User's display/username
+                 queryset = queryset.filter(
+                     Q(parent_name__icontains=clean_filter, parent_relationship='Coordinator') |
+                     Q(registered_by__first_name__icontains=clean_filter) |
+                     Q(registered_by__last_name__icontains=clean_filter)
+                 )
         
         # Apply role-based filtering
         if user.is_authenticated and user.role == User.Role.COORDINATOR:
@@ -562,9 +578,15 @@ class TicketViewSet(viewsets.ModelViewSet):
             'failed': []
         }
         
+        # Group tickets by coordinator/parent email for batch notifications
+        updated_tickets_by_coordinator = {} # {email: {'name': name, 'tickets': []}}
+        
         for ticket in tickets:
             try:
                 ticket_id_str = str(ticket.id)
+                
+                # Capture initial status for comparison
+                email_sent = False
                 
                 if action == 'approve':
                     old_status = ticket.status
@@ -573,25 +595,44 @@ class TicketViewSet(viewsets.ModelViewSet):
                     ticket.approved_by = request.user
                     ticket.save()
                     
-                    try:
-                        EmailService.send_ticket_approved(ticket)
-                    except Exception as e:
-                        print(f"Email failed: {e}")
+                    # Add to batch list if has parent/coordinator email
+                    if ticket.parent_email:
+                        if ticket.parent_email not in updated_tickets_by_coordinator:
+                            updated_tickets_by_coordinator[ticket.parent_email] = {
+                                'name': ticket.parent_name,
+                                'tickets': []
+                            }
+                        updated_tickets_by_coordinator[ticket.parent_email]['tickets'].append(ticket)
+                    else:
+                        # Send individual email if no coordinator
+                        try:
+                            EmailService.send_ticket_approved(ticket)
+                        except Exception as e:
+                            print(f"Email failed: {e}")
                         
                 elif action == 'reject':
                     old_status = ticket.status
                     ticket.status = Ticket.Status.REJECTED
                     ticket.save()
                     
-                    try:
-                        EmailService.send_status_update(ticket, old_status, Ticket.Status.REJECTED)
-                    except Exception as e:
-                        print(f"Email failed: {e}")
+                    # Add to batch list
+                    if ticket.parent_email:
+                        if ticket.parent_email not in updated_tickets_by_coordinator:
+                            updated_tickets_by_coordinator[ticket.parent_email] = {
+                                'name': ticket.parent_name,
+                                'tickets': []
+                            }
+                        updated_tickets_by_coordinator[ticket.parent_email]['tickets'].append(ticket)
+                    else:
+                        try:
+                            EmailService.send_status_update(ticket, old_status, Ticket.Status.REJECTED)
+                        except Exception as e:
+                            print(f"Email failed: {e}")
                     
                 elif action == 'send_email':
                     EmailService.send_custom_email(ticket, subject, message)
                 
-                # Template-based email actions
+                # Template-based email actions (Still sent individually as they are personalized content)
                 elif action == 'welcome_email':
                     try:
                         EmailService.send_welcome_email(ticket)
@@ -617,6 +658,19 @@ class TicketViewSet(viewsets.ModelViewSet):
                 
             except Exception as e:
                 results['failed'].append({'id': str(ticket.id), 'error': str(e)})
+        
+        # Send batch emails for coordinators
+        for email, data in updated_tickets_by_coordinator.items():
+            try:
+                if action in ['approve', 'reject']:
+                    EmailService.send_batch_status_update(
+                        tickets=data['tickets'],
+                        status=action,
+                        coordinator_name=data['name'],
+                        coordinator_email=email
+                    )
+            except Exception as e:
+                print(f"Batch email to {email} failed: {e}")
         
         return Response(results)
 
@@ -671,6 +725,13 @@ class TicketViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             for index, ticket_data in enumerate(tickets_data):
                 try:
+                    if coordinator_email:
+                        ticket_data['parent_email'] = coordinator_email
+                        ticket_data['parent_name'] = coordinator_name
+                        ticket_data['parent_relationship'] = 'Coordinator'
+                        if 'email' not in ticket_data or not ticket_data['email']:
+                            ticket_data['email'] = coordinator_email
+
                     # Validate using the create serializer
                     serializer = TicketCreateSerializer(data=ticket_data)
                     if serializer.is_valid():

@@ -108,6 +108,9 @@ class EmailService:
             from_email=settings.DEFAULT_FROM_EMAIL,
             to=[ticket.email]
         )
+        if ticket.parent_email and ticket.parent_email != ticket.email:
+             msg.to.append(ticket.parent_email)
+             
         msg.attach_alternative(html_message, "text/html")
         msg.send(fail_silently=False)
     
@@ -138,6 +141,9 @@ class EmailService:
             from_email=settings.DEFAULT_FROM_EMAIL,
             to=[ticket.email]
         )
+        if ticket.parent_email and ticket.parent_email != ticket.email:
+             msg.to.append(ticket.parent_email)
+
         msg.attach_alternative(html_message, "text/html")
         msg.send(fail_silently=False)
     
@@ -168,6 +174,9 @@ class EmailService:
             from_email=settings.DEFAULT_FROM_EMAIL,
             to=[ticket.email]
         )
+        if ticket.parent_email and ticket.parent_email != ticket.email:
+             msg.to.append(ticket.parent_email)
+
         msg.attach_alternative(html_message, "text/html")
         msg.send(fail_silently=False)
     
@@ -199,6 +208,9 @@ class EmailService:
             from_email=settings.DEFAULT_FROM_EMAIL,
             to=[ticket.email]
         )
+        if ticket.parent_email and ticket.parent_email != ticket.email:
+             msg.to.append(ticket.parent_email)
+
         msg.attach_alternative(html_message, "text/html")
         msg.send(fail_silently=False)
     
@@ -218,15 +230,49 @@ class EmailService:
         html_message = render_to_string('emails/ticket_confirmation.html', context)
         plain_message = strip_tags(html_message)
         
+        recipients = [ticket.email]
+        if ticket.parent_email and ticket.parent_email != ticket.email:
+            recipients.append(ticket.parent_email)
+            
         send_mail(
             subject=subject,
             message=plain_message,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[ticket.email, ticket.parent_email],
+            recipient_list=recipients,
             html_message=html_message,
             fail_silently=False,
         )
     
+    @staticmethod
+    def send_batch_status_update(tickets, status, coordinator_name=None, coordinator_email=None):
+        """
+        Send a consolidated status update for multiple tickets.
+        Only sends to coordinator/parent email.
+        """
+        if not tickets or not coordinator_email:
+            return
+            
+        subject = f"RCCG R63 Teens - Batch Status Update: {status.upper()}"
+        
+        context = {
+            'tickets': tickets,
+            'status': status,
+            'coordinator_name': coordinator_name or 'Coordinator',
+            'ticket_count': len(tickets)
+        }
+        
+        html_message = render_to_string('emails/batch_status_update.html', context)
+        plain_message = strip_tags(html_message)
+        
+        send_mail(
+            subject=subject,
+            message=plain_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[coordinator_email],
+            html_message=html_message,
+            fail_silently=False,
+        )
+
     @staticmethod
     def send_bulk_ticket_confirmation(tickets, coordinator_name, coordinator_email):
         """
@@ -327,11 +373,15 @@ class EmailService:
         # Personalize the message with recipient's name
         personalized_message = f"Dear {ticket.full_name},\n\n{message_content}\n\nBest regards,\nRCCG Region 63 Junior Church Team"
         
+        recipients = [ticket.email]
+        if ticket.parent_email and ticket.parent_email != ticket.email:
+            recipients.append(ticket.parent_email)
+
         send_mail(
             subject=subject,
             message=personalized_message,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[ticket.email],
+            recipient_list=recipients,
             fail_silently=False,
         )
         

@@ -29,6 +29,7 @@ const AdminVerify = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [provinceFilter, setProvinceFilter] = useState("all");
+  const [registeredByFilter, setRegisteredByFilter] = useState("all");
 
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -45,7 +46,14 @@ const AdminVerify = () => {
     rejected_tickets: number;
   } | null>(null);
 
+
   const provinceOptions = CHURCH_INFO_FIELDS.find(field => field.name === 'province')?.options || [];
+
+  // Helper to extract unique coordinator names from all loaded tickets for the filter dropdown
+  // Note: ideally this should come from a distinct backend endpoint if the dataset is huge
+  const uniqueCoordinators = Array.from(new Set(tickets.map(t => t.registeredBy || 'Self')))
+    .filter(name => name !== 'Self')
+    .sort();
 
   const {
     selectedTickets, setSelectedTickets, bulkAction, setBulkAction,
@@ -77,7 +85,8 @@ const AdminVerify = () => {
       const response = await ticketService.getAllTickets(currentPage, searchTerm, {
         status: statusFilter,
         category: categoryFilter,
-        province: provinceFilter
+        province: provinceFilter,
+        registered_by: registeredByFilter // Pass new filter to backend
       });
 
       setTickets(response.results);
@@ -104,12 +113,12 @@ const AdminVerify = () => {
       fetchTickets();
     }, 500); // Debounce search/filter
     return () => clearTimeout(timer);
-  }, [isAuthenticated, currentPage, searchTerm, statusFilter, categoryFilter, provinceFilter]);
+  }, [isAuthenticated, currentPage, searchTerm, statusFilter, categoryFilter, provinceFilter, registeredByFilter]);
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, categoryFilter, provinceFilter]);
+  }, [searchTerm, statusFilter, categoryFilter, provinceFilter, registeredByFilter]);
 
 
   const handleSort = (field: keyof Ticket) => {
@@ -311,6 +320,13 @@ const AdminVerify = () => {
                   <option value="pending">Pending</option>
                   <option value="approved">Approved</option>
                   <option value="rejected">Rejected</option>
+                </select>
+                <select value={registeredByFilter} onChange={(e) => setRegisteredByFilter(e.target.value)} className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-700 outline-none min-w-[200px]">
+                  <option value="all">All Registrants</option>
+                  <option value="Self">Self (Individual)</option>
+                  {uniqueCoordinators.map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
                 </select>
                 <button onClick={exportToCSV} className="bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-md transition-colors whitespace-nowrap"><FaDownload /> CSV</button>
               </div>
