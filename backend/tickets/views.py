@@ -173,10 +173,18 @@ class TicketViewSet(viewsets.ModelViewSet):
         # Coordinators doing bulk registration should skip and use the bulk email endpoint
         if not skip_email:
             try:
-                EmailService.send_ticket_confirmation(ticket)
+                # Send email in background thread to prevent SMTP timeouts from blocking the response
+                import threading
+                email_thread = threading.Thread(
+                    target=EmailService.send_ticket_confirmation,
+                    args=(ticket,),
+                    daemon=True
+                )
+                email_thread.start()
+                # Don't wait for email - ticket registration completes immediately
             except Exception as e:
                 # Log error but don't fail the request
-                print(f"Failed to send confirmation email: {e}")
+                print(f"Failed to queue confirmation email: {e}")
 
         # Return the full ticket data using the main serializer
         serializer = TicketSerializer(ticket)
