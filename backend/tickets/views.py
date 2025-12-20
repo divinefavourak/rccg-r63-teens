@@ -58,24 +58,25 @@ class TicketViewSet(viewsets.ModelViewSet):
         """
         Return authenticators for this view.
         
-        IMPORTANT: We do NOT skip authentication for POST/create anymore.
-        We want authentication to run so that coordinators with valid tokens
-        get properly identified (registered_by gets set correctly).
-        
-        The AllowAny permission in get_permissions() handles allowing
-        unauthenticated users - authentication failure won't block them.
-        
-        We only skip auth for truly public endpoints where we don't care
-        who the user is at all.
+        Skip authentication for public endpoints to avoid 401 errors.
+        For ticket creation, we skip auth by default but still try to identify
+        coordinators if they provide a valid token (handled via optional auth).
         """
         # For public endpoints, skip auth to avoid 401 on expired/invalid tokens
-        path = getattr(self.request, 'path_info', '') if hasattr(self, 'request') else ''
-        public_paths = ['verify', 'qr_code', 'upload_proof', 'upload_proof_by_ticket_id', 'bulk_create', 'send_bulk_confirmation']
-        if any(p in path for p in public_paths):
-            return []
+        if hasattr(self, 'request'):
+            path = getattr(self.request, 'path_info', '')
+            method = getattr(self.request, 'method', '')
+            
+            # Check for specific public action paths in URL
+            public_path_keywords = ['verify', 'qr_code', 'upload_proof', 'upload_proof_by_ticket_id', 'bulk_create', 'send_bulk_confirmation']
+            if any(p in path for p in public_path_keywords):
+                return []
+            
+            # For POST to /api/tickets/ (create action), skip authentication
+            if method == 'POST' and path.rstrip('/').endswith('/tickets'):
+                return []
         
-        # For all other endpoints (including create), use normal authentication
-        # This allows coordinators to be identified when they provide a token
+        # For all other endpoints, use normal authentication
         return super().get_authenticators()
     
     def get_serializer_class(self):
