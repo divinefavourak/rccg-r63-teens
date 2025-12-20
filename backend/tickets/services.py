@@ -112,7 +112,7 @@ class EmailService:
              msg.to.append(ticket.parent_email)
              
         msg.attach_alternative(html_message, "text/html")
-        msg.send(fail_silently=False)
+        msg.send(fail_silently=True)  # Don't crash if email fails
     
     @staticmethod
     def send_payment_reminder(ticket):
@@ -145,7 +145,7 @@ class EmailService:
              msg.to.append(ticket.parent_email)
 
         msg.attach_alternative(html_message, "text/html")
-        msg.send(fail_silently=False)
+        msg.send(fail_silently=True)  # Don't crash if email fails
     
     @staticmethod
     def send_welcome_email(ticket):
@@ -178,7 +178,7 @@ class EmailService:
              msg.to.append(ticket.parent_email)
 
         msg.attach_alternative(html_message, "text/html")
-        msg.send(fail_silently=False)
+        msg.send(fail_silently=True)  # Don't crash if email fails
     
     @staticmethod
     def send_final_instructions(ticket, event_location="Redemption City"):
@@ -212,7 +212,7 @@ class EmailService:
              msg.to.append(ticket.parent_email)
 
         msg.attach_alternative(html_message, "text/html")
-        msg.send(fail_silently=False)
+        msg.send(fail_silently=True)  # Don't crash if email fails
     
     @staticmethod
     def send_ticket_confirmation(ticket):
@@ -240,7 +240,7 @@ class EmailService:
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=recipients,
             html_message=html_message,
-            fail_silently=False,
+            fail_silently=True,  # Don't crash if email fails
         )
     
     @staticmethod
@@ -270,7 +270,7 @@ class EmailService:
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[coordinator_email],
             html_message=html_message,
-            fail_silently=False,
+            fail_silently=True,  # Don't crash if email fails
         )
 
     @staticmethod
@@ -315,7 +315,7 @@ class EmailService:
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[coordinator_email],
             html_message=html_message,
-            fail_silently=False,
+            fail_silently=True,  # Don't crash if email fails
         )
     
     @staticmethod
@@ -339,7 +339,7 @@ class EmailService:
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[payment.payer_email],
             html_message=html_message,
-            fail_silently=False,
+            fail_silently=True,  # Don't crash if email fails
         )
     
     @staticmethod
@@ -364,7 +364,7 @@ class EmailService:
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[ticket.email, ticket.parent_email],
             html_message=html_message,
-            fail_silently=False,
+            fail_silently=True,  # Don't crash if email fails
         )
     
     @staticmethod
@@ -382,7 +382,7 @@ class EmailService:
             message=personalized_message,
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=recipients,
-            fail_silently=False,
+            fail_silently=True,  # Don't crash if email fails
         )
         
 # PDF SERVICE
