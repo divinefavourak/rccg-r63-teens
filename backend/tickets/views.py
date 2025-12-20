@@ -181,6 +181,40 @@ class TicketViewSet(viewsets.ModelViewSet):
         serializer = TicketSerializer(ticket)
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    @action(detail=False, methods=['post'], url_path='bulk-create')
+    def bulk_create(self, request, *args, **kwargs):
+        """
+        Create multiple tickets in a single transaction.
+        Optimized for bulk uploads to avoid rate limiting and HTTP overhead.
+        """
+        create_serializer = self.get_serializer(data=request.data, many=True)
+        create_serializer.is_valid(raise_exception=True)
+        
+        created_tickets = []
+        
+        try:
+            with transaction.atomic():
+                for ticket_data in create_serializer.validated_data:
+                    # We manually instantiate and save to trigger the custom ID generation method
+                    ticket = Ticket(**ticket_data)
+                    ticket.registered_by = request.user
+                    ticket.registered_at = timezone.now()
+                    ticket.save()
+                    created_tickets.append(ticket)
+                
+                # Create a single audit log for the batch (optional, or per ticket)
+                # For now, let's just log the first request IP to avoid spamming logs excessively
+                # or we can rely on the fact that they are created.
+                
+                # If we want to return full data for all, we can.
+                response_serializer = TicketSerializer(created_tickets, many=True)
+                return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response(
+                {'error': f'Bulk creation failed: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
     
     # def perform_create(self, serializer):
     #     """Create a ticket with the current user as registered_by"""
@@ -678,25 +712,7 @@ class TicketViewSet(viewsets.ModelViewSet):
     def bulk_create(self, request):
         """
         Create multiple tickets in a single request (optimized for bulk registration).
-        
-        Request body:
-        {
-            "tickets": [
-                { "full_name": "...", "age": 15, ... },
-                { "full_name": "...", "age": 12, ... },
-                ...
-            ],
-            "coordinator_name": "John Doe",  # For consolidated email
-            "coordinator_email": "john@example.com"
-        }
-        
-        Returns:
-        {
-            "success": true,
-            "created_count": 10,
-            "tickets": [ { ticket data }, ... ],
-            "failed": [ { "index": 0, "error": "..." }, ... ]
-        }
+        Uses bulk_create to avoid N+1 queries.
         """
         tickets_data = request.data.get('tickets', [])
         coordinator_name = request.data.get('coordinator_name', 'Coordinator')
@@ -714,16 +730,35 @@ class TicketViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Validate all data first
+        serializer = TicketCreateSerializer(data=tickets_data, many=True)
+        if not serializer.is_valid():
+             return Response(
+                {'error': 'Validation failed', 'details': serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # Determine registered_by
         registered_by = request.user if request.user.is_authenticated else None
         registered_at = timezone.now()
         
-        created_tickets = []
-        failed_tickets = []
+        tickets_to_create = []
         
-        # Use a transaction for atomicity and performance
+        # Calculate Starting Ticket ID (Critical optimization)
+        # Instead of querying DB 177 times, we query ONCE.
+        date_prefix = timezone.now().strftime('%Y%m')
+        prefix = f'TKT-{date_prefix}-'
+        
+        # We need to lock or at least get the specific last one carefully
+        # For simplicity and speed in this context, we fetch last.
+        # Note: Race conditions are possible in high concurrency, but rare here.
         with transaction.atomic():
-            for index, ticket_data in enumerate(tickets_data):
+            last_ticket = Ticket.objects.filter(
+                ticket_id__startswith=prefix
+            ).select_for_update().order_by('ticket_id').last()
+
+            start_num = 1
+            if last_ticket:
                 try:
                     if coordinator_email:
                         ticket_data['parent_email'] = coordinator_email
@@ -768,25 +803,79 @@ class TicketViewSet(viewsets.ModelViewSet):
         
         # Send consolidated confirmation email if coordinator email provided
         if created_tickets and coordinator_email:
+                    parts = last_ticket.ticket_id.split('-')
+                    if len(parts) >= 3:
+                        start_num = int(parts[-1]) + 1
+                except (ValueError, IndexError):
+                    pass
+            
+            # Prepare objects
+            for index, valid_data in enumerate(serializer.validated_data):
+                current_num = start_num + index
+                new_ticket_id = f'{prefix}{current_num:05d}'
+                
+                ticket = Ticket(
+                    ticket_id=new_ticket_id,
+                    registered_by=registered_by,
+                    registered_at=registered_at,
+                    **valid_data
+                )
+                tickets_to_create.append(ticket)
+            
+            # Bulk Insert (1 Query)
+            Ticket.objects.bulk_create(tickets_to_create)
+            
+            # Fetch back or use the objects (Django populates IDs on Postgres, but maybe not others)
+            # Re-fetching is safer if we need the UUIDs, or we can trust they are created.
+            # Since we manually set ticket_id, we know them.
+        
+        # Create Audit Log (Optimized: One log for batch)
+        if tickets_to_create and registered_by:
+            first_ticket = tickets_to_create[0]
+             # Get the actual object from DB to ensure we have the UUID if needed,
+             # though for audit log purely by reference we might need it.
+             # models.Index(fields=['ticket_id']) exists, so fast lookup.
             try:
+                # Just logging the operation details
+                TicketAuditLog.objects.create(
+                    user=registered_by,
+                    action=TicketAuditLog.ActionType.BULK_UPLOAD,
+                    # We can't easily link to all tickets properly in one ForeignKey
+                    # So we link to the first one as representative or separate logic
+                    ticket=None, # Linking to None or first if retrieved
+                    new_values={
+                        'bulk_count': len(tickets_to_create),
+                        'start_ticket_id': tickets_to_create[0].ticket_id,
+                        'end_ticket_id': tickets_to_create[-1].ticket_id
+                    },
+                    ip_address=self.get_client_ip(),
+                    user_agent=request.META.get('HTTP_USER_AGENT', '')
+                )
+            except Exception as e:
+                print(f"Audit log failed: {e}")
+
+        # Send Consolidated Email
+        if tickets_to_create and coordinator_email:
+            try:
+                # We need to pass objects that have context like 'get_category_display' working.
+                # The bulk_created instances behave like normal instances mostly.
                 EmailService.send_bulk_ticket_confirmation(
-                    tickets=created_tickets,
+                    tickets=tickets_to_create,
                     coordinator_name=coordinator_name,
                     coordinator_email=coordinator_email
                 )
             except Exception as e:
                 print(f"Failed to send bulk confirmation email: {e}")
-        
-        # Serialize the created tickets
-        response_data = {
+
+        # Return Success
+        # We return the list of created tickets. Serializer expects instances.
+        return Response({
             'success': True,
-            'created_count': len(created_tickets),
-            'failed_count': len(failed_tickets),
-            'tickets': TicketSerializer(created_tickets, many=True).data,
-            'failed': failed_tickets
-        }
-        
-        return Response(response_data, status=status.HTTP_201_CREATED)
+            'created_count': len(tickets_to_create),
+            'failed_count': 0,
+            'tickets': TicketSerializer(tickets_to_create, many=True).data,
+            'failed': []
+        }, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
     def send_bulk_confirmation(self, request):

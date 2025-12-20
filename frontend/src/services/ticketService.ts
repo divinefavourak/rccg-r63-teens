@@ -194,6 +194,8 @@ class TicketService {
     return mapFromBackend(response.data);
   }
 
+
+
   /**
    * Update ticket status (Admin only)
    */

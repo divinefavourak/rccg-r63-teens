@@ -43,6 +43,8 @@ export interface User {
   province?: string;
   name?: string; // Optional because backend sometimes sends 'first_name'/'last_name' instead
   email?: string;
+  phone?: string;
+  parish?: string;
   token?: string; // ✅ Added to fix the "Property token does not exist" error
 }
 
