@@ -341,13 +341,16 @@ class EmailService:
     @staticmethod
     def send_custom_email(ticket, subject, message_content):
         """Send custom email to ticket holder with personalization"""
+        # Convert newlines to HTML breaks BEFORE the f-string
+        message_html = message_content.replace('\n', '<br>')
+        
         # Create HTML version
         html_content = f"""
         <html>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
             <p>Dear {ticket.full_name},</p>
             <div style="margin: 20px 0;">
-                {message_content.replace('\n', '<br>')}
+                {message_html}
             </div>
             <p>Best regards,<br>RCCG Region 63 Junior Church Team</p>
         </body>
