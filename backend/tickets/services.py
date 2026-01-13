@@ -101,11 +101,21 @@ class EmailService:
             msg.attach_alternative(html_content, "text/html")
             msg.send(fail_silently=fail_silently)
             
-            logger.info(f"Email sent successfully: {subject} to {recipients}")
+            # Safely log with ASCII encoding to handle emojis on Windows
+            try:
+                safe_subject = subject.encode('ascii', 'replace').decode('ascii')
+                logger.info(f"Email sent successfully: {safe_subject} to {recipients}")
+            except:
+                logger.info(f"Email sent successfully to {recipients}")
             return True
             
         except Exception as e:
-            logger.error(f"Failed to send email '{subject}' to {recipients}: {str(e)}")
+            # Safely log errors with ASCII encoding
+            try:
+                safe_subject = subject.encode('ascii', 'replace').decode('ascii')
+                logger.error(f"Failed to send email '{safe_subject}' to {recipients}: {str(e)}")
+            except:
+                logger.error(f"Failed to send email to {recipients}: {str(e)}")
             if not fail_silently:
                 raise
             return False
