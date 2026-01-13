@@ -234,17 +234,25 @@ CORS_ALLOW_ALL_ORIGINS = True
 MAILING = True
 
 if MAILING:
-    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_BACKEND = 'backend.email_backend.BrevoEmailBackend'  # Custom backend with SSL fix
     EMAIL_HOST = 'smtp-relay.brevo.com'
-    EMAIL_PORT = 587  # Brevo recommended port with TLS
-    EMAIL_USE_SSL = False
-    EMAIL_USE_TLS = True  # TLS is more compatible
+    EMAIL_PORT = 465  # Port 465 works on this network
+    EMAIL_USE_SSL = True
+    EMAIL_USE_TLS = False
     EMAIL_HOST_USER = os.environ.get('BREVO_SMTP_USER', '')
     EMAIL_HOST_PASSWORD = os.environ.get('BREVO_SMTP_KEY', '')
     EMAIL_TIMEOUT = 30
-    DEFAULT_FROM_EMAIL = os.environ.get('BREVO_SMTP_USER', 'noreply@r63teens.com')
+    DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@r63teens.com')
     SERVER_EMAIL = DEFAULT_FROM_EMAIL
     EMAIL_SUBJECT_PREFIX = '[R63 Teens] '
+    
+    # Multiple verified senders for different email contexts
+    EMAIL_SENDERS = {
+        'support': 'Faith Tribe Support <faithtribe.support@thefaithtribe.live>',
+        'no_reply': 'No Reply <no-reply@thefaithtribe.live>',
+        'junior_church': 'RCCG Junior Church <rccgjuniorchurch@thefaithtribe.live>',
+        'default': DEFAULT_FROM_EMAIL,
+    }
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 

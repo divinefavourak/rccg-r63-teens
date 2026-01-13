@@ -69,6 +69,9 @@ from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 import logging
 
+# Import sender utilities
+from utils.email_senders import get_sender, EmailSender
+
 logger = logging.getLogger(__name__)
 
 
@@ -76,7 +79,7 @@ class EmailService:
     """Service for sending emails via Brevo"""
     
     @staticmethod
-    def _send_email_safely(subject, html_content, recipients, fail_silently=True):
+    def _send_email_safely(subject, html_content, recipients, sender='default', fail_silently=True):
         """
         Helper method to send emails with proper error handling
         
@@ -84,6 +87,7 @@ class EmailService:
             subject: Email subject
             html_content: HTML email content
             recipients: List of recipient emails
+            sender: Sender key ('support', 'no_reply', 'junior_church', 'default')
             fail_silently: Whether to suppress errors
         
         Returns:
@@ -91,11 +95,12 @@ class EmailService:
         """
         try:
             plain_message = strip_tags(html_content)
+            from_email = get_sender(sender)
             
             msg = EmailMultiAlternatives(
                 subject=subject,
                 body=plain_message,
-                from_email=settings.DEFAULT_FROM_EMAIL,
+                from_email=from_email,
                 to=recipients
             )
             msg.attach_alternative(html_content, "text/html")
@@ -154,7 +159,7 @@ class EmailService:
         if ticket.parent_email and ticket.parent_email != ticket.email:
             recipients.append(ticket.parent_email)
         
-        return EmailService._send_email_safely(subject, html_message, recipients)
+        return EmailService._send_email_safely(subject, html_message, recipients, sender='junior_church')
     
     @staticmethod
     def send_payment_reminder(ticket):
@@ -178,7 +183,7 @@ class EmailService:
         if ticket.parent_email and ticket.parent_email != ticket.email:
             recipients.append(ticket.parent_email)
         
-        return EmailService._send_email_safely(subject, html_message, recipients)
+        return EmailService._send_email_safely(subject, html_message, recipients, sender='no_reply')
     
     @staticmethod
     def send_welcome_email(ticket):
@@ -202,7 +207,7 @@ class EmailService:
         if ticket.parent_email and ticket.parent_email != ticket.email:
             recipients.append(ticket.parent_email)
         
-        return EmailService._send_email_safely(subject, html_message, recipients)
+        return EmailService._send_email_safely(subject, html_message, recipients, sender='junior_church')
     
     @staticmethod
     def send_final_instructions(ticket, event_location="Redemption City"):
@@ -227,7 +232,7 @@ class EmailService:
         if ticket.parent_email and ticket.parent_email != ticket.email:
             recipients.append(ticket.parent_email)
         
-        return EmailService._send_email_safely(subject, html_message, recipients)
+        return EmailService._send_email_safely(subject, html_message, recipients, sender='junior_church')
     
     @staticmethod
     def send_ticket_confirmation(ticket):
@@ -248,7 +253,7 @@ class EmailService:
         if ticket.parent_email and ticket.parent_email != ticket.email:
             recipients.append(ticket.parent_email)
         
-        return EmailService._send_email_safely(subject, html_message, recipients)
+        return EmailService._send_email_safely(subject, html_message, recipients, sender='no_reply')
     
     @staticmethod
     def send_batch_status_update(tickets, status, coordinator_name=None, coordinator_email=None):
@@ -271,7 +276,7 @@ class EmailService:
         
         html_message = render_to_string('emails/batch_status_update.html', context)
         
-        return EmailService._send_email_safely(subject, html_message, [coordinator_email])
+        return EmailService._send_email_safely(subject, html_message, [coordinator_email], sender='no_reply')
 
     @staticmethod
     def send_bulk_ticket_confirmation(tickets, coordinator_name, coordinator_email):
@@ -309,7 +314,7 @@ class EmailService:
         
         html_message = render_to_string('emails/bulk_ticket_confirmation.html', context)
         
-        return EmailService._send_email_safely(subject, html_message, [coordinator_email])
+        return EmailService._send_email_safely(subject, html_message, [coordinator_email], sender='no_reply')
     
     @staticmethod
     def send_payment_confirmation(payment):
@@ -325,7 +330,7 @@ class EmailService:
         
         html_message = render_to_string('emails/payment_confirmation.html', context)
         
-        return EmailService._send_email_safely(subject, html_message, [payment.payer_email])
+        return EmailService._send_email_safely(subject, html_message, [payment.payer_email], sender='no_reply')
     
     @staticmethod
     def send_status_update(ticket, old_status, new_status):
@@ -346,7 +351,7 @@ class EmailService:
         if ticket.parent_email and ticket.parent_email != ticket.email:
             recipients.append(ticket.parent_email)
         
-        return EmailService._send_email_safely(subject, html_message, recipients)
+        return EmailService._send_email_safely(subject, html_message, recipients, sender='no_reply')
     
     @staticmethod
     def send_custom_email(ticket, subject, message_content):
@@ -371,7 +376,7 @@ class EmailService:
         if ticket.parent_email and ticket.parent_email != ticket.email:
             recipients.append(ticket.parent_email)
 
-        return EmailService._send_email_safely(subject, html_content, recipients)
+        return EmailService._send_email_safely(subject, html_content, recipients, sender='support')
         
 # PDF SERVICE
         
