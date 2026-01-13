@@ -6,7 +6,24 @@ import os
 from django.core.management.base import BaseCommand
 from django.core.mail import send_mail
 from django.conf import settings
-from utils.email_senders import get_sender, get_all_senders
+
+# Try to import sender utilities, fall back if not available
+try:
+    from utils.email_senders import get_sender, get_all_senders
+    HAS_SENDER_UTILS = True
+except ImportError:
+    HAS_SENDER_UTILS = False
+    
+    def get_sender(key='default'):
+        """Fallback: return default from email"""
+        senders = getattr(settings, 'EMAIL_SENDERS', {})
+        if senders and key in senders:
+            return senders[key]
+        return settings.DEFAULT_FROM_EMAIL
+    
+    def get_all_senders():
+        """Fallback: return EMAIL_SENDERS from settings"""
+        return getattr(settings, 'EMAIL_SENDERS', {'default': settings.DEFAULT_FROM_EMAIL})
 
 
 class Command(BaseCommand):

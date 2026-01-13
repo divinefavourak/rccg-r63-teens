@@ -4,6 +4,10 @@ pip install -r requirements.txt
 python manage.py collectstatic --no-input
 python manage.py migrate
 
-# Test email configuration after deployment (optional - won't fail build)
-echo "Testing email configuration..."
-python manage.py test_email_deploy --quiet || echo "Email test skipped or failed (non-blocking)"
+# Test email configuration after deployment
+echo ""
+echo "=================================================="
+echo "Testing email configuration after deployment..."
+echo "=================================================="
+python manage.py test_email_deploy --recipient="${TEST_EMAIL_RECIPIENT:-$DEFAULT_FROM_EMAIL}" 2>&1 || echo "⚠️ Email test completed with issues (non-blocking)"
+echo "=================================================="
