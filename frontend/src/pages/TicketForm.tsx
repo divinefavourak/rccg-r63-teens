@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useForm, SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
-import axios from "axios"; // Import axios directly for the silent login
+import axios from "axios";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import {
@@ -16,8 +16,7 @@ import {
 import { ticketSchema, TicketFormData } from "../schemas/ticketSchema";
 import { useTicketStore } from "../store/ticketStore";
 import { ticketService } from "../services/ticketService";
-import { paymentService } from "../services/paymentService";
-import { useAuth } from "../hooks/useAuth"; // Import auth hook
+import { useAuth } from "../hooks/useAuth";
 
 const STEP_FIELDS = {
   1: ['fullName', 'age', 'category', 'gender', 'phone', 'email'],
@@ -28,7 +27,7 @@ const STEP_FIELDS = {
 
 const TicketForm = () => {
   const navigate = useNavigate();
-  const { user } = useAuth(); // Get current logged in user (if any)
+  const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const currentStep = useTicketStore((state) => state.currentStep);
@@ -81,7 +80,7 @@ const TicketForm = () => {
   }, [watchedValues, setFormData]);
 
   const nextStep = async () => {
-    // /@ts-expect-error - Keys are valid
+    // @ts-expect-error - Keys are valid
     const fields = STEP_FIELDS[currentStep as keyof typeof STEP_FIELDS];
     const isStepValid = await trigger(fields);
 
@@ -101,10 +100,7 @@ const TicketForm = () => {
     try {
       let authToken = null;
 
-      // 1. Determine Auth Strategy (Keep this as is)
       if (user) {
-        // Use existing user session if available
-        // Note: Adjust this based on your actual User type structure
         authToken = (user as any).token || (user as any).access_token;
       }
 
@@ -125,18 +121,15 @@ const TicketForm = () => {
         authToken = authResponse.data.access;
       }
 
-      // 2. Create Ticket (Keep this as is)
       const newTicket = await ticketService.createTicket(data, authToken);
 
       if (!newTicket || !newTicket.id) {
-        throw new Error("Failed to create ticket record.");
+        throw new Error("Failed to create record.");
       }
 
-      // ---------------------------------------------------------
-      // 3. Redirect to Payment Page (UPDATED)
-      // ---------------------------------------------------------
       resetForm();
-      navigate("/payment", { state: { ticket: newTicket } });
+      // Navigate to payment or success page
+      navigate("/payment", { state: { ticket: newTicket } }); // Or directly to dashboard if free
 
     } catch (error: any) {
       console.error("Registration error:", error);
@@ -148,20 +141,17 @@ const TicketForm = () => {
     }
   };
 
-  // ... (Keep the getErrorMessage, renderFormField, renderStepContent functions exactly as before)
-  // ... (Keep the return JSX structure exactly as before)
-
   const getErrorMessage = (fieldName: string) => {
     return errors[fieldName as keyof TicketFormData]?.message;
   };
 
   const renderFormField = (field: any) => {
     const hasError = !!errors[field.name as keyof TicketFormData];
-    const inputClasses = `w-full px-4 py-3 bg-white dark:bg-[#1a0505]/50 border rounded-xl 
-      focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all 
+    const inputClasses = `w-full px-4 py-3 bg-white dark:bg-gray-800 border rounded-xl 
+      focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all 
       text-gray-900 dark:text-white 
-      placeholder-gray-400 dark:placeholder-white/30 
-      ${hasError ? 'border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/20' : 'border-gray-300 dark:border-red-900/50'}`;
+      placeholder-gray-400 dark:placeholder-gray-500 
+      ${hasError ? 'border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/20' : 'border-gray-300 dark:border-gray-700'}`;
 
     const registerOptions = field.name === 'age' ? { valueAsNumber: true } : {};
 
@@ -180,7 +170,7 @@ const TicketForm = () => {
       case 'checkbox':
         return (
           <label className="flex items-start space-x-3 cursor-pointer">
-            <input type="checkbox" {...register(field.name as keyof TicketFormData, registerOptions)} className="mt-1 w-5 h-5 text-yellow-600 rounded focus:ring-yellow-500 border-gray-300 dark:border-red-900" />
+            <input type="checkbox" {...register(field.name as keyof TicketFormData, registerOptions)} className="mt-1 w-5 h-5 text-primary-600 rounded focus:ring-primary-500 border-gray-300 dark:border-gray-600" />
             <span className={`text-sm ${hasError ? 'text-red-600' : 'text-gray-700 dark:text-gray-300'}`}>{field.label}</span>
           </label>
         );
@@ -194,20 +184,20 @@ const TicketForm = () => {
     let fields: any[] = [];
 
     switch (currentStep) {
-      case 1: title = "Participant Details"; fields = PERSONAL_INFO_FIELDS; break;
+      case 1: title = "Basic Information"; fields = PERSONAL_INFO_FIELDS; break;
       case 2: title = "Church Information"; fields = CHURCH_INFO_FIELDS; break;
-      case 3: title = "Medical & Emergency"; fields = MEDICAL_INFO_FIELDS; break;
-      case 4: title = "Parent/Guardian Consent"; fields = PARENT_INFO_FIELDS; break;
+      case 3: title = "Health & Emergency"; fields = MEDICAL_INFO_FIELDS; break;
+      case 4: title = "Parental Consent"; fields = PARENT_INFO_FIELDS; break;
     }
 
     return (
       <motion.div key={currentStep} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }} className="space-y-6">
-        <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-6 font-['Impact'] tracking-wide">{title}</h3>
+        <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-6 font-sans tracking-wide">{title}</h3>
 
         {currentStep === 4 && (
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-500/30 rounded-xl p-6 mb-6">
-            <h4 className="font-bold text-yellow-800 dark:text-yellow-400 mb-2 flex items-center gap-2"><span className="text-xl">⚠️</span> Payment Required:</h4>
-            <p className="text-yellow-700 dark:text-yellow-200/80 text-sm">A fee of <strong>₦3,000</strong> is required. You will be redirected to complete your payment via Bank Transfer.</p>
+          <div className="bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-500/30 rounded-xl p-6 mb-6">
+            <h4 className="font-bold text-primary-800 dark:text-primary-400 mb-2 flex items-center gap-2">Registration Info:</h4>
+            <p className="text-primary-700 dark:text-primary-200/80 text-sm">Please review all details before submitting.</p>
           </div>
         )}
 
@@ -215,7 +205,7 @@ const TicketForm = () => {
           {fields.map((field) => (
             <div key={field.name} className={field.type === 'textarea' || field.type === 'checkbox' ? 'md:col-span-2' : ''}>
               {field.type !== 'checkbox' && (
-                <label className="block text-sm font-bold text-gray-700 dark:text-red-100/80 mb-2 uppercase tracking-wider">
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wider">
                   {field.label} {field.required && <span className="text-red-500">*</span>}
                 </label>
               )}
@@ -229,41 +219,40 @@ const TicketForm = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#2b0303] text-gray-800 dark:text-white transition-colors duration-500">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white transition-colors duration-500">
       <Navbar />
       <div className="pt-28 pb-16 px-6 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-[50vh] bg-gradient-to-b from-red-100/50 dark:from-red-900/20 to-transparent pointer-events-none transition-colors duration-500"></div>
+        <div className="absolute top-0 left-0 w-full h-[50vh] bg-gradient-to-b from-primary-100/50 dark:from-primary-900/20 to-transparent pointer-events-none transition-colors duration-500"></div>
         <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto relative z-10">
           <div className="text-center mb-10">
-            <h1 className="text-4xl md:text-5xl font-black mb-4 text-red-900 dark:text-white"><span className="text-gold-3d">GET YOUR</span> TICKET</h1>
-            <p className="text-gray-600 dark:text-red-100/80 max-w-2xl mx-auto text-lg">Secure your spot for The Priceless Gift Camp 2025.</p>
+            <h1 className="text-4xl md:text-5xl font-black mb-4 text-gray-900 dark:text-white">
+              <span className="text-primary-600">JUNIOR CHURCH</span> REGISTRATION
+            </h1>
+            <p className="text-gray-600 dark:text-gray-300 max-w-2xl mx-auto text-lg">Join us on the Teen Digital Platform.</p>
           </div>
 
           <div className="mb-10">
             <div className="flex items-center justify-between mb-4 px-4">
               {[1, 2, 3, 4].map(step => (
                 <div key={step} className="flex flex-col items-center z-10">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg transition-all duration-500 border-4 ${step === currentStep ? 'bg-yellow-500 text-red-900 border-yellow-300 shadow-lg scale-110' : step < currentStep ? 'bg-green-600 text-white border-green-500' : 'bg-gray-200 text-gray-400 border-gray-300 dark:bg-red-950 dark:text-red-700 dark:border-red-900'}`}>{step < currentStep ? '✓' : step}</div>
-                  <span className={`text-xs mt-2 font-bold uppercase tracking-wider transition-colors duration-300 ${step === currentStep ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-400 dark:text-red-800'}`}>{step === 1 ? 'Bio' : step === 2 ? 'Church' : step === 3 ? 'Health' : 'Consent'}</span>
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg transition-all duration-500 border-4 ${step === currentStep ? 'bg-primary-600 text-white border-primary-400 shadow-lg scale-110' : step < currentStep ? 'bg-green-600 text-white border-green-500' : 'bg-gray-200 text-gray-400 border-gray-300 dark:bg-gray-800 dark:text-gray-600 dark:border-gray-700'}`}>{step < currentStep ? '✓' : step}</div>
+                  <span className={`text-xs mt-2 font-bold uppercase tracking-wider transition-colors duration-300 ${step === currentStep ? 'text-primary-600 dark:text-primary-400' : 'text-gray-400 dark:text-gray-600'}`}>{step === 1 ? 'Bio' : step === 2 ? 'Church' : step === 3 ? 'Health' : 'Consent'}</span>
                 </div>
               ))}
             </div>
-            <div className="relative w-full h-1 bg-gray-200 dark:bg-red-950 rounded-full -mt-8 mb-8 z-0 mx-4 max-w-[calc(100%-2rem)]">
-              <motion.div className="bg-gradient-to-r from-green-600 via-yellow-500 to-yellow-400 h-full rounded-full shadow-md" initial={{ width: "0%" }} animate={{ width: `${((currentStep - 1) / 3) * 100}%` }} transition={{ duration: 0.5, ease: "easeInOut" }} />
+            <div className="relative w-full h-1 bg-gray-200 dark:bg-gray-800 rounded-full -mt-8 mb-8 z-0 mx-4 max-w-[calc(100%-2rem)]">
+              <motion.div className="bg-gradient-to-r from-primary-600 via-primary-500 to-primary-400 h-full rounded-full shadow-md" initial={{ width: "0%" }} animate={{ width: `${((currentStep - 1) / 3) * 100}%` }} transition={{ duration: 0.5, ease: "easeInOut" }} />
             </div>
           </div>
 
-          <div className="glass-effect p-8 md:p-10 rounded-3xl relative bg-white/60 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-2xl backdrop-blur-xl">
-            <div className="absolute top-0 left-0 w-16 h-16 border-t-2 border-l-2 border-yellow-500/30 rounded-tl-3xl"></div>
-            <div className="absolute bottom-0 right-0 w-16 h-16 border-b-2 border-r-2 border-yellow-500/30 rounded-br-3xl"></div>
-
+          <div className="bg-white dark:bg-gray-800 p-8 md:p-10 rounded-3xl relative border border-gray-100 dark:border-gray-700 shadow-xl">
             <form onSubmit={handleSubmit(onSubmit)}>
               {renderStepContent()}
-              <div className="flex justify-between mt-12 pt-8 border-t border-gray-200 dark:border-white/10">
-                {currentStep > 1 ? <button type="button" onClick={prevStep} disabled={isSubmitting} className="px-8 py-3 border border-gray-300 dark:border-white/20 text-gray-600 dark:text-white/70 rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 transition-colors font-bold disabled:opacity-50">← BACK</button> : <div></div>}
+              <div className="flex justify-between mt-12 pt-8 border-t border-gray-200 dark:border-gray-700">
+                {currentStep > 1 ? <button type="button" onClick={prevStep} disabled={isSubmitting} className="px-8 py-3 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold disabled:opacity-50">← BACK</button> : <div></div>}
                 {currentStep < 4 ? <button type="button" onClick={nextStep} className="btn-primary px-10 py-3 rounded-xl shadow-lg flex items-center gap-2">NEXT STEP →</button> :
                   <motion.button type="submit" disabled={isSubmitting} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="btn-primary px-12 py-3 rounded-xl shadow-xl disabled:opacity-70 disabled:grayscale flex items-center gap-2">
-                    {isSubmitting ? "PROCESSING..." : "PAY ₦3,000 & REGISTER 💳"}
+                    {isSubmitting ? "PROCESSING..." : "COMPLETE REGISTRATION"}
                   </motion.button>
                 }
               </div>

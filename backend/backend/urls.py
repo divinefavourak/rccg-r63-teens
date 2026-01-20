@@ -36,7 +36,15 @@ urlpatterns = [
     # Admin
     path('admin/', admin.site.urls),
     
-    # API endpoints
+    # API v1 endpoints - New Platform
+    path('api/v1/auth/', include('users.urls')),
+    path('api/v1/profiles/', include('profiles.urls')),
+    path('api/v1/content/', include('content.urls')),
+    path('api/v1/media/', include('media.urls')),
+    path('api/v1/events/', include('events.urls')),
+    path('api/v1/payments/', include('payments.urls')),
+    
+    # Legacy API endpoints (for backward compatibility)
     path('api/auth/', include('users.urls')),
     path('api/', include('tickets.urls')),
     path('api/payments/', include('payments.urls')),

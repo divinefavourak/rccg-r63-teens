@@ -51,6 +51,7 @@ out/
 dist/
 build/
 .cache/
+template/
 
 # Testing
 .coverage

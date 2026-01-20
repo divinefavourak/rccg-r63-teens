@@ -73,8 +73,8 @@ const CheckTicketStatus = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#2b0303]">
-                <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-yellow-500"></div>
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+                <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-primary-500"></div>
             </div>
         );
     }
@@ -85,18 +85,18 @@ const CheckTicketStatus = () => {
             icon: FaExclamationTriangle,
             iconBg: 'bg-red-100 dark:bg-red-900/30',
             iconColor: 'text-red-600 dark:text-red-400',
-            title: 'TICKET NOT FOUND',
+            title: 'REGISTRATION NOT FOUND',
             titleColor: 'text-red-600 dark:text-red-400',
-            message: `We couldn't find a ticket with ID: ${ticketId}`,
-            description: 'This ticket may not exist or the ID might be incorrect.',
+            message: `We couldn't find a registration with ID: ${ticketId}`,
+            description: 'This ID may not exist or might be incorrect.',
         },
         pending: {
             icon: FaClock,
-            iconBg: 'bg-yellow-100 dark:bg-yellow-900/30',
-            iconColor: 'text-yellow-600 dark:text-yellow-400',
+            iconBg: 'bg-amber-100 dark:bg-amber-900/30',
+            iconColor: 'text-amber-600 dark:text-amber-400',
             title: 'PENDING VERIFICATION',
-            titleColor: 'text-yellow-600 dark:text-yellow-400',
-            message: 'Your ticket is awaiting admin approval',
+            titleColor: 'text-amber-600 dark:text-amber-400',
+            message: 'Your registration is awaiting admin approval',
             description: 'Your registration has been received and is currently being processed. You will be notified once approved.',
         },
         payment_pending: {
@@ -112,18 +112,18 @@ const CheckTicketStatus = () => {
             icon: FaCheckCircle,
             iconBg: 'bg-green-100 dark:bg-green-900/30',
             iconColor: 'text-green-600 dark:text-green-400',
-            title: 'TICKET APPROVED',
+            title: 'REGISTRATION APPROVED',
             titleColor: 'text-green-600 dark:text-green-400',
-            message: 'Your ticket has been approved!',
-            description: 'You are all set for the event. Present this ticket at the registration desk.',
+            message: 'Your registration has been approved!',
+            description: 'You are all set for the event. Present this pass at the registration desk.',
         },
         rejected: {
             icon: FaTimesCircle,
             iconBg: 'bg-red-100 dark:bg-red-900/30',
             iconColor: 'text-red-600 dark:text-red-400',
-            title: 'TICKET REJECTED',
+            title: 'REGISTRATION REJECTED',
             titleColor: 'text-red-600 dark:text-red-400',
-            message: 'Your ticket application was not approved',
+            message: 'Your registration application was not approved',
             description: 'Please contact the event organizers for more information.',
         },
     };
@@ -132,7 +132,7 @@ const CheckTicketStatus = () => {
     const IconComponent = config.icon;
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-[#2b0303] transition-colors duration-500">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-500">
             <Navbar />
 
             <div className="pt-28 pb-16 px-6">
@@ -153,13 +153,13 @@ const CheckTicketStatus = () => {
                                 <IconComponent className={`text-5xl ${config.iconColor}`} />
                             </div>
                         </motion.div>
-                        <h1 className={`text-3xl md:text-4xl font-black dark:text-white mb-2 font-['Impact'] tracking-wide`}>
+                        <h1 className={`text-3xl md:text-4xl font-black dark:text-white mb-2 font-sans tracking-wide`}>
                             <span className={config.titleColor}>{config.title}</span>
                         </h1>
-                        <p className="text-gray-600 dark:text-red-200/70 text-lg mb-2">
+                        <p className="text-gray-600 dark:text-gray-300 text-lg mb-2">
                             {config.message}
                         </p>
-                        <p className="text-gray-500 dark:text-red-200/50 text-sm">
+                        <p className="text-gray-500 dark:text-gray-400 text-sm">
                             {config.description}
                         </p>
                     </div>
@@ -170,12 +170,12 @@ const CheckTicketStatus = () => {
                             initial={{ scale: 0.9, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             transition={{ delay: 0.3 }}
-                            className="bg-white dark:bg-[#1a0505] rounded-xl shadow-lg p-6 mb-6 border-2 border-gray-200 dark:border-yellow-600/20"
+                            className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-6 border border-gray-200 dark:border-gray-700"
                         >
-                            <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">Ticket Details</h3>
+                            <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">Registration Details</h3>
                             <div className="grid grid-cols-2 gap-4 text-sm">
                                 <div>
-                                    <p className="text-gray-500 dark:text-gray-400">Ticket ID</p>
+                                    <p className="text-gray-500 dark:text-gray-400">ID</p>
                                     <p className="font-mono font-bold text-gray-800 dark:text-white">{ticketData.ticketId}</p>
                                 </div>
                                 <div>
@@ -186,7 +186,7 @@ const CheckTicketStatus = () => {
                                     <p className="text-gray-500 dark:text-gray-400">Status</p>
                                     <p className={`font-bold capitalize ${ticketData.status === 'approved' ? 'text-green-600' :
                                         ticketData.status === 'rejected' ? 'text-red-600' :
-                                            'text-yellow-600'
+                                            'text-amber-600'
                                         }`}>
                                         {ticketData.status}
                                     </p>
@@ -207,14 +207,14 @@ const CheckTicketStatus = () => {
                                         onClick={() => navigate(`/ticket-preview?ticket_id=${ticketId}`)}
                                         className="w-full py-3 bg-gradient-to-r from-green-500 to-green-600 text-white font-bold rounded-lg hover:shadow-lg transform hover:scale-105 transition-all"
                                     >
-                                        View Full Ticket
+                                        View Full Pass
                                     </button>
                                 )}
 
                                 {(ticketStatus === 'pending' || ticketStatus === 'payment_pending') && ticketData.payment_status === 'unpaid' && (
                                     <button
                                         onClick={() => navigate('/upload-payment')}
-                                        className="w-full py-3 bg-gradient-to-r from-yellow-500 to-yellow-600 text-white font-bold rounded-lg hover:shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-2"
+                                        className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-bold rounded-lg hover:shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-2"
                                     >
                                         <FaUpload /> Upload Payment Proof
                                     </button>
@@ -231,36 +231,25 @@ const CheckTicketStatus = () => {
                             transition={{ delay: 0.3 }}
                             className="space-y-4"
                         >
-                            <div className="bg-white dark:bg-[#1a0505] rounded-xl shadow-lg p-6 border-2 border-gray-200 dark:border-yellow-600/20 hover:border-yellow-500 transition-all">
+                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 border border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-all">
                                 <div className="flex items-start gap-4">
-                                    <div className="flex-shrink-0 w-12 h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">
-                                        <FaTicketAlt className="text-2xl text-yellow-600 dark:text-yellow-400" />
+                                    <div className="flex-shrink-0 w-12 h-12 bg-primary-100 dark:bg-primary-900/30 rounded-lg flex items-center justify-center">
+                                        <FaTicketAlt className="text-2xl text-primary-600 dark:text-primary-400" />
                                     </div>
                                     <div className="flex-1">
                                         <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
-                                            Register for a ticket
+                                            Register for a pass
                                         </h3>
-                                        <p className="text-gray-600 dark:text-red-200/70 text-sm mb-4">
-                                            Don't have a ticket yet? Register now for the event!
+                                        <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">
+                                            Don't have a pass yet? Register now for the event!
                                         </p>
                                         <button
-                                            onClick={() => navigate('/get-ticket')}
-                                            className="px-6 py-2 bg-gradient-to-r from-yellow-500 to-yellow-600 text-white font-bold rounded-lg hover:shadow-lg transform hover:scale-105 transition-all"
+                                            onClick={() => navigate('/register')}
+                                            className="px-6 py-2 bg-gradient-to-r from-primary-600 to-primary-700 text-white font-bold rounded-lg hover:shadow-lg transform hover:scale-105 transition-all"
                                         >
                                             Register Now
                                         </button>
                                     </div>
-                                </div>
-                            </div>
-
-                            <div className="bg-white dark:bg-[#1a0505] rounded-xl shadow-lg p-6 border-2 border-gray-200 dark:border-yellow-600/20">
-                                <div className="bg-gray-50 dark:bg-[#2b0303] rounded-lg p-4">
-                                    <p className="text-sm text-gray-700 dark:text-gray-300 font-mono mb-2">
-                                        Ticket ID Format: <span className="text-yellow-600 dark:text-yellow-400 font-bold">TKT-YYYYMM-XXXXX</span>
-                                    </p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                                        Example: TKT-202512-00001
-                                    </p>
                                 </div>
                             </div>
                         </motion.div>
@@ -270,7 +259,7 @@ const CheckTicketStatus = () => {
                     <div className="text-center mt-8">
                         <button
                             onClick={() => navigate('/')}
-                            className="text-sm font-bold text-gray-500 dark:text-white/40 hover:text-red-600 dark:hover:text-white transition-colors"
+                            className="text-sm font-bold text-gray-500 dark:text-white/40 hover:text-primary-600 dark:hover:text-white transition-colors"
                         >
                             ← Return to Home
                         </button>

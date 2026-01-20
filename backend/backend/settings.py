@@ -50,11 +50,19 @@ INSTALLED_APPS = [
     'django_filters',
     'storages',
     
-    # Local apps
+    # Local apps - Core
+    'common',
     'users',
-    'tickets',
+    'profiles',
+    
+    # Local apps - Content
+    'content',
+    'media.apps.MediaConfig',  # Use label 'media_content' to avoid conflict
+    
+    # Local apps - Events & Payments
+    'events',
+    'tickets',  # Legacy - will be deprecated after migration
     'payments',
-    # 'audit',
 ]
 
 MIDDLEWARE = [
