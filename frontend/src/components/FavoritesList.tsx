@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../api/axios';
-import { FavoriteItem } from '../types';
+import type { FavoriteItem } from '../types';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 import { FaPlay, FaBookOpen, FaTrash } from 'react-icons/fa';

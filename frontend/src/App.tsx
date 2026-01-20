@@ -1,25 +1,22 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { Analytics } from "@vercel/analytics/react"; // NEW: Analytics
 import ScrollToTop from './components/ScrollToTop';
 import ProtectedRoute from './components/ProtectedRoute';
-import { AuthProvider } from './context/AuthContext';
 
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const TicketForm = lazy(() => import('./pages/TicketForm'));
 const AdminLogin = lazy(() => import('./pages/AdminLogin'));
 const AdminRegister = lazy(() => import('./pages/AdminRegister'));
 const RegisterCoordinator = lazy(() => import('./pages/RegisterCoordinator'));
-const AdminVerify = lazy(() => import('./pages/AdminVerify'));
 const CoordinatorDashboard = lazy(() => import('./pages/CoordinatorDashboard'));
 const BulkRegister = lazy(() => import('./pages/BulkRegister'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const PaymentCallback = lazy(() => import('./pages/PaymentCallback'));
 const PaymentPage = lazy(() => import('./pages/PaymentPage'));
 const TicketPreview = lazy(() => import('./pages/TicketPreview'));
-const Login = lazy(() => import('./pages/Login'));
-const Register = lazy(() => import('./pages/Register'));
+const Auth3D = lazy(() => import('./pages/Auth3D'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const DevotionalList = lazy(() => import('./pages/DevotionalList')); // New
 const DevotionalDetail = lazy(() => import('./pages/DevotionalDetail'));
@@ -27,6 +24,14 @@ const ManualList = lazy(() => import('./pages/ManualList'));
 const MediaList = lazy(() => import('./pages/MediaList'));
 const EventList = lazy(() => import('./pages/EventList')); // New
 const EventDetail = lazy(() => import('./pages/EventDetail')); // New
+const AdminLayout = lazy(() => import('./components/AdminLayout'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const AdminDevotionals = lazy(() => import('./pages/AdminDevotionals'));
+const AdminManuals = lazy(() => import('./pages/AdminManuals'));
+const AdminMedia = lazy(() => import('./pages/AdminMedia'));
+const AdminEvents = lazy(() => import('./pages/AdminEvents'));
+const AdminUsers = lazy(() => import('./pages/AdminUsers'));
+const AdminSettings = lazy(() => import('./pages/AdminSettings'));
 
 const Loading = () => (
   <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 transition-colors duration-500">
@@ -58,8 +63,8 @@ function App() {
       <Suspense fallback={<Loading />}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+          <Route path="/login" element={<Auth3D />} />
+          <Route path="/register" element={<Auth3D initialIsSignUp={true} />} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
 
           {/* Content Routes */}
@@ -92,23 +97,19 @@ function App() {
             element={<ProtectedRoute allowedRoles={['coordinator']}><TicketForm /></ProtectedRoute>}
           />
 
-          {/* Admin Routes */}
-          <Route
-            path="/admin"
-            element={<ProtectedRoute allowedRoles={['admin']}><AdminVerify /></ProtectedRoute>}
-          />
-          <Route
-            path="/admin/register-admin"
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <AdminRegister />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/register-coordinator"
-            element={<ProtectedRoute allowedRoles={['admin']}><RegisterCoordinator /></ProtectedRoute>}
-          />
+          {/* Admin Dashboard Routes */}
+          <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminLayout /></ProtectedRoute>}>
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="devotionals" element={<AdminDevotionals />} />
+            <Route path="manuals" element={<AdminManuals />} />
+            <Route path="media" element={<AdminMedia />} />
+            <Route path="events" element={<AdminEvents />} />
+            <Route path="users" element={<AdminUsers />} />
+            <Route path="settings" element={<AdminSettings />} />
+            <Route path="register-admin" element={<AdminRegister />} />
+            <Route path="register-coordinator" element={<RegisterCoordinator />} />
+          </Route>
           {/* Paystack Callback Route */}
           <Route path="/payment/callback" element={<PaymentCallback />} />
           <Route path="/payment" element={<PaymentPage />} />

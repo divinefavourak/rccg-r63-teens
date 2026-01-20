@@ -1,6 +1,6 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import api from '../api/axios';
-import { User, LoginCredentials, RegisterCredentials, AuthResponse } from '../types';
+import type { User, LoginCredentials, RegisterCredentials, AuthResponse } from '../types';
 
 interface AuthContextType {
   user: User | null;
