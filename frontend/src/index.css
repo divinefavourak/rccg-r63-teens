@@ -6,10 +6,17 @@
 
 @layer base {
   :root {
-    --primary: #8B0000;
-    --primary-dark: #1a0505;
-    --accent: #FFD700;
-    --background: #ffffff;
+    --primary: #10B981;
+    /* Emerald Green */
+    --primary-dark: #065f46;
+    /* Darker Green */
+    --accent: #F59E0B;
+    /* Amber/Yellow for highlights */
+    --background: #FFFFFF;
+    --text-primary: #1F2937;
+    /* Gray 800 */
+    --text-secondary: #4B5563;
+    /* Gray 600 */
   }
 
   html {
@@ -24,48 +31,49 @@
 
 @layer components {
 
-  /* 3D Gold Button */
+  /* Modern Green Button */
   .btn-primary {
-    @apply bg-gradient-to-b from-yellow-300 via-yellow-500 to-yellow-700 text-red-900 font-black py-4 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-[0_4px_0_#B8860B] hover:shadow-[0_6px_0_#B8860B] active:shadow-none active:translate-y-1;
+    @apply bg-primary-500 hover:bg-primary-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-primary-500/30 active:scale-95;
   }
 
+  /* Secondary Button (Outline) */
   .btn-secondary {
-    @apply bg-white/10 backdrop-blur-md border border-yellow-500/50 text-yellow-600 dark:text-yellow-400 font-bold py-4 px-8 rounded-xl transition-all duration-300 hover:bg-white/20 hover:text-red-900 dark:hover:text-white;
+    @apply bg-transparent border-2 border-primary-500 text-primary-500 font-bold py-3 px-6 rounded-xl transition-all duration-300 hover:bg-primary-50 hover:text-primary-600 active:scale-95;
   }
 
+  /* Glass Card */
   .card {
-    @apply bg-white/80 dark:bg-black/40 backdrop-blur-lg rounded-2xl shadow-2xl border border-red-100 dark:border-white/10 transition-colors duration-500;
+    @apply bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 transition-all duration-300 hover:shadow-2xl;
   }
 
   .section-padding {
-    @apply py-20 px-6;
+    @apply py-16 px-4 md:px-8;
   }
 
   .container-custom {
     @apply container mx-auto max-w-7xl;
   }
 
-  /* 3D Gold Text Effect - FIXED: Replaced rgba with hex */
-  .text-gold-3d {
-    @apply bg-clip-text text-transparent bg-[image:var(--tw-gradient-gold-text)] drop-shadow-[0_2px_2px_#0000004D] dark:drop-shadow-[0_2px_2px_#000000CC];
-    background-image: linear-gradient(to bottom, #FFF8DC 0%, #FFD700 40%, #B8860B 100%);
-  }
-
-  .glass-effect {
-    @apply bg-white/40 dark:bg-red-900/30 backdrop-blur-lg border border-white/50 dark:border-red-500/30 shadow-xl transition-colors duration-500;
+  /* Gradient Text */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary-600 to-primary-400;
   }
 }
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 10px;
+  width: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #1a0505;
+  background: #f1f5f9;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(to bottom, #FFD700, #B8860B);
-  border-radius: 5px;
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
