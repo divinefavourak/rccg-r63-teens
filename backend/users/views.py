@@ -97,6 +97,23 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         return ip
 
 
+class RegisterView(generics.CreateAPIView):
+    """Public endpoint for user registration"""
+    serializer_class = UserCreateSerializer
+    permission_classes = [permissions.AllowAny]
+    
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        
+        # Return user data (without auto-login, frontend handles login after)
+        return Response(
+            {"detail": "Registration successful. Please login."},
+            status=status.HTTP_201_CREATED
+        )
+
+
 class UserViewSet(viewsets.ModelViewSet):
     """ViewSet for User management"""
     queryset = User.objects.all()

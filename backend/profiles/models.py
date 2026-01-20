@@ -37,7 +37,8 @@ class TeenProfile(UUIDMixin, TimestampMixin):
     age_group = models.CharField(
         max_length=20,
         choices=AgeGroup.choices,
-        blank=True
+        blank=True,
+        default=''
     )
     gender = models.CharField(max_length=20, choices=Gender.choices)
     bio = models.TextField(blank=True, max_length=500)
