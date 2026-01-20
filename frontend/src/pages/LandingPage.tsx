@@ -2,6 +2,8 @@ import { Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import { BookOpen, PlayCircle, Calendar, Users, ArrowRight, CheckCircle, Star } from "lucide-react";
 import { cn } from "../lib/utils";
+import HeroCarousel from "../components/HeroCarousel";
+import Footer from "../components/Footer";
 
 const LandingPage = () => {
   return (
@@ -16,7 +18,7 @@ const LandingPage = () => {
             <div className="flex-1 text-center lg:text-left z-10">
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 font-bold text-sm mb-8 animate-fade-in-up">
                 <Star size={16} className="fill-current" />
-                <span>The Official R63 Teens Platform</span>
+                <span>The Official Faith Tribe Platform</span>
               </div>
 
               <h1 className="text-5xl md:text-7xl font-black tracking-tight mb-6 leading-[1.1]">
@@ -59,35 +61,8 @@ const LandingPage = () => {
             </div>
 
             {/* Hero Image / Graphic */}
-            <div className="flex-1 relative w-full max-w-lg lg:max-w-none">
-              <div className="relative aspect-square lg:aspect-[4/3] rounded-3xl overflow-hidden shadow-2xl border-4 border-white dark:border-gray-800 bg-gray-100 dark:bg-gray-800 transform rotate-2 hover:rotate-0 transition-all duration-500">
-                {/* Fallback Pattern since Image Gen Failed */}
-                <div className="absolute inset-0 bg-gradient-to-br from-primary-100 to-green-50 dark:from-primary-900/40 dark:to-gray-900">
-                  <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#059669_1px,transparent_1px)] [background-size:16px_16px]"></div>
-                </div>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center p-8">
-                    <div className="w-24 h-24 bg-white dark:bg-gray-900 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl text-primary-600">
-                      <Star size={48} className="fill-current" />
-                    </div>
-                    <h3 className="text-2xl font-bold text-primary-900 dark:text-white mb-2">Welcome Home</h3>
-                    <p className="text-primary-700 dark:text-primary-300">Your spiritual journey starts here.</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Floating Cards */}
-              <div className="absolute -bottom-6 -left-6 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 animate-bounce-slow">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center text-green-600">
-                    <Calendar size={20} />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase">Next Event</p>
-                    <p className="font-bold text-gray-900 dark:text-white">Teens Camp '25</p>
-                  </div>
-                </div>
-              </div>
+            <div className="flex-1 relative w-full h-[500px] lg:h-auto min-h-[400px]">
+              <HeroCarousel />
             </div>
           </div>
         </div>
@@ -158,6 +133,7 @@ const LandingPage = () => {
         </div>
       </section>
 
+      <Footer />
     </div>
   );
 };

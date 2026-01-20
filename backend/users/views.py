@@ -30,12 +30,8 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         try:
             user = User.objects.get(username=username)
         except User.DoesNotExist:
-            LoginHistory.objects.create(
-                user=None,
-                ip_address=self.get_client_ip(request),
-                user_agent=request.META.get('HTTP_USER_AGENT', ''),
-                success=False
-            )
+            # Don't create login history for non-existent users (user_id is required)
+            # Just return 401 immediately
             return Response(
                 {"detail": "Invalid credentials"},
                 status=status.HTTP_401_UNAUTHORIZED
