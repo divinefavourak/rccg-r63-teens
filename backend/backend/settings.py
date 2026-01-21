@@ -57,7 +57,7 @@ INSTALLED_APPS = [
     
     # Local apps - Content
     'content',
-    'media.apps.MediaConfig',  # Use label 'media_content' to avoid conflict
+    'media',  # Media & Podcasts app (uses label 'media_content' in apps.py)
     
     # Local apps - Events & Payments
     'events',
