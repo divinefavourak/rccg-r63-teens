@@ -8,7 +8,8 @@ import {
     ThumbsUp,
     X,
     Upload,
-    Eye
+    Eye,
+    CloudDownload
 } from 'lucide-react';
 import api from '../api/axios';
 import type { Devotional } from '../types';
@@ -25,8 +26,12 @@ const AdminDevotionals = () => {
     const [formData, setFormData] = useState({
         title: '',
         date: '',
-        scripture_reference: '',
-        scripture_text: '',
+        scripture_reference: '', // Legacy/Fallback
+        scripture_text: '', // Legacy/Fallback
+        memory_verse_passage: '',
+        memory_verse_content: '',
+        bible_text_passage: '',
+        bible_text_content: '',
         content: '',
         key_point: '',
         prayer: '',
@@ -54,6 +59,10 @@ const AdminDevotionals = () => {
             date: '',
             scripture_reference: '',
             scripture_text: '',
+            memory_verse_passage: '',
+            memory_verse_content: '',
+            bible_text_passage: '',
+            bible_text_content: '',
             content: '',
             key_point: '',
             prayer: '',
@@ -70,6 +79,10 @@ const AdminDevotionals = () => {
             date: devotional.date,
             scripture_reference: devotional.scripture_reference,
             scripture_text: devotional.scripture_text,
+            memory_verse_passage: devotional.memory_verse_passage || '',
+            memory_verse_content: devotional.memory_verse_content || '',
+            bible_text_passage: devotional.bible_text_passage || '',
+            bible_text_content: devotional.bible_text_content || '',
             content: devotional.content,
             key_point: devotional.key_point,
             prayer: devotional.prayer || '',
@@ -124,6 +137,28 @@ const AdminDevotionals = () => {
         }
     };
 
+    const handleAutoFetch = async () => {
+        if (!window.confirm('This will automatically fetch devotionals for the next 7 days from the web. Continue?')) return;
+
+        try {
+            const loadingToast = toast.loading('Fetching devotionals...');
+            const { data } = await api.post('/content/devotionals/fetch_from_web/', { days: 7 });
+            toast.dismiss(loadingToast);
+
+            if (data.success) {
+                toast.success(`Successfully fetched ${data.fetched_count} devotionals!`);
+                if (data.errors && data.errors.length > 0) {
+                    toast('Some dates were skipped (already exist or not found)', { icon: '⚠️' });
+                }
+                fetchDevotionals();
+            }
+        } catch (error) {
+            console.error("Failed to fetch devotionals", error);
+            toast.dismiss();
+            toast.error("Failed to auto-fetch devotionals");
+        }
+    };
+
     useEffect(() => {
         fetchDevotionals();
     }, []);
@@ -175,15 +210,24 @@ const AdminDevotionals = () => {
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Devotionals Management</h2>
                     <p className="text-gray-500 dark:text-gray-400">Create and manage daily devotionals for teens</p>
                 </div>
-                <button
-                    onClick={() => {
-                        resetForm();
-                        setIsModalOpen(true);
-                    }}
-                    className="btn-primary py-2.5 px-6 flex items-center gap-2 shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5"
-                >
-                    <Plus size={20} /> Add Devotional
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={handleAutoFetch}
+                        className="btn-secondary py-2.5 px-4 flex items-center gap-2"
+                        title="Auto-fetch from OpenHeavens"
+                    >
+                        <CloudDownload size={20} /> <span className="hidden md:inline">Auto-Import</span>
+                    </button>
+                    <button
+                        onClick={() => {
+                            resetForm();
+                            setIsModalOpen(true);
+                        }}
+                        className="btn-primary py-2.5 px-6 flex items-center gap-2 shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5"
+                    >
+                        <Plus size={20} /> Add Devotional
+                    </button>
+                </div>
             </div>
 
             {/* Filters */}
@@ -326,28 +370,51 @@ const AdminDevotionals = () => {
                                     />
                                 </div>
 
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Memory Verse Reference</label>
+                                        <input
+                                            type="text"
+                                            name="memory_verse_passage"
+                                            placeholder="e.g., John 3:16"
+                                            className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
+                                            value={formData.memory_verse_passage}
+                                            onChange={handleInputChange}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Bible Reading Reference</label>
+                                        <input
+                                            type="text"
+                                            name="bible_text_passage"
+                                            placeholder="e.g., Psalm 23:1-6"
+                                            className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
+                                            value={formData.bible_text_passage}
+                                            onChange={handleInputChange}
+                                        />
+                                    </div>
+                                </div>
+
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Scripture Reference</label>
-                                    <input
-                                        type="text"
-                                        name="scripture_reference"
-                                        required
-                                        placeholder="e.g., John 3:16"
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Memory Verse Text</label>
+                                    <textarea
+                                        name="memory_verse_content"
+                                        rows={2}
+                                        placeholder="The actual text of the memory verse..."
                                         className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
-                                        value={formData.scripture_reference}
+                                        value={formData.memory_verse_content}
                                         onChange={handleInputChange}
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Scripture Text</label>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Bible Reading Text</label>
                                     <textarea
-                                        name="scripture_text"
-                                        required
+                                        name="bible_text_content"
                                         rows={3}
-                                        placeholder="Enter the scripture verse"
+                                        placeholder="The text of the bible reading (optional, can be long)..."
                                         className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
-                                        value={formData.scripture_text}
+                                        value={formData.bible_text_content}
                                         onChange={handleInputChange}
                                     />
                                 </div>

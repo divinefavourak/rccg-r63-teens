@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { FaTimes, FaCheck, FaBan, FaDownload, FaFilePdf, FaImage } from "react-icons/fa";
-import { Ticket } from "../types";
+import { type Ticket } from "../types";
 
 interface TicketDetailsModalProps {
     ticket: Ticket | null;
@@ -71,8 +71,8 @@ const TicketDetailsModal = ({ ticket, onClose, onApprove, onReject }: TicketDeta
                             <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                                 Payment Proof
                                 <span className={`text-xs px-2 py-1 rounded font-bold uppercase ${ticket.payment_status === 'verified' ? 'bg-green-100 text-green-700' :
-                                        ticket.payment_status === 'verification_pending' ? 'bg-yellow-100 text-yellow-700' :
-                                            'bg-gray-100 text-gray-700'
+                                    ticket.payment_status === 'verification_pending' ? 'bg-yellow-100 text-yellow-700' :
+                                        'bg-gray-100 text-gray-700'
                                     }`}>
                                     {ticket.payment_status?.replace(/_/g, ' ')}
                                 </span>

@@ -132,6 +132,47 @@ class DevotionalViewSet(viewsets.ModelViewSet):
             'total_read': profile.devotionals_read_count,
             'already_read': not created,
         })
+        
+    @action(detail=False, methods=['post'], permission_classes=[IsAdmin])
+    def fetch_from_web(self, request):
+        """
+        Trigger scraping of devotionals from the web.
+        Accepts 'days' param (default 7) or 'date' (specific date).
+        """
+        from .services.devotional_scraper import scrape_and_save_devotional
+        
+        target_date_str = request.data.get('date')
+        days = int(request.data.get('days', 7))
+        
+        results = []
+        errors = []
+        
+        if target_date_str:
+            # Single date
+            try:
+                target_date = date.fromisoformat(target_date_str)
+                result = scrape_and_save_devotional(target_date)
+                if result:
+                    results.append(result)
+                else:
+                    errors.append(f"Could not fetch for {target_date} (might already exist or not found)")
+            except ValueError:
+                return Response({'error': 'Invalid date format (YYYY-MM-DD)'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            # Scrape upcoming days (or fill gaps)
+            start_date = date.today()
+            for i in range(days):
+                target_date = start_date + timedelta(days=i)
+                result = scrape_and_save_devotional(target_date)
+                if result:
+                    results.append(result)
+        
+        return Response({
+            'success': True,
+            'fetched_count': len(results),
+            'results': results,
+            'errors': errors
+        })
 
 
 class ManualSeriesViewSet(viewsets.ModelViewSet):

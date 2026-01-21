@@ -7,19 +7,19 @@ import Footer from "../components/Footer";
 import BulkEmailModal from "../components/BulkEmailModal";
 import TicketDetailsModal from "../components/TicketDetailsModal";
 import { ticketService } from "../services/ticketService";
-import { Ticket } from "../types";
+import { type Ticket } from "../types";
 import toast from "react-hot-toast";
 import { CHURCH_INFO_FIELDS } from "../constants/formFields";
 import {
   FaSearch, FaCheck, FaTimes, FaEye, FaDownload,
   FaUser, FaSignOutAlt, FaUsers,
-  FaCheckCircle, FaExclamationTriangle, FaEnvelope, FaPaperPlane, FaChartPie, FaUserTie,
+  FaEnvelope, FaPaperPlane, FaChartPie, FaUserTie,
   FaChevronLeft, FaChevronRight
 } from "react-icons/fa";
 
 const AdminVerify = () => {
   console.log("AdminVerify updated version");
-  const { user, logout, isAuthenticated } = useAuth();
+  const { logout, isAuthenticated } = useAuth();
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -27,7 +27,7 @@ const AdminVerify = () => {
   // Filters & Pagination
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [categoryFilter] = useState("all");
   const [provinceFilter, setProvinceFilter] = useState("all");
   const [registeredByFilter, setRegisteredByFilter] = useState("all");
 
@@ -57,7 +57,7 @@ const AdminVerify = () => {
 
   const {
     selectedTickets, setSelectedTickets, bulkAction, setBulkAction,
-    isProcessing, operationResults, setOperationResults,
+    isProcessing,
     handleSelectAll, handleSelectTicket, handleBulkAction, sendCustomEmail
   } = useBulkOperations(tickets, setTickets);
 
@@ -186,7 +186,7 @@ const AdminVerify = () => {
       }
 
       // Call the bulk action API with the template action
-      await ticketService.performBulkAction(ticketIds, templateAction);
+      await ticketService.performBulkAction(ticketIds, templateAction as "approve" | "reject" | "send_email" | "delete" | "welcome_email" | "payment_reminder" | "final_instructions");
 
       setShowEmailModal(false);
       toast.success(`${templateAction.replace('_', ' ')} sent to ${ticketIds.length} recipients!`);

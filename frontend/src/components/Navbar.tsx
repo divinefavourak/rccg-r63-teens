@@ -97,7 +97,7 @@ const Navbar = () => {
             <Link
               to="/login"
               className={cn(
-                "ml-2 px-5 py-2.5 rounded-full font-bold text-sm transition-all duration-300 transform hover:scale-105",
+                "ml-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all duration-300 transform hover:scale-105 whitespace-nowrap",
                 "bg-primary-600 text-white shadow-lg shadow-primary-500/30 hover:shadow-primary-500/50 hover:bg-primary-700"
               )}
             >

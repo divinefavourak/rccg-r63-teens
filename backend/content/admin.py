@@ -44,8 +44,11 @@ class DevotionalAdmin(admin.ModelAdmin):
         ('Identification', {
             'fields': ('date', 'title', 'slug')
         }),
-        ('Scripture', {
-            'fields': ('anchor_scripture', 'scripture_text', 'bible_in_one_year')
+        ('Memory Verse', {
+            'fields': ('memory_verse_passage', 'memory_verse_content')
+        }),
+        ('Bible Reading', {
+            'fields': ('bible_text_passage', 'bible_text_content', 'bible_in_one_year')
         }),
         ('Content', {
             'fields': ('content', 'key_point', 'prayer', 'confession', 'action_point', 'hymn')
@@ -62,6 +65,10 @@ class DevotionalAdmin(admin.ModelAdmin):
         ('Stats', {
             'fields': ('view_count', 'share_count', 'read_count'),
             'classes': ('collapse',)
+        }),
+        ('Legacy / Debug', {
+             'fields': ('anchor_scripture', 'scripture_text'),
+             'classes': ('collapse',)
         }),
     )
     

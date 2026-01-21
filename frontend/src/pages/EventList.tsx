@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import api from '../api/axios';
-import { Event } from '../types';
-import { FaCalendarAlt, FaMapMarkerAlt, FaTicketAlt, FaInfoCircle } from 'react-icons/fa';
+import { type Event } from '../types';
+import { FaCalendarAlt, FaMapMarkerAlt, FaInfoCircle } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
 
 const EventList = () => {
