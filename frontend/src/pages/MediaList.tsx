@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import api from '../api/axios';
-import { MediaEpisode } from '../types';
-import { FaPlay, FaMusic, FaVideo, FaClock } from 'react-icons/fa';
+import { type MediaEpisode } from '../types';
+import { FaMusic, FaClock } from 'react-icons/fa';
 
 const MediaList = () => {
     const [media, setMedia] = useState<MediaEpisode[]>([]);
@@ -46,8 +46,8 @@ const MediaList = () => {
                                 key={type}
                                 onClick={() => setFilter(type)}
                                 className={`px-6 py-2 rounded-lg text-sm font-bold uppercase transition-all ${filter === type
-                                        ? 'bg-primary-500 text-white shadow-md'
-                                        : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
+                                    ? 'bg-primary-500 text-white shadow-md'
+                                    : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
                                     }`}
                             >
                                 {type}

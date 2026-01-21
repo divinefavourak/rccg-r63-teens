@@ -168,6 +168,7 @@ class DevotionalScraper:
             key_point = self._extract_key_point(article)
             
             # Extract other fields
+            bible_text_passage = self._extract_bible_text_passage(article)
             bible_in_one_year = self._extract_bible_reading(article)
             prayer = self._extract_section(article, ['prayer', 'prayer point', 'prayer focus'])
             action_point = self._extract_section(article, ['action point', 'action', 'do this'])
@@ -193,6 +194,12 @@ class DevotionalScraper:
                 'author': 'Pastor E.A. Adeboye',
                 'source_url': source_url,
                 'status': 'published',
+                
+                # New Fields Mapping
+                'memory_verse_passage': self._clean_text(anchor_scripture or '')[:255],
+                'memory_verse_content': self._clean_text(scripture_text or ''),
+                'bible_text_passage': self._clean_text(bible_text_passage or '')[:255],
+                # bible_text_content is not typically on the page, so leave blank or use external API later
             }
             
         except Exception as e:
@@ -291,13 +298,32 @@ class DevotionalScraper:
         
         patterns = [
             r'BIBLE\s+IN\s+(?:ONE\s+)?YEAR[:\s]*(.+?)(?=MEMORISE|KEY|PRAYER|$)',
-            r'READ[:\s]*(.+?)(?=MEMORISE|KEY|PRAYER|$)',
         ]
         
         for pattern in patterns:
             match = re.search(pattern, text_content, re.IGNORECASE | re.DOTALL)
             if match:
                 return match.group(1).strip()[:500]
+        
+        return ''
+
+    def _extract_bible_text_passage(self, article) -> str:
+        """Extract the main bible reading reference (e.g. READ: Psalm 23:1-6)."""
+        text_content = article.get_text()
+        
+        patterns = [
+            r'READ[:\s]*(.+?)(?=MEMORISE|KEY|PRAYER|BIBLE|MESSAGE|$)',
+            r'BIBLE\s+READING[:\s]*(.+?)(?=MEMORISE|KEY|PRAYER|BIBLE|MESSAGE|$)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text_content, re.IGNORECASE | re.DOTALL)
+            if match:
+                # If the match looks like "Bible in one year", ignore it (validation overlap)
+                extracted = match.group(1).strip()
+                if "year" in extracted.lower():
+                    continue
+                return extracted[:255]
         
         return ''
     

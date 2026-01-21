@@ -1,9 +1,9 @@
 // src/data/mockTickets.ts
-import { Ticket } from "../types";
+import { type Ticket } from "../types";
 
 export const MOCK_TICKETS: Ticket[] = [
   {
-    id: 1,
+    id: "1",
     ticketId: "R63T123456",
     fullName: "John Adebayo",
     age: "15",
@@ -30,7 +30,7 @@ export const MOCK_TICKETS: Ticket[] = [
     registeredAt: "2024-01-15T10:30:00Z"
   },
   {
-    id: 2,
+    id: "2",
     ticketId: "R63T123457",
     fullName: "Sarah Johnson",
     age: "12",

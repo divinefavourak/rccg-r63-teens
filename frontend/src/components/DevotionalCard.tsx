@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Devotional } from '../types';
+import { type Devotional } from '../types';
 import { FaBookOpen, FaHeart, FaCalendarAlt } from 'react-icons/fa';
 
 interface DevotionalCardProps {

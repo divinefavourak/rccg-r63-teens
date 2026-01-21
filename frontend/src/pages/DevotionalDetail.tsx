@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import api from '../api/axios';
-import { Devotional } from '../types';
+import { type Devotional } from '../types';
 import toast from 'react-hot-toast';
 import { FaCalendarAlt, FaShare, FaHeart, FaChevronLeft, FaCheckCircle } from 'react-icons/fa';
 
@@ -57,7 +57,11 @@ const DevotionalDetail = () => {
 
             {/* Hero Header */}
             <div className="bg-primary-600 pt-32 pb-20 px-4 text-center relative overflow-hidden">
-                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                {devotional.cover_image ? (
+                    <div className="absolute inset-0 bg-cover bg-center opacity-30" style={{ backgroundImage: `url(${devotional.cover_image})` }}></div>
+                ) : (
+                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                )}
                 <div className="relative z-10 container mx-auto max-w-4xl">
                     <button
                         onClick={() => navigate('/devotionals')}
@@ -71,18 +75,38 @@ const DevotionalDetail = () => {
                         {new Date(devotional.date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                     </div>
 
-                    <h1 className="text-3xl md:text-5xl font-black text-white mb-6 leading-tight">
+                    <h1 className="text-3xl md:text-5xl font-black text-white mb-8 leading-tight drop-shadow-lg">
                         {devotional.title}
                     </h1>
 
-                    <div className="bg-white/10 backdrop-blur-sm p-6 rounded-2xl border border-white/20 max-w-2xl mx-auto">
-                        <p className="text-white/80 text-sm uppercase font-bold tracking-widest mb-2">Memory Verse</p>
-                        <p className="text-xl md:text-2xl text-white font-serif italic">
-                            "{devotional.memory_verse}"
-                        </p>
-                        <p className="text-right text-white/60 mt-2 font-medium text-sm">
-                            — {devotional.scripture_reference}
-                        </p>
+                    <div className="grid md:grid-cols-1 gap-6 max-w-2xl mx-auto text-left">
+                        {/* Memory Verse Box */}
+                        <div className="bg-white/10 backdrop-blur-md p-6 rounded-xl border-l-4 border-accent-400 border-white/20 shadow-lg">
+                            <div className="flex items-center gap-2 text-accent-300 mb-3">
+                                <span className="uppercase font-bold tracking-widest text-sm">Memorise</span>
+                            </div>
+                            <p className="text-lg md:text-xl text-white font-medium mb-2 leading-relaxed">
+                                "{devotional.memory_verse_content || devotional.memory_verse || devotional.scripture_text}"
+                            </p>
+                            <p className="text-white/80 font-bold underline decoration-accent-400 underline-offset-4">
+                                {devotional.memory_verse_passage || devotional.scripture_reference || devotional.anchor_scripture}
+                            </p>
+                        </div>
+
+                        {/* Bible Reading Box */}
+                        <div className="bg-white/10 backdrop-blur-md p-6 rounded-xl border-l-4 border-primary-300 border-white/20 shadow-lg">
+                            <div className="flex items-center gap-2 text-primary-300 mb-3">
+                                <span className="uppercase font-bold tracking-widest text-sm">Read</span>
+                            </div>
+                            <p className="text-xl md:text-2xl text-white font-bold">
+                                {devotional.bible_text_passage || "Scripture Reading"}
+                            </p>
+                            {devotional.bible_text_content && (
+                                <p className="text-white/90 mt-2 text-sm leading-relaxed border-t border-white/10 pt-2">
+                                    {devotional.bible_text_content}
+                                </p>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { ticketService } from "../services/ticketService";
-import { Ticket } from "../types";
+import { type Ticket } from "../types";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import {

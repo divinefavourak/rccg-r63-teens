@@ -49,6 +49,12 @@ class UserCreateSerializer(serializers.ModelSerializer):
             'email': {'required': True},
             'first_name': {'required': True},
             'last_name': {'required': True},
+            'phone': {'required': False},
+            'role': {'required': False},
+            'province': {'required': False},
+            'zone': {'required': False},
+            'area': {'required': False},
+            'parish': {'required': False},
         }
     
     def validate(self, data):

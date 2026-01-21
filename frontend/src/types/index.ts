@@ -60,8 +60,12 @@ export interface RegisterCredentials {
   username: string;
   email: string;
   password: string;
+  password_confirm: string;
   first_name?: string;
   last_name?: string;
+  phone?: string;
+  province?: string;
+  role?: string;
 }
 
 export interface AuthResponse {
@@ -70,12 +74,23 @@ export interface AuthResponse {
   user: User;
 }
 
+// Devotional Content
 export interface Devotional {
   id: string;
   title: string;
   date: string;
   scripture_reference: string;
   memory_verse: string;
+
+  // New Fields
+  memory_verse_passage?: string;
+  memory_verse_content?: string;
+  bible_text_passage?: string;
+  bible_text_content?: string;
+  bible_in_one_year?: string;
+
+  cover_image?: string;
+
   content: string; // HTML or Markdown
   prayer_point: string;
   likes_count: number;

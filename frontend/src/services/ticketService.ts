@@ -1,5 +1,5 @@
 import { api } from "./api";
-import { Ticket } from "../types";
+import { type Ticket } from "../types";
 
 // 1. Helper to map Frontend (camelCase) -> Backend (snake_case)
 // Used when creating a ticket

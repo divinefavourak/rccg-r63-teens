@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { emailService } from '../utils/emailService';
 import { ticketService } from '../services/ticketService';
 import { EVENT_DETAILS } from '../constants/eventDetails';
-import { Ticket, OperationResult } from '../types';
+import { type Ticket, type OperationResult } from '../types';
 
 export const useBulkOperations = (
   tickets: Ticket[],

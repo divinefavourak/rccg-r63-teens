@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import DevotionalCard from '../components/DevotionalCard';
-import { Devotional } from '../types';
+import { type Devotional } from '../types';
 import api from '../api/axios';
 import { FaCalendarAlt, FaSearch } from 'react-icons/fa';
 
@@ -45,7 +45,7 @@ const DevotionalList = () => {
 
                 {/* Header */}
                 <div className="text-center mb-12">
-                    <h1 className="text-4xl font-black text-gray-900 dark:text-white uppercase mb-4">
+                    <h1 className="text-3xl md:text-4xl font-black text-gray-900 dark:text-white uppercase mb-4">
                         TEENAGE OPEN HEAVENS
                     </h1>
                     <div className="w-24 h-1 bg-primary-500 mx-auto rounded-full"></div>

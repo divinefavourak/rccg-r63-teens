@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { useLocation, Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, Link, useSearchParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import Navbar from "../components/Navbar";
@@ -15,17 +15,16 @@ import {
   FaUser,
   FaPhone,
   FaFileImage,
-  FaUpload,
-  FaIdCard
+  FaUpload
 } from "react-icons/fa";
 import rccgLogo from "../assets/logo.jpg";
 import faithLogo from "../assets/faith_logo.jpg";
 
-import { Ticket } from "../types";
+import { type Ticket } from "../types";
 
 const TicketPreview = () => {
   const location = useLocation();
-  const navigate = useNavigate();
+  // const navigate = useNavigate(); // Unused
   const [searchParams] = useSearchParams();
   const [ticketData, setTicketData] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
@@ -234,8 +233,8 @@ const TicketPreview = () => {
                 </div>
 
                 <div className={`px-6 py-2 rounded-full border font-bold uppercase tracking-wider text-sm ${ticket.status === 'approved'
-                    ? 'border-green-200 bg-green-50 text-green-700 dark:bg-green-900/30 dark:border-green-800 dark:text-green-400'
-                    : 'border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:border-amber-800 dark:text-amber-400'
+                  ? 'border-green-200 bg-green-50 text-green-700 dark:bg-green-900/30 dark:border-green-800 dark:text-green-400'
+                  : 'border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:border-amber-800 dark:text-amber-400'
                   }`}>
                   {ticket.status}
                 </div>
@@ -288,7 +287,7 @@ const TicketPreview = () => {
                     <div className="text-right">
                       <p className="text-xs opacity-80 uppercase font-bold">Venue</p>
                       <p className="font-bold text-white flex items-center justify-end gap-2">
-                        <FaMapMarkerAlt /> {EVENT_DETAILS.venue || "Glory Arena"}
+                        <FaMapMarkerAlt /> {EVENT_DETAILS.location || "Glory Arena"}
                       </p>
                     </div>
                   </div>

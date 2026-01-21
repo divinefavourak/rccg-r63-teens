@@ -24,14 +24,25 @@ class Devotional(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     title = models.CharField(max_length=255)
     slug = models.SlugField(max_length=300, unique=True, db_index=True)
     
-    # Scripture
-    anchor_scripture = models.CharField(max_length=255)  # e.g., "John 3:16"
-    scripture_text = models.TextField()
+    # Memory Verse
+    memory_verse_passage = models.CharField(max_length=255, blank=True)  # e.g., "John 3:16"
+    memory_verse_content = models.TextField(blank=True)  # The actual verse text
+    
+    # Bible Text (The main reading)
+    bible_text_passage = models.CharField(max_length=255, blank=True)  # e.g., "Psalm 139:14-15"
+    bible_text_content = models.TextField(blank=True)  # The text of the reading
+    
+    # Old fields - keeping for now to avoid breaking migration immediately, 
+    # but scraper will target new fields. 
+    # Actually, let's keep anchor_scripture/scripture_text as fallbacks or aliases if needed,
+    # but the user requested SEPARATE fields.
+    anchor_scripture = models.CharField(max_length=255, blank=True)
+    scripture_text = models.TextField(blank=True)
     bible_in_one_year = models.TextField(blank=True)  # Reading plan
     
     # Body content
     content = models.TextField()  # Main devotional content (Markdown/rich text)
-    key_point = models.CharField(max_length=500)
+    key_point = models.CharField(max_length=500, blank=True)
     
     # Engagement elements
     prayer = models.TextField(blank=True)

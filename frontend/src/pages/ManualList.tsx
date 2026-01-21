@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import api from '../api/axios';
-import { Manual } from '../types';
+import { type Manual } from '../types';
 import { FaBook, FaDownload, FaEye } from 'react-icons/fa';
 
 const ManualList = () => {

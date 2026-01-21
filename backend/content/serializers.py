@@ -21,8 +21,10 @@ class DevotionalListSerializer(serializers.ModelSerializer):
             'date',
             'title',
             'slug',
-            'anchor_scripture',
-            'key_point',
+            'title',
+            'slug',
+            'memory_verse_passage',
+            'memory_verse_content',
             'cover_image',
             'has_audio',
             'view_count',
@@ -45,9 +47,15 @@ class DevotionalDetailSerializer(serializers.ModelSerializer):
             'slug',
             
             # Scripture
+            'memory_verse_passage',
+            'memory_verse_content',
+            'bible_text_passage',
+            'bible_text_content',
+            'bible_in_one_year',
+            
+            # Legacy
             'anchor_scripture',
             'scripture_text',
-            'bible_in_one_year',
             
             # Content
             'content',
@@ -88,8 +96,14 @@ class DevotionalCreateUpdateSerializer(serializers.ModelSerializer):
         model = Devotional
         fields = [
             'date',
-            'title',
             'slug',
+            'memory_verse_passage',
+            'memory_verse_content',
+            'bible_text_passage',
+            'bible_text_content',
+            'bible_in_one_year',
+            
+            # Legacy
             'anchor_scripture',
             'scripture_text',
             'bible_in_one_year',
@@ -107,8 +121,13 @@ class DevotionalCreateUpdateSerializer(serializers.ModelSerializer):
             'tags',
             'status',
             'published_at',
+            'published_at',
             'scheduled_for',
         ]
+        extra_kwargs = {
+            'slug': {'read_only': True},
+            'anchor_scripture': {'required': False, 'allow_blank': True},
+        }
 
 
 # =====================
@@ -267,8 +286,12 @@ class ManualCreateUpdateSerializer(serializers.ModelSerializer):
             'target_age_group',
             'status',
             'published_at',
+            'published_at',
             'scheduled_for',
         ]
+        extra_kwargs = {
+            'slug': {'read_only': True},
+        }
 
 
 # =====================
