@@ -64,8 +64,10 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
-# Media and Static files
+# Media and Static files (ignore uploads but track backend media app)
 media/
+!backend/media/
+backend/media/devotionals/
 staticfiles/
 uploads/
 
