@@ -19,7 +19,7 @@ const EventDetail = () => {
 
     const fetchEvent = async () => {
         try {
-            const { data } = await api.get(`/content/events/${id}/`);
+            const { data } = await api.get(`/events/${id}/`);
             setEvent(data);
         } catch (error) {
             toast.error('Event not found');

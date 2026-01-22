@@ -25,7 +25,7 @@ const AdminMedia = () => {
     const fetchMedia = async () => {
         try {
             setLoading(true);
-            let url = '/content/media/';
+            let url = '/media/';
             if (activeType !== 'All Types') {
                 // url += `?type=${activeType.toLowerCase()}`;
             }

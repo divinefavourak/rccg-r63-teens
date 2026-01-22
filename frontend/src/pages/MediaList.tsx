@@ -16,7 +16,7 @@ const MediaList = () => {
     const fetchMedia = async () => {
         setLoading(true);
         try {
-            let url = '/content/media/';
+            let url = '/media/';
             if (filter !== 'all') {
                 url += `?type=${filter}`;
             }

@@ -24,7 +24,7 @@ const AdminEvents = () => {
     const fetchEvents = async () => {
         try {
             setLoading(true);
-            const { data } = await api.get('/content/events/');
+            const { data } = await api.get('/events/');
             setEvents(Array.isArray(data) ? data : data.results || []);
         } catch (error) {
             console.error("Failed to fetch events", error);

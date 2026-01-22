@@ -40,8 +40,8 @@ const AdminDashboard = () => {
             const [usersRes, devotionalsRes, mediaRes, eventsRes] = await Promise.all([
                 api.get('/users/'),
                 api.get('/content/devotionals/'),
-                api.get('/content/media/'),
-                api.get('/content/events/')
+                api.get('/media/'),
+                api.get('/events/')
             ]);
 
             const upcomingEvents = (eventsRes.data.results || eventsRes.data || []).filter((e: any) => new Date(e.start_date || e.date) > new Date()).length;
