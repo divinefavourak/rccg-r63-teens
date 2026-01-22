@@ -4,7 +4,6 @@ import {
     Search,
     Edit2,
     Trash2,
-    MoreVertical,
     ThumbsUp,
     X,
     Upload,

@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useForm, SubmitHandler } from "react-hook-form";
+import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
 import axios from "axios";
@@ -13,7 +13,7 @@ import {
   MEDICAL_INFO_FIELDS,
   PARENT_INFO_FIELDS
 } from "../constants/formFields";
-import { ticketSchema, TicketFormData } from "../schemas/ticketSchema";
+import { ticketSchema, type TicketFormData } from "../schemas/ticketSchema";
 import { useTicketStore } from "../store/ticketStore";
 import { ticketService } from "../services/ticketService";
 import { useAuth } from "../hooks/useAuth";
@@ -80,7 +80,6 @@ const TicketForm = () => {
   }, [watchedValues, setFormData]);
 
   const nextStep = async () => {
-    // @ts-expect-error - Keys are valid
     const fields = STEP_FIELDS[currentStep as keyof typeof STEP_FIELDS];
     const isStepValid = await trigger(fields);
 

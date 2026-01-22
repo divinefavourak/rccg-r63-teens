@@ -60,7 +60,7 @@ export interface RegisterCredentials {
   username: string;
   email: string;
   password: string;
-  password_confirm: string;
+  password_confirm?: string;
   first_name?: string;
   last_name?: string;
   phone?: string;
@@ -88,6 +88,13 @@ export interface Devotional {
   bible_text_passage?: string;
   bible_text_content?: string;
   bible_in_one_year?: string;
+
+  // Admin/Legacy Fields
+  scripture_text?: string;
+  anchor_scripture?: string;
+  key_point?: string;
+  prayer?: string;
+  status?: 'draft' | 'published' | 'scheduled';
 
   cover_image?: string;
 

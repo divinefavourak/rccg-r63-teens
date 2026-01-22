@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import api from '../api/axios';
-import { Event } from '../types';
+import { type Event } from '../types';
 import toast from 'react-hot-toast';
-import { FaCalendarAlt, FaMapMarkerAlt, FaMoneyBillWave, FaClock, FaTicketAlt, FaChevronLeft } from 'react-icons/fa';
+import { FaCalendarAlt, FaMapMarkerAlt, FaClock, FaTicketAlt, FaChevronLeft } from 'react-icons/fa';
 
 const EventDetail = () => {
     const { id } = useParams<{ id: string }>();
@@ -121,10 +121,10 @@ const EventDetail = () => {
                                 onClick={handleRegister}
                                 disabled={!isOpen || registering}
                                 className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg transition-all ${!isOpen
-                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                        : registering
-                                            ? 'bg-primary-700 text-white cursor-wait'
-                                            : 'bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white hover:shadow-primary-500/30 hover:-translate-y-1'
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    : registering
+                                        ? 'bg-primary-700 text-white cursor-wait'
+                                        : 'bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white hover:shadow-primary-500/30 hover:-translate-y-1'
                                     }`}
                             >
                                 <FaTicketAlt />

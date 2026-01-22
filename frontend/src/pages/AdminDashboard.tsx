@@ -7,9 +7,7 @@ import {
     PlayCircle,
     Calendar,
     Plus,
-    ArrowUpRight,
-    TrendingUp,
-    MoreVertical
+    TrendingUp
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -25,7 +23,7 @@ const data = [
 ];
 
 const AdminDashboard = () => {
-    const { user } = useAuthContext();
+    useAuthContext(); // Verify authentication
 
     const [statsData, setStatsData] = useState({
         users: 0,

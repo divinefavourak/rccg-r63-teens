@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import img1 from '../assets/img1.JPG';
 import logo from '../assets/faith_tribe_logo.png'; // Assuming this exists, or fallback
