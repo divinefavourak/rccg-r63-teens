@@ -85,7 +85,7 @@ const AdminMedia = () => {
             if (formData.file) data.append('file', formData.file); // Adjust field name 'file' based on your backend serializer (e.g. 'file_url' or 'media_file')
             if (formData.thumbnail) data.append('thumbnail', formData.thumbnail);
 
-            await api.post('/content/media/', data, {
+            await api.post('/media/', data, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
@@ -115,7 +115,7 @@ const AdminMedia = () => {
     const handleDelete = async (id: string) => {
         if (!window.confirm('Are you sure you want to delete this item?')) return;
         try {
-            await api.delete(`/content/media/${id}/`);
+            await api.delete(`/media/${id}/`);
             toast.success("Media deleted");
             fetchMedia();
         } catch (error) {
