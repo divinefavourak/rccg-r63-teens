@@ -37,11 +37,12 @@ const AdminDashboard = () => {
 
     const fetchStats = async () => {
         try {
+            // CORRECTED ENDPOINTS based on url configs
             const [usersRes, devotionalsRes, mediaRes, eventsRes] = await Promise.all([
                 api.get('/users/'),
                 api.get('/content/devotionals/'),
-                api.get('/content/media/'),
-                api.get('/content/events/')
+                api.get('/media/episodes/'),
+                api.get('/events/events/')
             ]);
 
             // Helper to get count from paginated or non-paginated response
