@@ -10,13 +10,19 @@ https://www.openheavens.com.ng/YYYY/MM/open-heaven-for-teens-DD-monthname-YYYY.h
 import logging
 import re
 from datetime import date
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
+from contextlib import contextmanager
 
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 from django.utils.text import slugify
 
 logger = logging.getLogger(__name__)
+
+
+class ScraperException(Exception):
+    """Base exception for scraper errors."""
+    pass
 
 
 class DevotionalScraper:
@@ -29,7 +35,6 @@ class DevotionalScraper:
         "open-heaven-for-teens-{day}-{month_name}-{year}.html"
     )
     
-    # Alternative URL formats to try
     ALT_URL_TEMPLATES = [
         "https://www.openheavens.com.ng/{year}/{month:02d}/open-heaven-for-teens-{day:02d}-{month_name}-{year}.html",
         "https://www.openheavens.com.ng/{year}/{month:02d}/teen-open-heaven-{day}-{month_name}-{year}.html",
@@ -48,17 +53,30 @@ class DevotionalScraper:
         9: 'sep', 10: 'oct', 11: 'nov', 12: 'dec'
     }
     
+    # Required fields that must have content
+    REQUIRED_FIELDS = ['title', 'content']
+    
     def __init__(self, timeout: int = 30):
         self.timeout = timeout
-        self.session = requests.Session()
-        self.session.headers.update({
+        self._session = None
+    
+    @contextmanager
+    def _get_session(self):
+        """Context manager for requests session."""
+        session = requests.Session()
+        session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
                           '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
         })
+        try:
+            yield session
+        finally:
+            session.close()
     
     def build_url(self, target_date: date) -> str:
+        """Build the primary URL for a given date."""
         return self.BASE_URL_TEMPLATE.format(
             year=target_date.year,
             month=target_date.month,
@@ -66,7 +84,8 @@ class DevotionalScraper:
             month_name=self.MONTH_NAMES[target_date.month]
         )
     
-    def build_alt_urls(self, target_date: date) -> list:
+    def build_alt_urls(self, target_date: date) -> List[str]:
+        """Build alternative URLs to try if primary fails."""
         urls = []
         for template in self.ALT_URL_TEMPLATES:
             try:
@@ -83,132 +102,279 @@ class DevotionalScraper:
         return urls
     
     def fetch_page(self, url: str) -> Optional[str]:
+        """Fetch a page with proper error handling."""
         try:
-            response = self.session.get(url, timeout=self.timeout)
-            if response.status_code == 404:
-                logger.warning(f"Devotional page not found: {url}")
-                return None
-            response.raise_for_status()
-            return response.text
+            with self._get_session() as session:
+                response = session.get(url, timeout=self.timeout)
+                if response.status_code == 404:
+                    logger.warning(f"Devotional page not found: {url}")
+                    return None
+                response.raise_for_status()
+                return response.text
+        except requests.exceptions.Timeout:
+            logger.error(f"Timeout fetching {url}")
+            return None
         except requests.exceptions.RequestException as e:
             logger.error(f"Error fetching {url}: {e}")
             return None
     
-    def _clean_text(self, text: str) -> str:
-        """Clean extracted text by removing extra whitespace and HTML artifacts."""
+    def _clean_text(self, text: str, preserve_newlines: bool = False) -> str:
+        """Clean extracted text by removing extra whitespace and HTML entities."""
         if not text:
             return ''
-        text = re.sub(r'\s+', ' ', text).strip()
-        text = re.sub(r'&nbsp;', ' ', text)
-        text = re.sub(r'&amp;', '&', text)
-        text = re.sub(r'&lt;', '<', text)
-        text = re.sub(r'&gt;', '>', text)
-        return text
-
+        
+        # Decode HTML entities
+        text = text.replace('&nbsp;', ' ')
+        text = text.replace('&amp;', '&')
+        text = text.replace('&lt;', '<')
+        text = text.replace('&gt;', '>')
+        text = text.replace('&quot;', '"')
+        text = text.replace('&#039;', "'")
+        
+        if preserve_newlines:
+            # Clean up spaces on each line but keep line breaks
+            lines = [re.sub(r'[ \t]+', ' ', line).strip() for line in text.split('\n')]
+            return '\n'.join(line for line in lines if line)
+        else:
+            # Replace all whitespace with single space
+            return re.sub(r'\s+', ' ', text).strip()
+    
+    def _find_section_content(self, soup: BeautifulSoup, label: str, 
+                              next_labels: List[str] = None) -> Optional[str]:
+        """
+        Find content for a section by looking for the label and extracting 
+        content until the next section label.
+        """
+        if next_labels is None:
+            next_labels = ['MESSAGE', 'KEY POINT', 'PRAYER', 'HYMN', 'BIBLE IN ONE YEAR', 'AUTHOR']
+        
+        # Find all text elements
+        all_elements = soup.find_all(['p', 'div', 'strong', 'b', 'h1', 'h2', 'h3', 'h4'])
+        
+        content_parts = []
+        capturing = False
+        
+        for elem in all_elements:
+            elem_text = elem.get_text().strip()
+            
+            # Check if this is our target label
+            if label.upper() in elem_text.upper() and not capturing:
+                capturing = True
+                # Extract content after the label on the same line
+                content_after_label = re.sub(
+                    rf'^.*?{re.escape(label)}:?\s*', 
+                    '', 
+                    elem_text, 
+                    flags=re.IGNORECASE
+                ).strip()
+                if content_after_label:
+                    content_parts.append(content_after_label)
+                continue
+            
+            # Check if we've hit a next section
+            if capturing and any(next_label.upper() in elem_text.upper() for next_label in next_labels):
+                break
+            
+            # Capture content
+            if capturing and elem_text:
+                content_parts.append(elem_text)
+        
+        return ' '.join(content_parts) if content_parts else None
+    
+    def _extract_theme(self, soup: BeautifulSoup) -> Optional[str]:
+        """Extract the theme/title of the devotional."""
+        # Look for THEME: label
+        for elem in soup.find_all(['p', 'strong', 'b', 'h1', 'h2', 'h3']):
+            text = elem.get_text().strip()
+            if re.match(r'^\s*THEME:', text, re.IGNORECASE):
+                theme = re.sub(r'^\s*THEME:\s*', '', text, flags=re.IGNORECASE)
+                return self._clean_text(theme)
+        
+        # Fallback to H1 or first strong/bold text
+        h1 = soup.find('h1')
+        if h1:
+            return self._clean_text(h1.get_text())
+        
+        return None
+    
+    def _extract_memory_verse(self, soup: BeautifulSoup) -> Dict[str, str]:
+        """Extract memory verse content and reference."""
+        result = {'content': '', 'passage': ''}
+        
+        content = self._find_section_content(soup, 'MEMORISE', ['BIBLE READING', 'READ'])
+        if not content:
+            return result
+        
+        # Try to split verse text from reference
+        # Pattern: "verse text" - Reference  OR  verse text (Reference)
+        match = re.search(
+            r'^(.+?)\s*[-–—]\s*([1-3]?\s*[A-Za-z]+\s+\d+:\d+[a-z]?(?:-\d+[a-z]?)?)\s*$',
+            content
+        )
+        if match:
+            result['content'] = self._clean_text(match.group(1).strip('"\''))
+            result['passage'] = self._clean_text(match.group(2))
+        else:
+            # Try another pattern with parentheses
+            match = re.search(
+                r'^(.+?)\s*\(([1-3]?\s*[A-Za-z]+\s+\d+:\d+[a-z]?(?:-\d+[a-z]?)?)\)\s*$',
+                content
+            )
+            if match:
+                result['content'] = self._clean_text(match.group(1).strip('"\''))
+                result['passage'] = self._clean_text(match.group(2))
+            else:
+                # If we can't split, put everything in content
+                result['content'] = self._clean_text(content)
+        
+        return result
+    
+    def _extract_bible_reading(self, soup: BeautifulSoup) -> Dict[str, str]:
+        """Extract Bible reading passage and content."""
+        result = {'passage': '', 'content': ''}
+        
+        content = self._find_section_content(soup, 'BIBLE READING', ['MESSAGE'])
+        if not content:
+            # Try alternative label
+            content = self._find_section_content(soup, 'READ', ['MESSAGE'])
+        
+        if not content:
+            return result
+        
+        # Extract the passage reference (e.g., "2 Kings 4:8-17")
+        passage_match = re.search(
+            r'([1-3]?\s*[A-Za-z]+\s+\d+:\d+(?:-\d+)?)',
+            content
+        )
+        if passage_match:
+            result['passage'] = self._clean_text(passage_match.group(1))
+            # Remove the passage from content to get the actual text
+            bible_text = content.replace(passage_match.group(0), '', 1)
+            result['content'] = self._clean_text(bible_text)
+        else:
+            result['content'] = self._clean_text(content)
+        
+        return result
+    
+    def _extract_message(self, soup: BeautifulSoup) -> str:
+        """Extract the main message/content."""
+        content = self._find_section_content(
+            soup, 
+            'MESSAGE', 
+            ['KEY POINT', 'PRAYER', 'HYMN', 'BIBLE IN ONE YEAR']
+        )
+        return self._clean_text(content) if content else ''
+    
+    def _extract_key_point(self, soup: BeautifulSoup) -> str:
+        """Extract the key point."""
+        content = self._find_section_content(
+            soup, 
+            'KEY POINT', 
+            ['PRAYER', 'BIBLE IN ONE YEAR', 'HYMN', 'AUTHOR']
+        )
+        return self._clean_text(content) if content else ''
+    
+    def _extract_bible_in_one_year(self, soup: BeautifulSoup) -> str:
+        """Extract Bible in one year reading."""
+        content = self._find_section_content(
+            soup, 
+            'BIBLE IN ONE YEAR', 
+            ['HYMN', 'AUTHOR', 'PRAYER']
+        )
+        return self._clean_text(content) if content else ''
+    
+    def _extract_hymn(self, soup: BeautifulSoup) -> str:
+        """Extract hymn content with preserved formatting."""
+        content = self._find_section_content(
+            soup, 
+            'HYMN', 
+            ['BIBLE IN ONE YEAR', 'AUTHOR', 'PRAYER']
+        )
+        # Preserve newlines for hymn lyrics
+        return self._clean_text(content, preserve_newlines=True) if content else ''
+    
     def parse_html(self, html: str, target_date: date, source_url: str) -> Optional[Dict[str, Any]]:
-        """
-        Parse the HTML content using regex patterns to match the "Open Heavens" format.
-        """
+        """Parse the HTML content and extract devotional data."""
         soup = BeautifulSoup(html, 'html.parser')
         
         # Find the main content container
-        article = soup.find('div', class_='entry-content') or soup.find('article') or soup.find('div', class_='post-content')
+        article = (
+            soup.find('div', class_='entry-content') or 
+            soup.find('article') or 
+            soup.find('div', class_='post-content') or
+            soup.find('div', class_='content')
+        )
         
         if not article:
             logger.warning(f"Could not find article container for {source_url}")
             return None
-
-        # Get text with newlines preserved to help regex matching
-        text_content = article.get_text(separator='\n')
         
+        # Use the article for parsing
+        soup = article if isinstance(article, BeautifulSoup) else BeautifulSoup(str(article), 'html.parser')
+        
+        # Extract all sections
         data = {
             'date': target_date,
             'source_url': source_url,
             'status': 'published',
             'author': 'Pastor E.A. Adeboye',
         }
-
-        # 1. THEME (Title)
-        # Matches: "THEME: FROM GOOD TO VERY GOOD"
-        theme_match = re.search(r'THEME:\s*(.+)', text_content, re.IGNORECASE)
-        if theme_match:
-            data['title'] = self._clean_text(theme_match.group(1))
-        else:
-            # Fallback to H1
-            h1 = soup.find('h1')
-            data['title'] = self._clean_text(h1.get_text()) if h1 else 'Open Heavens Devotional'
         
-        data['slug'] = slugify(f"{target_date}-{data['title']}")[:300]
-
-        # 2. MEMORISE (Content + Reference)
-        # Matches: "verse text" - Reference  OR  verse text \n Reference
-        mem_match = re.search(r'MEMORISE:[\s\n]*["\']?(.+?)["\']?[\s\n]*[-–—]?[\s\n]*([1-9]?[A-Za-z]+\s+\d+:\d+[a-z]?)', text_content, re.DOTALL | re.IGNORECASE)
-        if mem_match:
-            data['memory_verse_content'] = self._clean_text(mem_match.group(1))
-            data['memory_verse_passage'] = self._clean_text(mem_match.group(2))
-        else:
-            data['memory_verse_content'] = ''
-            data['memory_verse_passage'] = ''
-
-        # 3. BIBLE READING (Passage + Content)
-        # Matches: "BIBLE READING: 2 KINGS 4:8-17"
-        read_match = re.search(r'BIBLE READING:[\s\n]*([1-9]?[A-Za-z]+\s+\d+:\d+(?:-\d+)?)', text_content, re.IGNORECASE)
-        if read_match:
-            data['bible_text_passage'] = self._clean_text(read_match.group(1))
-            
-            # Extract the Bible text block (between BIBLE READING line and MESSAGE line)
-            full_pattern = re.search(r'BIBLE READING:.*?[\n\r](.+?)[\n\r]\s*(?:MESSAGE|HYMN|KEY POINT)', text_content, re.DOTALL | re.IGNORECASE)
-            if full_pattern:
-                # The match includes the text. We clean it up.
-                raw_text = full_pattern.group(1)
-                # Remove the passage title if it got captured
-                raw_text = raw_text.replace(data['bible_text_passage'], '')
-                data['bible_text_content'] = self._clean_text(raw_text)
-            else:
-                data['bible_text_content'] = ''
-        else:
-            data['bible_text_passage'] = ''
-            data['bible_text_content'] = ''
-
-        # 4. MESSAGE (Main Content)
-        # Captures everything between MESSAGE: and the next section (KEY POINT, PRAYER, etc.)
-        msg_match = re.search(r'MESSAGE:[\s\n]*(.+?)[\s\n]*(?:KEY POINT|PRAYER|HYMN|BIBLE IN ONE YEAR)', text_content, re.DOTALL | re.IGNORECASE)
-        if msg_match:
-            data['content'] = self._clean_text(msg_match.group(1))
-        else:
-            # Fallback: if we can't parse structure, dump everything (not ideal but better than empty)
-            data['content'] = ""
-
-        # 5. KEY POINT
-        kp_match = re.search(r'KEY POINT:[\s\n]*(.+?)(?:[\n]|$|BIBLE IN ONE YEAR|HYMN|AUTHOR)', text_content, re.DOTALL | re.IGNORECASE)
-        data['key_point'] = self._clean_text(kp_match.group(1)) if kp_match else ''
-
-        # 6. BIBLE IN ONE YEAR
-        bioy_match = re.search(r'BIBLE IN ONE YEAR:[\s\n]*(.+?)(?:[\n]|$|HYMN|AUTHOR)', text_content, re.DOTALL | re.IGNORECASE)
-        data['bible_in_one_year'] = self._clean_text(bioy_match.group(1)) if bioy_match else ''
-
-        # 7. HYMN (Full Lyrics)
-        # Captures "HYMN X: TITLE" followed by lyrics until end of section
-        hymn_match = re.search(r'(HYMN\s*\d*:?.+?)(?:[\n]|$|BIBLE IN ONE YEAR)', text_content, re.DOTALL | re.IGNORECASE)
-        if hymn_match:
-            # We want to preserve newlines for lyrics, so we don't use _clean_text which strips them
-            raw_hymn = hymn_match.group(1).strip()
-            # Basic cleanup but keep structure
-            raw_hymn = re.sub(r'&nbsp;', ' ', raw_hymn)
-            data['hymn'] = raw_hymn
-        else:
-            data['hymn'] = ''
-
-        # Backwards compatibility fields (Optional)
-        data['anchor_scripture'] = data.get('memory_verse_passage', '')
-        data['scripture_text'] = data.get('memory_verse_content', '')
-
+        # Theme/Title
+        title = self._extract_theme(soup)
+        if not title:
+            logger.warning(f"No theme found for {target_date}, using default")
+            title = f'Open Heaven for Teens - {target_date.strftime("%B %d, %Y")}'
+        data['title'] = title
+        data['slug'] = slugify(f"{target_date}-{title}")[:300]
+        
+        # Memory Verse
+        memory_verse = self._extract_memory_verse(soup)
+        data['memory_verse_content'] = memory_verse['content']
+        data['memory_verse_passage'] = memory_verse['passage']
+        
+        # Bible Reading
+        bible_reading = self._extract_bible_reading(soup)
+        data['bible_text_passage'] = bible_reading['passage']
+        data['bible_text_content'] = bible_reading['content']
+        
+        # Main Message
+        data['content'] = self._extract_message(soup)
+        
+        # Key Point
+        data['key_point'] = self._extract_key_point(soup)
+        
+        # Bible in One Year
+        data['bible_in_one_year'] = self._extract_bible_in_one_year(soup)
+        
+        # Hymn
+        data['hymn'] = self._extract_hymn(soup)
+        
+        # Backwards compatibility fields
+        data['anchor_scripture'] = data['memory_verse_passage']
+        data['scripture_text'] = data['memory_verse_content']
+        
+        # Log extraction results
+        extracted_fields = [k for k, v in data.items() if v and k not in ['date', 'source_url', 'status', 'author', 'slug']]
+        logger.info(f"Extracted fields for {target_date}: {', '.join(extracted_fields)}")
+        
         return data
     
+    def validate_data(self, data: Dict[str, Any]) -> bool:
+        """Validate that required fields are present and not empty."""
+        missing_fields = []
+        for field in self.REQUIRED_FIELDS:
+            if not data.get(field):
+                missing_fields.append(field)
+        
+        if missing_fields:
+            logger.error(f"Missing required fields: {', '.join(missing_fields)}")
+            return False
+        
+        return True
+    
     def scrape(self, target_date: date) -> Optional[Dict[str, Any]]:
-        """
-        Scrape devotional for a specific date.
-        """
+        """Scrape devotional for a specific date."""
         # Try primary URL first
         url = self.build_url(target_date)
         logger.info(f"Scraping devotional for {target_date} from {url}")
@@ -229,7 +395,17 @@ class DevotionalScraper:
             logger.warning(f"Could not fetch devotional for {target_date}")
             return None
         
-        return self.parse_html(html, target_date, url)
+        data = self.parse_html(html, target_date, url)
+        
+        if not data:
+            return None
+        
+        # Validate data before returning
+        if not self.validate_data(data):
+            logger.error(f"Validation failed for devotional on {target_date}")
+            return None
+        
+        return data
 
 
 def scrape_and_save_devotional(target_date: date = None) -> Optional[dict]:
@@ -269,5 +445,5 @@ def scrape_and_save_devotional(target_date: date = None) -> Optional[dict]:
             'source_url': source_url,
         }
     except Exception as e:
-        logger.error(f"Error saving devotional for {target_date}: {e}")
+        logger.error(f"Error saving devotional for {target_date}: {e}", exc_info=True)
         return None
