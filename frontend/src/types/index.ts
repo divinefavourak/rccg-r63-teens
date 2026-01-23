@@ -1,8 +1,10 @@
+// frontend/src/types/index.ts
+
 export interface Ticket {
-  id: string; // ✅ Changed from number to string (Backend uses UUIDs)
+  id: string;
   ticketId: string;
   fullName: string;
-  age: string | number; // ✅ Allow string to handle form inputs before conversion
+  age: string | number;
   category: string;
   gender: string;
   phone: string;
@@ -79,27 +81,30 @@ export interface Devotional {
   id: string;
   title: string;
   date: string;
-  scripture_reference: string;
-  memory_verse: string;
+  
+  // Legacy Fields (kept for type safety)
+  scripture_reference?: string;
+  memory_verse?: string;
+  scripture_text?: string;
+  anchor_scripture?: string;
 
-  // New Fields
+  // New Open Heavens Fields
   memory_verse_passage?: string;
   memory_verse_content?: string;
   bible_text_passage?: string;
   bible_text_content?: string;
   bible_in_one_year?: string;
+  hymn?: string;
+  author?: string;
 
-  // Admin/Legacy Fields
-  scripture_text?: string;
-  anchor_scripture?: string;
   key_point?: string;
   prayer?: string;
+  prayer_point?: string; // Legacy alias check
   status?: 'draft' | 'published' | 'scheduled';
 
   cover_image?: string;
-
   content: string; // HTML or Markdown
-  prayer_point: string;
+  
   likes_count: number;
   is_liked?: boolean;
 }
