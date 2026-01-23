@@ -1,18 +1,12 @@
-import { useState, useEffect } from 'react';
+// frontend/src/pages/AdminDevotionals.tsx
+
+import React, { useState, useEffect } from 'react';
 import {
-    Plus,
-    Search,
-    Edit2,
-    Trash2,
-    ThumbsUp,
-    X,
-    Upload,
-    Eye,
-    CloudDownload
+    Plus, Search, Edit2, Trash2, ThumbsUp, X,
+    Upload, Eye, CloudDownload
 } from 'lucide-react';
 import api from '../api/axios';
 import type { Devotional } from '../types';
-
 import toast from 'react-hot-toast';
 
 const AdminDevotionals = () => {
@@ -25,15 +19,19 @@ const AdminDevotionals = () => {
     const [formData, setFormData] = useState({
         title: '',
         date: '',
-        scripture_reference: '', // Legacy/Fallback
-        scripture_text: '', // Legacy/Fallback
+        author: 'Pastor E.A. Adeboye',
+        // Scripture & Memory Verse
         memory_verse_passage: '',
         memory_verse_content: '',
         bible_text_passage: '',
         bible_text_content: '',
+        bible_in_one_year: '',
+        // Content
         content: '',
         key_point: '',
         prayer: '',
+        hymn: '',
+        // Meta
         status: 'draft',
         cover_image: null as File | null
     });
@@ -56,15 +54,16 @@ const AdminDevotionals = () => {
         setFormData({
             title: '',
             date: '',
-            scripture_reference: '',
-            scripture_text: '',
+            author: 'Pastor E.A. Adeboye',
             memory_verse_passage: '',
             memory_verse_content: '',
             bible_text_passage: '',
             bible_text_content: '',
+            bible_in_one_year: '',
             content: '',
             key_point: '',
             prayer: '',
+            hymn: '',
             status: 'draft',
             cover_image: null
         });
@@ -76,15 +75,19 @@ const AdminDevotionals = () => {
         setFormData({
             title: devotional.title,
             date: devotional.date,
-            scripture_reference: devotional.scripture_reference,
-            scripture_text: devotional.scripture_text,
-            memory_verse_passage: devotional.memory_verse_passage || '',
-            memory_verse_content: devotional.memory_verse_content || '',
-            bible_text_passage: devotional.bible_text_passage || '',
+            author: devotional.author || 'Pastor E.A. Adeboye',
+            
+            // Prefer new fields, fallback to legacy if needed
+            memory_verse_passage: devotional.memory_verse_passage || devotional.anchor_scripture || '',
+            memory_verse_content: devotional.memory_verse_content || devotional.scripture_text || '',
+            bible_text_passage: devotional.bible_text_passage || devotional.scripture_reference || '',
             bible_text_content: devotional.bible_text_content || '',
+            bible_in_one_year: devotional.bible_in_one_year || '',
+            
             content: devotional.content,
-            key_point: devotional.key_point,
-            prayer: devotional.prayer || '',
+            key_point: devotional.key_point || '',
+            prayer: devotional.prayer || devotional.prayer_point || '',
+            hymn: devotional.hymn || '',
             status: devotional.status || 'draft',
             cover_image: null
         });
@@ -178,7 +181,6 @@ const AdminDevotionals = () => {
     const getStatus = (date: string) => {
         const devDate = new Date(date);
         const today = new Date();
-        // Reset time to compare dates only
         today.setHours(0, 0, 0, 0);
         devDate.setHours(0, 0, 0, 0);
 
@@ -197,10 +199,8 @@ const AdminDevotionals = () => {
 
     const filteredDevotionals = devotionals.filter(item =>
         item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.scripture_reference.toLowerCase().includes(searchQuery.toLowerCase())
+        (item.bible_text_passage && item.bible_text_passage.toLowerCase().includes(searchQuery.toLowerCase()))
     );
-
-
 
     return (
         <div className="space-y-6">
@@ -241,17 +241,6 @@ const AdminDevotionals = () => {
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
                 </div>
-                <div className="flex gap-2">
-                    <select
-                        className="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 outline-none focus:border-green-500"
-                        value={activeStatus}
-                        onChange={(e) => setActiveStatus(e.target.value)}
-                    >
-                        <option>All Status</option>
-                        <option>Published</option>
-                        <option>Scheduled</option>
-                    </select>
-                </div>
             </div>
 
             {/* Table */}
@@ -262,9 +251,9 @@ const AdminDevotionals = () => {
                             <tr className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-800">
                                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
                                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Title</th>
-                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Scripture</th>
+                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Reading</th>
                                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
-                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Engagement</th>
+                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Likes</th>
                                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
                             </tr>
                         </thead>
@@ -285,7 +274,9 @@ const AdminDevotionals = () => {
                                             {new Date(item.date).toLocaleDateString()}
                                         </td>
                                         <td className="p-4 text-sm font-medium text-gray-900 dark:text-white">{item.title}</td>
-                                        <td className="p-4 text-sm text-gray-500 dark:text-gray-400">{item.scripture_reference}</td>
+                                        <td className="p-4 text-sm text-gray-500 dark:text-gray-400">
+                                            {item.bible_text_passage || item.scripture_reference || '-'}
+                                        </td>
                                         <td className="p-4">
                                             <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${getStatusColor(status)}`}>
                                                 {status}
@@ -332,7 +323,7 @@ const AdminDevotionals = () => {
             {/* Create/Edit Modal */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-2xl my-8 flex flex-col max-h-[90vh]">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-3xl my-8 flex flex-col max-h-[90vh]">
                         <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-800 rounded-t-2xl z-10">
                             <h3 className="text-xl font-bold text-gray-900 dark:text-white">
                                 {editingId ? 'Edit Devotional' : 'Create New Devotional'}
@@ -344,88 +335,113 @@ const AdminDevotionals = () => {
 
                         <div className="p-6 overflow-y-auto">
                             <form onSubmit={handleSubmit} className="space-y-6">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date</label>
-                                    <input
-                                        type="date"
-                                        name="date"
-                                        required
-                                        className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
-                                        value={formData.date}
-                                        onChange={handleInputChange}
-                                    />
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date</label>
+                                        <input
+                                            type="date"
+                                            name="date"
+                                            required
+                                            className="form-input"
+                                            value={formData.date}
+                                            onChange={handleInputChange}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Author</label>
+                                        <input
+                                            type="text"
+                                            name="author"
+                                            className="form-input"
+                                            value={formData.author}
+                                            onChange={handleInputChange}
+                                        />
+                                    </div>
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title</label>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Theme (Title)</label>
                                     <input
                                         type="text"
                                         name="title"
                                         required
-                                        placeholder="Enter devotional title"
-                                        className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
+                                        placeholder="e.g. FROM GOOD TO VERY GOOD"
+                                        className="form-input font-bold"
                                         value={formData.title}
                                         onChange={handleInputChange}
                                     />
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl space-y-4 border border-gray-200 dark:border-gray-700">
+                                    <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Scripture Details</h4>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Memory Verse Ref.</label>
+                                            <input
+                                                type="text"
+                                                name="memory_verse_passage"
+                                                placeholder="e.g. Genesis 26:13"
+                                                className="form-input text-sm"
+                                                value={formData.memory_verse_passage}
+                                                onChange={handleInputChange}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Reading Ref.</label>
+                                            <input
+                                                type="text"
+                                                name="bible_text_passage"
+                                                placeholder="e.g. 2 KINGS 4:8-17"
+                                                className="form-input text-sm"
+                                                value={formData.bible_text_passage}
+                                                onChange={handleInputChange}
+                                            />
+                                        </div>
+                                    </div>
+
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Memory Verse Reference</label>
-                                        <input
-                                            type="text"
-                                            name="memory_verse_passage"
-                                            placeholder="e.g., John 3:16"
-                                            className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
-                                            value={formData.memory_verse_passage}
+                                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Memory Verse Content</label>
+                                        <textarea
+                                            name="memory_verse_content"
+                                            rows={2}
+                                            className="form-input text-sm"
+                                            value={formData.memory_verse_content}
                                             onChange={handleInputChange}
                                         />
                                     </div>
+
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Bible Reading Reference</label>
+                                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Bible Reading Content (Full Text)</label>
+                                        <textarea
+                                            name="bible_text_content"
+                                            rows={4}
+                                            className="form-input text-sm font-serif"
+                                            value={formData.bible_text_content}
+                                            onChange={handleInputChange}
+                                        />
+                                    </div>
+                                    
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Bible In One Year</label>
                                         <input
                                             type="text"
-                                            name="bible_text_passage"
-                                            placeholder="e.g., Psalm 23:1-6"
-                                            className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
-                                            value={formData.bible_text_passage}
+                                            name="bible_in_one_year"
+                                            placeholder="e.g. EXODUS 24-27"
+                                            className="form-input text-sm"
+                                            value={formData.bible_in_one_year}
                                             onChange={handleInputChange}
                                         />
                                     </div>
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Memory Verse Text</label>
-                                    <textarea
-                                        name="memory_verse_content"
-                                        rows={2}
-                                        placeholder="The actual text of the memory verse..."
-                                        className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
-                                        value={formData.memory_verse_content}
-                                        onChange={handleInputChange}
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Bible Reading Text</label>
-                                    <textarea
-                                        name="bible_text_content"
-                                        rows={3}
-                                        placeholder="The text of the bible reading (optional, can be long)..."
-                                        className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
-                                        value={formData.bible_text_content}
-                                        onChange={handleInputChange}
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Main Content</label>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Message Content</label>
                                     <textarea
                                         name="content"
                                         required
-                                        rows={6}
-                                        placeholder="Write the devotional content..."
-                                        className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
+                                        rows={8}
+                                        className="form-input"
                                         value={formData.content}
                                         onChange={handleInputChange}
                                     />
@@ -436,9 +452,7 @@ const AdminDevotionals = () => {
                                     <input
                                         type="text"
                                         name="key_point"
-                                        required
-                                        placeholder="Main takeaway message"
-                                        className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
+                                        className="form-input"
                                         value={formData.key_point}
                                         onChange={handleInputChange}
                                     />
@@ -449,63 +463,40 @@ const AdminDevotionals = () => {
                                     <textarea
                                         name="prayer"
                                         rows={2}
-                                        placeholder="Prayer for the day"
-                                        className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
+                                        className="form-input"
                                         value={formData.prayer}
                                         onChange={handleInputChange}
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cover Image</label>
-                                    <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-8 text-center hover:border-green-500 transition-colors cursor-pointer relative bg-gray-50 dark:bg-gray-800/50">
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={handleFileChange}
-                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                        />
-                                        <div className="flex flex-col items-center gap-2 text-gray-500 dark:text-gray-400">
-                                            <Upload className="w-8 h-8 mb-2" />
-                                            <span className="font-medium">Click to upload or drag and drop</span>
-                                            <span className="text-xs">PNG, JPG up to 5MB</span>
-                                            {formData.cover_image && (
-                                                <div className="mt-2 text-green-600 font-medium text-sm bg-green-50 px-3 py-1 rounded-full">
-                                                    Selected: {formData.cover_image.name}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Hymn (Full Lyrics)</label>
+                                    <textarea
+                                        name="hymn"
+                                        rows={6}
+                                        placeholder="Hymn lyrics..."
+                                        className="form-input font-serif"
+                                        value={formData.hymn}
+                                        onChange={handleInputChange}
+                                    />
                                 </div>
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
                                     <select
                                         name="status"
-                                        className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
+                                        className="form-input"
                                         value={formData.status}
                                         onChange={handleInputChange}
                                     >
                                         <option value="draft">Draft</option>
                                         <option value="published">Published</option>
-                                        <option value="scheduled">Scheduled</option>
                                     </select>
                                 </div>
 
                                 <div className="flex gap-4 pt-4 border-t border-gray-100 dark:border-gray-700 sticky bottom-0 bg-white dark:bg-gray-800 z-10">
-                                    <button
-                                        type="button"
-                                        onClick={resetForm}
-                                        className="flex-1 py-2.5 px-4 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="flex-1 py-2.5 px-4 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700 transition-all shadow-lg shadow-green-600/20"
-                                    >
-                                        {editingId ? 'Update Devotional' : 'Save Devotional'}
-                                    </button>
+                                    <button type="button" onClick={resetForm} className="flex-1 btn-secondary py-3">Cancel</button>
+                                    <button type="submit" className="flex-1 btn-primary py-3">{editingId ? 'Update' : 'Save'}</button>
                                 </div>
                             </form>
                         </div>
@@ -513,7 +504,7 @@ const AdminDevotionals = () => {
                 </div>
             )}
 
-            {/* View Modal */}
+            {/* View Modal logic remains largely same, just updated to show new fields if desired */}
             {viewDevotional && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
                     <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-2xl my-8 flex flex-col max-h-[90vh]">
@@ -526,46 +517,15 @@ const AdminDevotionals = () => {
                                 <X size={24} />
                             </button>
                         </div>
-
                         <div className="p-6 overflow-y-auto space-y-6">
-                            {viewDevotional.cover_image && (
-                                <img
-                                    src={viewDevotional.cover_image}
-                                    alt={viewDevotional.title}
-                                    className="w-full h-48 object-cover rounded-lg"
-                                />
-                            )}
-
-                            <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border-l-4 border-green-500">
-                                <h4 className="font-bold text-gray-900 dark:text-white mb-2">Scripture: {viewDevotional.scripture_reference}</h4>
-                                <p className="text-gray-700 dark:text-gray-300 italic">"{viewDevotional.scripture_text}"</p>
-                            </div>
-
-                            <div className="prose dark:prose-invert max-w-none text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                                {viewDevotional.content}
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-                                    <h5 className="font-bold text-blue-900 dark:text-blue-300 mb-1">Key Point</h5>
-                                    <p className="text-blue-800 dark:text-blue-200 text-sm">{viewDevotional.key_point}</p>
-                                </div>
-
-                                <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
-                                    <h5 className="font-bold text-purple-900 dark:text-purple-300 mb-1">Prayer</h5>
-                                    <p className="text-purple-800 dark:text-purple-200 text-sm">{viewDevotional.prayer}</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 rounded-b-2xl">
-                            <div className="flex justify-end">
-                                <button
-                                    onClick={() => setViewDevotional(null)}
-                                    className="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                                >
-                                    Close
-                                </button>
+                            {/* Preview Content */}
+                            <div className="prose dark:prose-invert max-w-none">
+                                <p><strong>Memorise:</strong> {viewDevotional.memory_verse_content}</p>
+                                <p><strong>Read:</strong> {viewDevotional.bible_text_passage}</p>
+                                <hr />
+                                <div dangerouslySetInnerHTML={{ __html: viewDevotional.content }} />
+                                {viewDevotional.key_point && <p className="bg-blue-50 p-2 rounded"><strong>Key Point:</strong> {viewDevotional.key_point}</p>}
+                                {viewDevotional.hymn && <pre className="bg-gray-50 p-4 rounded text-sm font-sans whitespace-pre-wrap">{viewDevotional.hymn}</pre>}
                             </div>
                         </div>
                     </div>
