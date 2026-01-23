@@ -40,16 +40,24 @@ const AdminDashboard = () => {
             const [usersRes, devotionalsRes, mediaRes, eventsRes] = await Promise.all([
                 api.get('/users/'),
                 api.get('/content/devotionals/'),
-                api.get('/media/'),
-                api.get('/events/')
+                api.get('/content/media/'),
+                api.get('/content/events/')
             ]);
+
+            // Helper to get count from paginated or non-paginated response
+            const getCount = (res: any) => {
+                if (res.data?.count !== undefined) return res.data.count;
+                if (Array.isArray(res.data)) return res.data.length;
+                if (Array.isArray(res.data?.results)) return res.data.results.length; // Fallback if count missing
+                return 0;
+            };
 
             const upcomingEvents = (eventsRes.data.results || eventsRes.data || []).filter((e: any) => new Date(e.start_date || e.date) > new Date()).length;
 
             setStatsData({
-                users: (usersRes.data.results || usersRes.data || []).length,
-                devotionals: (devotionalsRes.data.results || devotionalsRes.data || []).length,
-                media: (mediaRes.data.results || mediaRes.data || []).length,
+                users: getCount(usersRes),
+                devotionals: getCount(devotionalsRes),
+                media: getCount(mediaRes),
                 events: upcomingEvents
             });
         } catch (error) {
