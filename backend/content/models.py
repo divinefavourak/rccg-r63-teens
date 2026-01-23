@@ -20,41 +20,45 @@ class Devotional(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     # Date-based identification (one per day)
     date = models.DateField(unique=True, db_index=True)
     
-    # Content identification
+    # THEME
     title = models.CharField(max_length=255)
     slug = models.SlugField(max_length=300, unique=True, db_index=True)
     
-    # Memory Verse
+    # MEMORISE (Text + Reference)
     memory_verse_passage = models.CharField(max_length=255, blank=True)  # e.g., "John 3:16"
     memory_verse_content = models.TextField(blank=True)  # The actual verse text
     
-    # Bible Text (The main reading)
+    # BIBLE READING (Reference + Full Text)
     bible_text_passage = models.CharField(max_length=255, blank=True)  # e.g., "Psalm 139:14-15"
-    bible_text_content = models.TextField(blank=True)  # The text of the reading
+    bible_text_content = models.TextField(blank=True)  # The full text of the reading
     
-    # Old fields - keeping for now to avoid breaking migration immediately, 
-    # but scraper will target new fields. 
-    # Actually, let's keep anchor_scripture/scripture_text as fallbacks or aliases if needed,
-    # but the user requested SEPARATE fields.
+    # MESSAGE
+    content = models.TextField()  # Main devotional content (Markdown/rich text)
+    
+    # KEY POINT
+    key_point = models.CharField(max_length=500, blank=True)
+    
+    # BIBLE IN ONE YEAR
+    bible_in_one_year = models.CharField(max_length=255, blank=True) # e.g. "EXODUS 24-27"
+    
+    # AUTHOR
+    author = models.CharField(max_length=255, default='Pastor E.A. Adeboye')
+    
+    # HYMN (Title + Lyrics)
+    # Changed to TextField to support full lyrics with line breaks
+    hymn = models.TextField(blank=True)
+    
+    # Legacy Fields (kept for backward compatibility or fallbacks)
     anchor_scripture = models.CharField(max_length=255, blank=True)
     scripture_text = models.TextField(blank=True)
-    bible_in_one_year = models.TextField(blank=True)  # Reading plan
-    
-    # Body content
-    content = models.TextField()  # Main devotional content (Markdown/rich text)
-    key_point = models.CharField(max_length=500, blank=True)
     
     # Engagement elements
     prayer = models.TextField(blank=True)
     confession = models.TextField(blank=True)
     action_point = models.TextField(blank=True)
-    hymn = models.CharField(max_length=255, blank=True)  # Hymn reference
     
-    # Metadata
-    author = models.CharField(max_length=255, default='Pastor E.A. Adeboye')
+    # Resources
     cover_image = models.ImageField(upload_to='devotionals/', null=True, blank=True)
-    
-    # Audio version (optional)
     audio_url = models.URLField(blank=True)
     audio_file = models.FileField(upload_to='devotional_audio/', blank=True)
     audio_duration_seconds = models.PositiveIntegerField(null=True, blank=True)
