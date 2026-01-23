@@ -40,10 +40,14 @@ const AdminMedia = () => {
     const fetchMedia = async () => {
         try {
             setLoading(true);
-            let url = '/content/media/';
-            if (activeType !== 'All Types') {
-                // url += `?type=${activeType.toLowerCase()}`;
-            }
+            // CORRECTED: Pointing to the 'episodes' endpoint defined in media/urls.py
+            let url = '/media/episodes/';
+            
+            // Optional: Add filtering if your backend supports it
+            // if (activeType !== 'All Types') {
+            //     url += `?media_type=${activeType.toLowerCase()}`;
+            // }
+            
             const { data } = await api.get(url);
             setMedia(Array.isArray(data) ? data : data.results || []);
         } catch (error) {
@@ -67,6 +71,8 @@ const AdminMedia = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Validation: Audio/Video file is required
         if (!formData.file) {
             toast.error("Please select a media file to upload");
             return;
@@ -81,11 +87,12 @@ const AdminMedia = () => {
             data.append('published_at', formData.published_at);
             if (formData.duration) data.append('duration', formData.duration);
             
-            // Append files
-            if (formData.file) data.append('file', formData.file); // Adjust field name 'file' based on your backend serializer (e.g. 'file_url' or 'media_file')
+            // Matches backend expectations
+            data.append('file', formData.file); 
             if (formData.thumbnail) data.append('thumbnail', formData.thumbnail);
 
-            await api.post('/media/', data, {
+            // CORRECTED: Posting to 'episodes'
+            await api.post('/media/episodes/', data, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
@@ -115,7 +122,7 @@ const AdminMedia = () => {
     const handleDelete = async (id: string) => {
         if (!window.confirm('Are you sure you want to delete this item?')) return;
         try {
-            await api.delete(`/media/${id}/`);
+            await api.delete(`/media/episodes/${id}/`);
             toast.success("Media deleted");
             fetchMedia();
         } catch (error) {
