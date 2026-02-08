@@ -54,6 +54,8 @@ INSTALLED_APPS = [
     'users',
     'tickets',
     'payments',
+    'content',
+    'profiles',
     # 'audit',
 ]
 

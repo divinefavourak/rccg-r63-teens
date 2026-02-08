@@ -314,3 +314,259 @@ class CheckInRecord(models.Model):
     
     def __str__(self):
         return f"{self.ticket.ticket_id} - {self.checked_in_at.strftime('%Y-%m-%d %H:%M')}"
+
+
+class Event(models.Model):
+    """Generalized event model for camps, conferences, workshops, etc."""
+    
+    class EventType(models.TextChoices):
+        CAMP = 'camp', 'Camp'
+        CONFERENCE = 'conference', 'Conference'
+        WORKSHOP = 'workshop', 'Workshop'
+        RETREAT = 'retreat', 'Retreat'
+        CONCERT = 'concert', 'Concert'
+        OUTREACH = 'outreach', 'Outreach'
+        OTHER = 'other', 'Other'
+    
+    class Status(models.TextChoices):
+        DRAFT = 'draft', 'Draft'
+        PUBLISHED = 'published', 'Published'
+        REGISTRATION_OPEN = 'registration_open', 'Registration Open'
+        REGISTRATION_CLOSED = 'registration_closed', 'Registration Closed'
+        ONGOING = 'ongoing', 'Ongoing'
+        COMPLETED = 'completed', 'Completed'
+        CANCELLED = 'cancelled', 'Cancelled'
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255)
+    slug = models.SlugField(max_length=255, unique=True)
+    description = models.TextField()
+    short_description = models.CharField(max_length=500, blank=True)
+    event_type = models.CharField(
+        max_length=20,
+        choices=EventType.choices,
+        default=EventType.CAMP
+    )
+    
+    # Event dates
+    start_date = models.DateTimeField()
+    end_date = models.DateTimeField()
+    
+    # Registration period
+    registration_start = models.DateTimeField()
+    registration_end = models.DateTimeField()
+    
+    # Location
+    venue = models.CharField(max_length=255)
+    address = models.TextField(blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    state = models.CharField(max_length=100, blank=True)
+    
+    # Capacity
+    max_capacity = models.IntegerField(default=0, help_text="0 = unlimited")
+    current_registrations = models.IntegerField(default=0, editable=False)
+    
+    # Pricing
+    is_free = models.BooleanField(default=False)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    early_bird_price = models.DecimalField(
+        max_digits=10, decimal_places=2, 
+        null=True, blank=True,
+        help_text="Special price for early registration"
+    )
+    early_bird_deadline = models.DateTimeField(null=True, blank=True)
+    
+    # Media
+    banner_image = models.ImageField(upload_to='events/banners/', null=True, blank=True)
+    thumbnail = models.ImageField(upload_to='events/thumbnails/', null=True, blank=True)
+    
+    # Status
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.DRAFT
+    )
+    is_featured = models.BooleanField(default=False)
+    
+    # Metadata
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_events'
+    )
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-start_date']
+        indexes = [
+            models.Index(fields=['slug']),
+            models.Index(fields=['status']),
+            models.Index(fields=['event_type']),
+            models.Index(fields=['start_date']),
+            models.Index(fields=['registration_start', 'registration_end']),
+        ]
+        verbose_name = 'Event'
+        verbose_name_plural = 'Events'
+    
+    def __str__(self):
+        return self.name
+    
+    @property
+    def is_registration_open(self):
+        """Check if registration is currently open"""
+        now = timezone.now()
+        return (
+            self.status == self.Status.REGISTRATION_OPEN and
+            self.registration_start <= now <= self.registration_end and
+            (self.max_capacity == 0 or self.current_registrations < self.max_capacity)
+        )
+    
+    @property
+    def is_full(self):
+        """Check if event is at capacity"""
+        return self.max_capacity > 0 and self.current_registrations >= self.max_capacity
+    
+    @property
+    def spots_remaining(self):
+        """Get remaining spots"""
+        if self.max_capacity == 0:
+            return None  # Unlimited
+        return max(0, self.max_capacity - self.current_registrations)
+    
+    @property
+    def current_price(self):
+        """Get current applicable price"""
+        if self.is_free:
+            return 0
+        now = timezone.now()
+        if self.early_bird_price and self.early_bird_deadline and now < self.early_bird_deadline:
+            return self.early_bird_price
+        return self.price
+    
+    def increment_registration_count(self):
+        """Increment registration count"""
+        self.current_registrations += 1
+        self.save(update_fields=['current_registrations'])
+    
+    def decrement_registration_count(self):
+        """Decrement registration count"""
+        if self.current_registrations > 0:
+            self.current_registrations -= 1
+            self.save(update_fields=['current_registrations'])
+
+
+class EventRegistration(models.Model):
+    """Registration for an event - links users/tickets to events"""
+    
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        CONFIRMED = 'confirmed', 'Confirmed'
+        CANCELLED = 'cancelled', 'Cancelled'
+        WAITLIST = 'waitlist', 'Waitlist'
+        CHECKED_IN = 'checked_in', 'Checked In'
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name='registrations'
+    )
+    
+    # Can be linked to a ticket (for backward compatibility) or a user directly
+    ticket = models.ForeignKey(
+        Ticket,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='event_registrations'
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='event_registrations'
+    )
+    
+    # Registration details
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING
+    )
+    registration_number = models.CharField(max_length=50, unique=True, editable=False)
+    
+    # Payment (if applicable)
+    amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    payment_status = models.CharField(
+        max_length=20,
+        choices=Ticket.PaymentStatus.choices,
+        default=Ticket.PaymentStatus.UNPAID
+    )
+    
+    # Additional info
+    special_requests = models.TextField(blank=True)
+    notes = models.TextField(blank=True)
+    
+    # Timestamps
+    registered_at = models.DateTimeField(auto_now_add=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    checked_in_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-registered_at']
+        unique_together = [
+            ['event', 'ticket'],
+            ['event', 'user'],
+        ]
+        indexes = [
+            models.Index(fields=['event', 'status']),
+            models.Index(fields=['registration_number']),
+            models.Index(fields=['registered_at']),
+        ]
+        verbose_name = 'Event Registration'
+        verbose_name_plural = 'Event Registrations'
+    
+    def __str__(self):
+        identifier = self.ticket.full_name if self.ticket else (self.user.full_name if self.user else 'Unknown')
+        return f"{self.event.name} - {identifier}"
+    
+    def save(self, *args, **kwargs):
+        """Generate registration number on first save"""
+        if not self.registration_number:
+            date_prefix = timezone.now().strftime('%Y%m')
+            last_reg = EventRegistration.objects.filter(
+                registration_number__startswith=f'REG-{date_prefix}-'
+            ).order_by('registration_number').last()
+            
+            if last_reg:
+                last_num = int(last_reg.registration_number.split('-')[-1])
+                new_num = last_num + 1
+            else:
+                new_num = 1
+            
+            self.registration_number = f'REG-{date_prefix}-{new_num:05d}'
+        
+        super().save(*args, **kwargs)
+    
+    def confirm(self):
+        """Confirm the registration"""
+        self.status = self.Status.CONFIRMED
+        self.confirmed_at = timezone.now()
+        self.save()
+    
+    def cancel(self):
+        """Cancel the registration"""
+        self.status = self.Status.CANCELLED
+        self.save()
+        self.event.decrement_registration_count()
+    
+    def check_in(self):
+        """Mark as checked in"""
+        self.status = self.Status.CHECKED_IN
+        self.checked_in_at = timezone.now()
+        self.save()

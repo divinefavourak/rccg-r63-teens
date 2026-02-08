@@ -75,3 +75,66 @@ class ProvinceAccessPermission(permissions.BasePermission):
             return user.province == obj.registered_by.province
         
         return False
+
+
+class IsTeen(permissions.BasePermission):
+    """Permission check for teen users"""
+    def has_permission(self, request, view):
+        return (
+            request.user and 
+            request.user.is_authenticated and 
+            request.user.role == User.Role.TEEN
+        )
+
+
+class IsTeenOrCoordinator(permissions.BasePermission):
+    """Permission check for teen or coordinator users"""
+    def has_permission(self, request, view):
+        return (
+            request.user and 
+            request.user.is_authenticated and 
+            request.user.role in [User.Role.TEEN, User.Role.COORDINATOR]
+        )
+
+
+class IsTeenOrHigher(permissions.BasePermission):
+    """
+    Permission check for teen or higher access level.
+    Access levels: Teen < Individual < Coordinator < Admin
+    """
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        return request.user.role in [
+            User.Role.TEEN, 
+            User.Role.INDIVIDUAL, 
+            User.Role.COORDINATOR, 
+            User.Role.ADMIN
+        ]
+
+
+class CanManageEvents(permissions.BasePermission):
+    """Permission for event management - only Admin can create/edit events"""
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        
+        # Read permissions for all authenticated users
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        
+        # Write permissions only for admin
+        return request.user.role == User.Role.ADMIN
+
+
+class CanRegisterForEvents(permissions.BasePermission):
+    """Permission for event registration - Teen, Coordinator, Admin can register"""
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        
+        return request.user.role in [
+            User.Role.TEEN,
+            User.Role.COORDINATOR,
+            User.Role.ADMIN
+        ]

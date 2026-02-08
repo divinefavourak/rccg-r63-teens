@@ -40,6 +40,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         ADMIN = 'admin', 'Administrator'
         COORDINATOR = 'coordinator', 'Coordinator'
         INDIVIDUAL = 'individual', 'Individual'
+        TEEN = 'teen', 'Teen'
     
     class Province(models.TextChoices):
         # Updated to match frontend/src/constants/formFields.tsx
