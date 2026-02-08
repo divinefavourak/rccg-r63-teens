@@ -1,178 +1,216 @@
+"""
+Django admin configuration for the content app.
+"""
 from django.contrib import admin
-from .models import Devotional, Manual, Podcast, Article
+from django.utils.html import format_html
+from .models import Devotional, ManualSeries, Manual, Article
 
 
 @admin.register(Devotional)
 class DevotionalAdmin(admin.ModelAdmin):
-    list_display = ['title', 'date', 'scripture', 'is_published', 'author', 'created_at']
-    list_filter = ['is_published', 'date', 'author']
-    search_fields = ['title', 'scripture', 'content']
+    """Admin for Devotional model."""
+    
+    list_display = [
+        'date',
+        'title',
+        'anchor_scripture',
+        'status',
+        'view_count',
+        'read_count',
+        'has_audio_icon',
+        'published_at',
+    ]
+    list_filter = [
+        'status',
+        'date',
+        'created_at',
+    ]
+    search_fields = [
+        'title',
+        'content',
+        'anchor_scripture',
+        'key_point',
+    ]
+    prepopulated_fields = {'slug': ('title',)}
     date_hierarchy = 'date'
     ordering = ['-date']
-    readonly_fields = ['created_at', 'updated_at']
+    
+    readonly_fields = [
+        'id', 'slug', 'view_count', 'share_count', 'read_count',
+        'created_at', 'updated_at'
+    ]
     
     fieldsets = (
-        ('Basic Information', {
-            'fields': ('title', 'date', 'scripture', 'scripture_text')
+        ('Identification', {
+            'fields': ('date', 'title', 'slug')
+        }),
+        ('Memory Verse', {
+            'fields': ('memory_verse_passage', 'memory_verse_content')
+        }),
+        ('Bible Reading', {
+            'fields': ('bible_text_passage', 'bible_text_content', 'bible_in_one_year')
         }),
         ('Content', {
-            'fields': ('content', 'prayer_points', 'memory_verse')
+            'fields': ('content', 'key_point', 'prayer', 'confession', 'action_point', 'hymn')
         }),
         ('Media', {
-            'fields': ('featured_image',)
+            'fields': ('cover_image', 'audio_url', 'audio_file', 'audio_duration_seconds')
+        }),
+        ('Metadata', {
+            'fields': ('author', 'tags')
         }),
         ('Publishing', {
-            'fields': ('is_published', 'published_at', 'author')
+            'fields': ('status', 'published_at', 'scheduled_for')
         }),
-        ('Timestamps', {
-            'fields': ('created_at', 'updated_at'),
+        ('Stats', {
+            'fields': ('view_count', 'share_count', 'read_count'),
             'classes': ('collapse',)
+        }),
+        ('Legacy / Debug', {
+             'fields': ('anchor_scripture', 'scripture_text'),
+             'classes': ('collapse',)
         }),
     )
     
-    actions = ['publish_selected', 'unpublish_selected']
+    def has_audio_icon(self, obj):
+        if obj.has_audio:
+            return format_html('<span style="color: green;">✓</span>')
+        return format_html('<span style="color: #ccc;">—</span>')
+    has_audio_icon.short_description = 'Audio'
     
+    actions = ['publish_selected', 'archive_selected']
+    
+    @admin.action(description='Publish selected devotionals')
     def publish_selected(self, request, queryset):
-        queryset.update(is_published=True)
-    publish_selected.short_description = "Publish selected devotionals"
+        queryset.update(status='published')
     
-    def unpublish_selected(self, request, queryset):
-        queryset.update(is_published=False)
-    unpublish_selected.short_description = "Unpublish selected devotionals"
+    @admin.action(description='Archive selected devotionals')
+    def archive_selected(self, request, queryset):
+        queryset.update(status='archived')
+
+
+@admin.register(ManualSeries)
+class ManualSeriesAdmin(admin.ModelAdmin):
+    """Admin for ManualSeries model."""
+    
+    list_display = [
+        'title',
+        'start_date',
+        'end_date',
+        'manual_count',
+        'status',
+    ]
+    list_filter = ['status', 'start_date']
+    search_fields = ['title', 'description']
+    prepopulated_fields = {'slug': ('title',)}
+    readonly_fields = ['id', 'created_at', 'updated_at']
+    
+    def manual_count(self, obj):
+        return obj.manuals.count()
+    manual_count.short_description = 'Manuals'
 
 
 @admin.register(Manual)
 class ManualAdmin(admin.ModelAdmin):
-    list_display = ['title', 'year', 'week_number', 'theme', 'week_start', 'week_end', 'is_published']
-    list_filter = ['is_published', 'year', 'author']
-    search_fields = ['title', 'theme', 'lesson_content']
-    ordering = ['-year', '-week_number']
-    readonly_fields = ['created_at', 'updated_at']
+    """Admin for Manual model."""
+    
+    list_display = [
+        'week_number',
+        'title',
+        'series',
+        'week_start_date',
+        'target_age_group',
+        'status',
+        'view_count',
+        'download_count',
+    ]
+    list_filter = [
+        'status',
+        'series',
+        'target_age_group',
+        'week_start_date',
+    ]
+    search_fields = ['title', 'theme', 'memory_verse']
+    prepopulated_fields = {'slug': ('title',)}
+    date_hierarchy = 'week_start_date'
+    ordering = ['-week_start_date']
+    
+    readonly_fields = [
+        'id', 'slug', 'view_count', 'download_count',
+        'created_at', 'updated_at'
+    ]
     
     fieldsets = (
-        ('Basic Information', {
-            'fields': ('title', 'year', 'week_number', 'theme')
-        }),
-        ('Dates', {
-            'fields': ('week_start', 'week_end')
-        }),
-        ('Scripture', {
-            'fields': ('scripture_reference', 'scripture_text')
+        ('Week Info', {
+            'fields': ('series', 'week_number', 'week_start_date', 'week_end_date')
         }),
         ('Content', {
-            'fields': ('lesson_content', 'discussion_questions', 'practical_application', 'take_home_points')
+            'fields': ('title', 'slug', 'theme', 'memory_verse', 'memory_verse_text')
         }),
-        ('Files', {
-            'fields': ('pdf_file',)
+        ('Lesson Content', {
+            'fields': (
+                'lesson_objectives', 'lesson_content', 'key_takeaways',
+                'discussion_questions', 'practical_application', 'activity_suggestions'
+            )
+        }),
+        ('Prayer', {
+            'fields': ('opening_prayer_points', 'closing_prayer'),
+            'classes': ('collapse',)
+        }),
+        ('Resources', {
+            'fields': ('cover_image', 'pdf_url', 'pdf_file', 'additional_resources')
         }),
         ('Publishing', {
-            'fields': ('is_published', 'published_at', 'author')
+            'fields': ('target_age_group', 'status', 'published_at', 'scheduled_for')
         }),
-        ('Timestamps', {
-            'fields': ('created_at', 'updated_at'),
+        ('Stats', {
+            'fields': ('view_count', 'download_count'),
             'classes': ('collapse',)
         }),
     )
-    
-    actions = ['publish_selected', 'unpublish_selected']
-    
-    def publish_selected(self, request, queryset):
-        queryset.update(is_published=True)
-    publish_selected.short_description = "Publish selected manuals"
-    
-    def unpublish_selected(self, request, queryset):
-        queryset.update(is_published=False)
-    unpublish_selected.short_description = "Unpublish selected manuals"
-
-
-@admin.register(Podcast)
-class PodcastAdmin(admin.ModelAdmin):
-    list_display = ['title', 'category', 'episode_number', 'host', 'play_count', 'is_published', 'published_at']
-    list_filter = ['is_published', 'category', 'season']
-    search_fields = ['title', 'description', 'host', 'guests']
-    ordering = ['-published_at', '-created_at']
-    readonly_fields = ['play_count', 'created_at', 'updated_at']
-    
-    fieldsets = (
-        ('Basic Information', {
-            'fields': ('title', 'description', 'category')
-        }),
-        ('Episode Details', {
-            'fields': ('episode_number', 'season', 'host', 'guests')
-        }),
-        ('Media', {
-            'fields': ('audio_file', 'duration', 'thumbnail')
-        }),
-        ('Statistics', {
-            'fields': ('play_count',),
-            'classes': ('collapse',)
-        }),
-        ('Publishing', {
-            'fields': ('is_published', 'published_at')
-        }),
-        ('Timestamps', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
-    )
-    
-    actions = ['publish_selected', 'unpublish_selected']
-    
-    def publish_selected(self, request, queryset):
-        queryset.update(is_published=True)
-    publish_selected.short_description = "Publish selected podcasts"
-    
-    def unpublish_selected(self, request, queryset):
-        queryset.update(is_published=False)
-    unpublish_selected.short_description = "Unpublish selected podcasts"
 
 
 @admin.register(Article)
 class ArticleAdmin(admin.ModelAdmin):
-    list_display = ['title', 'category', 'author', 'is_featured', 'view_count', 'is_published', 'published_at']
-    list_filter = ['is_published', 'is_featured', 'category', 'author']
-    search_fields = ['title', 'excerpt', 'content', 'tags']
+    """Admin for Article model."""
+    
+    list_display = [
+        'title',
+        'category',
+        'author_name',
+        'is_featured',
+        'status',
+        'view_count',
+        'published_at',
+    ]
+    list_filter = ['status', 'category', 'is_featured', 'is_pinned']
+    search_fields = ['title', 'content', 'excerpt', 'author_name']
     prepopulated_fields = {'slug': ('title',)}
-    ordering = ['-published_at', '-created_at']
-    readonly_fields = ['view_count', 'created_at', 'updated_at']
+    ordering = ['-published_at']
+    
+    readonly_fields = [
+        'id', 'slug', 'view_count', 'share_count', 'read_time_minutes',
+        'created_at', 'updated_at'
+    ]
     
     fieldsets = (
-        ('Basic Information', {
-            'fields': ('title', 'slug', 'category', 'excerpt')
-        }),
         ('Content', {
-            'fields': ('content', 'featured_image')
+            'fields': ('title', 'slug', 'excerpt', 'content')
         }),
-        ('Metadata', {
-            'fields': ('author', 'tags', 'is_featured')
+        ('Categorization', {
+            'fields': ('category', 'tags')
         }),
-        ('Statistics', {
-            'fields': ('view_count',),
-            'classes': ('collapse',)
+        ('Author', {
+            'fields': ('author_name', 'author_bio', 'author_image')
+        }),
+        ('Media', {
+            'fields': ('cover_image', 'featured_image_caption')
         }),
         ('Publishing', {
-            'fields': ('is_published', 'published_at')
+            'fields': ('status', 'is_featured', 'is_pinned', 'published_at', 'scheduled_for')
         }),
-        ('Timestamps', {
-            'fields': ('created_at', 'updated_at'),
+        ('Stats', {
+            'fields': ('view_count', 'share_count', 'read_time_minutes'),
             'classes': ('collapse',)
         }),
     )
-    
-    actions = ['publish_selected', 'unpublish_selected', 'feature_selected', 'unfeature_selected']
-    
-    def publish_selected(self, request, queryset):
-        queryset.update(is_published=True)
-    publish_selected.short_description = "Publish selected articles"
-    
-    def unpublish_selected(self, request, queryset):
-        queryset.update(is_published=False)
-    unpublish_selected.short_description = "Unpublish selected articles"
-    
-    def feature_selected(self, request, queryset):
-        queryset.update(is_featured=True)
-    feature_selected.short_description = "Mark selected articles as featured"
-    
-    def unfeature_selected(self, request, queryset):
-        queryset.update(is_featured=False)
-    unfeature_selected.short_description = "Unmark selected articles as featured"

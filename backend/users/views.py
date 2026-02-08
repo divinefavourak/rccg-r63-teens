@@ -30,12 +30,8 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         try:
             user = User.objects.get(username=username)
         except User.DoesNotExist:
-            LoginHistory.objects.create(
-                user=None,
-                ip_address=self.get_client_ip(request),
-                user_agent=request.META.get('HTTP_USER_AGENT', ''),
-                success=False
-            )
+            # Don't create login history for non-existent users (user_id is required)
+            # Just return 401 immediately
             return Response(
                 {"detail": "Invalid credentials"},
                 status=status.HTTP_401_UNAUTHORIZED
@@ -99,6 +95,23 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         else:
             ip = request.META.get('REMOTE_ADDR')
         return ip
+
+
+class RegisterView(generics.CreateAPIView):
+    """Public endpoint for user registration"""
+    serializer_class = UserCreateSerializer
+    permission_classes = [permissions.AllowAny]
+    
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        
+        # Return user data (without auto-login, frontend handles login after)
+        return Response(
+            {"detail": "Registration successful. Please login."},
+            status=status.HTTP_201_CREATED
+        )
 
 
 class UserViewSet(viewsets.ModelViewSet):

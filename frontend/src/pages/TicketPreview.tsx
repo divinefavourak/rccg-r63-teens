@@ -1,16 +1,15 @@
 import { motion } from "framer-motion";
-import { useLocation, Link, useNavigate, useSearchParams } from "react-router-dom"; // Added hooks
-import { useEffect, useState } from "react"; // Added hooks
+import { useLocation, Link, useSearchParams } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { EVENT_DETAILS } from "../constants/eventDetails";
 import { generatePDF, generateImage } from "../utils/pdfGenerator";
-import { ticketService } from "../services/ticketService"; // Added service
-import toast from "react-hot-toast"; // Added toast
+import { ticketService } from "../services/ticketService";
+import toast from "react-hot-toast";
 import {
   FaDownload,
-  FaPrint,
   FaCheckCircle,
   FaMapMarkerAlt,
   FaUser,
@@ -21,48 +20,38 @@ import {
 import rccgLogo from "../assets/logo.jpg";
 import faithLogo from "../assets/faith_logo.jpg";
 
-import { Ticket } from "../types"; // Import shared type
-
-// Local interface removed to avoid conflicts
+import { type Ticket } from "../types";
 
 const TicketPreview = () => {
   const location = useLocation();
-  const navigate = useNavigate();
+  // const navigate = useNavigate(); // Unused
   const [searchParams] = useSearchParams();
   const [ticketData, setTicketData] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploadingPayment, setUploadingPayment] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  // Initialize from State or URL
   useEffect(() => {
     const init = async () => {
       const stateTicket = location.state?.ticket;
 
       if (stateTicket) {
-        // Data passed from previous page
         setTicketData(normalizeTicket(stateTicket));
         setLoading(false);
       } else {
-        // Try fetching from URL param
         const ticketIdFromUrl = searchParams.get('ticket_id') || searchParams.get('id');
 
         if (ticketIdFromUrl) {
           try {
             const fetchedTicket = await ticketService.verifyTicket(ticketIdFromUrl);
             if (fetchedTicket) {
-              if (fetchedTicket.status === 'approved') {
-                setTicketData(fetchedTicket);
-              } else {
-                // Redirect to status dashboard for non-approved tickets
-                navigate(`/ticket-not-found?ticket_id=${ticketIdFromUrl}`);
-              }
+              setTicketData(fetchedTicket); // Assuming verifyTicket returns normalized data or handles it
             } else {
-              toast.error("Ticket not found. Please check your ticket ID.");
+              toast.error("Registration not found. Check ID.");
             }
           } catch (error) {
             console.error("Fetch error:", error);
-            toast.error("Could not fetch ticket details.");
+            toast.error("Could not fetch registration details.");
           }
         }
         setLoading(false);
@@ -72,17 +61,8 @@ const TicketPreview = () => {
     init();
   }, [location.state, searchParams]);
 
-  const rawTicket = location.state?.ticket; // Keep for fallback ref if needed
-
-  // Normalized ticket object to use in render
-  // If loading, show null (or spinner). If not loading and no data, show fallback/mock or redirect.
-  // Ideally, we shouldn't show mock data in production unless dev mode.
-  // For now, consistent with previous code, we'll keep the mock feedback if absolutely nothing found,
-  // OR we can render a "Not Found" state.
-
   const ticket: Ticket = ticketData || {
-    // Only use this fallback if we are NOT loading and HAVE NO data
-    ticketId: "DEMO-TICKET",
+    ticketId: "DEMO-USER",
     fullName: "Loading...",
     age: "0",
     category: "",
@@ -102,14 +82,12 @@ const TicketPreview = () => {
     parentRelationship: "",
     status: 'pending',
     registeredAt: new Date().toISOString(),
-    id: "temp-id-fallback"
+    id: "temp-id-fallback",
+    payment_status: 'unpaid'
   };
 
-  // Helper to normalize backend data to Ticket interface (moved inside or kept outside)
   const normalizeTicket = (raw: any): Ticket => {
-    // If it's already normalized (from service), return it
     if (raw.ticketId) return raw;
-
     return {
       ticketId: raw.ticketId || raw.ticket_id,
       fullName: raw.fullName || raw.full_name,
@@ -122,7 +100,6 @@ const TicketPreview = () => {
       zone: raw.zone,
       area: raw.area,
       parish: raw.parish,
-      department: raw.department,
       medicalConditions: raw.medicalConditions || raw.medical_conditions,
       medications: raw.medications,
       dietaryRestrictions: raw.dietaryRestrictions || raw.dietary_restrictions,
@@ -136,27 +113,24 @@ const TicketPreview = () => {
       status: raw.status || 'pending',
       registeredAt: raw.registeredAt || raw.registered_at || new Date().toISOString(),
       id: raw.id || raw._id || "temp-id-normalized",
+      payment_status: raw.payment_status || 'unpaid'
     };
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#2b0303]">
-        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-yellow-500"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-primary-500"></div>
       </div>
     );
   }
 
-  const handlePrint = () => {
-    window.print();
-  };
-
   const handleDownloadPDF = async () => {
-    await generatePDF('ticket-card-content', `RCCG-Ticket-${ticket.ticketId}.pdf`);
+    await generatePDF('ticket-card-content', `RCCG-Member-${ticket.ticketId}.pdf`);
   };
 
   const handleDownloadImage = async () => {
-    await generateImage('ticket-card-content', `RCCG-Ticket-${ticket.ticketId}.png`);
+    await generateImage('ticket-card-content', `RCCG-Member-${ticket.ticketId}.png`);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -184,7 +158,7 @@ const TicketPreview = () => {
 
       if (response.ok) {
         const updatedTicket = await response.json();
-        setTicketData(updatedTicket);
+        setTicketData(normalizeTicket(updatedTicket));
         toast.success("Payment proof uploaded successfully! Awaiting verification.");
         setSelectedFile(null);
       } else {
@@ -199,13 +173,12 @@ const TicketPreview = () => {
     }
   };
 
-
   const getCategoryLabel = (cat: string) => {
     return cat ? cat.replace(/_/g, ' ').toUpperCase() : '';
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#2b0303] transition-colors duration-500">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-500">
       <Navbar />
 
       <div className="pt-28 pb-16 px-6">
@@ -215,10 +188,10 @@ const TicketPreview = () => {
           className="max-w-5xl mx-auto"
         >
           <div className="text-center mb-8">
-            <h1 className="text-3xl md:text-4xl font-black text-gray-800 dark:text-white mb-2 font-['Impact'] tracking-wide">
-              YOUR <span className="text-yellow-600 dark:text-yellow-400">GOLDEN TICKET</span>
+            <h1 className="text-3xl md:text-4xl font-black text-gray-900 dark:text-white mb-2 font-sans tracking-wide">
+              YOUR <span className="text-primary-600 dark:text-primary-400">ACCESS PASS</span>
             </h1>
-            <p className="text-gray-600 dark:text-red-200/70">Please present this at the registration desk.</p>
+            <p className="text-gray-600 dark:text-gray-300">Please present this ID at the venue.</p>
           </div>
 
           <motion.div
@@ -226,22 +199,18 @@ const TicketPreview = () => {
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.3 }}
             id="ticket-card-content"
-            className="relative bg-gradient-to-br from-[#fffbeb] to-[#f3e5ab] text-[#2b0303] rounded-3xl overflow-hidden shadow-2xl border-4 border-yellow-600/50 p-8 max-w-4xl mx-auto"
+            className="relative bg-white dark:bg-gray-800 text-gray-800 dark:text-white rounded-3xl overflow-hidden shadow-2xl border border-gray-200 dark:border-gray-700 p-8 max-w-4xl mx-auto"
           >
-            {/* Ornate Corner Designs (CSS only) */}
-            <div className="absolute top-0 left-0 w-24 h-24 border-t-[8px] border-l-[8px] border-yellow-600/30 rounded-tl-3xl"></div>
-            <div className="absolute bottom-0 right-0 w-24 h-24 border-b-[8px] border-r-[8px] border-yellow-600/30 rounded-br-3xl"></div>
-
             {/* Watermark Logo */}
             <div className="absolute inset-0 flex items-center justify-center opacity-5 pointer-events-none">
-              <img src={rccgLogo} alt="" className="w-96 h-96 grayscale opacity-50" />
+              <img src={rccgLogo} alt="" className="w-96 h-96 grayscale opacity-20" />
             </div>
 
             {/* Visual Verified Overlay - Only for Approved Tickets */}
             {ticket.status === 'approved' && (
               <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none overflow-hidden">
-                <div className="opacity-20 transform -rotate-12">
-                  <FaCheckCircle className="text-[400px] text-green-600" />
+                <div className="opacity-10 transform -rotate-12">
+                  <FaCheckCircle className="text-[300px] text-primary-600" />
                 </div>
               </div>
             )}
@@ -249,21 +218,23 @@ const TicketPreview = () => {
 
             <div className="relative z-10">
               {/* Header Section with Dual Logos */}
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b-2 border-[#2b0303]/10 pb-6 mb-6">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-gray-100 dark:border-gray-700 pb-6 mb-6">
                 <div className="flex items-center gap-4 mb-4 md:mb-0">
                   <div className="flex -space-x-3">
-                    <img src={rccgLogo} alt="RCCG" className="w-16 h-16 rounded-full border-2 border-yellow-600 shadow-md bg-white object-cover" />
-                    <img src={faithLogo} alt="Faith Tribe" className="w-16 h-16 rounded-full border-2 border-yellow-600 shadow-md bg-white object-cover" />
+                    <img src={rccgLogo} alt="RCCG" className="w-16 h-16 rounded-full border-2 border-white shadow-md bg-white object-cover" />
+                    <img src={faithLogo} alt="Faith Tribe" className="w-16 h-16 rounded-full border-2 border-white shadow-md bg-white object-cover" />
                   </div>
                   <div>
-                    <h2 className="text-2xl md:text-3xl font-black text-[#8B0000] uppercase tracking-tighter leading-none">
+                    <h2 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter leading-none">
                       {EVENT_DETAILS.title}
                     </h2>
-                    <p className="text-yellow-700 font-bold tracking-widest text-xs md:text-sm mt-1">{EVENT_DETAILS.theme}</p>
+                    <p className="text-primary-600 dark:text-primary-400 font-bold tracking-widest text-xs md:text-sm mt-1">{EVENT_DETAILS.theme}</p>
                   </div>
                 </div>
 
-                <div className={`px-6 py-2 rounded-full border-2 font-bold uppercase tracking-wider text-sm ${ticket.status === 'approved' ? 'border-green-600 text-green-800 bg-green-100' : 'border-yellow-600 text-yellow-900 bg-yellow-100'
+                <div className={`px-6 py-2 rounded-full border font-bold uppercase tracking-wider text-sm ${ticket.status === 'approved'
+                  ? 'border-green-200 bg-green-50 text-green-700 dark:bg-green-900/30 dark:border-green-800 dark:text-green-400'
+                  : 'border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:border-amber-800 dark:text-amber-400'
                   }`}>
                   {ticket.status}
                 </div>
@@ -271,14 +242,14 @@ const TicketPreview = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {/* QR Code Section */}
-                <div className="bg-white p-4 rounded-xl shadow-inner border border-[#2b0303]/10 flex flex-col items-center justify-center order-2 md:order-1">
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center order-2 md:order-1">
                   <QRCodeSVG
                     value={JSON.stringify({ id: ticket.ticketId, name: ticket.fullName })}
                     size={160}
                     level="H"
-                    fgColor="#2b0303"
+                    fgColor="#1fa055"
                   />
-                  <p className="mt-3 font-mono font-bold text-lg text-[#8B0000] tracking-widest">
+                  <p className="mt-3 font-mono font-bold text-lg text-gray-900 tracking-widest">
                     {ticket.ticketId}
                   </p>
                 </div>
@@ -287,28 +258,28 @@ const TicketPreview = () => {
                 <div className="md:col-span-2 space-y-6 order-1 md:order-2">
                   <div className="grid grid-cols-2 gap-6">
                     <div>
-                      <p className="text-xs font-bold text-yellow-700 uppercase tracking-wider mb-1 flex items-center gap-1">
-                        <FaUser className="text-yellow-600" /> Attendee Name
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                        <FaUser className="text-primary-500" /> Attendee Name
                       </p>
-                      <p className="text-xl font-bold text-[#2b0303] truncate">{ticket.fullName}</p>
+                      <p className="text-xl font-bold text-gray-900 dark:text-white truncate">{ticket.fullName}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-yellow-700 uppercase tracking-wider mb-1">Category</p>
-                      <p className="text-xl font-bold text-[#2b0303]">{getCategoryLabel(ticket.category)}</p>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Category</p>
+                      <p className="text-xl font-bold text-gray-900 dark:text-white">{getCategoryLabel(ticket.category)}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-yellow-700 uppercase tracking-wider mb-1">Church Parish</p>
-                      <p className="text-lg font-semibold text-[#2b0303] truncate">{ticket.parish}</p>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Church Parish</p>
+                      <p className="text-lg font-semibold text-gray-900 dark:text-white truncate">{ticket.parish}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-yellow-700 uppercase tracking-wider mb-1">Emergency Contact</p>
-                      <p className="text-lg font-semibold text-[#2b0303] flex items-center gap-2">
-                        <FaPhone className="text-xs" /> {ticket.emergencyPhone}
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Contact</p>
+                      <p className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                        <FaPhone className="text-xs" /> {ticket.phone || ticket.parentPhone}
                       </p>
                     </div>
                   </div>
 
-                  <div className="bg-[#8B0000] text-yellow-400 p-4 rounded-xl flex items-center justify-between shadow-lg">
+                  <div className="bg-primary-600 text-white p-4 rounded-xl flex items-center justify-between shadow-lg">
                     <div>
                       <p className="text-xs opacity-80 uppercase font-bold">Date</p>
                       <p className="font-bold text-white">{EVENT_DETAILS.date}</p>
@@ -316,7 +287,7 @@ const TicketPreview = () => {
                     <div className="text-right">
                       <p className="text-xs opacity-80 uppercase font-bold">Venue</p>
                       <p className="font-bold text-white flex items-center justify-end gap-2">
-                        <FaMapMarkerAlt /> Glory Arena
+                        <FaMapMarkerAlt /> {EVENT_DETAILS.location || "Glory Arena"}
                       </p>
                     </div>
                   </div>
@@ -325,53 +296,49 @@ const TicketPreview = () => {
             </div>
           </motion.div>
 
-          {/* Instructions Card (Outside PDF area) */}
-          <div className="mt-8 bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-500/30 rounded-xl p-6 shadow-sm">
-            <h4 className="font-bold text-green-800 dark:text-green-400 mb-3 flex items-center gap-2">
-              <span className="text-xl">📋</span> Important Instructions
+          {/* Instructions Card */}
+          <div className="mt-8 bg-blue-50 border border-blue-100 dark:bg-blue-900/10 dark:border-blue-500/20 rounded-xl p-6 shadow-sm">
+            <h4 className="font-bold text-blue-800 dark:text-blue-400 mb-3 flex items-center gap-2">
+              <span className="text-xl">ℹ️</span> Registration Info
             </h4>
-            <ul className="text-sm text-green-700 dark:text-green-200/80 space-y-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <ul className="text-sm text-blue-700 dark:text-blue-200/80 space-y-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <li className="flex items-center bg-white/50 dark:bg-black/20 p-2 rounded-lg">
-                <FaCheckCircle className="mr-2 text-green-600 shrink-0" />
-                <span>Payment via Coordinator</span>
+                <FaCheckCircle className="mr-2 text-blue-600 shrink-0" />
+                <span>Keep ID Safe</span>
               </li>
               <li className="flex items-center bg-white/50 dark:bg-black/20 p-2 rounded-lg">
-                <FaCheckCircle className="mr-2 text-green-600 shrink-0" />
-                <span>Valid ID Required</span>
+                <FaCheckCircle className="mr-2 text-blue-600 shrink-0" />
+                <span>Present at Entry</span>
               </li>
               <li className="flex items-center bg-white/50 dark:bg-black/20 p-2 rounded-lg">
-                <FaCheckCircle className="mr-2 text-green-600 shrink-0" />
-                <span>Parent Consent Verified</span>
-              </li>
-              <li className="flex items-center bg-white/50 dark:bg-black/20 p-2 rounded-lg">
-                <FaCheckCircle className="mr-2 text-green-600 shrink-0" />
-                <span>Arrival: 9:00 AM</span>
+                <FaCheckCircle className="mr-2 text-blue-600 shrink-0" />
+                <span>Verify Status</span>
               </li>
             </ul>
           </div>
 
-          {/* Payment Upload Section - Only show if payment is unpaid */}
-          {(ticket.payment_status === 'unpaid' || !ticket.payment_status) && ticket.ticketId !== "DEMO-TICKET" && (
-            <div className="mt-8 bg-yellow-50 border border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-500/30 rounded-xl p-6 shadow-sm">
-              <h4 className="font-bold text-yellow-800 dark:text-yellow-400 mb-3 flex items-center gap-2">
+          {/* Payment Upload Section - Only show if payment is unpaid/pending and not demo */}
+          {(ticket.payment_status === 'unpaid' || !ticket.payment_status) && ticket.ticketId !== "DEMO-USER" && (
+            <div className="mt-8 bg-amber-50 border border-amber-100 dark:bg-amber-900/10 dark:border-amber-500/20 rounded-xl p-6 shadow-sm">
+              <h4 className="font-bold text-amber-800 dark:text-amber-400 mb-3 flex items-center gap-2">
                 <FaUpload className="text-xl" /> Upload Payment Proof
               </h4>
-              <p className="text-sm text-yellow-700 dark:text-yellow-200/80 mb-4">
-                Have you made payment? Upload your receipt or proof of payment here for verification.
+              <p className="text-sm text-amber-700 dark:text-amber-200/80 mb-4">
+                Registration pending payment verification? Upload your receipt here.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
                 <input
                   type="file"
                   accept="image/*,.pdf"
                   onChange={handleFileChange}
-                  className="block w-full text-sm text-gray-700 dark:text-gray-200 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-yellow-100 file:text-yellow-700 hover:file:bg-yellow-200 dark:file:bg-yellow-800 dark:file:text-yellow-100"
+                  className="block w-full text-sm text-gray-700 dark:text-gray-200 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-amber-100 file:text-amber-700 hover:file:bg-amber-200 dark:file:bg-amber-900/30 dark:file:text-amber-400"
                 />
                 <button
                   onClick={handleUploadPayment}
                   disabled={!selectedFile || uploadingPayment}
                   className={`px-6 py-2 rounded-lg font-bold whitespace-nowrap flex items-center gap-2 ${!selectedFile || uploadingPayment
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-yellow-600 text-white hover:bg-yellow-700'
+                    : 'bg-amber-600 text-white hover:bg-amber-700'
                     }`}
                 >
                   {uploadingPayment ? (
@@ -387,7 +354,7 @@ const TicketPreview = () => {
                 </button>
               </div>
               {selectedFile && (
-                <p className="text-sm text-yellow-700 dark:text-yellow-200/80 mt-2">
+                <p className="text-sm text-amber-700 dark:text-amber-200/80 mt-2">
                   Selected: {selectedFile.name}
                 </p>
               )}
@@ -398,7 +365,7 @@ const TicketPreview = () => {
           <div className="flex flex-col sm:flex-row justify-center gap-4 mt-8">
             <button
               onClick={handleDownloadImage}
-              className="px-8 py-3 bg-white dark:bg-white/10 text-gray-800 dark:text-white border border-gray-300 dark:border-white/20 rounded-xl hover:bg-gray-50 dark:hover:bg-white/20 transition-all font-bold flex items-center justify-center gap-2 shadow-sm"
+              className="px-8 py-3 bg-white dark:bg-gray-800 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all font-bold flex items-center justify-center gap-2 shadow-sm"
             >
               <FaFileImage /> Download Image
             </button>
@@ -411,7 +378,7 @@ const TicketPreview = () => {
           </div>
 
           <div className="text-center mt-8">
-            <Link to="/" className="text-sm font-bold text-gray-500 dark:text-white/40 hover:text-red-600 dark:hover:text-white transition-colors">
+            <Link to="/" className="text-sm font-bold text-gray-500 dark:text-white/40 hover:text-primary-600 dark:hover:text-white transition-colors">
               ← Return to Home
             </Link>
           </div>

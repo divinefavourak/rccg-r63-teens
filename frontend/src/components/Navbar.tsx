@@ -1,147 +1,167 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useLocation } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTheme } from "../hooks/useTheme";
-import { FaSun, FaMoon } from "react-icons/fa";
+import { Sun, Moon, Menu, X, ChevronRight } from "lucide-react";
+import { cn } from "../lib/utils";
 import rccgLogo from "../assets/logo.jpg";
 import faithLogo from "../assets/faith_logo.jpg";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
 
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 20);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   const navItems = [
     { name: "Home", path: "/" },
-    { name: "Register", path: "/get-ticket" },
-    { name: "Admin", path: "/admin-login" },
+    { name: "Devotionals", path: "/devotionals" },
+    { name: "Manuals", path: "/manuals" },
+    { name: "Media", path: "/media" },
+    { name: "Events", path: "/events" },
   ];
 
   return (
     <motion.nav
       initial={{ y: -100 }}
       animate={{ y: 0 }}
-      className="fixed top-0 w-full z-50 transition-all duration-300 bg-white/90 dark:bg-[#2b0303]/95 backdrop-blur-md border-b border-red-100 dark:border-yellow-500/20 shadow-xl"
+      className={cn(
+        "fixed top-0 w-full z-50 transition-all duration-300 border-b",
+        scrolled
+          ? "bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-gray-200 dark:border-gray-800 shadow-sm py-3"
+          : "bg-transparent border-transparent py-5"
+      )}
     >
-      <div className="container mx-auto px-4 py-3">
+      <div className="container mx-auto px-4 md:px-6">
         <div className="flex justify-between items-center">
-          {/* Dual Logo Section - Updated for Size & Spacing */}
-          <motion.div
-            whileHover={{ scale: 1.02 }}
-            className="flex items-center gap-3 md:gap-4"
-          >
-            {/* Logos Container - Removed overlap, increased size */}
-            <div className="flex items-center gap-2">
-              <img 
-                src={rccgLogo} 
-                alt="RCCG Logo" 
-                className="w-12 h-12 md:w-14 md:h-14 rounded-full border-2 border-yellow-500/50 shadow-md object-cover hover:scale-110 transition-transform duration-300"
+          {/* Logo Section */}
+          <Link to="/" className="flex items-center gap-3 group">
+            <div className="flex items-center -space-x-3 transition-transform group-hover:scale-105">
+              <img
+                src={rccgLogo}
+                alt="RCCG Logo"
+                className="w-10 h-10 rounded-full border-2 border-white dark:border-gray-800 shadow-sm object-cover z-10"
               />
-              <img 
-                src={faithLogo} 
-                alt="Faith Tribe Logo" 
-                className="w-12 h-12 md:w-14 md:h-14 rounded-full border-2 border-yellow-500/50 shadow-md object-cover hover:scale-110 transition-transform duration-300"
+              <img
+                src={faithLogo}
+                alt="Faith Tribe Logo"
+                className="w-10 h-10 rounded-full border-2 border-white dark:border-gray-800 shadow-sm object-cover"
               />
             </div>
-            
-            {/* Divider (Optional, adds separation) */}
-            <div className="hidden sm:block w-px h-10 bg-yellow-500/30"></div>
-
-            <Link to="/" className="text-left flex flex-col justify-center">
-              <div className="text-red-900 dark:text-white font-black text-sm md:text-base leading-none tracking-wide font-['Impact'] mb-1">
+            <div className="flex flex-col">
+              <span className="font-bold text-gray-900 dark:text-white leading-none tracking-tight">
                 RCCG REGION 63
-              </div>
-              <div className="text-yellow-600 dark:text-yellow-400 text-[10px] md:text-xs leading-none font-bold tracking-widest uppercase">
-                Junior Church | Faith Tribe
-              </div>
-            </Link>
-          </motion.div>
+              </span>
+              <span className="text-[10px] text-primary-600 dark:text-primary-400 font-bold tracking-widest uppercase mt-0.5">
+                Teens Platform
+              </span>
+            </div>
+          </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-6 lg:space-x-8">
+          <div className="hidden md:flex items-center space-x-1">
             {navItems.map((item) => (
               <Link
                 key={item.name}
                 to={item.path}
-                className={`relative px-2 py-1 font-bold transition-all duration-300 text-sm tracking-wide ${
+                className={cn(
+                  "px-4 py-2 rounded-full text-sm font-medium transition-all duration-200",
                   location.pathname === item.path
-                    ? "text-red-600 dark:text-yellow-400"
-                    : "text-gray-600 dark:text-red-100 hover:text-red-800 dark:hover:text-white"
-                }`}
+                    ? "text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20"
+                    : "text-gray-600 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                )}
               >
                 {item.name}
-                {location.pathname === item.path && (
-                  <motion.div
-                    layoutId="navbar-underline"
-                    className="absolute bottom-0 left-0 w-full h-0.5 bg-red-600 dark:bg-yellow-400 rounded-full"
-                  />
-                )}
               </Link>
             ))}
-            
-            <button 
+
+            <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-2" />
+
+            <button
               onClick={toggleTheme}
-              className="p-2 rounded-full bg-red-100 dark:bg-black/20 text-red-800 dark:text-yellow-400 hover:scale-110 transition-transform shadow-sm"
+              className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              aria-label="Toggle Theme"
             >
-              {theme === 'dark' ? <FaSun size={16} /> : <FaMoon size={16} />}
+              <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+              <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
             </button>
 
             <Link
-              to="/get-ticket"
-              className="bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 text-red-900 text-xs font-black py-2.5 px-6 rounded-full shadow-lg hover:shadow-yellow-500/50 transition-all transform hover:-translate-y-0.5"
+              to="/login"
+              className={cn(
+                "ml-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all duration-300 transform hover:scale-105 whitespace-nowrap",
+                "bg-primary-600 text-white shadow-lg shadow-primary-500/30 hover:shadow-primary-500/50 hover:bg-primary-700"
+              )}
             >
-              REGISTER NOW
+              Sign In
             </Link>
           </div>
 
           {/* Mobile Menu Controls */}
-          <div className="flex items-center gap-3 md:hidden">
-            <button 
+          <div className="flex items-center gap-2 md:hidden">
+            <button
               onClick={toggleTheme}
-              className="p-2 rounded-full bg-red-50 dark:bg-white/10 text-red-800 dark:text-yellow-400 border border-red-100 dark:border-white/10"
+              className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             >
-              {theme === 'dark' ? <FaSun size={14} /> : <FaMoon size={14} />}
+              {theme === 'dark' ? <Moon size={20} /> : <Sun size={20} />}
             </button>
-            <button 
-              className="p-2 text-red-800 dark:text-yellow-400"
+            <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="p-2 text-gray-900 dark:text-white"
             >
-              <div className={`w-6 h-0.5 bg-current mb-1.5 transition-transform ${isMenuOpen ? 'rotate-45 translate-y-2' : ''}`}></div>
-              <div className={`w-6 h-0.5 bg-current mb-1.5 transition-opacity ${isMenuOpen ? 'opacity-0' : ''}`}></div>
-              <div className={`w-6 h-0.5 bg-current transition-transform ${isMenuOpen ? '-rotate-45 -translate-y-2' : ''}`}></div>
+              {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
           </div>
         </div>
-
-        {/* Mobile Menu Dropdown */}
-        <AnimatePresence>
-          {isMenuOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="md:hidden mt-4 overflow-hidden bg-white/95 dark:bg-red-950/95 backdrop-blur-xl rounded-2xl border border-red-100 dark:border-yellow-500/20 shadow-xl"
-            >
-              <div className="p-4 space-y-2">
-                {navItems.map((item) => (
-                  <Link
-                    key={item.name}
-                    to={item.path}
-                    className={`block px-4 py-3 rounded-xl font-bold transition-all text-sm ${
-                      location.pathname === item.path
-                        ? "bg-red-50 dark:bg-yellow-500/20 text-red-600 dark:text-yellow-400"
-                        : "text-gray-600 dark:text-white hover:bg-gray-50 dark:hover:bg-white/10"
-                    }`}
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    {item.name}
-                  </Link>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
+
+      {/* Mobile Menu Dropdown */}
+      <AnimatePresence>
+        {isMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="md:hidden border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-xl overflow-hidden"
+          >
+            <div className="p-4 space-y-2">
+              {navItems.map((item) => (
+                <Link
+                  key={item.name}
+                  to={item.path}
+                  className={cn(
+                    "flex items-center justify-between px-4 py-3 rounded-xl text-base font-medium transition-all",
+                    location.pathname === item.path
+                      ? "bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400"
+                      : "text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  )}
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  {item.name}
+                  {location.pathname === item.path && <ChevronRight size={16} />}
+                </Link>
+              ))}
+              <div className="pt-4 mt-2 border-t border-gray-100 dark:border-gray-800">
+                <Link
+                  to="/login"
+                  className="flex items-center justify-center w-full px-4 py-3 bg-primary-600 text-white rounded-xl font-bold text-sm shadow-md"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Access Portal
+                </Link>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.nav>
   );
 };

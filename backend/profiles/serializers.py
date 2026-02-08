@@ -1,163 +1,211 @@
+"""
+Serializers for the profiles app.
+"""
 from rest_framework import serializers
-from django.contrib.contenttypes.models import ContentType
-from .models import TeenProfile, ContentProgress, SavedContent
-from content.models import Devotional, Manual, Podcast, Article
+from django.contrib.auth import get_user_model
+from .models import TeenProfile, DevotionalProgress, ManualProgress, Favorite
+
+User = get_user_model()
 
 
 class TeenProfileSerializer(serializers.ModelSerializer):
-    """Serializer for TeenProfile model"""
-    username = serializers.CharField(source='user.username', read_only=True)
-    email = serializers.EmailField(source='user.email', read_only=True)
-    full_name = serializers.CharField(source='user.full_name', read_only=True)
-    interests_list = serializers.ListField(read_only=True)
-    favorite_topics_list = serializers.ListField(read_only=True)
+    """Full serializer for teen profiles."""
+    
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    user_username = serializers.CharField(source='user.username', read_only=True)
+    full_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    age = serializers.IntegerField(read_only=True)
     
     class Meta:
         model = TeenProfile
         fields = [
-            'id', 'username', 'email', 'full_name',
-            'date_of_birth', 'school', 'grade_level',
-            'interests', 'interests_list', 'favorite_topics', 'favorite_topics_list',
-            'devotional_reminder', 'new_content_notification', 'event_notification',
-            'total_devotionals_read', 'total_manuals_completed', 'total_podcasts_played',
-            'current_streak', 'longest_streak', 'last_activity_at',
-            'created_at', 'updated_at'
+            'id',
+            'user',
+            'user_email',
+            'user_username',
+            'full_name',
+            
+            # Personal
+            'date_of_birth',
+            'age',
+            'age_group',
+            'gender',
+            'bio',
+            'avatar',
+            
+            # Church hierarchy
+            'province',
+            'zone',
+            'area',
+            'parish',
+            'department',
+            
+            # Guardian
+            'guardian_name',
+            'guardian_phone',
+            'guardian_email',
+            'guardian_relationship',
+            
+            # Emergency
+            'emergency_contact_name',
+            'emergency_contact_phone',
+            'emergency_contact_relationship',
+            
+            # Medical
+            'medical_conditions',
+            'allergies',
+            'medications',
+            'dietary_restrictions',
+            'blood_group',
+            
+            # Preferences
+            'favorite_devotional_topics',
+            'notification_preferences',
+            
+            # Stats
+            'devotionals_read_count',
+            'events_attended_count',
+            'streak_days',
+            'longest_streak',
+            'last_active_at',
+            
+            # Timestamps
+            'created_at',
+            'updated_at',
         ]
         read_only_fields = [
-            'id', 'username', 'email', 'full_name',
-            'total_devotionals_read', 'total_manuals_completed', 'total_podcasts_played',
-            'current_streak', 'longest_streak', 'last_activity_at',
-            'created_at', 'updated_at'
+            'id', 'user', 'age', 'age_group',
+            'devotionals_read_count', 'events_attended_count',
+            'streak_days', 'longest_streak', 'last_active_at',
+            'created_at', 'updated_at',
         ]
 
 
-class ContentProgressSerializer(serializers.ModelSerializer):
-    """Serializer for ContentProgress model"""
-    content_type_name = serializers.SerializerMethodField()
-    content_title = serializers.SerializerMethodField()
+class TeenProfileCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating a teen profile."""
     
     class Meta:
-        model = ContentProgress
+        model = TeenProfile
         fields = [
-            'id', 'user', 'content_type', 'content_type_name', 'object_id',
-            'content_title', 'status', 'progress_percentage', 'last_position',
-            'notes', 'started_at', 'completed_at', 'last_accessed_at'
+            'date_of_birth',
+            'gender',
+            'province',
+            'zone',
+            'area',
+            'parish',
+            'department',
+            'guardian_name',
+            'guardian_phone',
+            'guardian_email',
+            'guardian_relationship',
         ]
-        read_only_fields = ['id', 'user', 'content_title', 'content_type_name']
     
-    def get_content_type_name(self, obj):
-        return obj.content_type.model
-    
-    def get_content_title(self, obj):
-        if obj.content_object:
-            return getattr(obj.content_object, 'title', str(obj.content_object))
-        return None
+    def create(self, validated_data):
+        user = self.context['request'].user
+        return TeenProfile.objects.create(user=user, **validated_data)
 
 
-class ContentProgressCreateSerializer(serializers.Serializer):
-    """Serializer for creating/updating content progress"""
-    content_type = serializers.ChoiceField(
-        choices=['devotional', 'manual', 'podcast', 'article']
-    )
-    object_id = serializers.UUIDField()
-    status = serializers.ChoiceField(
-        choices=['not_started', 'in_progress', 'completed'],
-        required=False
-    )
-    progress_percentage = serializers.IntegerField(min_value=0, max_value=100, required=False)
-    last_position = serializers.DurationField(required=False)
-    notes = serializers.CharField(required=False, allow_blank=True)
-    
-    def validate_content_type(self, value):
-        """Convert string to ContentType"""
-        content_type_map = {
-            'devotional': Devotional,
-            'manual': Manual,
-            'podcast': Podcast,
-            'article': Article
-        }
-        model_class = content_type_map.get(value)
-        if not model_class:
-            raise serializers.ValidationError(f"Invalid content type: {value}")
-        return ContentType.objects.get_for_model(model_class)
-    
-    def validate(self, data):
-        """Validate that the content exists"""
-        content_type = data['content_type']
-        object_id = data['object_id']
-        
-        try:
-            model_class = content_type.model_class()
-            model_class.objects.get(pk=object_id)
-        except model_class.DoesNotExist:
-            raise serializers.ValidationError(f"Content with id {object_id} does not exist")
-        
-        return data
-
-
-class SavedContentSerializer(serializers.ModelSerializer):
-    """Serializer for SavedContent model"""
-    content_type_name = serializers.SerializerMethodField()
-    content_title = serializers.SerializerMethodField()
-    content_data = serializers.SerializerMethodField()
+class TeenProfileUpdateSerializer(serializers.ModelSerializer):
+    """Serializer for updating a teen profile."""
     
     class Meta:
-        model = SavedContent
+        model = TeenProfile
         fields = [
-            'id', 'user', 'content_type', 'content_type_name', 'object_id',
-            'content_title', 'content_data', 'note', 'saved_at'
+            'bio',
+            'avatar',
+            'zone',
+            'area',
+            'parish',
+            'department',
+            'guardian_name',
+            'guardian_phone',
+            'guardian_email',
+            'guardian_relationship',
+            'emergency_contact_name',
+            'emergency_contact_phone',
+            'emergency_contact_relationship',
+            'medical_conditions',
+            'allergies',
+            'medications',
+            'dietary_restrictions',
+            'blood_group',
+            'favorite_devotional_topics',
+            'notification_preferences',
         ]
-        read_only_fields = ['id', 'user', 'saved_at', 'content_title', 'content_data', 'content_type_name']
-    
-    def get_content_type_name(self, obj):
-        return obj.content_type.model
-    
-    def get_content_title(self, obj):
-        if obj.content_object:
-            return getattr(obj.content_object, 'title', str(obj.content_object))
-        return None
-    
-    def get_content_data(self, obj):
-        """Return minimal content data for display"""
-        if obj.content_object:
-            return {
-                'id': str(obj.content_object.id),
-                'title': getattr(obj.content_object, 'title', ''),
-                'type': obj.content_type.model
-            }
-        return None
 
 
-class SavedContentCreateSerializer(serializers.Serializer):
-    """Serializer for saving content"""
-    content_type = serializers.ChoiceField(
-        choices=['devotional', 'manual', 'podcast', 'article']
-    )
-    object_id = serializers.UUIDField()
-    note = serializers.CharField(required=False, allow_blank=True, max_length=500)
+class TeenProfileListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for listing profiles."""
     
-    def validate_content_type(self, value):
-        """Convert string to ContentType"""
-        content_type_map = {
-            'devotional': Devotional,
-            'manual': Manual,
-            'podcast': Podcast,
-            'article': Article
-        }
-        model_class = content_type_map.get(value)
-        if not model_class:
-            raise serializers.ValidationError(f"Invalid content type: {value}")
-        return ContentType.objects.get_for_model(model_class)
+    full_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    age = serializers.IntegerField(read_only=True)
     
-    def validate(self, data):
-        """Validate that the content exists"""
-        content_type = data['content_type']
-        object_id = data['object_id']
-        
-        try:
-            model_class = content_type.model_class()
-            model_class.objects.get(pk=object_id)
-        except model_class.DoesNotExist:
-            raise serializers.ValidationError(f"Content with id {object_id} does not exist")
-        
-        return data
+    class Meta:
+        model = TeenProfile
+        fields = [
+            'id',
+            'full_name',
+            'age',
+            'age_group',
+            'gender',
+            'avatar',
+            'province',
+            'parish',
+            'streak_days',
+        ]
+
+
+class DevotionalProgressSerializer(serializers.ModelSerializer):
+    """Serializer for devotional progress tracking."""
+    
+    class Meta:
+        model = DevotionalProgress
+        fields = [
+            'id',
+            'profile',
+            'devotional_id',
+            'read_at',
+            'completion_percentage',
+            'notes',
+        ]
+        read_only_fields = ['id', 'profile', 'read_at']
+    
+    def create(self, validated_data):
+        profile = self.context['request'].user.teen_profile
+        return DevotionalProgress.objects.create(profile=profile, **validated_data)
+
+
+class ManualProgressSerializer(serializers.ModelSerializer):
+    """Serializer for manual progress tracking."""
+    
+    class Meta:
+        model = ManualProgress
+        fields = [
+            'id',
+            'profile',
+            'manual_id',
+            'started_at',
+            'completed_at',
+            'completion_percentage',
+            'notes',
+        ]
+        read_only_fields = ['id', 'profile', 'started_at']
+
+
+class FavoriteSerializer(serializers.ModelSerializer):
+    """Serializer for user favorites."""
+    
+    class Meta:
+        model = Favorite
+        fields = [
+            'id',
+            'profile',
+            'content_type',
+            'content_id',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'profile', 'created_at']
+    
+    def create(self, validated_data):
+        profile = self.context['request'].user.teen_profile
+        return Favorite.objects.create(profile=profile, **validated_data)

@@ -36,8 +36,21 @@ urlpatterns = [
     # Admin
     path('admin/', admin.site.urls),
     
-    # API endpoints
+    # API v1 endpoints - New Platform
+    path('api/v1/auth/', include('users.urls')),
+    path('api/v1/profiles/', include('profiles.urls')),
+    path('api/v1/content/', include('content.urls')),
+    path('api/v1/media/', include('media.urls')),
+    path('api/v1/events/', include('events.urls')),
+    path('api/v1/payments/', include('payments.urls')),
+    
+    # Legacy API endpoints (for backward compatibility with frontend)
     path('api/auth/', include('users.urls')),
+    path('api/users/', include('users.urls')),  # Added for AdminUsers page
+    path('api/content/', include('content.urls')),  # Added for content pages
+    path('api/media/', include('media.urls')),  # Added for media pages
+    path('api/events/', include('events.urls')),  # Added for events pages
+    path('api/profiles/', include('profiles.urls')),  # Added for profiles
     path('api/', include('tickets.urls')),
     path('api/payments/', include('payments.urls')),
     

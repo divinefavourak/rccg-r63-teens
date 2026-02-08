@@ -50,13 +50,19 @@ INSTALLED_APPS = [
     'django_filters',
     'storages',
     
-    # Local apps
+    # Local apps - Core
+    'common',
     'users',
-    'tickets',
-    'payments',
-    'content',
     'profiles',
-    # 'audit',
+    
+    # Local apps - Content
+    'content',
+    'media',  # Media & Podcasts app (uses label 'media_content' in apps.py)
+    
+    # Local apps - Events & Payments
+    'events',
+    'tickets',  # Legacy - will be deprecated after migration
+    'payments',
 ]
 
 MIDDLEWARE = [
@@ -301,3 +307,18 @@ SPECTACULAR_SETTINGS = {
     'COMPONENT_SPLIT_RESPONSE': True,
     # OTHER SETTINGS
 }
+
+# ==============================================================================
+# CELERY SETTINGS
+# ==============================================================================
+
+CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'Africa/Lagos'
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
+
+# Celery Beat schedule is defined in backend/celery.py

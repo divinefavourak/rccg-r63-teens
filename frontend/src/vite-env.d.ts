@@ -1,5 +1,11 @@
 /// <reference types="vite/client" />
 
+declare module '*.JPG';
+declare module '*.jpg';
+declare module '*.png';
+
+
+
 interface ImportMetaEnv {
   readonly VITE_API_URL?: string;
   readonly VITE_PUBLIC_AGENT_USERNAME?: string;
