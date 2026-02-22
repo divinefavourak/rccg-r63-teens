@@ -57,7 +57,6 @@ urlpatterns = [
     # New platform APIs
     path('api/content/', include('content.urls')),
     path('api/profiles/', include('profiles.urls')),
-    path('api/events/', include('tickets.event_urls')),
     
     # Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

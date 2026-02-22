@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q
 from django.utils import timezone
 
-from .models import Event, EventRegistration
+from events.models import Event, EventRegistration
 from .event_serializers import (
     EventSerializer, EventListSerializer,
     EventRegistrationSerializer, EventRegistrationCreateSerializer
