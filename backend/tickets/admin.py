@@ -3,7 +3,7 @@ from django.http import HttpResponse
 from django.utils import timezone
 import openpyxl
 from openpyxl.styles import Font, PatternFill
-from .models import Ticket, BulkUpload, TicketAuditLog, CheckInRecord
+from .models import Ticket, BulkUpload, TicketAuditLog, CheckInRecord, Event, EventRegistration
 
 
 @admin.register(Ticket)
@@ -203,3 +203,98 @@ class CheckInRecordAdmin(admin.ModelAdmin):
     search_fields = ('ticket__ticket_id', 'ticket__full_name', 'checked_in_by__username')
     readonly_fields = ('checked_in_at',)
     date_hierarchy = 'checked_in_at'
+
+
+@admin.register(Event)
+class EventAdmin(admin.ModelAdmin):
+    """Admin configuration for Event model"""
+    list_display = ('name', 'event_type', 'start_date', 'end_date', 'venue', 'status', 'current_registrations', 'is_featured')
+    list_filter = ('status', 'event_type', 'is_featured', 'start_date')
+    search_fields = ('name', 'description', 'venue', 'city')
+    prepopulated_fields = {'slug': ('name',)}
+    readonly_fields = ('current_registrations', 'created_at', 'updated_at')
+    date_hierarchy = 'start_date'
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('name', 'slug', 'event_type', 'description', 'short_description')
+        }),
+        ('Dates', {
+            'fields': ('start_date', 'end_date', 'registration_start', 'registration_end')
+        }),
+        ('Location', {
+            'fields': ('venue', 'address', 'city', 'state')
+        }),
+        ('Capacity & Pricing', {
+            'fields': ('max_capacity', 'current_registrations', 'is_free', 'price', 'early_bird_price', 'early_bird_deadline')
+        }),
+        ('Media', {
+            'fields': ('banner_image', 'thumbnail')
+        }),
+        ('Status', {
+            'fields': ('status', 'is_featured', 'created_by')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    actions = ['open_registration', 'close_registration']
+    
+    def open_registration(self, request, queryset):
+        queryset.update(status=Event.Status.REGISTRATION_OPEN)
+    open_registration.short_description = "Open registration for selected events"
+    
+    def close_registration(self, request, queryset):
+        queryset.update(status=Event.Status.REGISTRATION_CLOSED)
+    close_registration.short_description = "Close registration for selected events"
+
+
+@admin.register(EventRegistration)
+class EventRegistrationAdmin(admin.ModelAdmin):
+    """Admin configuration for EventRegistration model"""
+    list_display = ('registration_number', 'event', 'get_registrant', 'status', 'payment_status', 'registered_at')
+    list_filter = ('status', 'payment_status', 'event', 'registered_at')
+    search_fields = ('registration_number', 'ticket__full_name', 'user__username', 'event__name')
+    readonly_fields = ('registration_number', 'registered_at', 'confirmed_at', 'checked_in_at')
+    date_hierarchy = 'registered_at'
+    
+    fieldsets = (
+        ('Registration Info', {
+            'fields': ('registration_number', 'event', 'status')
+        }),
+        ('Registrant', {
+            'fields': ('ticket', 'user')
+        }),
+        ('Payment', {
+            'fields': ('amount_paid', 'payment_status')
+        }),
+        ('Additional Info', {
+            'fields': ('special_requests', 'notes')
+        }),
+        ('Timestamps', {
+            'fields': ('registered_at', 'confirmed_at', 'checked_in_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_registrant(self, obj):
+        if obj.ticket:
+            return obj.ticket.full_name
+        if obj.user:
+            return obj.user.full_name
+        return 'Unknown'
+    get_registrant.short_description = 'Registrant'
+    
+    actions = ['confirm_registrations', 'cancel_registrations']
+    
+    def confirm_registrations(self, request, queryset):
+        for reg in queryset:
+            reg.confirm()
+    confirm_registrations.short_description = "Confirm selected registrations"
+    
+    def cancel_registrations(self, request, queryset):
+        for reg in queryset:
+            reg.cancel()
+    cancel_registrations.short_description = "Cancel selected registrations"
