@@ -3,7 +3,8 @@ from django.http import HttpResponse
 from django.utils import timezone
 import openpyxl
 from openpyxl.styles import Font, PatternFill
-from .models import Ticket, BulkUpload, TicketAuditLog, CheckInRecord, Event, EventRegistration
+from .models import Ticket, BulkUpload, TicketAuditLog, CheckInRecord
+from events.models import Event, EventRegistration
 
 
 @admin.register(Ticket)
