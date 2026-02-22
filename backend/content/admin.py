@@ -31,7 +31,6 @@ class DevotionalAdmin(admin.ModelAdmin):
         'anchor_scripture',
         'key_point',
     ]
-    prepopulated_fields = {'slug': ('title',)}
     date_hierarchy = 'date'
     ordering = ['-date']
     
@@ -131,7 +130,6 @@ class ManualAdmin(admin.ModelAdmin):
         'week_start_date',
     ]
     search_fields = ['title', 'theme', 'memory_verse']
-    prepopulated_fields = {'slug': ('title',)}
     date_hierarchy = 'week_start_date'
     ordering = ['-week_start_date']
     
@@ -185,7 +183,6 @@ class ArticleAdmin(admin.ModelAdmin):
     ]
     list_filter = ['status', 'category', 'is_featured', 'is_pinned']
     search_fields = ['title', 'content', 'excerpt', 'author_name']
-    prepopulated_fields = {'slug': ('title',)}
     ordering = ['-published_at']
     
     readonly_fields = [
