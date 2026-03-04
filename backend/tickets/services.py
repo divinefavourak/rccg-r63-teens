@@ -133,7 +133,6 @@ class EmailService:
         # Get QR code as base64
         qr_code_base64 = None
         try:
-            from .qr_service import QRCodeService  # Import here to avoid circular imports
             qr_code_base64 = QRCodeService.get_qr_code_base64(ticket)
         except Exception as e:
             logger.error(f"Failed to generate QR code for ticket {ticket.ticket_id}: {e}")
@@ -154,11 +153,13 @@ class EmailService:
         
         html_message = render_to_string('emails/ticket_approved.html', context)
         
-        # Build recipient list
-        recipients = [ticket.email]
-        if ticket.parent_email and ticket.parent_email != ticket.email:
-            recipients.append(ticket.parent_email)
-        
+        # Build recipient list (filter out None/empty emails, deduplicate)
+        recipients = list(dict.fromkeys(filter(None, [ticket.email, ticket.parent_email])))
+
+        if not recipients:
+            logger.warning(f"No valid recipients for ticket {ticket.ticket_id} approval email")
+            return False
+
         return EmailService._send_email_safely(subject, html_message, recipients, sender='junior_church')
     
     @staticmethod
@@ -178,11 +179,12 @@ class EmailService:
         }
         
         html_message = render_to_string('emails/payment_reminder.html', context)
-        
-        recipients = [ticket.email]
-        if ticket.parent_email and ticket.parent_email != ticket.email:
-            recipients.append(ticket.parent_email)
-        
+
+        recipients = list(dict.fromkeys(filter(None, [ticket.email, ticket.parent_email])))
+        if not recipients:
+            logger.warning(f"No valid recipients for payment reminder email: {ticket.ticket_id}")
+            return False
+
         return EmailService._send_email_safely(subject, html_message, recipients, sender='no_reply')
     
     @staticmethod
@@ -202,11 +204,12 @@ class EmailService:
         }
         
         html_message = render_to_string('emails/welcome_email.html', context)
-        
-        recipients = [ticket.email]
-        if ticket.parent_email and ticket.parent_email != ticket.email:
-            recipients.append(ticket.parent_email)
-        
+
+        recipients = list(dict.fromkeys(filter(None, [ticket.email, ticket.parent_email])))
+        if not recipients:
+            logger.warning(f"No valid recipients for welcome email: {ticket.ticket_id}")
+            return False
+
         return EmailService._send_email_safely(subject, html_message, recipients, sender='junior_church')
     
     @staticmethod
@@ -227,11 +230,12 @@ class EmailService:
         }
         
         html_message = render_to_string('emails/final_instructions.html', context)
-        
-        recipients = [ticket.email]
-        if ticket.parent_email and ticket.parent_email != ticket.email:
-            recipients.append(ticket.parent_email)
-        
+
+        recipients = list(dict.fromkeys(filter(None, [ticket.email, ticket.parent_email])))
+        if not recipients:
+            logger.warning(f"No valid recipients for final instructions email: {ticket.ticket_id}")
+            return False
+
         return EmailService._send_email_safely(subject, html_message, recipients, sender='junior_church')
     
     @staticmethod
@@ -248,11 +252,12 @@ class EmailService:
         }
         
         html_message = render_to_string('emails/ticket_confirmation.html', context)
-        
-        recipients = [ticket.email]
-        if ticket.parent_email and ticket.parent_email != ticket.email:
-            recipients.append(ticket.parent_email)
-        
+
+        recipients = list(dict.fromkeys(filter(None, [ticket.email, ticket.parent_email])))
+        if not recipients:
+            logger.warning(f"No valid recipients for ticket confirmation email: {ticket.ticket_id}")
+            return False
+
         return EmailService._send_email_safely(subject, html_message, recipients, sender='no_reply')
     
     @staticmethod
@@ -346,11 +351,12 @@ class EmailService:
         }
         
         html_message = render_to_string('emails/status_update.html', context)
-        
-        recipients = [ticket.email]
-        if ticket.parent_email and ticket.parent_email != ticket.email:
-            recipients.append(ticket.parent_email)
-        
+
+        recipients = list(dict.fromkeys(filter(None, [ticket.email, ticket.parent_email])))
+        if not recipients:
+            logger.warning(f"No valid recipients for status update email: {ticket.ticket_id}")
+            return False
+
         return EmailService._send_email_safely(subject, html_message, recipients, sender='no_reply')
     
     @staticmethod
@@ -372,9 +378,10 @@ class EmailService:
         </html>
         """
         
-        recipients = [ticket.email]
-        if ticket.parent_email and ticket.parent_email != ticket.email:
-            recipients.append(ticket.parent_email)
+        recipients = list(dict.fromkeys(filter(None, [ticket.email, ticket.parent_email])))
+        if not recipients:
+            logger.warning(f"No valid recipients for custom email: {ticket.ticket_id}")
+            return False
 
         return EmailService._send_email_safely(subject, html_content, recipients, sender='support')
         

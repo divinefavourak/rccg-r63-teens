@@ -54,10 +54,6 @@ urlpatterns = [
     path('api/', include('tickets.urls')),
     path('api/payments/', include('payments.urls')),
     
-    # New platform APIs
-    path('api/content/', include('content.urls')),
-    path('api/profiles/', include('profiles.urls')),
-    
     # Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),

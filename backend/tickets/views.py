@@ -191,62 +191,8 @@ class TicketViewSet(viewsets.ModelViewSet):
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
-    @action(detail=False, methods=['post'], url_path='bulk-create')
-    def bulk_create(self, request, *args, **kwargs):
-        """
-        Create multiple tickets in a single transaction.
-        Optimized for bulk uploads to avoid rate limiting and HTTP overhead.
-        """
-        create_serializer = self.get_serializer(data=request.data, many=True)
-        create_serializer.is_valid(raise_exception=True)
-        
-        created_tickets = []
-        
-        try:
-            with transaction.atomic():
-                for ticket_data in create_serializer.validated_data:
-                    # We manually instantiate and save to trigger the custom ID generation method
-                    ticket = Ticket(**ticket_data)
-                    ticket.registered_by = request.user
-                    ticket.registered_at = timezone.now()
-                    ticket.save()
-                    created_tickets.append(ticket)
-                
-                # Create a single audit log for the batch (optional, or per ticket)
-                # For now, let's just log the first request IP to avoid spamming logs excessively
-                # or we can rely on the fact that they are created.
-                
-                # If we want to return full data for all, we can.
-                response_serializer = TicketSerializer(created_tickets, many=True)
-                return Response(response_serializer.data, status=status.HTTP_201_CREATED)
-        except Exception as e:
-            return Response(
-                {'error': f'Bulk creation failed: {str(e)}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-    
-    # def perform_create(self, serializer):
-    #     """Create a ticket with the current user as registered_by"""
-    #     ticket = serializer.save(
-    #         registered_by=self.request.user,
-    #         registered_at=timezone.now()
-    #     )
-        
-    #     # Create audit log
-    #     ticket_data = TicketSerializer(ticket).data
-    #     # Convert UUIDs to strings for JSON serialization
-    #     ticket_data = convert_uuid_to_string(ticket_data)
-        
-    #     TicketAuditLog.objects.create(
-    #         user=self.request.user,
-    #         action=TicketAuditLog.ActionType.CREATE,
-    #         ticket=ticket,
-    #         new_values=ticket_data,
-    #         ip_address=self.get_client_ip(),
-    #         user_agent=self.request.META.get('HTTP_USER_AGENT', '')
-    #     )
 
-    
+
     def perform_update(self, serializer):
         """Update ticket with audit logging"""
         old_instance = self.get_object()
@@ -399,7 +345,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         queryset = self.filter_queryset(self.get_queryset())
         
         # Create CSV response
-        response = Response(content_type='text/csv')
+        response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="tickets.csv"'
         
         # Write CSV
@@ -471,9 +417,12 @@ class TicketViewSet(viewsets.ModelViewSet):
     def qr_code(self, request, pk=None):
         """Get QR code for a ticket"""
         ticket = self.get_object()
-        
-        # Check permissions
-        if not self.request.user.has_perm('tickets.view_ticket', ticket):
+
+        # Check permissions: admins see all, coordinators see only their province
+        user = request.user
+        if not user.is_authenticated:
+            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        if not user.is_admin and not (user.is_coordinator and user.province == ticket.province):
             return Response(
                 {'error': 'Permission denied'},
                 status=status.HTTP_403_FORBIDDEN
@@ -507,9 +456,12 @@ class TicketViewSet(viewsets.ModelViewSet):
     def download_ticket(self, request, pk=None):
         """Download ticket as PDF"""
         ticket = self.get_object()
-        
-        # Check permissions
-        if not self.request.user.has_perm('tickets.view_ticket', ticket):
+
+        # Check permissions: admins see all, coordinators see only their province
+        user = request.user
+        if not user.is_authenticated:
+            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        if not user.is_admin and not (user.is_coordinator and user.province == ticket.province):
             return Response(
                 {'error': 'Permission denied'},
                 status=status.HTTP_403_FORBIDDEN
@@ -1249,12 +1201,13 @@ class CheckInDashboardView(APIView):
             count=Count('id')
         ).order_by('-count')
         
-        # By hour (for today)
+        # By hour (for today) - use __hour lookup which works across all DB backends
+        from django.db.models.functions import ExtractHour
         today_by_hour = queryset.filter(
             checked_in_at__date=today
-        ).extra({
-            'hour': "EXTRACT(HOUR FROM checked_in_at)"
-        }).values('hour').annotate(
+        ).annotate(
+            hour=ExtractHour('checked_in_at')
+        ).values('hour').annotate(
             count=Count('id')
         ).order_by('hour')
         
