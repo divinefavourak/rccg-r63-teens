@@ -31,17 +31,13 @@ const CoordinatorLogin = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     try {
-      const success = await login(formData.username, formData.password);
-      if (success) {
-        toast.success("Login Successful");
-        // The useEffect will handle the redirection
-      } else {
-        toast.error("Invalid credentials.");
-      }
+      await login({ username: formData.username, password: formData.password });
+      toast.success("Login Successful");
+      // The useEffect will handle the redirection
     } catch (error) {
-      toast.error("Login failed.");
+      toast.error("Invalid credentials.");
     } finally {
       setIsSubmitting(false);
     }
