@@ -1,8 +1,8 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
-import { Calendar, MapPin, Clock, Ticket, CheckCircle, XCircle, AlertCircle, RefreshCw, Search } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Calendar, MapPin, Clock, Ticket, CheckCircle, XCircle, AlertCircle, RefreshCw, Search, Download } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 
 interface Registration {
     id: string;
@@ -14,6 +14,7 @@ interface Registration {
     attendee_phone: string;
     attendee_province: string;
     attendee_parish: string;
+    attendee_category?: string;
     status: 'pending' | 'confirmed' | 'cancelled' | 'waitlisted' | 'checked_in' | 'no_show';
     payment_status: string;
     checked_in_at: string | null;
@@ -40,6 +41,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: ReactN
 };
 
 const DashboardEvents = () => {
+    const navigate = useNavigate();
     const [registrations, setRegistrations] = useState<Registration[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -212,10 +214,17 @@ const DashboardEvents = () => {
                                             )}
                                             <Link
                                                 to={`/events/${reg.event}`}
-                                                className="text-xs font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-400 underline-offset-2 hover:underline"
+                                                className="text-xs font-semibold text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 underline-offset-2 hover:underline"
                                             >
-                                                View Event →
+                                                Event →
                                             </Link>
+                                            <button
+                                                onClick={() => navigate('/ticket-preview', { state: { registration: reg } })}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-600 text-white text-xs font-bold hover:bg-primary-700 transition-colors"
+                                                title="View & download your pass"
+                                            >
+                                                <Download size={12} /> Pass
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
