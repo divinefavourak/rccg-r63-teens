@@ -1,11 +1,12 @@
 // frontend/src/pages/DevotionalDetail.tsx
 
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import api from '../api/axios';
 import { type Devotional } from '../types';
 import toast from 'react-hot-toast';
+import { useAuthContext } from '../context/AuthContext';
 import { 
     FaCalendarAlt, FaShare, FaHeart, FaChevronLeft, 
     FaCheckCircle, FaBookOpen, FaMusic, FaUserEdit 
@@ -14,6 +15,7 @@ import {
 const DevotionalDetail = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const { isAuthenticated } = useAuthContext();
     const [devotional, setDevotional] = useState<Devotional | null>(null);
     const [loading, setLoading] = useState(true);
     const [isRead, setIsRead] = useState(false);
@@ -183,32 +185,56 @@ const DevotionalDetail = () => {
                         )}
 
                         {/* Action Buttons */}
-                        <div className="mt-12 flex flex-col md:flex-row items-center justify-between gap-6 border-t border-gray-100 dark:border-gray-700 pt-8">
-                            <div className="flex gap-4">
-                                <button
-                                    onClick={toggleFavorite}
-                                    className="btn-secondary rounded-full px-6 py-3 flex items-center justify-center gap-2 hover:bg-pink-50 hover:border-pink-200 hover:text-pink-500 transition-all"
-                                >
-                                    <FaHeart /> Like
-                                </button>
-                                <button className="btn-secondary rounded-full px-6 py-3 flex items-center justify-center gap-2 transition-all">
-                                    <FaShare /> Share
-                                </button>
-                            </div>
+                        <div className="mt-12 border-t border-gray-100 dark:border-gray-700 pt-8">
+                            {isAuthenticated ? (
+                                <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                                    <div className="flex gap-4">
+                                        <button
+                                            onClick={toggleFavorite}
+                                            className="btn-secondary rounded-full px-6 py-3 flex items-center justify-center gap-2 hover:bg-pink-50 hover:border-pink-200 hover:text-pink-500 transition-all"
+                                        >
+                                            <FaHeart /> Like
+                                        </button>
+                                        <button className="btn-secondary rounded-full px-6 py-3 flex items-center justify-center gap-2 transition-all">
+                                            <FaShare /> Share
+                                        </button>
+                                    </div>
 
-                            <button
-                                onClick={markAsRead}
-                                disabled={isRead}
-                                className={`btn-primary px-8 py-3 flex items-center gap-3 text-lg shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-1 ${isRead ? 'opacity-50 cursor-not-allowed bg-gray-500 hover:transform-none hover:shadow-none' : ''}`}
-                            >
-                                {isRead ? (
-                                    <>
-                                        <FaCheckCircle /> Read
-                                    </>
-                                ) : (
-                                    "Mark as Read"
-                                )}
-                            </button>
+                                    <button
+                                        onClick={markAsRead}
+                                        disabled={isRead}
+                                        className={`btn-primary px-8 py-3 flex items-center gap-3 text-lg shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-1 ${isRead ? 'opacity-50 cursor-not-allowed bg-gray-500 hover:transform-none hover:shadow-none' : ''}`}
+                                    >
+                                        {isRead ? (
+                                            <>
+                                                <FaCheckCircle /> Read
+                                            </>
+                                        ) : (
+                                            "Mark as Read"
+                                        )}
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center gap-4 py-4 text-center">
+                                    <p className="text-gray-500 dark:text-gray-400 text-sm">
+                                        Sign in to track your reading, like devotionals, and build your streak.
+                                    </p>
+                                    <div className="flex gap-3">
+                                        <Link
+                                            to="/login"
+                                            className="btn-primary px-6 py-2.5 text-sm font-bold rounded-xl"
+                                        >
+                                            Sign In
+                                        </Link>
+                                        <Link
+                                            to="/register"
+                                            className="btn-secondary px-6 py-2.5 text-sm font-bold rounded-xl"
+                                        >
+                                            Create Account
+                                        </Link>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                     </div>

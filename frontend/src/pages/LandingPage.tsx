@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import { BookOpen, PlayCircle, Calendar, Users, ArrowRight, CheckCircle, Star } from "lucide-react";
 import HeroCarousel from "../components/HeroCarousel";
-import Footer from "../components/Footer";
+
 
 const LandingPage = () => {
   return (
@@ -132,7 +132,6 @@ const LandingPage = () => {
         </div>
       </section>
 
-      <Footer />
     </div>
   );
 };

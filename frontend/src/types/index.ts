@@ -111,13 +111,21 @@ export interface Devotional {
 
 export interface MediaEpisode {
   id: string;
+  series?: string;
+  series_title?: string;
   title: string;
   description: string;
-  media_type: 'audio' | 'video';
-  file_url: string;
-  thumbnail_url?: string;
-  duration: string;
+  media_type: 'audio' | 'video' | 'both';
+  thumbnail?: string;       // ImageField URL from backend
+  has_audio: boolean;
+  has_video: boolean;
+  duration_seconds?: number;
+  duration_formatted?: string;
   published_at: string;
+  view_count: number;
+  play_count: number;
+  is_featured: boolean;
+  status: string;
 }
 
 export interface FavoriteItem {

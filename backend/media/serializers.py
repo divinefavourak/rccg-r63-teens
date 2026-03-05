@@ -219,8 +219,18 @@ class MediaEpisodeDetailSerializer(serializers.ModelSerializer):
 
 
 class MediaEpisodeCreateUpdateSerializer(serializers.ModelSerializer):
-    """Serializer for creating/updating episodes (admin only)."""
-    
+    """Serializer for creating/updating episodes (admin only).
+
+    Accepts a generic ``file`` field (write-only) and routes it to
+    ``audio_file`` or ``video_file`` based on ``media_type``.
+    Also accepts ``duration`` (string "MM:SS") and stores it as seconds.
+    """
+
+    # Generic upload field — maps to audio_file / video_file in create/update
+    file = serializers.FileField(write_only=True, required=False)
+    # Human-readable duration e.g. "15:30"
+    duration = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
     class Meta:
         model = MediaEpisode
         fields = [
@@ -233,14 +243,18 @@ class MediaEpisodeCreateUpdateSerializer(serializers.ModelSerializer):
             'show_notes',
             'thumbnail',
             'media_type',
-            
+
+            # Generic upload helpers
+            'file',
+            'duration',
+
             # Audio
             'audio_url',
             'audio_file',
             'audio_duration_seconds',
             'audio_file_size_bytes',
             'audio_mime_type',
-            
+
             # Video
             'video_url',
             'video_file',
@@ -248,30 +262,75 @@ class MediaEpisodeCreateUpdateSerializer(serializers.ModelSerializer):
             'video_file_size_bytes',
             'video_mime_type',
             'video_resolution',
-            
+
             # Streaming
             'hls_url',
             'dash_url',
             'embed_code',
             'external_video_id',
-            
+
             # Metadata
             'tags',
             'guests',
             'transcript',
             'chapters',
-            
+
             # Flags
             'is_featured',
             'is_premium',
             'is_explicit',
             'order',
-            
+
             # Publishing
             'status',
             'published_at',
             'scheduled_for',
         ]
+
+    def _parse_duration_seconds(self, duration_str: str) -> int:
+        """Convert 'MM:SS' or 'HH:MM:SS' to total seconds."""
+        try:
+            parts = [int(p) for p in duration_str.strip().split(':')]
+            if len(parts) == 2:
+                return parts[0] * 60 + parts[1]
+            if len(parts) == 3:
+                return parts[0] * 3600 + parts[1] * 60 + parts[2]
+        except (ValueError, AttributeError):
+            pass
+        return 0
+
+    def _route_file(self, validated_data: dict) -> dict:
+        """Move generic ``file`` into ``audio_file`` or ``video_file``."""
+        uploaded = validated_data.pop('file', None)
+        if uploaded:
+            media_type = validated_data.get('media_type', 'audio')
+            if media_type == 'video':
+                validated_data.setdefault('video_file', uploaded)
+            else:
+                validated_data.setdefault('audio_file', uploaded)
+        return validated_data
+
+    def _route_duration(self, validated_data: dict) -> dict:
+        """Convert ``duration`` string into the correct seconds field."""
+        duration_str = validated_data.pop('duration', None)
+        if duration_str:
+            seconds = self._parse_duration_seconds(duration_str)
+            media_type = validated_data.get('media_type', 'audio')
+            if media_type == 'video':
+                validated_data.setdefault('video_duration_seconds', seconds)
+            else:
+                validated_data.setdefault('audio_duration_seconds', seconds)
+        return validated_data
+
+    def create(self, validated_data):
+        validated_data = self._route_file(validated_data)
+        validated_data = self._route_duration(validated_data)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        validated_data = self._route_file(validated_data)
+        validated_data = self._route_duration(validated_data)
+        return super().update(instance, validated_data)
 
 
 # =====================

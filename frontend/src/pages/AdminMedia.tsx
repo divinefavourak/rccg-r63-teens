@@ -187,8 +187,8 @@ const AdminMedia = () => {
                 ) : filteredMedia.map((item) => (
                     <div key={item.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden group">
                         <div className="aspect-video bg-gray-100 dark:bg-gray-900 relative flex items-center justify-center">
-                            {item.thumbnail_url ? (
-                                <img src={item.thumbnail_url} alt={item.title} className="w-full h-full object-cover" />
+                            {item.thumbnail ? (
+                                <img src={item.thumbnail} alt={item.title} className="w-full h-full object-cover" />
                             ) : item.media_type === 'video' ? (
                                 <Video size={48} className="text-gray-300 dark:text-gray-700" />
                             ) : (
@@ -198,7 +198,7 @@ const AdminMedia = () => {
                                 {item.media_type === 'video' ? 'Video' : 'Podcast'}
                             </span>
                             <span className="absolute bottom-4 right-4 px-2 py-1 rounded bg-black/50 text-white text-xs font-medium backdrop-blur-sm">
-                                {item.duration || '00:00'}
+                                {item.duration_formatted || '00:00'}
                             </span>
                         </div>
 

@@ -127,10 +127,12 @@ class MediaEpisode(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
         VIDEO_ONLY = 'video', 'Video Only'
         AUDIO_AND_VIDEO = 'both', 'Audio & Video'
     
-    # Series relationship
+    # Series relationship (optional — standalone episodes are allowed)
     series = models.ForeignKey(
         MediaSeries,
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name='episodes'
     )
     
@@ -145,7 +147,7 @@ class MediaEpisode(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     show_notes = models.TextField(blank=True)  # Markdown for timestamps, links
     
     # Thumbnail/Cover
-    thumbnail = models.ImageField(upload_to='media_thumbnails/')
+    thumbnail = models.ImageField(upload_to='media_thumbnails/', null=True, blank=True)
     
     # Media Type Indicator
     media_type = models.CharField(

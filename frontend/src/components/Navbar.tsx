@@ -2,16 +2,18 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Link, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useTheme } from "../hooks/useTheme";
-import { Sun, Moon, Menu, X, ChevronRight } from "lucide-react";
+import { Sun, Moon, Menu, X, ChevronRight, LogOut, LayoutDashboard, User } from "lucide-react";
 import { cn } from "../lib/utils";
 import rccgLogo from "../assets/logo.jpg";
 import faithLogo from "../assets/faith_logo.jpg";
+import { useAuthContext } from "../context/AuthContext";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
+  const { user, isAuthenticated, logout } = useAuthContext();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -94,15 +96,43 @@ const Navbar = () => {
               <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
             </button>
 
-            <Link
-              to="/login"
-              className={cn(
-                "ml-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all duration-300 transform hover:scale-105 whitespace-nowrap",
-                "bg-primary-600 text-white shadow-lg shadow-primary-500/30 hover:shadow-primary-500/50 hover:bg-primary-700"
-              )}
-            >
-              Sign In
-            </Link>
+            {isAuthenticated && user ? (
+              <div className="flex items-center gap-2 ml-2">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                  <div className="w-6 h-6 rounded-full bg-primary-600 flex items-center justify-center">
+                    <User size={13} className="text-white" />
+                  </div>
+                  <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 max-w-[120px] truncate">
+                    {user.username}
+                  </span>
+                </div>
+                <Link
+                  to="/dashboard"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-sm bg-primary-600 text-white hover:bg-primary-700 transition-all shadow-md shadow-primary-500/20 hover:scale-105 transform"
+                >
+                  <LayoutDashboard size={14} />
+                  Dashboard
+                </Link>
+                <button
+                  onClick={logout}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+                  aria-label="Sign Out"
+                >
+                  <LogOut size={15} />
+                  Sign Out
+                </button>
+              </div>
+            ) : (
+              <Link
+                to="/login"
+                className={cn(
+                  "ml-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all duration-300 transform hover:scale-105 whitespace-nowrap",
+                  "bg-primary-600 text-white shadow-lg shadow-primary-500/30 hover:shadow-primary-500/50 hover:bg-primary-700"
+                )}
+              >
+                Sign In
+              </Link>
+            )}
           </div>
 
           {/* Mobile Menu Controls */}
@@ -149,14 +179,40 @@ const Navbar = () => {
                   {location.pathname === item.path && <ChevronRight size={16} />}
                 </Link>
               ))}
-              <div className="pt-4 mt-2 border-t border-gray-100 dark:border-gray-800">
-                <Link
-                  to="/login"
-                  className="flex items-center justify-center w-full px-4 py-3 bg-primary-600 text-white rounded-xl font-bold text-sm shadow-md"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Access Portal
-                </Link>
+              <div className="pt-4 mt-2 border-t border-gray-100 dark:border-gray-800 space-y-2">
+                {isAuthenticated && user ? (
+                  <>
+                    <div className="flex items-center gap-2 px-4 py-2">
+                      <div className="w-7 h-7 rounded-full bg-primary-600 flex items-center justify-center">
+                        <User size={14} className="text-white" />
+                      </div>
+                      <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">{user.username}</span>
+                    </div>
+                    <Link
+                      to="/dashboard"
+                      className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-primary-600 text-white rounded-xl font-bold text-sm shadow-md"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      <LayoutDashboard size={15} />
+                      Dashboard
+                    </Link>
+                    <button
+                      onClick={() => { logout(); setIsMenuOpen(false); }}
+                      className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl font-bold text-sm"
+                    >
+                      <LogOut size={15} />
+                      Sign Out
+                    </button>
+                  </>
+                ) : (
+                  <Link
+                    to="/login"
+                    className="flex items-center justify-center w-full px-4 py-3 bg-primary-600 text-white rounded-xl font-bold text-sm shadow-md"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Access Portal
+                  </Link>
+                )}
               </div>
             </div>
           </motion.div>
