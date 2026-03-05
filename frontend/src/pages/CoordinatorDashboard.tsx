@@ -328,16 +328,6 @@ const CoordinatorDashboard = () => {
                                                 </td>
                                                 <td className="p-3">
                                                     <div className="flex items-center gap-1">
-                                                        {reg.status === 'pending' && (
-                                                            <button
-                                                                disabled={isUpdating}
-                                                                onClick={() => updateStatus(reg.id, 'confirmed')}
-                                                                title="Confirm"
-                                                                className="p-1.5 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-600 hover:bg-green-100 transition-colors disabled:opacity-40"
-                                                            >
-                                                                <CheckCircle size={15} />
-                                                            </button>
-                                                        )}
                                                         {reg.status === 'confirmed' && !reg.checked_in_at && (
                                                             <button
                                                                 disabled={isUpdating}

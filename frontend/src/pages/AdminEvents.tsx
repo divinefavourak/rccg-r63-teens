@@ -52,6 +52,9 @@ const AdminEvents = () => {
     const [registrations, setRegistrations] = useState<Registration[]>([]);
     const [regLoading, setRegLoading] = useState(false);
     const [regSearch, setRegSearch] = useState('');
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+    const [bulkConfirming, setBulkConfirming] = useState(false);
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -93,6 +96,7 @@ const AdminEvents = () => {
         setSelectedEvent(event);
         setRegistrations([]);
         setRegSearch('');
+        setSelectedIds([]);
         setRegLoading(true);
         try {
             const { data } = await api.get(`/events/events/${event.id}/registrations/`);
@@ -109,11 +113,28 @@ const AdminEvents = () => {
         try {
             await api.post(`/events/registrations/${regId}/update_status/`, { status: newStatus });
             toast.success(`Status updated to ${newStatus}`);
-            // Refresh list
             if (selectedEvent) fetchRegistrations(selectedEvent);
         } catch {
             toast.error('Failed to update status');
         }
+    };
+
+    const handleBulkConfirm = async () => {
+        setBulkConfirming(true);
+        let succeeded = 0;
+        for (const id of selectedIds) {
+            try {
+                await api.post(`/events/registrations/${id}/update_status/`, { status: 'confirmed' });
+                succeeded++;
+            } catch {
+                // continue with remaining
+            }
+        }
+        toast.success(`${succeeded} registration${succeeded !== 1 ? 's' : ''} confirmed`);
+        setSelectedIds([]);
+        setBulkConfirmOpen(false);
+        setBulkConfirming(false);
+        if (selectedEvent) fetchRegistrations(selectedEvent);
     };
 
 
@@ -325,6 +346,14 @@ const AdminEvents = () => {
                                 </p>
                             </div>
                             <div className="flex items-center gap-2">
+                                {selectedIds.length > 0 && (
+                                    <button
+                                        onClick={() => setBulkConfirmOpen(true)}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 text-white text-xs font-bold hover:bg-green-700 transition-colors"
+                                    >
+                                        <CheckCircle size={14} /> Bulk Confirm ({selectedIds.length})
+                                    </button>
+                                )}
                                 <button onClick={() => fetchRegistrations(selectedEvent)}
                                     className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
                                     title="Refresh"
@@ -381,6 +410,18 @@ const AdminEvents = () => {
                                 <table className="w-full text-left text-sm">
                                     <thead className="bg-gray-50 dark:bg-gray-900/50 sticky top-0">
                                         <tr>
+                                            <th className="p-3 w-8">
+                                                <input
+                                                    type="checkbox"
+                                                    className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                                                    checked={selectedIds.length > 0 && registrations.filter(r => r.status === 'pending').every(r => selectedIds.includes(r.id))}
+                                                    onChange={e => {
+                                                        const pendingIds = registrations.filter(r => r.status === 'pending').map(r => r.id);
+                                                        setSelectedIds(e.target.checked ? pendingIds : []);
+                                                    }}
+                                                    title="Select all pending"
+                                                />
+                                            </th>
                                             <th className="p-3 text-xs font-bold text-gray-500 uppercase">Attendee</th>
                                             <th className="p-3 text-xs font-bold text-gray-500 uppercase">Contact</th>
                                             <th className="p-3 text-xs font-bold text-gray-500 uppercase">Province</th>
@@ -399,7 +440,19 @@ const AdminEvents = () => {
                                             .map(reg => {
                                                 const sc = REG_STATUS_CONFIG[reg.status] || REG_STATUS_CONFIG.pending;
                                                 return (
-                                                    <tr key={reg.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/20">
+                                                    <tr key={reg.id} className={`hover:bg-gray-50 dark:hover:bg-gray-900/20 ${selectedIds.includes(reg.id) ? 'bg-green-50 dark:bg-green-900/10' : ''}`}>
+                                                        <td className="p-3">
+                                                            {reg.status === 'pending' && (
+                                                                <input
+                                                                    type="checkbox"
+                                                                    className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                                                                    checked={selectedIds.includes(reg.id)}
+                                                                    onChange={e => setSelectedIds(prev =>
+                                                                        e.target.checked ? [...prev, reg.id] : prev.filter(id => id !== reg.id)
+                                                                    )}
+                                                                />
+                                                            )}
+                                                        </td>
                                                         <td className="p-3">
                                                             <div className="font-semibold text-gray-900 dark:text-white">{reg.attendee_name}</div>
                                                             <div className="text-xs text-gray-400 font-mono">{reg.registration_id}</div>
@@ -455,6 +508,42 @@ const AdminEvents = () => {
                                     </tbody>
                                 </table>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Bulk Confirm Modal */}
+            {bulkConfirmOpen && (
+                <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-sm shadow-2xl p-6">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-xl">
+                                <CheckCircle size={22} className="text-green-600 dark:text-green-400" />
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Bulk Confirm</h3>
+                        </div>
+                        <p className="text-gray-600 dark:text-gray-400 mb-6">
+                            Confirm <span className="font-bold text-gray-900 dark:text-white">{selectedIds.length}</span> registration{selectedIds.length !== 1 ? 's' : ''}? This will mark them all as <span className="font-semibold text-green-600">Confirmed</span>.
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setBulkConfirmOpen(false)}
+                                disabled={bulkConfirming}
+                                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleBulkConfirm}
+                                disabled={bulkConfirming}
+                                className="flex-1 px-4 py-2.5 rounded-xl bg-green-600 text-white font-bold hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {bulkConfirming
+                                    ? <><span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" /> Confirming...</>
+                                    : <><CheckCircle size={16} /> Confirm All</>
+                                }
+                            </button>
                         </div>
                     </div>
                 </div>
