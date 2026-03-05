@@ -703,10 +703,15 @@ class RCCGOnlineScraper:
         data['key_point'] = key_point
 
         # ── Bible in one year ──────────────────────────────────────────────────
+        # Some lines embed BIBLE IN ONE YEAR mid-text (inside a big <p> that also
+        # contains KEY POINT and HYMN). Extract only the inline reference value
+        # (up to the next newline) rather than taking the whole line.
         bioy = ''
         for line in lines:
             if re.search(r'BIBLE IN ONE YEAR', line, re.IGNORECASE):
-                bioy = self._strip_prefix(line).title()
+                m = re.search(r'BIBLE\s+IN\s+ONE\s+YEAR\s*:\s*([^\n]+)', line, re.IGNORECASE)
+                if m:
+                    bioy = m.group(1).strip().title()
                 break
         data['bible_in_one_year'] = bioy
 
