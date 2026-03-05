@@ -108,7 +108,6 @@ class MediaEpisodeAdmin(admin.ModelAdmin):
         'is_premium',
     ]
     search_fields = ['title', 'description', 'tags']
-    prepopulated_fields = {'slug': ('title',)}
     ordering = ['-published_at']
     date_hierarchy = 'published_at'
     

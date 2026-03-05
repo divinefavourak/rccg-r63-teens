@@ -4,6 +4,21 @@ import api from '../api/axios';
 import { type MediaEpisode } from '../types';
 import { FaMusic, FaClock } from 'react-icons/fa';
 
+const MEDIA_BASE = import.meta.env.VITE_MEDIA_URL || 'http://localhost:8000';
+
+const resolveUrl = (path: string | null | undefined): string | null => {
+    if (!path) return null;
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    return `${MEDIA_BASE}${path.startsWith('/') ? '' : '/'}${path}`;
+};
+
+const getMediaUrl = (item: MediaEpisode): string | null => {
+    if (item.media_type === 'video') {
+        return resolveUrl(item.video_url || item.video_file);
+    }
+    return resolveUrl(item.audio_url || item.audio_file);
+};
+
 const MediaList = () => {
     const [media, setMedia] = useState<MediaEpisode[]>([]);
     const [loading, setLoading] = useState(true);
@@ -16,14 +31,12 @@ const MediaList = () => {
     const fetchMedia = async () => {
         setLoading(true);
         try {
-            let url = '/media/';
-            if (filter !== 'all') {
-                url += `?type=${filter}`;
-            }
+            let url = '/media/episodes/';
+            if (filter !== 'all') url += `?media_type=${filter}`;
             const { data } = await api.get(url);
             setMedia(Array.isArray(data) ? data : data.results || []);
         } catch (error) {
-            console.error("Failed to fetch media");
+            console.error('Failed to fetch media', error);
         } finally {
             setLoading(false);
         }
@@ -58,44 +71,61 @@ const MediaList = () => {
 
                 {loading ? (
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                        {[1, 2, 3].map(i => <div key={i} className="h-64 bg-gray-200 animate-pulse rounded-2xl"></div>)}
+                        {[1, 2, 3].map(i => <div key={i} className="h-64 bg-gray-200 dark:bg-gray-700 animate-pulse rounded-2xl"></div>)}
+                    </div>
+                ) : media.length === 0 ? (
+                    <div className="text-center py-20 text-gray-500 dark:text-gray-400">
+                        <FaMusic className="text-5xl mx-auto mb-4 opacity-30" />
+                        <p className="text-lg font-medium">No media available yet.</p>
                     </div>
                 ) : (
                     <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-                        {media.map((item) => (
-                            <div key={item.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden group">
-                                <div className="aspect-video bg-gray-900 relative group">
-                                    {item.media_type === 'video' ? (
-                                        <video controls className="w-full h-full object-cover">
-                                            <source src={item.file_url} type="video/mp4" />
-                                            Your browser does not support video.
-                                        </video>
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-900 to-primary-900">
-                                            <FaMusic className="text-white/20 text-6xl" />
-                                            <div className="absolute inset-0 flex items-center justify-center">
-                                                <audio controls className="w-10/12">
-                                                    <source src={item.file_url} />
-                                                </audio>
+                        {media.map((item) => {
+                            const mediaUrl = getMediaUrl(item);
+                            return (
+                                <div key={item.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden group">
+                                    <div className="aspect-video bg-gray-900 relative">
+                                        {item.media_type === 'video' && mediaUrl ? (
+                                            <video controls className="w-full h-full object-cover">
+                                                <source src={mediaUrl} type="video/mp4" />
+                                                Your browser does not support video.
+                                            </video>
+                                        ) : (
+                                            <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-900 to-primary-900 gap-3 px-4">
+                                                <FaMusic className="text-white/20 text-5xl" />
+                                                {mediaUrl && (
+                                                    <audio controls className="w-full max-w-xs">
+                                                        <source src={mediaUrl} />
+                                                    </audio>
+                                                )}
                                             </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="p-6">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${item.media_type === 'video' ? 'bg-red-100 text-red-600' : 'bg-purple-100 text-purple-600'}`}>
-                                            {item.media_type}
-                                        </span>
-                                        <div className="flex items-center text-gray-400 text-xs">
-                                            <FaClock className="mr-1" /> {item.duration}
-                                        </div>
+                                        )}
+                                        {item.thumbnail && (
+                                            <img
+                                                src={resolveUrl(item.thumbnail) || ''}
+                                                alt={item.title}
+                                                className="absolute inset-0 w-full h-full object-cover opacity-0 group-hover:opacity-0 pointer-events-none"
+                                            />
+                                        )}
                                     </div>
-                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 line-clamp-1">{item.title}</h3>
-                                    <p className="text-gray-500 text-sm line-clamp-2">{item.description}</p>
+
+                                    <div className="p-6">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${item.media_type === 'video' ? 'bg-red-100 text-red-600' : 'bg-purple-100 text-purple-600'}`}>
+                                                {item.media_type}
+                                            </span>
+                                            {item.duration_formatted && (
+                                                <div className="flex items-center text-gray-400 text-xs gap-1">
+                                                    <FaClock /> {item.duration_formatted}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 line-clamp-1">{item.title}</h3>
+                                        <p className="text-gray-500 text-sm line-clamp-2">{item.description}</p>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>

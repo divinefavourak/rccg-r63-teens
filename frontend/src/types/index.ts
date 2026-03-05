@@ -116,9 +116,13 @@ export interface MediaEpisode {
   title: string;
   description: string;
   media_type: 'audio' | 'video' | 'both';
-  thumbnail?: string;       // ImageField URL from backend
+  thumbnail?: string;
   has_audio: boolean;
   has_video: boolean;
+  audio_url?: string;
+  audio_file?: string;
+  video_url?: string;
+  video_file?: string;
   duration_seconds?: number;
   duration_formatted?: string;
   published_at: string;
@@ -137,12 +141,34 @@ export interface FavoriteItem {
 
 export interface Manual {
   id: string;
+  series?: string | null;
+  series_title?: string;
+  week_number: number;
+  week_start_date: string;
+  week_end_date: string;
   title: string;
-  description: string;
+  slug?: string;
+  theme?: string;           // bible text passage
+  memory_verse?: string;    // passage reference
+  memory_verse_text?: string;
+  lesson_objectives?: string[];
+  lesson_content?: string;
+  key_takeaways?: string[];
+  discussion_questions?: string[];
+  practical_application?: string;
+  activity_suggestions?: string[];
+  opening_prayer_points?: string[];
+  closing_prayer?: string;
   cover_image?: string;
-  file_url: string; // PDF
-  is_series: boolean;
-  series_id?: string;
+  pdf_url?: string;
+  pdf_file?: string;
+  additional_resources?: string[];
+  has_pdf?: boolean;
+  target_age_group?: string;
+  view_count?: number;
+  download_count?: number;
+  status?: string;
+  published_at?: string;
 }
 
 export interface Series {
@@ -155,18 +181,29 @@ export interface Series {
 export interface Event {
   id: string;
   title: string;
-  description: string;
-  details: string; // Markdown/HTML
-  location: string;
-  start_date: string;
-  end_date: string;
-  registration_deadline?: string;
+  slug?: string;
+  event_type?: string;
+  short_description?: string;
+  description?: string;
+  venue?: string;            // backend field (was: location)
+  city?: string;
+  state?: string;
+  address?: string;
+  start_datetime: string;    // backend field (was: start_date)
+  end_datetime?: string;     // backend field (was: end_date)
+  cover_image?: string;
+  is_virtual?: boolean;
+  is_free?: boolean;
   price: number;
-  image?: string;
-  is_active: boolean;
+  registration_status?: string;
   registration_count: number;
-  available_seats?: number;
+  max_attendees?: number;    // backend field (was: available_seats)
+  spots_remaining?: number;
+  is_upcoming?: boolean;
+  is_featured?: boolean;
+  status?: string;
 }
+
 
 export interface EventRegistration {
   id: string;

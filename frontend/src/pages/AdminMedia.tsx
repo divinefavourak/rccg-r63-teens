@@ -83,7 +83,8 @@ const AdminMedia = () => {
             data.append('title', formData.title);
             data.append('description', formData.description);
             data.append('media_type', formData.media_type);
-            data.append('published_at', formData.published_at);
+            data.append('status', 'published');
+            data.append('published_at', new Date(formData.published_at).toISOString());
             // Matches backend expectations
             data.append('file', formData.file); 
             if (formData.thumbnail) data.append('thumbnail', formData.thumbnail);

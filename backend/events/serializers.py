@@ -17,6 +17,11 @@ class EventListSerializer(serializers.ModelSerializer):
     spots_remaining = serializers.IntegerField(read_only=True)
     is_upcoming = serializers.BooleanField(read_only=True)
     current_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    registration_count = serializers.SerializerMethodField()
+
+    def get_registration_count(self, obj):
+        """Return live annotation if available, else fall back to stored field."""
+        return getattr(obj, 'live_registration_count', obj.registration_count)
     
     class Meta:
         model = Event
@@ -54,6 +59,10 @@ class EventDetailSerializer(serializers.ModelSerializer):
     is_past = serializers.BooleanField(read_only=True)
     is_full = serializers.BooleanField(read_only=True)
     current_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    registration_count = serializers.SerializerMethodField()
+
+    def get_registration_count(self, obj):
+        return getattr(obj, 'live_registration_count', obj.registration_count)
     
     class Meta:
         model = Event
@@ -200,6 +209,10 @@ class EventCreateUpdateSerializer(serializers.ModelSerializer):
             'published_at',
             'scheduled_for',
         ]
+        extra_kwargs = {
+            # Auto-generated in model.save() from title — do not require from client
+            'slug': {'required': False},
+        }
 
 
 # =====================

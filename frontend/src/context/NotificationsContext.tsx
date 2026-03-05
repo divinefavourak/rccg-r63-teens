@@ -99,15 +99,15 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
             }
         } catch (_) { /* silent */ }
 
-        // 2. Upcoming events (next 30 days)
+        // 2. Upcoming events (next 30 days) — only published events, no auth required
         try {
-            const { data } = await api.get('/events/?limit=5');
+            const { data } = await api.get('/events/events/?status=published&ordering=start_datetime&limit=5');
             const events = Array.isArray(data) ? data : data.results ?? [];
             const now = Date.now();
             const future = now + 30 * 24 * 3600000;
 
             for (const ev of events) {
-                const ts = new Date(ev.start_date).getTime();
+                const ts = new Date(ev.start_datetime).getTime();
                 if (ts < now || ts > future) continue;
 
                 const daysLeft = Math.ceil((ts - now) / 86400000);
@@ -115,7 +115,7 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
                     id: `ev_${ev.id}`,
                     title: 'Upcoming Event',
                     body: `${ev.title} is in ${daysLeft === 1 ? '1 day' : `${daysLeft} days`}.`,
-                    time: timeAgo(ev.start_date),
+                    time: timeAgo(ev.start_datetime),
                     rawTime: ts,
                     read: readIds.has(`ev_${ev.id}`),
                     icon: Calendar,

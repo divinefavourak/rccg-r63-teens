@@ -104,12 +104,12 @@ class MediaSeriesDetailSerializer(serializers.ModelSerializer):
 
 class MediaEpisodeListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for listing episodes."""
-    
-    series_title = serializers.CharField(source='series.title', read_only=True)
+
+    series_title = serializers.CharField(source='series.title', read_only=True, default='')
     duration_formatted = serializers.CharField(read_only=True)
     has_audio = serializers.BooleanField(read_only=True)
     has_video = serializers.BooleanField(read_only=True)
-    
+
     class Meta:
         model = MediaEpisode
         fields = [
@@ -125,6 +125,11 @@ class MediaEpisodeListSerializer(serializers.ModelSerializer):
             'media_type',
             'has_audio',
             'has_video',
+            # Actual playback URLs included so the list page can render players
+            'audio_url',
+            'audio_file',
+            'video_url',
+            'video_file',
             'duration_seconds',
             'duration_formatted',
             'published_at',

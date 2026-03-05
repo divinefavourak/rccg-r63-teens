@@ -390,14 +390,32 @@ class EventRegistration(UUIDMixin, TimestampMixin):
     
     def save(self, *args, **kwargs):
         if not self.registration_id:
+            # Build a short readable prefix from the event's first word (e.g. CAMP, CONF, RCCG)
+            event_prefix = 'EVT'
+            if self.event_id:
+                try:
+                    import re
+                    title = Event.objects.filter(pk=self.event_id).values_list('title', flat=True).first() or 'EVT'
+                    first_word = re.sub(r'[^A-Z0-9]', '', title.split()[0].upper()[:6]) or 'EVT'
+                    event_prefix = first_word
+                except Exception:
+                    event_prefix = 'EVT'
+
             date_prefix = timezone.now().strftime('%Y%m%d')
             last_reg = EventRegistration.objects.filter(
-                registration_id__startswith=f'REG-{date_prefix}-'
+                registration_id__startswith=f'{event_prefix}-{date_prefix}-'
             ).order_by('registration_id').last()
-            
-            next_num = (int(last_reg.registration_id.split('-')[-1]) + 1) if last_reg else 1
-            self.registration_id = f'REG-{date_prefix}-{next_num:05d}'
-        
+
+            if last_reg:
+                try:
+                    next_num = int(last_reg.registration_id.split('-')[-1]) + 1
+                except (ValueError, IndexError):
+                    next_num = 1
+            else:
+                next_num = 1
+
+            self.registration_id = f'{event_prefix}-{date_prefix}-{next_num:05d}'
+
         super().save(*args, **kwargs)
     
     @property

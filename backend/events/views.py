@@ -48,7 +48,16 @@ class EventViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         queryset = self.queryset
-        
+
+        # Annotate with live registration counts so the stored counter is never stale
+        queryset = queryset.annotate(
+            live_registration_count=Count(
+                'registrations',
+                filter=Q(registrations__status__in=['confirmed', 'checked_in']),
+                distinct=True
+            )
+        )
+
         # Non-admins only see published events
         if not self.request.user.is_authenticated or self.request.user.role != 'admin':
             queryset = queryset.filter(status='published')
@@ -239,8 +248,10 @@ class EventRegistrationViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def mine(self, request):
         """Get current user's registrations."""
-        registrations = EventRegistration.objects.filter(user=request.user)
-        serializer = EventRegistrationListSerializer(registrations, many=True)
+        registrations = EventRegistration.objects.filter(
+            user=request.user
+        ).select_related('event').order_by('-created_at')
+        serializer = EventRegistrationDetailSerializer(registrations, many=True)
         return Response(serializer.data)
     
     @action(

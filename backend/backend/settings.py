@@ -164,12 +164,53 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
 
-# File upload settings
-FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
-DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024   # 10MB
+# ============================================================
+# CLOUDFLARE R2 MEDIA STORAGE
+# ============================================================
+R2_ACCESS_KEY_ID = os.getenv('R2_ACCESS_KEY_ID')
+R2_SECRET_ACCESS_KEY = os.getenv('R2_SECRET_ACCESS_KEY')
+R2_ACCOUNT_ID = os.getenv('R2_ACCOUNT_ID')
+R2_BUCKET_NAME = os.getenv('R2_BUCKET_NAME', 'rccg-r63-media')
+R2_PUBLIC_DOMAIN = os.getenv('R2_PUBLIC_DOMAIN', '').strip()
+# Strip any protocol prefix the user may have accidentally included
+R2_PUBLIC_DOMAIN = R2_PUBLIC_DOMAIN.replace('https://', '').replace('http://', '').strip('/')
+
+if R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY and R2_ACCOUNT_ID:
+    # Use Cloudflare R2 for all uploaded media files
+    AWS_ACCESS_KEY_ID = R2_ACCESS_KEY_ID
+    AWS_SECRET_ACCESS_KEY = R2_SECRET_ACCESS_KEY
+    AWS_STORAGE_BUCKET_NAME = R2_BUCKET_NAME
+    AWS_S3_ENDPOINT_URL = f'https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com'
+    AWS_S3_REGION_NAME = 'auto'
+    AWS_DEFAULT_ACL = 'public-read'
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_QUERYSTRING_AUTH = False  # Public URLs — no signed query strings
+    AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
+
+    if R2_PUBLIC_DOMAIN:
+        # Use your custom domain / R2 public bucket URL for file URLs
+        AWS_S3_CUSTOM_DOMAIN = R2_PUBLIC_DOMAIN
+        MEDIA_URL = f'https://{R2_PUBLIC_DOMAIN}/'
+    else:
+        MEDIA_URL = f'https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com/{R2_BUCKET_NAME}/'
+
+    STORAGES = {
+        'default': {
+            'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage',
+        },
+        'staticfiles': {
+            'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+        },
+    }
+else:
+    # Fall back to local storage when R2 credentials are not set
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = BASE_DIR / 'media'
+
+# File upload settings — raised for video files
+FILE_UPLOAD_MAX_MEMORY_SIZE = 500 * 1024 * 1024  # 500MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 500 * 1024 * 1024   # 500MB
 FILE_UPLOAD_PERMISSIONS = 0o644
 
 # Allowed file types for payment receipts
