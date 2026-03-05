@@ -137,41 +137,48 @@ class DevotionalViewSet(viewsets.ModelViewSet):
     def fetch_from_web(self, request):
         """
         Trigger scraping of devotionals from the web.
-        Accepts 'days' param (default 7) or 'date' (specific date).
+
+        Body params:
+          - date  (str, optional) : specific date in YYYY-MM-DD format
+          - days  (int, default 7): number of past days to backfill
+          - force (bool, default false): re-scrape even if record exists
         """
         from .services.devotional_scraper import scrape_and_save_devotional
-        
+
         target_date_str = request.data.get('date')
         days = int(request.data.get('days', 7))
-        
+        force = bool(request.data.get('force', False))
+
         results = []
         errors = []
-        
+
         if target_date_str:
-            # Single date
+            # Single specific date
             try:
                 target_date = date.fromisoformat(target_date_str)
-                result = scrape_and_save_devotional(target_date)
+                result = scrape_and_save_devotional(target_date, force=force)
                 if result:
                     results.append(result)
                 else:
-                    errors.append(f"Could not fetch for {target_date} (might already exist or not found)")
+                    errors.append(f"Could not fetch for {target_date} (already exists or not published yet)")
             except ValueError:
-                return Response({'error': 'Invalid date format (YYYY-MM-DD)'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'Invalid date format. Use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
         else:
-            # Scrape upcoming days (or fill gaps)
-            start_date = date.today()
-            for i in range(days):
-                target_date = start_date + timedelta(days=i)
-                result = scrape_and_save_devotional(target_date)
+            # Backfill: today and the previous (days-1) days, oldest first
+            for i in range(days - 1, -1, -1):
+                target_date = date.today() - timedelta(days=i)
+                result = scrape_and_save_devotional(target_date, force=force)
                 if result:
                     results.append(result)
-        
+                else:
+                    errors.append(str(target_date))
+
         return Response({
             'success': True,
             'fetched_count': len(results),
+            'skipped_count': len(errors),
             'results': results,
-            'errors': errors
+            'errors': errors,
         })
 
 

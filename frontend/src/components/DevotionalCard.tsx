@@ -9,7 +9,7 @@ interface DevotionalCardProps {
 const DevotionalCard = ({ devotional }: DevotionalCardProps) => {
     return (
         <Link
-            to={`/devotional/${devotional.id}`}
+            to={`/devotionals/${devotional.id}`}
             className="card group hover:scale-[1.02] transition-transform duration-300 flex flex-col h-full"
         >
             <div className="h-48 bg-gradient-to-br from-primary-500 to-primary-700 relative overflow-hidden rounded-t-2xl">

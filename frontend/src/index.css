@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&family=Mountains+of+Christmas:wght@400;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -6,22 +6,26 @@
 
 @layer base {
   :root {
-    --primary: #10B981;
+    --primary: #10b981;
     /* Emerald Green */
     --primary-dark: #065f46;
     /* Darker Green */
-    --accent: #F59E0B;
+    --accent: #f59e0b;
     /* Amber/Yellow for highlights */
-    --background: #FFFFFF;
-    --text-primary: #1F2937;
+    --background: #ffffff;
+    --text-primary: #1f2937;
     /* Gray 800 */
-    --text-secondary: #4B5563;
+    --text-secondary: #4b5563;
     /* Gray 600 */
   }
 
   html {
     scroll-behavior: smooth;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family:
+      "Inter",
+      system-ui,
+      -apple-system,
+      sans-serif;
   }
 
   body {
@@ -30,7 +34,6 @@
 }
 
 @layer components {
-
   /* Modern Green Button */
   .btn-primary {
     @apply bg-primary-500 hover:bg-primary-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-primary-500/30 active:scale-95;
@@ -57,6 +60,35 @@
   /* Gradient Text */
   .text-gradient {
     @apply bg-clip-text text-transparent bg-gradient-to-r from-primary-600 to-primary-400;
+  }
+
+  /* Form Inputs — used across admin upload modals */
+  .form-input {
+    @apply w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600
+           bg-white dark:bg-gray-900 text-gray-900 dark:text-white
+           placeholder-gray-400 text-sm
+           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
+           transition-all duration-150;
+  }
+
+  /* Styled file upload zone */
+  .file-upload-zone {
+    @apply flex flex-col items-center justify-center gap-2
+           border-2 border-dashed border-gray-300 dark:border-gray-600
+           rounded-xl p-6 cursor-pointer text-center
+           hover:border-primary-400 hover:bg-primary-50/50 dark:hover:bg-primary-900/10
+           transition-all duration-200;
+  }
+
+  /* File input button styling */
+  .file-input {
+    @apply block w-full text-sm text-gray-500 dark:text-gray-400
+           file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0
+           file:text-sm file:font-semibold
+           file:bg-primary-50 file:text-primary-700
+           dark:file:bg-primary-900/30 dark:file:text-primary-400
+           hover:file:bg-primary-100 dark:hover:file:bg-primary-900/50
+           file:cursor-pointer file:transition-colors;
   }
 }
 

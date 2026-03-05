@@ -39,7 +39,7 @@ const AdminDashboard = () => {
         try {
             // CORRECTED ENDPOINTS based on url configs
             const [usersRes, devotionalsRes, mediaRes, eventsRes] = await Promise.all([
-                api.get('/users/'),
+                api.get('/auth/users/'),
                 api.get('/content/devotionals/'),
                 api.get('/media/episodes/'),
                 api.get('/events/events/')
@@ -182,7 +182,7 @@ const AdminDashboard = () => {
                         </select>
                     </div>
 
-                    <div className="h-[300px] w-full">
+                    <div className="h-[300px] w-full" style={{ minHeight: 300 }}>
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={chartData}>
                                 <defs>

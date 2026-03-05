@@ -39,6 +39,13 @@ const AdminDevotionals = () => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [viewDevotional, setViewDevotional] = useState<Devotional | null>(null);
 
+    // Auto-import modal state
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [importDays, setImportDays] = useState(7);
+    const [importDate, setImportDate] = useState('');
+    const [importForce, setImportForce] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
+
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -140,24 +147,35 @@ const AdminDevotionals = () => {
     };
 
     const handleAutoFetch = async () => {
-        if (!window.confirm('This will automatically fetch devotionals for the next 7 days from the web. Continue?')) return;
-
+        setIsImporting(true);
         try {
-            const loadingToast = toast.loading('Fetching devotionals...');
-            const { data } = await api.post('/content/devotionals/fetch_from_web/', { days: 7 });
+            const payload: Record<string, unknown> = { force: importForce };
+            if (importDate) {
+                payload.date = importDate;
+            } else {
+                payload.days = importDays;
+            }
+
+            const loadingToast = toast.loading('Importing devotionals from web...');
+            const { data } = await api.post('/content/devotionals/fetch_from_web/', payload);
             toast.dismiss(loadingToast);
 
             if (data.success) {
-                toast.success(`Successfully fetched ${data.fetched_count} devotionals!`);
-                if (data.errors && data.errors.length > 0) {
-                    toast('Some dates were skipped (already exist or not found)', { icon: '⚠️' });
-                }
+                const msg = importDate
+                    ? data.fetched_count > 0
+                        ? `Imported devotional for ${importDate}`
+                        : `Devotional for ${importDate} already exists or not yet published`
+                    : `Imported ${data.fetched_count} devotional(s). Skipped: ${data.skipped_count}`;
+                data.fetched_count > 0 ? toast.success(msg) : toast(msg, { icon: 'ℹ️' });
+                setIsImportModalOpen(false);
                 fetchDevotionals();
             }
-        } catch (error) {
-            console.error("Failed to fetch devotionals", error);
+        } catch (error: unknown) {
             toast.dismiss();
-            toast.error("Failed to auto-fetch devotionals");
+            const msg = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
+            toast.error(msg || 'Failed to auto-import devotionals');
+        } finally {
+            setIsImporting(false);
         }
     };
 
@@ -211,9 +229,9 @@ const AdminDevotionals = () => {
                 </div>
                 <div className="flex gap-2">
                     <button
-                        onClick={handleAutoFetch}
+                        onClick={() => setIsImportModalOpen(true)}
                         className="btn-secondary py-2.5 px-4 flex items-center gap-2"
-                        title="Auto-fetch from OpenHeavens"
+                        title="Auto-import from OpenHeavens"
                     >
                         <CloudDownload size={20} /> <span className="hidden md:inline">Auto-Import</span>
                     </button>
@@ -527,6 +545,93 @@ const AdminDevotionals = () => {
                                 {viewDevotional.key_point && <p className="bg-blue-50 p-2 rounded"><strong>Key Point:</strong> {viewDevotional.key_point}</p>}
                                 {viewDevotional.hymn && <pre className="bg-gray-50 p-4 rounded text-sm font-sans whitespace-pre-wrap">{viewDevotional.hymn}</pre>}
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Auto-Import Modal */}
+            {isImportModalOpen && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
+                        <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-700">
+                            <div className="flex items-center gap-3">
+                                <CloudDownload size={22} className="text-green-600" />
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Auto-Import Devotionals</h3>
+                            </div>
+                            <button onClick={() => setIsImportModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-5">
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                                Fetches Teen Open Heaven devotionals from <span className="font-medium text-gray-700 dark:text-gray-300">openheavens.com.ng</span> and saves them to the database.
+                            </p>
+
+                            {/* Specific date OR last N days */}
+                            <div className="space-y-3">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Specific Date <span className="text-gray-400 font-normal">(leave blank to import last N days)</span>
+                                </label>
+                                <input
+                                    type="date"
+                                    value={importDate}
+                                    onChange={e => setImportDate(e.target.value)}
+                                    max={new Date().toISOString().split('T')[0]}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none text-sm"
+                                />
+                            </div>
+
+                            {!importDate && (
+                                <div className="space-y-2">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Days to backfill: <span className="text-green-600 font-bold">{importDays}</span>
+                                    </label>
+                                    <input
+                                        type="range"
+                                        min={1} max={30}
+                                        value={importDays}
+                                        onChange={e => setImportDays(Number(e.target.value))}
+                                        className="w-full accent-green-600"
+                                    />
+                                    <div className="flex justify-between text-xs text-gray-400">
+                                        <span>1 day</span><span>30 days</span>
+                                    </div>
+                                </div>
+                            )}
+
+                            <label className="flex items-center gap-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={importForce}
+                                    onChange={e => setImportForce(e.target.checked)}
+                                    className="w-4 h-4 accent-green-600"
+                                />
+                                <span className="text-sm text-gray-700 dark:text-gray-300">
+                                    Force re-import <span className="text-gray-400">(overwrites existing records)</span>
+                                </span>
+                            </label>
+                        </div>
+
+                        <div className="flex gap-3 p-6 pt-0">
+                            <button
+                                onClick={() => setIsImportModalOpen(false)}
+                                className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleAutoFetch}
+                                disabled={isImporting}
+                                className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                            >
+                                {isImporting ? (
+                                    <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Importing...</>
+                                ) : (
+                                    <><CloudDownload size={16} /> Start Import</>
+                                )}
+                            </button>
                         </div>
                     </div>
                 </div>

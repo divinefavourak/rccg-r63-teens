@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuthContext } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft, User, Mail, Lock, Loader, Heart } from 'lucide-react';
+import { ArrowLeft, User, Mail, Lock, Loader, Heart, Eye, EyeOff } from 'lucide-react';
 
 const Register = () => {
     const { register } = useAuthContext();
@@ -11,21 +11,42 @@ const Register = () => {
         username: '',
         email: '',
         password: '',
+        password_confirm: '',
         first_name: '',
         last_name: ''
     });
     const [loading, setLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirm, setShowConfirm] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (formData.password !== formData.password_confirm) {
+            toast.error("Passwords don't match");
+            return;
+        }
+
+        if (formData.password.length < 8) {
+            toast.error("Password must be at least 8 characters");
+            return;
+        }
+
         setLoading(true);
         try {
             await register(formData);
             toast.success('Account created successfully!');
             navigate('/dashboard');
         } catch (error: any) {
-            const msg = error.response?.data?.username ? 'Username already exists' : 'Registration failed';
-            toast.error(msg);
+            const data = error.response?.data;
+            if (data) {
+                // Surface the first backend validation error
+                const firstError = Object.values(data)[0];
+                const msg = Array.isArray(firstError) ? firstError[0] : String(firstError);
+                toast.error(msg || 'Registration failed');
+            } else {
+                toast.error('Registration failed. Please try again.');
+            }
         } finally {
             setLoading(false);
         }
@@ -55,22 +76,24 @@ const Register = () => {
                     <form className="space-y-5" onSubmit={handleSubmit}>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">First Name</label>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">First Name <span className="text-red-500">*</span></label>
                                 <input
                                     name="first_name"
                                     type="text"
-                                    className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-700 rounded-xl leading-5 bg-white dark:bg-gray-800 placeholder-gray-500 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent sm:text-sm transition-all"
+                                    required
+                                    className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 placeholder-gray-500 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 sm:text-sm transition-all"
                                     placeholder="John"
                                     value={formData.first_name}
                                     onChange={handleChange}
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Last Name</label>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Last Name <span className="text-red-500">*</span></label>
                                 <input
                                     name="last_name"
                                     type="text"
-                                    className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-700 rounded-xl leading-5 bg-white dark:bg-gray-800 placeholder-gray-500 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent sm:text-sm transition-all"
+                                    required
+                                    className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 placeholder-gray-500 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 sm:text-sm transition-all"
                                     placeholder="Doe"
                                     value={formData.last_name}
                                     onChange={handleChange}
@@ -88,7 +111,7 @@ const Register = () => {
                                     name="username"
                                     type="text"
                                     required
-                                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-700 rounded-xl leading-5 bg-white dark:bg-gray-800 placeholder-gray-500 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent sm:text-sm transition-all"
+                                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 placeholder-gray-500 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 sm:text-sm transition-all"
                                     placeholder="johndoe"
                                     value={formData.username}
                                     onChange={handleChange}
@@ -106,7 +129,7 @@ const Register = () => {
                                     name="email"
                                     type="email"
                                     required
-                                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-700 rounded-xl leading-5 bg-white dark:bg-gray-800 placeholder-gray-500 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent sm:text-sm transition-all"
+                                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 placeholder-gray-500 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 sm:text-sm transition-all"
                                     placeholder="you@example.com"
                                     value={formData.email}
                                     onChange={handleChange}
@@ -122,14 +145,54 @@ const Register = () => {
                                 </div>
                                 <input
                                     name="password"
-                                    type="password"
+                                    type={showPassword ? 'text' : 'password'}
                                     required
-                                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-700 rounded-xl leading-5 bg-white dark:bg-gray-800 placeholder-gray-500 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent sm:text-sm transition-all"
-                                    placeholder="Create a strong password"
+                                    minLength={8}
+                                    className="block w-full pl-10 pr-10 py-3 border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 placeholder-gray-500 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 sm:text-sm transition-all"
+                                    placeholder="Min. 8 characters"
                                     value={formData.password}
                                     onChange={handleChange}
                                 />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                                >
+                                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
                             </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Confirm Password <span className="text-red-500">*</span></label>
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <Lock size={18} className="text-gray-400" />
+                                </div>
+                                <input
+                                    name="password_confirm"
+                                    type={showConfirm ? 'text' : 'password'}
+                                    required
+                                    className={`block w-full pl-10 pr-10 py-3 border rounded-xl bg-white dark:bg-gray-800 placeholder-gray-500 text-gray-900 dark:text-white focus:outline-none focus:ring-2 sm:text-sm transition-all ${
+                                        formData.password_confirm && formData.password !== formData.password_confirm
+                                            ? 'border-red-400 focus:ring-red-400'
+                                            : 'border-gray-300 dark:border-gray-700 focus:ring-primary-500'
+                                    }`}
+                                    placeholder="Repeat your password"
+                                    value={formData.password_confirm}
+                                    onChange={handleChange}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowConfirm(!showConfirm)}
+                                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                                >
+                                    {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
+                            </div>
+                            {formData.password_confirm && formData.password !== formData.password_confirm && (
+                                <p className="mt-1 text-xs text-red-500">Passwords don't match</p>
+                            )}
                         </div>
 
                         <div className="pt-2">

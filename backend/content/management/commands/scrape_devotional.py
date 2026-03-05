@@ -81,22 +81,17 @@ class Command(BaseCommand):
                 self.stdout.write(f"  {scrape_date}: Would scrape from {url}")
                 continue
             
-            # Delete existing if force
-            if exists and force:
-                Devotional.objects.filter(date=scrape_date).delete()
-                self.stdout.write(self.style.WARNING(f"  {scrape_date}: Deleted existing devotional."))
-            
-            # Scrape
-            result = scrape_and_save_devotional(scrape_date)
-            
+            # Scrape first, then replace — avoids data loss if save fails
+            result = scrape_and_save_devotional(scrape_date, force=force)
+
             if result:
                 self.stdout.write(self.style.SUCCESS(
-                    f"  {scrape_date}: ✓ Saved '{result['title'][:50]}...'"
+                    f"  {scrape_date}: [OK] Saved '{result['title'][:50]}...'"
                 ))
                 success_count += 1
             else:
                 self.stdout.write(self.style.ERROR(
-                    f"  {scrape_date}: ✗ Failed to scrape"
+                    f"  {scrape_date}: [FAIL] Failed to scrape"
                 ))
                 fail_count += 1
         

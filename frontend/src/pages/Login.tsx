@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { useAuthContext } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft, User, Lock, Loader } from 'lucide-react';
+import { ArrowLeft, User, Lock, Loader, Eye, EyeOff } from 'lucide-react';
 
 const Login = () => {
     const { login } = useAuthContext();
     const navigate = useNavigate();
     const [formData, setFormData] = useState({ username: '', password: '' });
     const [loading, setLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -16,7 +17,16 @@ const Login = () => {
         try {
             await login(formData);
             toast.success('Welcome back!');
-            navigate('/dashboard');
+            // Route based on role (user state is updated by login())
+            const stored = localStorage.getItem('rccg_user');
+            const role = stored ? JSON.parse(stored)?.role : null;
+            if (role === 'admin') {
+                navigate('/admin/dashboard');
+            } else if (role === 'coordinator') {
+                navigate('/coordinator');
+            } else {
+                navigate('/dashboard');
+            }
         } catch (error) {
             toast.error('Invalid credentials');
         } finally {
@@ -66,13 +76,20 @@ const Login = () => {
                                     <Lock size={18} className="text-gray-400" />
                                 </div>
                                 <input
-                                    type="password"
+                                    type={showPassword ? 'text' : 'password'}
                                     required
                                     className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-700 rounded-xl leading-5 bg-white dark:bg-gray-800 placeholder-gray-500 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent sm:text-sm transition-all"
                                     placeholder="Enter your password"
                                     value={formData.password}
                                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                                 />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                                >
+                                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
                             </div>
                         </div>
 

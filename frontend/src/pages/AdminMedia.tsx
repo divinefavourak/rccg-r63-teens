@@ -278,7 +278,7 @@ const AdminMedia = () => {
                                         type="file" 
                                         accept={formData.media_type === 'audio' ? 'audio/*' : 'video/*'}
                                         required
-                                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                                        className="file-input"
                                         onChange={(e) => handleFileChange(e, 'file')}
                                     />
                                 </div>
@@ -287,7 +287,7 @@ const AdminMedia = () => {
                                     <input 
                                         type="file" 
                                         accept="image/*"
-                                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-50 file:text-gray-700 hover:file:bg-gray-100"
+                                        className="file-input"
                                         onChange={(e) => handleFileChange(e, 'thumbnail')}
                                     />
                                 </div>
