@@ -4,7 +4,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
-import axios from "axios";
+import api from "../api/axios";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import {
@@ -15,7 +15,6 @@ import {
 } from "../constants/formFields";
 import { ticketSchema, type TicketFormData } from "../schemas/ticketSchema";
 import { useTicketStore } from "../store/ticketStore";
-import { ticketService } from "../services/ticketService";
 import { useAuth } from "../hooks/useAuth";
 
 const STEP_FIELDS = {
@@ -25,10 +24,23 @@ const STEP_FIELDS = {
   4: ['parentName', 'parentEmail', 'parentPhone', 'parentRelationship', 'parentConsent', 'medicalConsent', 'photoConsent']
 } as const;
 
+interface EventOption {
+  id: string;
+  title: string;
+  start_datetime: string;
+  venue: string;
+  registration_status: string;
+  min_age: number | null;
+  max_age: number | null;
+}
+
 const TicketForm = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [events, setEvents] = useState<EventOption[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState('');
+  const [loadingEvents, setLoadingEvents] = useState(true);
 
   const currentStep = useTicketStore((state) => state.currentStep);
   const setCurrentStep = useTicketStore((state) => state.setCurrentStep);
@@ -52,10 +64,10 @@ const TicketForm = () => {
       gender: "",
       phone: "",
       email: "",
-      province: "",
-      zone: "",
-      area: "",
-      parish: "",
+      province: (user as any)?.province || "",
+      zone: (user as any)?.zone || "",
+      area: (user as any)?.area || "",
+      parish: (user as any)?.parish || "",
       department: "",
       medicalConditions: "",
       medications: "",
@@ -79,6 +91,18 @@ const TicketForm = () => {
     setFormData(watchedValues);
   }, [watchedValues, setFormData]);
 
+  useEffect(() => {
+    api.get('/events/events/?status=published')
+      .then(({ data }) => {
+        const list: EventOption[] = Array.isArray(data) ? data : (data.results || []);
+        const open = list.filter(e => e.registration_status === 'open');
+        setEvents(open);
+        if (open.length === 1) setSelectedEventId(open[0].id);
+      })
+      .catch(() => toast.error('Failed to load events'))
+      .finally(() => setLoadingEvents(false));
+  }, []);
+
   const nextStep = async () => {
     const fields = STEP_FIELDS[currentStep as keyof typeof STEP_FIELDS];
     const isStepValid = await trigger(fields);
@@ -95,47 +119,52 @@ const TicketForm = () => {
   };
 
   const onSubmit: SubmitHandler<TicketFormData> = async (data) => {
+    if (!selectedEventId) {
+      toast.error('Please select an event before submitting');
+      setCurrentStep(1);
+      return;
+    }
     setIsSubmitting(true);
     try {
-      let authToken = null;
-
-      if (user) {
-        authToken = (user as any).token || (user as any).access_token;
-      }
-
-      if (!authToken) {
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-        const publicUser = import.meta.env.VITE_PUBLIC_AGENT_USERNAME;
-        const publicPass = import.meta.env.VITE_PUBLIC_AGENT_PASSWORD;
-
-        if (!publicUser || !publicPass) {
-          throw new Error("Public registration configuration missing.");
-        }
-
-        const authResponse = await axios.post(`${apiUrl}/auth/login/`, {
-          username: publicUser,
-          password: publicPass
-        });
-
-        authToken = authResponse.data.access;
-      }
-
-      const newTicket = await ticketService.createTicket(data, authToken);
-
-      if (!newTicket || !newTicket.id) {
-        throw new Error("Failed to create record.");
-      }
+      const response = await api.post(`/events/events/${selectedEventId}/register/`, {
+        attendee_name:     data.fullName,
+        attendee_email:    data.email,
+        attendee_phone:    data.phone,
+        attendee_age:      data.age,
+        attendee_gender:   data.gender,
+        attendee_province: data.province,
+        attendee_zone:     data.zone,
+        attendee_area:     data.area,
+        attendee_parish:   data.parish,
+        attendee_department: data.department,
+        attendee_category: data.category,
+        medical_conditions:   data.medicalConditions,
+        medications:          data.medications,
+        dietary_restrictions: data.dietaryRestrictions,
+        emergency_contact_name:         data.emergencyContact,
+        emergency_contact_phone:        data.emergencyPhone,
+        emergency_contact_relationship: data.emergencyRelationship,
+        guardian_name:         data.parentName,
+        guardian_email:        data.parentEmail,
+        guardian_phone:        data.parentPhone,
+        guardian_relationship: data.parentRelationship,
+        guardian_consent:      data.parentConsent,
+      });
 
       resetForm();
-      // Navigate to payment or success page
-      navigate("/payment", { state: { ticket: newTicket } }); // Or directly to dashboard if free
+      toast.success('Registration successful! A confirmation has been sent.');
 
+      if ((user as any)?.role === 'coordinator') {
+        navigate('/coordinator/dashboard');
+      } else {
+        navigate('/ticket-preview', { state: { registration: response.data } });
+      }
     } catch (error: any) {
-      console.error("Registration error:", error);
-      const errorMsg = error.response?.data?.detail ||
-        error.response?.data?.error ||
-        "Registration failed. Please try again.";
-      toast.error(errorMsg);
+      const detail = error?.response?.data;
+      const errorMsg = detail
+        ? (typeof detail === 'string' ? detail : JSON.stringify(detail))
+        : 'Registration failed. Please try again.';
+      toast.error(errorMsg.length < 200 ? errorMsg : 'Registration failed. Please check your details.');
       setIsSubmitting(false);
     }
   };
@@ -230,11 +259,47 @@ const TicketForm = () => {
       <div className="pt-28 pb-16 px-6 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-[50vh] bg-gradient-to-b from-primary-100/50 dark:from-primary-900/20 to-transparent pointer-events-none transition-colors duration-500"></div>
         <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto relative z-10">
-          <div className="text-center mb-10">
+          <div className="text-center mb-8">
             <h1 className="text-4xl md:text-5xl font-black mb-4 text-gray-900 dark:text-white">
               <span className="text-primary-600">JUNIOR CHURCH</span> REGISTRATION
             </h1>
             <p className="text-gray-600 dark:text-gray-300 max-w-2xl mx-auto text-lg">Join us on the Teen Digital Platform.</p>
+          </div>
+
+          {/* Event picker */}
+          <div className="mb-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
+            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+              📅 <span>Select Event <span className="text-red-500">*</span></span>
+            </label>
+            {loadingEvents ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">Loading events…</p>
+            ) : events.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                No events are currently open for registration.
+              </p>
+            ) : (
+              <select
+                value={selectedEventId}
+                onChange={e => setSelectedEventId(e.target.value)}
+                className="w-full px-4 py-3 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-primary-500 dark:text-white transition-all"
+              >
+                <option value="">Choose an event…</option>
+                {events.map(ev => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.title}
+                    {ev.start_datetime
+                      ? ` — ${new Date(ev.start_datetime).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+                      : ''}
+                    {ev.venue ? ` · ${ev.venue}` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+            {!selectedEventId && !loadingEvents && events.length > 0 && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 font-medium">
+                Please pick an event to continue.
+              </p>
+            )}
           </div>
 
           <div className="mb-10">
