@@ -23,6 +23,7 @@ venv.bak/
 pythonenv/
 
 # IDE
+.claude
 .vscode/
 .idea/
 *.swp
