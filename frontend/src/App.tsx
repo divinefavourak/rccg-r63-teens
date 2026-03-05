@@ -43,6 +43,7 @@ const RegisterCoordinator = lazy(() => import('./pages/RegisterCoordinator'));
 const CoordinatorLogin = lazy(() => import('./pages/CoordinatorLogin'));
 const CoordinatorDashboard = lazy(() => import('./pages/CoordinatorDashboard'));
 const BulkRegister = lazy(() => import('./pages/BulkRegister'));
+const CheckIn = lazy(() => import('./pages/CheckIn'));
 
 const Loading = () => (
   <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 transition-colors duration-500">
@@ -110,6 +111,12 @@ function App() {
           <Route
             path="/coordinator/single-register"
             element={<ProtectedRoute allowedRoles={['coordinator']}><TicketForm /></ProtectedRoute>}
+          />
+
+          {/* Check-in — accessible to coordinators and admins */}
+          <Route
+            path="/check-in"
+            element={<ProtectedRoute allowedRoles={['coordinator', 'admin']}><CheckIn /></ProtectedRoute>}
           />
 
           {/* Admin */}
