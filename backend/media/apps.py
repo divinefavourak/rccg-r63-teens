@@ -6,3 +6,6 @@ class MediaConfig(AppConfig):
     name = 'media'
     verbose_name = 'Media & Podcasts'
     label = 'media_content'  # Avoid conflict with Django's media folder
+
+    def ready(self):
+        import media.signals  # noqa: F401
