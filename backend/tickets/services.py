@@ -449,7 +449,6 @@ class PDFService:
         story.append(Spacer(1, 30))
         
         # Generate QR code
-        from .services import QRCodeService
         qr_base64 = QRCodeService.get_qr_code_base64(ticket)
         qr_image_data = base64.b64decode(qr_base64)
         
