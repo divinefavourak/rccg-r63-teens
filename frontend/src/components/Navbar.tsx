@@ -14,6 +14,10 @@ const Navbar = () => {
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
   const { user, isAuthenticated, logout } = useAuthContext();
+  const dashboardPath =
+    (user as any)?.role === 'coordinator' ? '/coordinator/dashboard' :
+    (user as any)?.role === 'admin' ? '/admin/dashboard' :
+    '/dashboard';
 
   useEffect(() => {
     const handleScroll = () => {
@@ -107,7 +111,7 @@ const Navbar = () => {
                   </span>
                 </div>
                 <Link
-                  to="/dashboard"
+                  to={dashboardPath}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-sm bg-primary-600 text-white hover:bg-primary-700 transition-all shadow-md shadow-primary-500/20 hover:scale-105 transform"
                 >
                   <LayoutDashboard size={14} />
@@ -189,7 +193,7 @@ const Navbar = () => {
                       <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">{user.username}</span>
                     </div>
                     <Link
-                      to="/dashboard"
+                      to={dashboardPath}
                       className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-primary-600 text-white rounded-xl font-bold text-sm shadow-md"
                       onClick={() => setIsMenuOpen(false)}
                     >

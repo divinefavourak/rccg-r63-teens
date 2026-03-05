@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
@@ -220,6 +220,13 @@ const TicketForm = () => {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white transition-colors duration-500">
       <Navbar />
+      {(user as any)?.role === 'coordinator' && (
+        <div className="pt-20 px-6 max-w-4xl mx-auto">
+          <Link to="/coordinator/dashboard" className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">
+            ← Back to Dashboard
+          </Link>
+        </div>
+      )}
       <div className="pt-28 pb-16 px-6 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-[50vh] bg-gradient-to-b from-primary-100/50 dark:from-primary-900/20 to-transparent pointer-events-none transition-colors duration-500"></div>
         <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto relative z-10">

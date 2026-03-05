@@ -172,7 +172,19 @@ const CoordinatorDashboard = () => {
                             Manage registrations and events for your province
                         </p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <button
+                            onClick={() => navigate('/coordinator/single-register')}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        >
+                            <FileText size={15} /> Single Register
+                        </button>
+                        <button
+                            onClick={() => navigate('/coordinator/bulk-register')}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 transition-colors shadow-sm"
+                        >
+                            <Users size={15} /> Bulk Register
+                        </button>
                         <button
                             onClick={fetchData}
                             className="p-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"

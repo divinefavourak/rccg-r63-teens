@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
-import { FaPlus, FaMinus, FaCalculator, FaUsers, FaArrowRight } from "react-icons/fa";
+import { FaPlus, FaMinus, FaCalculator, FaUsers, FaArrowRight, FaArrowLeft } from "react-icons/fa";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import toast from "react-hot-toast";
@@ -147,6 +147,12 @@ const BulkRegister = () => {
             <p className="text-gray-600 dark:text-white/60 text-lg">
               Quickly register your group by category.
             </p>
+          </div>
+
+          <div className="mb-6">
+            <Link to="/coordinator/dashboard" className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 dark:text-white/60 hover:text-gray-900 dark:hover:text-white transition-colors">
+              <FaArrowLeft size={12} /> Back to Dashboard
+            </Link>
           </div>
 
           <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-8">
