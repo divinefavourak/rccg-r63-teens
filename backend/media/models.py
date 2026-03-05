@@ -225,11 +225,14 @@ class MediaEpisode(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
         ]
     
     def __str__(self):
-        return f"{self.series.title} - {self.title}"
-    
+        series_title = self.series.title if self.series else 'Standalone'
+        return f"{series_title} - {self.title}"
+
     def save(self, *args, **kwargs):
         if not self.slug:
-            self.slug = slugify(f"{self.series.title}-{self.title}")[:300]
+            series_prefix = self.series.title if self.series else ''
+            base = f"{series_prefix}-{self.title}" if series_prefix else self.title
+            self.slug = slugify(base)[:300]
         
         # Auto-detect media type based on what's available
         if not self.media_type or self.media_type == self.MediaType.AUDIO_ONLY:
