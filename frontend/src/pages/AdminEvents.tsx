@@ -53,6 +53,7 @@ const AdminEvents = () => {
     const [regLoading, setRegLoading] = useState(false);
     const [regSearch, setRegSearch] = useState('');
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
     const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
     const [bulkConfirming, setBulkConfirming] = useState(false);
 
@@ -97,6 +98,7 @@ const AdminEvents = () => {
         setRegistrations([]);
         setRegSearch('');
         setSelectedIds([]);
+        setBulkMenuOpen(false);
         setRegLoading(true);
         try {
             const { data } = await api.get(`/events/events/${event.id}/registrations/`);
@@ -209,7 +211,7 @@ const AdminEvents = () => {
     const stats = [
         { title: 'Upcoming Events', value: upcomingCount, icon: <Calendar size={20} />, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
         { title: 'Total Registrations', value: totalRegistrations, icon: <Users size={20} />, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
-        { title: 'Capacity Used', value: `${capacityRate}%`, icon: <MapPin size={20} />, color: 'text-green-600', bg: 'bg-gray-50 dark:bg-gray-800' },
+        { title: 'Capacity Used', value: `${Math.min(capacityRate, 100)}%`, icon: <MapPin size={20} />, color: 'text-green-600', bg: 'bg-gray-50 dark:bg-gray-800' },
     ];
 
     const filteredEvents = events.filter(item =>
@@ -347,12 +349,30 @@ const AdminEvents = () => {
                             </div>
                             <div className="flex items-center gap-2">
                                 {selectedIds.length > 0 && (
-                                    <button
-                                        onClick={() => setBulkConfirmOpen(true)}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 text-white text-xs font-bold hover:bg-green-700 transition-colors"
-                                    >
-                                        <CheckCircle size={14} /> Bulk Confirm ({selectedIds.length})
-                                    </button>
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => setBulkMenuOpen(o => !o)}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-600 text-white text-xs font-bold hover:bg-primary-700 transition-colors"
+                                        >
+                                            <Users size={13} /> Bulk Actions ({selectedIds.length}) ▾
+                                        </button>
+                                        {bulkMenuOpen && (
+                                            <div className="absolute right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-10 min-w-[170px] overflow-hidden">
+                                                <button
+                                                    onClick={() => { setBulkMenuOpen(false); setBulkConfirmOpen(true); }}
+                                                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
+                                                >
+                                                    <CheckCircle size={14} /> Confirm Selected
+                                                </button>
+                                                <button
+                                                    onClick={() => { setBulkMenuOpen(false); setSelectedIds([]); }}
+                                                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                                >
+                                                    <X size={14} /> Clear Selection
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 )}
                                 <button onClick={() => fetchRegistrations(selectedEvent)}
                                     className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
