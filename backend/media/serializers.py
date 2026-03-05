@@ -223,13 +223,11 @@ class MediaEpisodeCreateUpdateSerializer(serializers.ModelSerializer):
 
     Accepts a generic ``file`` field (write-only) and routes it to
     ``audio_file`` or ``video_file`` based on ``media_type``.
-    Also accepts ``duration`` (string "MM:SS") and stores it as seconds.
+    Duration is auto-detected from the uploaded file using mutagen.
     """
 
     # Generic upload field — maps to audio_file / video_file in create/update
     file = serializers.FileField(write_only=True, required=False)
-    # Human-readable duration e.g. "15:30"
-    duration = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = MediaEpisode
@@ -244,9 +242,8 @@ class MediaEpisodeCreateUpdateSerializer(serializers.ModelSerializer):
             'thumbnail',
             'media_type',
 
-            # Generic upload helpers
+            # Generic upload helper
             'file',
-            'duration',
 
             # Audio
             'audio_url',
@@ -286,50 +283,62 @@ class MediaEpisodeCreateUpdateSerializer(serializers.ModelSerializer):
             'published_at',
             'scheduled_for',
         ]
+        extra_kwargs = {
+            # Auto-generated in model.save() — do not require from client
+            'slug': {'required': False},
+            # Allow admins to leave description blank for quick uploads
+            'description': {'required': False, 'allow_blank': True},
+        }
 
-    def _parse_duration_seconds(self, duration_str: str) -> int:
-        """Convert 'MM:SS' or 'HH:MM:SS' to total seconds."""
+    @staticmethod
+    def _extract_duration(file_obj) -> int:
+        """Return duration in seconds from an uploaded file using mutagen.
+        Returns 0 if the file type is unsupported or extraction fails.
+        """
         try:
-            parts = [int(p) for p in duration_str.strip().split(':')]
-            if len(parts) == 2:
-                return parts[0] * 60 + parts[1]
-            if len(parts) == 3:
-                return parts[0] * 3600 + parts[1] * 60 + parts[2]
-        except (ValueError, AttributeError):
+            import mutagen
+            file_obj.seek(0)
+            audio = mutagen.File(file_obj)
+            if audio and audio.info:
+                return int(audio.info.length)
+        except Exception:
             pass
+        finally:
+            try:
+                file_obj.seek(0)
+            except Exception:
+                pass
         return 0
 
     def _route_file(self, validated_data: dict) -> dict:
-        """Move generic ``file`` into ``audio_file`` or ``video_file``."""
+        """Move generic ``file`` into ``audio_file`` or ``video_file``
+        and auto-populate duration + file size."""
         uploaded = validated_data.pop('file', None)
-        if uploaded:
-            media_type = validated_data.get('media_type', 'audio')
-            if media_type == 'video':
-                validated_data.setdefault('video_file', uploaded)
-            else:
-                validated_data.setdefault('audio_file', uploaded)
-        return validated_data
+        if not uploaded:
+            return validated_data
 
-    def _route_duration(self, validated_data: dict) -> dict:
-        """Convert ``duration`` string into the correct seconds field."""
-        duration_str = validated_data.pop('duration', None)
-        if duration_str:
-            seconds = self._parse_duration_seconds(duration_str)
-            media_type = validated_data.get('media_type', 'audio')
-            if media_type == 'video':
-                validated_data.setdefault('video_duration_seconds', seconds)
-            else:
-                validated_data.setdefault('audio_duration_seconds', seconds)
+        media_type = validated_data.get('media_type', 'audio')
+        is_video = media_type == 'video'
+
+        if is_video:
+            validated_data.setdefault('video_file', uploaded)
+            if not validated_data.get('video_duration_seconds'):
+                validated_data['video_duration_seconds'] = self._extract_duration(uploaded)
+            validated_data.setdefault('video_file_size_bytes', getattr(uploaded, 'size', None))
+        else:
+            validated_data.setdefault('audio_file', uploaded)
+            if not validated_data.get('audio_duration_seconds'):
+                validated_data['audio_duration_seconds'] = self._extract_duration(uploaded)
+            validated_data.setdefault('audio_file_size_bytes', getattr(uploaded, 'size', None))
+
         return validated_data
 
     def create(self, validated_data):
         validated_data = self._route_file(validated_data)
-        validated_data = self._route_duration(validated_data)
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
         validated_data = self._route_file(validated_data)
-        validated_data = self._route_duration(validated_data)
         return super().update(instance, validated_data)
 
 

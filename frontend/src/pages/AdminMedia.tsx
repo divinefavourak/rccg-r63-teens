@@ -29,7 +29,6 @@ const AdminMedia = () => {
         media_type: 'audio',
         file: null as File | null,
         thumbnail: null as File | null,
-        duration: '',
         published_at: new Date().toISOString().split('T')[0]
     });
 
@@ -85,8 +84,6 @@ const AdminMedia = () => {
             data.append('description', formData.description);
             data.append('media_type', formData.media_type);
             data.append('published_at', formData.published_at);
-            if (formData.duration) data.append('duration', formData.duration);
-            
             // Matches backend expectations
             data.append('file', formData.file); 
             if (formData.thumbnail) data.append('thumbnail', formData.thumbnail);
@@ -106,7 +103,6 @@ const AdminMedia = () => {
                 media_type: 'audio',
                 file: null,
                 thumbnail: null,
-                duration: '',
                 published_at: new Date().toISOString().split('T')[0]
             });
             
@@ -291,28 +287,15 @@ const AdminMedia = () => {
                                         onChange={(e) => handleFileChange(e, 'thumbnail')}
                                     />
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Duration</label>
-                                        <input 
-                                            type="text" 
-                                            name="duration"
-                                            placeholder="e.g. 15:30"
-                                            className="form-input" 
-                                            value={formData.duration}
-                                            onChange={handleInputChange}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date</label>
-                                        <input 
-                                            type="date" 
-                                            name="published_at"
-                                            className="form-input" 
-                                            value={formData.published_at}
-                                            onChange={handleInputChange}
-                                        />
-                                    </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date</label>
+                                    <input
+                                        type="date"
+                                        name="published_at"
+                                        className="form-input"
+                                        value={formData.published_at}
+                                        onChange={handleInputChange}
+                                    />
                                 </div>
                                 <div className="pt-4">
                                     <button 
