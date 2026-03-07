@@ -82,6 +82,7 @@ const Settings = () => {
         last_name: user?.last_name || '',
         email: user?.email || '',
         phone: user?.phone || '',
+        gender: user?.gender || '',
     });
     const [profileLoading, setProfileLoading] = useState(false);
 
@@ -188,6 +189,19 @@ const Settings = () => {
                     </div>
                     <Field label="Email Address" icon={Mail} type="email" name="email" value={profileData.email} onChange={handleProfileChange} placeholder="you@example.com" required />
                     <Field label="Phone Number" icon={Phone} type="tel" name="phone" value={profileData.phone} onChange={handleProfileChange} placeholder="+234 800 000 0000" />
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Gender</label>
+                        <select
+                            name="gender"
+                            value={profileData.gender}
+                            onChange={(e) => setProfileData(prev => ({ ...prev, gender: e.target.value }))}
+                            className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 sm:text-sm transition-all"
+                        >
+                            <option value="">Prefer not to say</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                        </select>
+                    </div>
 
                     <div className="pt-2 flex justify-end">
                         <button

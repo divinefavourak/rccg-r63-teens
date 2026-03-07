@@ -6,6 +6,7 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  needsGender: boolean;
   login: (credentials: LoginCredentials) => Promise<void>;
   register: (credentials: RegisterCredentials) => Promise<void>;
   logout: () => void;
@@ -17,6 +18,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [needsGender, setNeedsGender] = useState(false);
 
   useEffect(() => {
     const initializeAuth = async () => {
@@ -45,12 +47,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = async (credentials: LoginCredentials) => {
     try {
       const response = await api.post<AuthResponse>('/auth/login/', credentials);
-      const { access, refresh, user: userData } = response.data;
+      const { access, refresh, user: userData, needs_gender } = response.data;
 
       const userWithToken = { ...userData, token: access, refreshToken: refresh };
 
       localStorage.setItem("rccg_user", JSON.stringify(userWithToken));
       setUser(userWithToken);
+      setNeedsGender(!!needs_gender);
     } catch (error) {
       console.error("Login failed:", error);
       throw error;
@@ -93,7 +96,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, register, logout, updateProfile }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, needsGender, login, register, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

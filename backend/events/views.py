@@ -11,6 +11,7 @@ from common.permissions import (
     ContentPermission, IsAdmin, IsCoordinatorOrAdmin,
     ProvinceAccessPermission
 )
+from .email_service import EventEmailService
 from .models import Event, EventRegistration, BulkUpload, RegistrationAuditLog
 from .serializers import (
     EventListSerializer,
@@ -114,7 +115,9 @@ class EventViewSet(viewsets.ModelViewSet):
         )
         serializer.is_valid(raise_exception=True)
         registration = serializer.save()
-        
+
+        EventEmailService.send_registration_confirmation(registration)
+
         return Response(
             EventRegistrationDetailSerializer(registration).data,
             status=status.HTTP_201_CREATED
@@ -230,6 +233,10 @@ class EventRegistrationViewSet(viewsets.ModelViewSet):
         if self.action in ['update', 'partial_update', 'destroy']:
             return [permissions.IsAuthenticated(), IsCoordinatorOrAdmin()]
         return [permissions.IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        registration = serializer.save()
+        EventEmailService.send_registration_confirmation(registration)
     
     def get_queryset(self):
         user = self.request.user
@@ -277,7 +284,7 @@ class EventRegistrationViewSet(viewsets.ModelViewSet):
         else:
             registration.status = new_status
             registration.save()
-        
+
         # Create audit log
         RegistrationAuditLog.objects.create(
             registration=registration,
@@ -286,7 +293,13 @@ class EventRegistrationViewSet(viewsets.ModelViewSet):
             old_values={'status': old_status},
             new_values={'status': new_status},
         )
-        
+
+        # Send email notification
+        if new_status == 'confirmed':
+            EventEmailService.send_registration_confirmed(registration)
+        else:
+            EventEmailService.send_status_update(registration, old_status, new_status)
+
         return Response(EventRegistrationDetailSerializer(registration).data)
     
     @action(

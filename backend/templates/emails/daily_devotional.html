@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Today's Devotional</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Poppins', -apple-system, sans-serif; background: #252432; color: #fff; margin: 0; padding: 20px 0; }
+        .container { max-width: 600px; margin: 0 auto; background: #252432; border-radius: 20px; overflow: hidden; box-shadow: 0 0 40px rgba(255,39,112,0.15); }
+        .header { background: #1e1e2a; padding: 36px 24px; text-align: center; border-bottom: 3px solid #ff2770; }
+        .logos { display: flex; justify-content: center; align-items: center; gap: 16px; margin-bottom: 18px; }
+        .logo { width: 64px; height: 64px; border-radius: 50%; border: 2px solid #45f3ff; object-fit: cover; box-shadow: 0 0 12px rgba(69,243,255,0.35); }
+        .header h1 { color: #45f3ff; font-size: 22px; font-weight: 800; margin: 0 0 6px; letter-spacing: 0.06em; text-transform: uppercase; text-shadow: 0 0 20px rgba(69,243,255,0.5); }
+        .header-date { color: #ff2770; font-size: 13px; font-weight: 600; margin: 4px 0 0; }
+        .header-sub { color: rgba(255,255,255,0.45); font-size: 12px; margin-top: 4px; }
+        .content { padding: 32px 28px; }
+        .cover-img { width: 100%; border-radius: 14px; margin-bottom: 24px; display: block; }
+        .devotional-title { font-size: 22px; font-weight: 800; color: #fff; margin: 0 0 20px; line-height: 1.3; }
+        .section-label { color: #ff2770; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; margin: 20px 0 8px; }
+        .verse-box { background: #2d2d39; border-left: 3px solid #45f3ff; border-radius: 0 12px 12px 0; padding: 14px 18px; margin: 0 0 18px; }
+        .verse-ref { color: #45f3ff; font-weight: 700; font-size: 13px; margin: 0 0 6px; }
+        .verse-text { color: #aaa; font-size: 14px; line-height: 1.75; margin: 0; font-style: italic; }
+        .message-preview { color: #999; font-size: 15px; line-height: 1.8; margin: 0 0 20px; }
+        .key-point-box { background: #2d2d39; border: 1px solid rgba(255,39,112,0.25); border-radius: 14px; padding: 16px 20px; margin: 20px 0; }
+        .key-point-label { color: #ff2770; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 8px; }
+        .key-point-text { color: #fff; font-size: 15px; line-height: 1.6; margin: 0; }
+        .bible-plan-box { background: #2d2d39; border: 1px solid rgba(69,243,255,0.15); border-radius: 12px; padding: 12px 16px; margin: 18px 0; }
+        .bible-plan-label { color: #45f3ff; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+        .bible-plan-ref { color: #777; font-size: 13px; }
+        .btn { display: inline-block; text-decoration: none; font-weight: 700; padding: 14px 42px; border-radius: 30px; font-size: 15px; background: #ff2770; color: #fff; box-shadow: 0 0 20px rgba(255,39,112,0.5); }
+        .footer { background: #1e1e2a; padding: 28px; text-align: center; border-top: 2px solid rgba(255,39,112,0.2); }
+        .footer-brand { color: #45f3ff; font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+        .footer p { color: #555; font-size: 12px; margin: 3px 0; }
+        .footer a { color: #777; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logos">
+                {% if logo_url %}<img src="{{ logo_url }}" alt="RCCG Logo" class="logo">{% endif %}
+                {% if faith_logo_url %}<img src="{{ faith_logo_url }}" alt="Faith Tribe Logo" class="logo">{% endif %}
+            </div>
+            <h1>Today's Devotional</h1>
+            <p class="header-date">{{ devotional.date|date:"l, F d, Y" }}</p>
+            <p class="header-sub">Teenage Open Heaven &mdash; RCCG Region 63</p>
+        </div>
+
+        <div class="content">
+            {% if devotional.cover_image %}
+            <img src="{{ devotional.cover_image.url }}" alt="{{ devotional.title }}" class="cover-img">
+            {% endif %}
+
+            <h2 class="devotional-title">{{ devotional.title }}</h2>
+
+            {% if devotional.memory_verse_passage %}
+            <p class="section-label">Memorise</p>
+            <div class="verse-box">
+                <p class="verse-ref">{{ devotional.memory_verse_passage }}</p>
+                {% if devotional.memory_verse_content %}
+                <p class="verse-text">&ldquo;{{ devotional.memory_verse_content }}&rdquo;</p>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if devotional.bible_text_passage %}
+            <p class="section-label">Bible Reading</p>
+            <div class="verse-box">
+                <p class="verse-ref">{{ devotional.bible_text_passage }}</p>
+                {% if devotional.bible_text_content %}
+                <p class="verse-text">{{ devotional.bible_text_content|truncatewords:60 }}</p>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <p class="section-label">Message</p>
+            <p class="message-preview">{{ devotional.content|striptags|truncatewords:80 }}...</p>
+
+            {% if devotional.key_point %}
+            <div class="key-point-box">
+                <p class="key-point-label">Key Point</p>
+                <p class="key-point-text">{{ devotional.key_point }}</p>
+            </div>
+            {% endif %}
+
+            <div style="text-align:center; margin:28px 0;">
+                <a href="{{ devotional_url }}" class="btn">READ FULL DEVOTIONAL</a>
+            </div>
+
+            {% if devotional.bible_in_one_year %}
+            <div class="bible-plan-box">
+                <p class="bible-plan-label">Bible in One Year</p>
+                <p class="bible-plan-ref">{{ devotional.bible_in_one_year }}</p>
+            </div>
+            {% endif %}
+
+            {% if devotional.author %}
+            <p style="color:#555; font-size:12px; text-align:right; margin-top:16px;">
+                &mdash; {{ devotional.author }}
+            </p>
+            {% endif %}
+        </div>
+
+        <div class="footer">
+            <p class="footer-brand">RCCG Region 63 Junior Church</p>
+            <p>&copy; {% now "Y" %} All rights reserved.</p>
+            <p>You are receiving this because you have email notifications enabled.</p>
+            <p style="margin-top:8px;">
+                To unsubscribe, log in and turn off email notifications in your account settings.<br>
+                <a href="{{ frontend_url }}/settings">Manage notification preferences</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

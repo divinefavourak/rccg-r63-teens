@@ -8,6 +8,36 @@ import { useAuthContext } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationsContext';
 import { motion, AnimatePresence } from 'framer-motion';
 
+// ─── Gender Banner ────────────────────────────────────────────────────────────
+const GenderBanner = () => {
+    const { user, needsGender } = useAuthContext();
+    const [dismissed, setDismissed] = useState(false);
+
+    if (dismissed || !needsGender || (user?.role !== 'teen' && user?.gender)) return null;
+    if (user?.gender) return null;
+    if (user?.role !== 'teen') return null;
+
+    return (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-yellow-400/40 bg-yellow-400/10 px-4 py-3 text-sm text-yellow-200">
+            <span>
+                <strong className="text-yellow-300">Action needed:</strong>{' '}
+                Please add your gender in{' '}
+                <Link to="/dashboard/settings" className="font-bold underline text-yellow-300 hover:text-yellow-100">
+                    Settings
+                </Link>{' '}
+                — it's used for your avatar and personalisation.
+            </span>
+            <button
+                onClick={() => setDismissed(true)}
+                className="flex-shrink-0 text-yellow-400 hover:text-yellow-200 transition-colors"
+                aria-label="Dismiss"
+            >
+                <X size={16} />
+            </button>
+        </div>
+    );
+};
+
 // ─── Notification Panel ───────────────────────────────────────────────────────
 const NotificationPanel = ({ onClose }: { onClose: () => void }) => {
     const { notifications, loading, markRead, markAllRead, unreadCount } = useNotifications();
@@ -252,6 +282,7 @@ const DashboardLayout = () => {
                 </header>
 
                 <main className="flex-1 overflow-y-auto p-4 lg:p-8 scroll-smooth">
+                    <GenderBanner />
                     <Outlet />
                 </main>
             </div>

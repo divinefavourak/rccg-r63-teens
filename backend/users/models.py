@@ -41,6 +41,11 @@ class User(AbstractBaseUser, PermissionsMixin):
         COORDINATOR = 'coordinator', 'Coordinator'
         TEEN = 'teen', 'Teen'
         INDIVIDUAL = 'individual', 'Individual'  # Legacy - use TEEN for new users
+
+    class Gender(models.TextChoices):
+        MALE = 'male', 'Male'
+        FEMALE = 'female', 'Female'
+        NOT_SPECIFIED = 'not_specified', 'Prefer not to say'
     
     class Province(models.TextChoices):
         # Updated to match frontend/src/constants/formFields.tsx
@@ -99,6 +104,11 @@ class User(AbstractBaseUser, PermissionsMixin):
     last_login = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    # Gender (used for avatars; required for teens, optional for other roles)
+    gender = models.CharField(
+        max_length=20, choices=Gender.choices, blank=True, default=''
+    )
+
     # Profile metadata
     profile_picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True)
     bio = models.TextField(blank=True, max_length=500)

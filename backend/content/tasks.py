@@ -2,10 +2,87 @@
 Celery tasks for the content app.
 """
 import logging
+import threading
 from datetime import date
 from celery import shared_task
 
 logger = logging.getLogger(__name__)
+
+
+@shared_task(name='content.tasks.send_daily_devotional_email')
+def send_daily_devotional_email(devotional_id):
+    """
+    Send today's devotional to all users who have email_notifications enabled.
+
+    Args:
+        devotional_id: UUID of the Devotional to send.
+    """
+    from django.conf import settings
+    from django.core.mail import EmailMultiAlternatives
+    from django.template.loader import render_to_string
+    from django.utils.html import strip_tags
+
+    from content.models import Devotional
+    from users.models import User
+    from utils.email_senders import get_sender
+
+    try:
+        devotional = Devotional.objects.get(pk=devotional_id)
+    except Devotional.DoesNotExist:
+        logger.error('Devotional %s not found — cannot send email.', devotional_id)
+        return {'success': False, 'reason': 'devotional_not_found'}
+
+    recipients = list(
+        User.objects.filter(email_notifications=True, is_active=True)
+        .values_list('email', flat=True)
+    )
+
+    if not recipients:
+        logger.info('No subscribed recipients for devotional email.')
+        return {'success': True, 'sent': 0}
+
+    frontend_url = getattr(settings, 'FRONTEND_URL', None) or 'https://rccg-r63-juniorchurch.vercel.app'
+    devotional_url = f"{frontend_url}/devotional/{devotional.slug}"
+
+    context = {
+        'devotional': devotional,
+        'devotional_url': devotional_url,
+        'frontend_url': frontend_url,
+        'logo_url': 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/logo.jpg',
+        'faith_logo_url': 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/faith_logo.jpg',
+    }
+
+    html = render_to_string('emails/daily_devotional.html', context)
+    plain = strip_tags(html)
+    from_email = get_sender('junior_church')
+    subject = f"Today's Devotional – {devotional.title} ({devotional.date.strftime('%B %d, %Y')})"
+
+    # Send in batches of 50 to avoid SMTP timeouts
+    batch_size = 50
+    sent = 0
+    failed = 0
+
+    for i in range(0, len(recipients), batch_size):
+        batch = recipients[i:i + batch_size]
+        try:
+            msg = EmailMultiAlternatives(
+                subject=subject,
+                body=plain,
+                from_email=from_email,
+                bcc=batch,  # BCC so recipients don't see each other's emails
+            )
+            msg.attach_alternative(html, 'text/html')
+            msg.send(fail_silently=False)
+            sent += len(batch)
+        except Exception as exc:
+            logger.error('Failed to send devotional batch %d: %s', i // batch_size, exc)
+            failed += len(batch)
+
+    logger.info(
+        'Devotional email "%s" sent: %d delivered, %d failed.',
+        devotional.title, sent, failed
+    )
+    return {'success': True, 'sent': sent, 'failed': failed}
 
 
 @shared_task(
@@ -50,6 +127,15 @@ def daily_devotional_scrape(self):
     
     if result:
         logger.info(f"Successfully scraped devotional for {today}: {result['title']}")
+
+        # Trigger subscriber email — runs as a separate Celery task so a
+        # slow SMTP delivery never blocks the scrape result being recorded.
+        try:
+            devotional = Devotional.objects.get(date=today)
+            send_daily_devotional_email.delay(str(devotional.pk))
+        except Devotional.DoesNotExist:
+            logger.warning('Devotional for %s not found after scrape — skipping email.', today)
+
         return {
             'success': True,
             'action': 'created',

@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.contrib.auth import authenticate
 from django.db.models import Q
 
+from .email_service import UserEmailService
 from .models import User, LoginHistory, AuditLog
 from .serializers import (
     UserSerializer, UserCreateSerializer, UserUpdateSerializer,
@@ -80,12 +81,14 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         # Generate tokens
         refresh = RefreshToken.for_user(user)
         
+        user_data = UserSerializer(user).data
         response_data = {
             'access': str(refresh.access_token),
             'refresh': str(refresh),
-            'user': UserSerializer(user).data
+            'user': user_data,
+            'needs_gender': user.role == User.Role.TEEN and not user.gender,
         }
-        
+
         return Response(response_data)
     
     def get_client_ip(self, request):
@@ -106,8 +109,9 @@ class RegisterView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        
-        # Return user data (without auto-login, frontend handles login after)
+
+        UserEmailService.send_welcome_email(user)
+
         return Response(
             {"detail": "Registration successful. Please login."},
             status=status.HTTP_201_CREATED
@@ -147,7 +151,10 @@ class UserViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         user = serializer.save()
-        
+
+        # Notify the new user that their account was created
+        UserEmailService.send_account_created_email(user, created_by=self.request.user)
+
         # Log the creation
         AuditLog.objects.create(
             user=self.request.user,
@@ -232,7 +239,9 @@ class ChangePasswordView(APIView):
         
         user.set_password(new_password)
         user.save()
-        
+
+        UserEmailService.send_password_changed_email(user)
+
         # Log password change
         AuditLog.objects.create(
             user=user,
@@ -242,7 +251,7 @@ class ChangePasswordView(APIView):
             ip_address=self.get_client_ip(request),
             user_agent=request.META.get('HTTP_USER_AGENT', '')
         )
-        
+
         return Response({"detail": "Password changed successfully."})
     
     def get_client_ip(self, request):
@@ -266,6 +275,69 @@ class LoginHistoryView(generics.ListAPIView):
             return LoginHistory.objects.filter(user_id=user_id)
         
         return LoginHistory.objects.all()
+
+
+class ForgotPasswordView(APIView):
+    """
+    Accept an email address and send a password-reset link if the account exists.
+    Always returns 200 to prevent email enumeration attacks.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email', '').strip().lower()
+        if email:
+            try:
+                user = User.objects.get(email=email, is_active=True)
+                UserEmailService.send_password_reset_email(user)
+            except User.DoesNotExist:
+                pass  # Silently ignore — never reveal whether email exists
+
+        return Response(
+            {"detail": "If that email is registered, a reset link has been sent."}
+        )
+
+
+class ResetPasswordView(APIView):
+    """
+    Accept uid + token (from the reset email) and a new password, then apply it.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        from django.contrib.auth.tokens import default_token_generator
+        from django.utils.encoding import force_str
+        from django.utils.http import urlsafe_base64_decode
+
+        uid = request.data.get('uid', '')
+        token = request.data.get('token', '')
+        new_password = request.data.get('new_password', '')
+
+        if not uid or not token or not new_password:
+            return Response(
+                {"detail": "uid, token, and new_password are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            user_id = force_str(urlsafe_base64_decode(uid))
+            user = User.objects.get(pk=user_id, is_active=True)
+        except (User.DoesNotExist, ValueError, TypeError):
+            return Response(
+                {"detail": "Invalid reset link."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not default_token_generator.check_token(user, token):
+            return Response(
+                {"detail": "Reset link is invalid or has expired."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.set_password(new_password)
+        user.save()
+
+        return Response({"detail": "Password has been reset. You may now log in."})
 
 
 class AuditLogView(generics.ListAPIView):

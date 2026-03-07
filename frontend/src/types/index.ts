@@ -41,7 +41,8 @@ export interface Ticket {
 export interface User {
   id: string;
   username: string;
-  role: 'admin' | 'coordinator';
+  role: 'admin' | 'coordinator' | 'teen';
+  gender?: string;
   province?: string;
   name?: string;
   first_name?: string;
@@ -66,6 +67,7 @@ export interface RegisterCredentials {
   first_name?: string;
   last_name?: string;
   phone?: string;
+  gender?: string;
   province?: string;
   role?: string;
 }
@@ -74,6 +76,7 @@ export interface AuthResponse {
   access: string;
   refresh: string;
   user: User;
+  needs_gender?: boolean;
 }
 
 // Devotional Content

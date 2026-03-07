@@ -14,7 +14,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name', 'full_name',
-            'phone', 'role', 'role_display', 'province', 'province_display',
+            'phone', 'gender', 'role', 'role_display', 'province', 'province_display',
             'zone', 'area', 'parish', 'is_active', 'date_joined', 'last_login',
             'profile_picture', 'bio', 'email_notifications', 'sms_notifications',
         ]
@@ -42,7 +42,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'username', 'email', 'password', 'password_confirm',
-            'first_name', 'last_name', 'phone', 'role', 'province',
+            'first_name', 'last_name', 'phone', 'gender', 'role', 'province',
             'zone', 'area', 'parish'
         ]
         extra_kwargs = {
@@ -50,17 +50,22 @@ class UserCreateSerializer(serializers.ModelSerializer):
             'first_name': {'required': True},
             'last_name': {'required': True},
             'phone': {'required': False},
+            'gender': {'required': False},
             'role': {'required': False},
             'province': {'required': False},
             'zone': {'required': False},
             'area': {'required': False},
             'parish': {'required': False},
         }
-    
+
     def validate(self, data):
         # Check if passwords match
         if data['password'] != data['password_confirm']:
             raise serializers.ValidationError({"password_confirm": "Passwords don't match."})
+
+        # Teens must provide gender (used for avatar generation)
+        if data.get('role') == User.Role.TEEN and not data.get('gender'):
+            raise serializers.ValidationError({"gender": "Gender is required for teen accounts."})
         
         # Role-specific validation
         if data.get('role') == User.Role.COORDINATOR and not data.get('province'):
@@ -104,7 +109,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'first_name', 'last_name', 'phone', 'email',
+            'first_name', 'last_name', 'phone', 'email', 'gender',
             'zone', 'area', 'parish', 'profile_picture', 'bio',
             'email_notifications', 'sms_notifications',
             'current_password', 'new_password'

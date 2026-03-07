@@ -283,9 +283,17 @@ CORS_ALLOW_ALL_ORIGINS = True
 MAILING = True
 
 if MAILING:
-    EMAIL_BACKEND = 'backend.email_backend.BrevoEmailBackend'  # Custom backend with SSL fix
+    import sys
+    # On Linux (Railway/production) the OS SSL store works fine with the standard backend.
+    # On Windows, Python's SSL bundle sometimes can't verify Brevo's cert, so we use
+    # a custom backend that disables cert verification as a workaround.
+    if sys.platform == 'win32':
+        EMAIL_BACKEND = 'backend.email_backend.BrevoEmailBackend'
+    else:
+        EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+
     EMAIL_HOST = 'smtp-relay.brevo.com'
-    EMAIL_PORT = 465  # Port 465 works on this network
+    EMAIL_PORT = 465
     EMAIL_USE_SSL = True
     EMAIL_USE_TLS = False
     EMAIL_HOST_USER = os.environ.get('BREVO_SMTP_USER', '')
@@ -294,7 +302,7 @@ if MAILING:
     DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@r63teens.com')
     SERVER_EMAIL = DEFAULT_FROM_EMAIL
     EMAIL_SUBJECT_PREFIX = '[R63 Teens] '
-    
+
     # Multiple verified senders for different email contexts
     EMAIL_SENDERS = {
         'support': 'Faith Tribe Support <faithtribe.support@thefaithtribe.live>',
@@ -306,7 +314,7 @@ else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # Email validation
-if not EMAIL_HOST_PASSWORD and EMAIL_BACKEND == 'django.core.mail.backends.smtp.EmailBackend':
+if not os.environ.get('BREVO_SMTP_KEY') and MAILING:
     import warnings
     warnings.warn('BREVO_SMTP_KEY not set. Email functionality will not work.')
 

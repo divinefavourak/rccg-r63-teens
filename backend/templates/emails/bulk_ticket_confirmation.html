@@ -6,21 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bulk Registration Confirmation</title>
     <style>
-<<<<<<< HEAD
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 700px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
-        .content { padding: 20px; background-color: #f9f9f9; }
-        .summary-box { background-color: white; border: 1px solid #ddd; padding: 15px; margin: 15px 0; }
-        .ticket-count { font-size: 24px; font-weight: bold; color: #4CAF50; text-align: center; }
-        .category-section { background-color: #f0f8ff; padding: 15px; margin: 10px 0; border-left: 4px solid #4CAF50; }
-        .ticket-list { background-color: white; padding: 10px; margin: 5px 0; border: 1px solid #eee; }
-        .ticket-item { padding: 8px; border-bottom: 1px solid #f0f0f0; }
-        .ticket-item:last-child { border-bottom: none; }
-        .next-steps { background-color: #E8F5E8; padding: 15px; margin: 15px 0; border-left: 4px solid #4CAF50; }
-        .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
-        .coordinator-info { background-color: #FFF3E0; padding: 15px; margin: 15px 0; border-left: 4px solid #FF9800; }
-=======
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
 
         body {
@@ -188,17 +173,12 @@
             font-weight: 600;
             margin-bottom: 10px;
         }
->>>>>>> 4be705b2eaa845521c96312929ff1150271b30c6
     </style>
 </head>
 
 <body>
     <div class="container">
         <div class="header">
-<<<<<<< HEAD
-            <h1>RCCG R63 Teens Event</h1>
-            <h2>Bulk Registration Confirmation</h2>
-=======
             <div class="logos">
                 {% if logo_url %}
                 <img src="{{ logo_url }}" alt="RCCG Logo" class="logo">
@@ -207,106 +187,19 @@
                 <img src="{{ faith_logo_url }}" alt="Faith Tribe Logo" class="logo">
                 {% endif %}
             </div>
-            <h1>📦 BULK REGISTRATION</h1>
-            <p>RCCG Region 63 December Campout 2025</p>
-            <p style="color: #FFD700; font-weight: 600; margin-top: 5px; font-size: 12px;">Theme: THE PRICELESS GIFT</p>
->>>>>>> 4be705b2eaa845521c96312929ff1150271b30c6
+            <h1>BULK REGISTRATION</h1>
+            <p>RCCG Region 63 Junior Church</p>
         </div>
 
         <div class="content">
-<<<<<<< HEAD
-            <p>Dear {{ coordinator_name }},</p>
-            
-            <p>Thank you for completing the bulk registration for the RCCG Region 63 Teens Event! All registrations have been processed successfully.</p>
-            
-            <div class="summary-box">
-                <h3>Registration Summary:</h3>
-                <div class="ticket-count">{{ ticket_count }} Tickets Registered</div>
-                <p><strong>Registration Date:</strong> {{ registered_at|date:"F d, Y H:i" }}</p>
-                <p><strong>Coordinator:</strong> {{ coordinator_name }}</p>
-            </div>
-            
-            {% for category, category_tickets in tickets_by_category.items %}
-                <div class="category-section">
-                    <h3>{{ category }} ({{ category_tickets|length }} ticket{{ category_tickets|length|pluralize }})</h3>
-                    <div class="ticket-list">
-                        {% for ticket in category_tickets %}
-                            <div class="ticket-item">
-                                <strong>{{ ticket.ticket_id }}</strong> - {{ ticket.full_name }} ({{ ticket.age }} years)
-                                {% if ticket.gender != 'not_specified' %}
-                                    - {{ ticket.get_gender_display }}
-                                {% endif %}
-                            </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            {% endfor %}
-            
-            <div class="coordinator-info">
-                <h3>Coordinator Responsibilities:</h3>
-                <ul>
-                    <li><strong>Payment Processing:</strong> You are responsible for collecting and processing payments for all registered participants</li>
-                    <li><strong>Communication:</strong> Please inform all participants about their registration status and next steps</li>
-                    <li><strong>Documentation:</strong> Keep records of all payments and participant information</li>
-                    <li><strong>Updates:</strong> Notify participants of any event updates or changes</li>
-                </ul>
-            </div>
-            
-            <div class="next-steps">
-                <h3>Next Steps:</h3>
-                <ul>
-                    <li><strong>Payment Collection:</strong> Collect ₦3,000 from each participant</li>
-                    <li><strong>Bulk Payment:</strong> Make a single payment of ₦{{ ticket_count|mul:3000|floatformat:0 }} for all {{ ticket_count }} tickets</li>
-                    <li><strong>Payment Options:</strong>
-                        <ul>
-                            <li>Online payment via the registration portal</li>
-                            <li>Bank transfer (contact admin for details)</li>
-                            <li>Upload payment receipt for verification</li>
-                        </ul>
-                    </li>
-                    <li><strong>Ticket Distribution:</strong> Once payment is confirmed, download and distribute individual tickets to participants</li>
-                    <li><strong>Event Preparation:</strong> Ensure all participants have their tickets and understand event requirements</li>
-                </ul>
-            </div>
-            
-            <div class="summary-box">
-                <h3>Important Information:</h3>
-                <ul>
-                    <li>All registrations are currently <strong>PENDING APPROVAL</strong></li>
-                    <li>Tickets will be automatically approved upon payment confirmation</li>
-                    <li>Each participant will need their individual ticket for event entry</li>
-                    <li>Keep this email as proof of bulk registration</li>
-                    <li>Contact the admin team if you encounter any issues</li>
-                </ul>
-            </div>
-            
-            <div class="summary-box">
-                <h3>Registered Participants Summary:</h3>
-                {% for ticket in tickets %}
-                    <div style="display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #eee;">
-                        <span><strong>{{ ticket.ticket_id }}</strong></span>
-                        <span>{{ ticket.full_name }}</span>
-                        <span>{{ ticket.get_category_display }}</span>
-                        <span>{{ ticket.age }}yrs</span>
-                    </div>
-                {% endfor %}
-            </div>
-            
-            <p>Thank you for your leadership in organizing this registration. Your efforts help make this event possible for our teens!</p>
-            
-            <p>If you have any questions about the registration process or need assistance, please contact the admin team.</p>
-            
-            <p>Best regards,<br>
-            RCCG R63 Teens Event Team</p>
-=======
-            <p class="greeting">Hello, {{ coordinator_name }}! 👋</p>
+            <p class="greeting">Hello, {{ coordinator_name }}!</p>
 
             <p class="message">
-                Your bulk registration has been successfully processed!
+                Your bulk registration has been successfully processed.
             </p>
 
             <div style="text-align: center;">
-                <div class="count-badge">{{ ticket_count }} TICKETS</div>
+                <div class="count-badge">{{ ticket_count }} TICKET{{ ticket_count|pluralize }}</div>
             </div>
 
             {% for category, category_tickets in tickets_by_category.items %}
@@ -324,31 +217,24 @@
             {% endfor %}
 
             <div class="info-box">
-                <p class="info-title">📋 What's Next?</p>
+                <p class="info-title">What's Next?</p>
                 <p class="info-text">
-                    All registrations are pending approval. Each attendee will receive
-                    their own confirmation email once their ticket is approved.
+                    All registrations are currently <strong style="color:#FFD700;">PENDING APPROVAL</strong>.
+                    Each attendee will receive their own confirmation email once their ticket is approved.
                     Please keep this email for your records.
                 </p>
             </div>
->>>>>>> 4be705b2eaa845521c96312929ff1150271b30c6
         </div>
 
         <div class="footer">
-<<<<<<< HEAD
-            <p>This is an automated email. Please do not reply.</p>
-            <p>For support, contact your regional coordinator or admin team.</p>
-            <p>© {% now "Y" %} RCCG Region 63. All rights reserved.</p>
-        </div>
-    </div>
-</body>
-=======
             <p class="social-text">RCCG Region 63 Junior Church</p>
             <p>&copy; {% now "Y" %} All rights reserved.</p>
+            {% if registered_at %}
             <p>Registered: {{ registered_at|date:"F d, Y H:i" }}</p>
+            {% endif %}
+            <p>This is an automated email. Please do not reply.</p>
         </div>
     </div>
 </body>
 
->>>>>>> 4be705b2eaa845521c96312929ff1150271b30c6
 </html>
