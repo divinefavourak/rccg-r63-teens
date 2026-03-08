@@ -19,10 +19,22 @@ const DevotionalDetail = () => {
     const [devotional, setDevotional] = useState<Devotional | null>(null);
     const [loading, setLoading] = useState(true);
     const [isRead, setIsRead] = useState(false);
+    const [streak, setStreak] = useState<{ streak_days: number; total_read: number } | null>(null);
 
     useEffect(() => {
         fetchDevotional();
+        if (isAuthenticated) checkReadStatus();
     }, [id]);
+
+    const checkReadStatus = async () => {
+        try {
+            const { data } = await api.get('/content/devotionals/my_reads/');
+            if (data.read_ids?.includes(id)) setIsRead(true);
+            setStreak({ streak_days: data.streak_days, total_read: data.total_read });
+        } catch {
+            // silently ignore — user may not be logged in
+        }
+    };
 
     const fetchDevotional = async () => {
         try {
@@ -37,11 +49,16 @@ const DevotionalDetail = () => {
     };
 
     const markAsRead = async () => {
-        if (!devotional) return;
+        if (!devotional || isRead) return;
         try {
-            await api.post(`/content/devotionals/${id}/mark_read/`);
+            const { data } = await api.post(`/content/devotionals/${id}/mark_read/`);
             setIsRead(true);
-            toast.success('Marked as read! Streak updated.');
+            setStreak({ streak_days: data.streak_days, total_read: data.total_read });
+            if (data.streak_days > 1) {
+                toast.success(`🔥 ${data.streak_days}-day streak! Keep it up!`);
+            } else {
+                toast.success('Marked as read! Great start — come back tomorrow to build your streak!');
+            }
         } catch (error) {
             console.error(error);
             toast.error('Could not mark as read');
@@ -186,6 +203,30 @@ const DevotionalDetail = () => {
 
                         {/* Action Buttons */}
                         <div className="mt-12 border-t border-gray-100 dark:border-gray-700 pt-8">
+                            {/* Streak Banner */}
+                            {isAuthenticated && streak && (streak.streak_days > 0 || streak.total_read > 0) && (
+                                <div className="mb-6 flex items-center gap-6 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-700/40 rounded-2xl px-6 py-4">
+                                    <div className="text-center">
+                                        <div className="text-3xl font-black text-amber-500">🔥 {streak.streak_days}</div>
+                                        <div className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider mt-0.5">Day Streak</div>
+                                    </div>
+                                    <div className="w-px h-10 bg-amber-200 dark:bg-amber-700/40" />
+                                    <div className="text-center">
+                                        <div className="text-3xl font-black text-primary-600 dark:text-primary-400">{streak.total_read}</div>
+                                        <div className="text-xs font-bold text-primary-700 dark:text-primary-400 uppercase tracking-wider mt-0.5">Total Read</div>
+                                    </div>
+                                    <div className="flex-1 ml-2">
+                                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                                            {streak.streak_days === 0
+                                                ? 'Start your streak — read today\'s devotional!'
+                                                : streak.streak_days === 1
+                                                ? 'You\'re on a 1-day streak! Come back tomorrow!'
+                                                : `Amazing! ${streak.streak_days} days in a row. Don't break the chain!`}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
                             {isAuthenticated ? (
                                 <div className="flex flex-col md:flex-row items-center justify-between gap-6">
                                     <div className="flex gap-4">

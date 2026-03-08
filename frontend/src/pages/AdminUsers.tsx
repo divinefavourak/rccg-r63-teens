@@ -8,16 +8,13 @@ import type { User } from '../types';
 import toast from 'react-hot-toast';
 
 const PROVINCES = [
-    { value: 'lagos', label: 'Lagos' },
-    { value: 'abuja', label: 'Abuja' },
-    { value: 'rivers', label: 'Rivers' },
-    { value: 'kano', label: 'Kano' },
-    { value: 'oyo', label: 'Oyo' },
-    { value: 'delta', label: 'Delta' },
-    { value: 'anambra', label: 'Anambra' },
-    { value: 'enugu', label: 'Enugu' },
-    { value: 'kaduna', label: 'Kaduna' },
-    { value: 'ogun', label: 'Ogun' },
+    { value: 'lagos_province_9',   label: 'Lagos Province 9' },
+    { value: 'lagos_province_28',  label: 'Lagos Province 28' },
+    { value: 'lagos_province_69',  label: 'Lagos Province 69' },
+    { value: 'lagos_province_84',  label: 'Lagos Province 84' },
+    { value: 'lagos_province_86',  label: 'Lagos Province 86' },
+    { value: 'lagos_province_104', label: 'Lagos Province 104' },
+    { value: 'regional_hq',        label: 'Regional Headquarter' },
 ];
 
 const EMPTY_FORM = {

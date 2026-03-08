@@ -269,7 +269,7 @@ const AdminDevotionals = () => {
                             <tr className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-800">
                                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
                                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Title</th>
-                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Reading</th>
+                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Views</th>
                                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
                                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Likes</th>
                                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
@@ -293,7 +293,12 @@ const AdminDevotionals = () => {
                                         </td>
                                         <td className="p-4 text-sm font-medium text-gray-900 dark:text-white">{item.title}</td>
                                         <td className="p-4 text-sm text-gray-500 dark:text-gray-400">
-                                            {item.bible_text_passage || item.scripture_reference || '-'}
+                                            <div className="flex items-center gap-1.5">
+                                                <Eye size={13} className="text-gray-400" />
+                                                <span className="font-semibold text-gray-700 dark:text-gray-300">
+                                                    {(item as any).view_count ?? (item as any).read_count ?? 0}
+                                                </span>
+                                            </div>
                                         </td>
                                         <td className="p-4">
                                             <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${getStatusColor(status)}`}>

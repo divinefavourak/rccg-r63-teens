@@ -3,9 +3,10 @@ Content models for the RCCG R63 Teens platform.
 Includes Devotionals (Teenage Open Heaven) and Manuals (weekly teaching material).
 """
 from django.db import models
+from django.conf import settings
 from django.utils.text import slugify
 from common.models import (
-    TimestampMixin, UUIDMixin, PublishableMixin, 
+    TimestampMixin, UUIDMixin, PublishableMixin,
     SlugMixin, ViewableMixin
 )
 import uuid
@@ -289,10 +290,36 @@ class Article(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugify(self.title)[:300]
-        
+
         # Calculate read time (approx 200 words per minute)
         if self.content:
             word_count = len(self.content.split())
             self.read_time_minutes = max(1, word_count // 200)
-        
+
         super().save(*args, **kwargs)
+
+
+class UserReadLog(models.Model):
+    """
+    Lightweight per-user devotional read tracking.
+    Works for ALL authenticated users regardless of whether they have a TeenProfile.
+    The unique_together constraint prevents double-counting atomically.
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='devotional_reads',
+    )
+    devotional = models.ForeignKey(
+        Devotional,
+        on_delete=models.CASCADE,
+        related_name='user_reads',
+    )
+    read_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [['user', 'devotional']]
+        ordering = ['-read_at']
+
+    def __str__(self):
+        return f'{self.user.username} read {self.devotional}'

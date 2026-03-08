@@ -1,10 +1,12 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, ArrowRight } from 'lucide-react';
+import { Calendar, ArrowRight, BookOpen, CheckCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Devotional } from '../../services/contentService';
 import { contentService } from '../../services/contentService';
+import api from '../../api/axios';
+import { useAuthContext } from '../../context/AuthContext';
 
 // Returns "Today", "Yesterday", or locale date string
 const formatDate = (dateStr: string): string => {
@@ -24,9 +26,12 @@ const formatDate = (dateStr: string): string => {
 };
 
 const Devotionals = () => {
+    const { isAuthenticated } = useAuthContext();
     const [devotionals, setDevotionals] = useState<Devotional[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [readIds, setReadIds] = useState<Set<string>>(new Set());
+    const [streak, setStreak] = useState<{ streak_days: number; total_read: number; longest_streak: number } | null>(null);
 
     useEffect(() => {
         const fetchDevotionals = async () => {
@@ -41,7 +46,20 @@ const Devotionals = () => {
         };
 
         fetchDevotionals();
-    }, []);
+
+        if (isAuthenticated) {
+            api.get('/content/devotionals/my_reads/')
+                .then(({ data }) => {
+                    setReadIds(new Set(data.read_ids ?? []));
+                    setStreak({
+                        streak_days: data.streak_days ?? 0,
+                        total_read: data.total_read ?? 0,
+                        longest_streak: data.longest_streak ?? 0,
+                    });
+                })
+                .catch(() => {});
+        }
+    }, [isAuthenticated]);
 
     if (loading) {
         return (
@@ -72,6 +90,42 @@ const Devotionals = () => {
                 <p className="text-gray-600 dark:text-gray-400">Feed your spirit with the unadulterated Word of God.</p>
             </header>
 
+            {/* Streak Banner */}
+            {isAuthenticated && streak && (
+                <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-6 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-700/40 rounded-2xl px-6 py-4"
+                >
+                    <div className="text-center">
+                        <div className="text-3xl font-black text-amber-500">🔥 {streak.streak_days}</div>
+                        <div className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider mt-0.5">Day Streak</div>
+                    </div>
+                    <div className="w-px h-10 bg-amber-200 dark:bg-amber-700/40" />
+                    <div className="text-center">
+                        <div className="text-3xl font-black text-primary-600 dark:text-primary-400">{streak.total_read}</div>
+                        <div className="text-xs font-bold text-primary-700 dark:text-primary-400 uppercase tracking-wider mt-0.5">Total Read</div>
+                    </div>
+                    {streak.longest_streak > 0 && (
+                        <>
+                            <div className="w-px h-10 bg-amber-200 dark:bg-amber-700/40" />
+                            <div className="text-center">
+                                <div className="text-3xl font-black text-green-600 dark:text-green-400">{streak.longest_streak}</div>
+                                <div className="text-xs font-bold text-green-700 dark:text-green-400 uppercase tracking-wider mt-0.5">Best Streak</div>
+                            </div>
+                        </>
+                    )}
+                    <div className="flex-1 ml-2 hidden md:block">
+                        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                            {streak.streak_days === 0
+                                ? 'Start your streak today!'
+                                : `${streak.streak_days} day${streak.streak_days !== 1 ? 's' : ''} and counting — don't break the chain!`}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">Read a devotional every day to grow your streak</p>
+                    </div>
+                </motion.div>
+            )}
+
             <div className="grid gap-6">
                 {devotionals.map((devotional) => (
                     <motion.article
@@ -95,6 +149,11 @@ const Devotionals = () => {
                                     <Calendar size={14} />
                                     {formatDate(devotional.date)}
                                 </span>
+                                {readIds.has(devotional.id) && (
+                                    <span className="flex items-center gap-1 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full">
+                                        <CheckCircle size={12} /> Read
+                                    </span>
+                                )}
                             </div>
 
                             {/* Title with fallback */}

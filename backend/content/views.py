@@ -9,7 +9,7 @@ from django.db.models import Q
 from datetime import date, timedelta
 
 from common.permissions import ContentPermission, IsAdmin
-from .models import Devotional, ManualSeries, Manual, Article
+from .models import Devotional, ManualSeries, Manual, Article, UserReadLog
 from .serializers import (
     DevotionalListSerializer,
     DevotionalDetailSerializer,
@@ -104,35 +104,76 @@ class DevotionalViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def mark_read(self, request, pk=None):
-        """Mark devotional as read."""
+        """
+        Mark a devotional as read for any authenticated user.
+        Uses UserReadLog for deduplication (works without a TeenProfile).
+        Also updates TeenProfile streak if the user has one.
+        """
         devotional = self.get_object()
-        
-        # Check if user has profile
-        if not hasattr(request.user, 'teen_profile'):
-            return Response(
-                {'detail': 'Profile required to track reading progress.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        from profiles.models import DevotionalProgress
-        
-        profile = request.user.teen_profile
-        progress, created = DevotionalProgress.objects.get_or_create(
-            profile=profile,
-            devotional_id=devotional.id
+
+        # Deduplicate via UserReadLog — works for ALL users
+        log, created = UserReadLog.objects.get_or_create(
+            user=request.user,
+            devotional=devotional,
         )
-        
+
+        streak_days = 0
+        total_read = 0
+
         if created:
             devotional.increment_read_count()
-            profile.update_streak(date.today())
-        
+
+            # Update streak only for users that have a full TeenProfile
+            try:
+                profile = request.user.teen_profile
+                profile.update_streak(date.today())
+                streak_days = profile.streak_days
+                total_read = profile.devotionals_read_count
+            except Exception:
+                # No TeenProfile — streak not tracked, that's fine
+                pass
+
+        else:
+            # Already read — return current streak if profile exists
+            try:
+                profile = request.user.teen_profile
+                streak_days = profile.streak_days
+                total_read = profile.devotionals_read_count
+            except Exception:
+                pass
+
         return Response({
             'success': True,
-            'streak_days': profile.streak_days,
-            'total_read': profile.devotionals_read_count,
+            'streak_days': streak_days,
+            'total_read': total_read,
             'already_read': not created,
         })
         
+    @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
+    def my_reads(self, request):
+        """Return IDs of devotionals the current user has read + streak info."""
+        read_ids = list(
+            UserReadLog.objects.filter(user=request.user)
+            .values_list('devotional_id', flat=True)
+        )
+        streak_days = 0
+        total_read = len(read_ids)
+        longest_streak = 0
+        try:
+            profile = request.user.teen_profile
+            streak_days = profile.streak_days
+            total_read = profile.devotionals_read_count
+            longest_streak = profile.longest_streak
+        except Exception:
+            pass
+
+        return Response({
+            'read_ids': [str(i) for i in read_ids],
+            'streak_days': streak_days,
+            'total_read': total_read,
+            'longest_streak': longest_streak,
+        })
+
     @action(detail=False, methods=['post'], permission_classes=[IsAdmin])
     def fetch_from_web(self, request):
         """
