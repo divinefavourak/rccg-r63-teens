@@ -19,6 +19,8 @@ const DevotionalDetail = () => {
     const [devotional, setDevotional] = useState<Devotional | null>(null);
     const [loading, setLoading] = useState(true);
     const [isRead, setIsRead] = useState(false);
+    const [isLiked, setIsLiked] = useState(false);
+    const [likesCount, setLikesCount] = useState(0);
     const [streak, setStreak] = useState<{ streak_days: number; total_read: number } | null>(null);
 
     useEffect(() => {
@@ -30,6 +32,7 @@ const DevotionalDetail = () => {
         try {
             const { data } = await api.get('/content/devotionals/my_reads/');
             if (data.read_ids?.includes(id)) setIsRead(true);
+            if (data.like_ids?.includes(id)) setIsLiked(true);
             setStreak({ streak_days: data.streak_days, total_read: data.total_read });
         } catch {
             // silently ignore — user may not be logged in
@@ -40,6 +43,7 @@ const DevotionalDetail = () => {
         try {
             const { data } = await api.get(`/content/devotionals/${id}/`);
             setDevotional(data);
+            setLikesCount(data.likes_count ?? 0);
         } catch (error) {
             toast.error('Devotional not found');
             navigate('/devotionals');
@@ -65,8 +69,39 @@ const DevotionalDetail = () => {
         }
     };
 
-    const toggleFavorite = async () => {
-        toast.success("Added to favorites");
+    const toggleLike = async () => {
+        if (!devotional) return;
+        try {
+            const { data } = await api.post(`/content/devotionals/${id}/toggle_like/`);
+            setIsLiked(data.liked);
+            setLikesCount(data.likes_count);
+            toast.success(data.liked ? '❤️ Liked!' : 'Like removed');
+        } catch {
+            toast.error('Could not update like');
+        }
+    };
+
+    const handleShare = async () => {
+        const url = window.location.href;
+        const title = devotional?.title || 'Daily Devotional';
+        const text = devotional?.memory_verse_content
+            ? `"${devotional.memory_verse_content}" — ${devotional.memory_verse_passage}`
+            : 'Check out this devotional!';
+
+        try {
+            if (navigator.share) {
+                await navigator.share({ title, text, url });
+            } else {
+                await navigator.clipboard.writeText(url);
+                toast.success('Link copied to clipboard!');
+            }
+            // Record the share on the backend (best-effort)
+            api.post(`/content/devotionals/${id}/record_share/`).catch(() => {});
+        } catch (err: any) {
+            if (err?.name !== 'AbortError') {
+                toast.error('Could not share');
+            }
+        }
     };
 
     if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900"><div className="animate-spin h-10 w-10 border-4 border-primary-500 border-t-transparent rounded-full"></div></div>;
@@ -231,12 +266,16 @@ const DevotionalDetail = () => {
                                 <div className="flex flex-col md:flex-row items-center justify-between gap-6">
                                     <div className="flex gap-4">
                                         <button
-                                            onClick={toggleFavorite}
-                                            className="btn-secondary rounded-full px-6 py-3 flex items-center justify-center gap-2 hover:bg-pink-50 hover:border-pink-200 hover:text-pink-500 transition-all"
+                                            onClick={toggleLike}
+                                            className={`btn-secondary rounded-full px-6 py-3 flex items-center justify-center gap-2 transition-all ${isLiked ? 'bg-pink-50 border-pink-200 text-pink-500' : 'hover:bg-pink-50 hover:border-pink-200 hover:text-pink-500'}`}
                                         >
-                                            <FaHeart /> Like
+                                            <FaHeart className={isLiked ? 'text-pink-500' : ''} />
+                                            {likesCount > 0 ? likesCount : ''} {isLiked ? 'Liked' : 'Like'}
                                         </button>
-                                        <button className="btn-secondary rounded-full px-6 py-3 flex items-center justify-center gap-2 transition-all">
+                                        <button
+                                            onClick={handleShare}
+                                            className="btn-secondary rounded-full px-6 py-3 flex items-center justify-center gap-2 transition-all hover:bg-blue-50 hover:border-blue-200 hover:text-blue-500"
+                                        >
                                             <FaShare /> Share
                                         </button>
                                     </div>

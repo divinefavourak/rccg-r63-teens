@@ -1,6 +1,7 @@
 """
 Views for the content app (devotionals, manuals, articles).
 """
+from django.db import models
 from rest_framework import viewsets, generics, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -9,7 +10,7 @@ from django.db.models import Q
 from datetime import date, timedelta
 
 from common.permissions import ContentPermission, IsAdmin
-from .models import Devotional, ManualSeries, Manual, Article, UserReadLog
+from .models import Devotional, ManualSeries, Manual, Article, UserReadLog, UserLikeLog
 from .serializers import (
     DevotionalListSerializer,
     DevotionalDetailSerializer,
@@ -151,9 +152,13 @@ class DevotionalViewSet(viewsets.ModelViewSet):
         
     @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
     def my_reads(self, request):
-        """Return IDs of devotionals the current user has read + streak info."""
+        """Return IDs of devotionals the current user has read/liked + streak info."""
         read_ids = list(
             UserReadLog.objects.filter(user=request.user)
+            .values_list('devotional_id', flat=True)
+        )
+        like_ids = list(
+            UserLikeLog.objects.filter(user=request.user)
             .values_list('devotional_id', flat=True)
         )
         streak_days = 0
@@ -169,10 +174,40 @@ class DevotionalViewSet(viewsets.ModelViewSet):
 
         return Response({
             'read_ids': [str(i) for i in read_ids],
+            'like_ids': [str(i) for i in like_ids],
             'streak_days': streak_days,
             'total_read': total_read,
             'longest_streak': longest_streak,
         })
+
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def toggle_like(self, request, pk=None):
+        """Like or unlike a devotional. Returns current liked state and total count."""
+        devotional = self.get_object()
+        existing = UserLikeLog.objects.filter(user=request.user, devotional=devotional).first()
+        if existing:
+            existing.delete()
+            Devotional.objects.filter(pk=devotional.pk).update(
+                likes_count=models.F('likes_count') - 1
+            )
+            devotional.refresh_from_db(fields=['likes_count'])
+            return Response({'liked': False, 'likes_count': devotional.likes_count})
+        else:
+            UserLikeLog.objects.create(user=request.user, devotional=devotional)
+            Devotional.objects.filter(pk=devotional.pk).update(
+                likes_count=models.F('likes_count') + 1
+            )
+            devotional.refresh_from_db(fields=['likes_count'])
+            return Response({'liked': True, 'likes_count': devotional.likes_count})
+
+    @action(detail=True, methods=['post'])
+    def record_share(self, request, pk=None):
+        """Increment share count when a user shares this devotional."""
+        devotional = self.get_object()
+        Devotional.objects.filter(pk=devotional.pk).update(
+            share_count=models.F('share_count') + 1
+        )
+        return Response({'success': True})
 
     @action(detail=False, methods=['post'], permission_classes=[IsAdmin])
     def fetch_from_web(self, request):

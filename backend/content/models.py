@@ -67,6 +67,7 @@ class Devotional(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     # Analytics
     share_count = models.PositiveIntegerField(default=0)
     read_count = models.PositiveIntegerField(default=0)
+    likes_count = models.PositiveIntegerField(default=0)
     
     # Tags for categorization
     tags = models.JSONField(default=list, blank=True)
@@ -323,3 +324,24 @@ class UserReadLog(models.Model):
 
     def __str__(self):
         return f'{self.user.username} read {self.devotional}'
+
+
+class UserLikeLog(models.Model):
+    """Per-user like/unlike tracking for devotionals. No TeenProfile required."""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='devotional_likes',
+    )
+    devotional = models.ForeignKey(
+        Devotional,
+        on_delete=models.CASCADE,
+        related_name='user_likes',
+    )
+    liked_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [['user', 'devotional']]
+
+    def __str__(self):
+        return f'{self.user.username} liked {self.devotional}'
