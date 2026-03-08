@@ -32,9 +32,12 @@ const Overview = () => {
                     <p className="text-red-100 max-w-xl">
                         "Let no one despise your youth, but be an example to the believers in word, in conduct, in love, in spirit, in faith, in purity." — 1 Timothy 4:12
                     </p>
-                    <button className="mt-6 bg-yellow-500 hover:bg-yellow-400 text-red-900 font-bold py-2 px-6 rounded-full transition-colors shadow-lg">
+                    <NavLink
+                        to="/dashboard/devotionals"
+                        className="mt-6 inline-block bg-yellow-500 hover:bg-yellow-400 text-red-900 font-bold py-2 px-6 rounded-full transition-colors shadow-lg"
+                    >
                         View Today's Devotional
-                    </button>
+                    </NavLink>
                 </div>
 
                 {/* Decorative Circles */}

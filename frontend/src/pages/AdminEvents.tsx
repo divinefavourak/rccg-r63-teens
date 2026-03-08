@@ -11,7 +11,11 @@ import {
     XCircle,
     Clock,
     RefreshCw,
-    AlertCircle
+    AlertCircle,
+    Edit2,
+    Trash2,
+    Loader,
+    ChevronLeft
 } from 'lucide-react';
 import api from '../api/axios';
 import type { Event } from '../types';
@@ -47,6 +51,14 @@ const AdminEvents = () => {
     const [loading, setLoading] = useState(true);
     const [activeType, setActiveType] = useState('All Types');
     const [searchQuery, setSearchQuery] = useState('');
+    // Pagination
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalCount, setTotalCount] = useState(0);
+    const PAGE_SIZE = 20;
+    // Registrations pagination
+    const [regPage, setRegPage] = useState(1);
+    const [regTotal, setRegTotal] = useState(0);
+    const REG_PAGE_SIZE = 20;
     // Registrations panel
     const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
     const [registrations, setRegistrations] = useState<Registration[]>([]);
@@ -56,6 +68,11 @@ const AdminEvents = () => {
     const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
     const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
     const [bulkConfirming, setBulkConfirming] = useState(false);
+
+    // Edit / Delete state
+    const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+    const [deleteEventId, setDeleteEventId] = useState<string | null>(null);
+    const [deletingEvent, setDeletingEvent] = useState(false);
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -76,15 +93,15 @@ const AdminEvents = () => {
     });
 
     useEffect(() => {
-        fetchEvents();
-    }, []);
+        fetchEvents(currentPage);
+    }, [currentPage]);
 
-    const fetchEvents = async () => {
+    const fetchEvents = async (page = 1) => {
         try {
             setLoading(true);
-            // CORRECTED: Pointing to 'events' resource inside 'events' app
-            const { data } = await api.get('/events/events/');
+            const { data } = await api.get(`/events/events/?page=${page}&page_size=${PAGE_SIZE}`);
             setEvents(Array.isArray(data) ? data : data.results || []);
+            setTotalCount(data.count ?? (Array.isArray(data) ? data.length : 0));
         } catch (error) {
             console.error("Failed to fetch events", error);
             toast.error("Failed to load events");
@@ -93,17 +110,19 @@ const AdminEvents = () => {
         }
     };
 
-    const fetchRegistrations = async (event: Event) => {
+    const fetchRegistrations = async (event: Event, page = 1) => {
         setSelectedEvent(event);
         setRegistrations([]);
         setRegSearch('');
         setSelectedIds([]);
         setBulkMenuOpen(false);
+        setRegPage(page);
         setRegLoading(true);
         try {
-            const { data } = await api.get(`/events/events/${event.id}/registrations/`);
+            const { data } = await api.get(`/events/events/${event.id}/registrations/?page=${page}&page_size=${REG_PAGE_SIZE}`);
             const list = Array.isArray(data) ? data : data.results || [];
             setRegistrations(list);
+            setRegTotal(data.count ?? list.length);
         } catch (err) {
             toast.error('Failed to load registrations');
         } finally {
@@ -192,7 +211,7 @@ const AdminEvents = () => {
                 max_attendees: 100,
                 image: null
             });
-            fetchEvents();
+            fetchEvents(1); setCurrentPage(1);
         } catch (error: any) {
             const detail = error?.response?.data;
             console.error('Failed to create event:', detail || error);
@@ -201,6 +220,87 @@ const AdminEvents = () => {
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    const openEdit = (event: Event) => {
+        setEditingEvent(event);
+        setFormData({
+            title: event.title,
+            event_type: (event as any).event_type || 'other',
+            short_description: (event as any).short_description || '',
+            description: (event as any).description || '',
+            venue: event.venue || '',
+            city: (event as any).city || '',
+            start_datetime: event.start_datetime ? event.start_datetime.slice(0, 16) : '',
+            end_datetime: (event as any).end_datetime ? (event as any).end_datetime.slice(0, 16) : '',
+            price: event.price || 0,
+            is_free: !event.price || event.price === 0,
+            max_attendees: event.max_attendees || 100,
+            image: null,
+        });
+        setIsModalOpen(true);
+    };
+
+    const handleEditSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingEvent) return;
+        try {
+            setIsSubmitting(true);
+            const data = new FormData();
+            data.append('title', formData.title);
+            data.append('event_type', formData.event_type);
+            data.append('short_description', formData.short_description);
+            data.append('description', formData.description || formData.short_description);
+            data.append('venue', formData.venue);
+            data.append('city', formData.city);
+            data.append('start_datetime', new Date(formData.start_datetime).toISOString());
+            data.append('end_datetime', new Date(formData.end_datetime).toISOString());
+            data.append('max_attendees', String(formData.max_attendees));
+            data.append('price', String(formData.price));
+            data.append('is_free', formData.price === 0 ? 'true' : 'false');
+            if (formData.image) data.append('cover_image', formData.image);
+
+            await api.patch(`/events/events/${editingEvent.id}/`, data, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            toast.success('Event updated successfully');
+            setIsModalOpen(false);
+            setEditingEvent(null);
+            fetchEvents(1); setCurrentPage(1);
+        } catch (error: any) {
+            const detail = error?.response?.data;
+            const msg = detail ? JSON.stringify(detail) : 'Failed to update event';
+            toast.error(msg.length < 150 ? msg : 'Failed to update event');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleDeleteEvent = async () => {
+        if (!deleteEventId) return;
+        setDeletingEvent(true);
+        try {
+            await api.delete(`/events/events/${deleteEventId}/`);
+            toast.success('Event deleted');
+            setDeleteEventId(null);
+            if (selectedEvent?.id === deleteEventId) setSelectedEvent(null);
+            fetchEvents(1); setCurrentPage(1);
+        } catch {
+            toast.error('Failed to delete event');
+        } finally {
+            setDeletingEvent(false);
+        }
+    };
+
+    const closeModal = () => {
+        setIsModalOpen(false);
+        setEditingEvent(null);
+        setFormData({
+            title: '', event_type: 'other', short_description: '',
+            description: '', venue: '', city: '',
+            start_datetime: '', end_datetime: '',
+            price: 0, is_free: false, max_attendees: 100, image: null,
+        });
     };
 
     // Calculate Stats
@@ -320,12 +420,28 @@ const AdminEvents = () => {
                                         </span>
                                     </td>
                                     <td className="p-4 text-right">
-                                        <button
-                                            onClick={() => fetchRegistrations(item)}
-                                            className="flex items-center gap-1 text-xs font-bold text-primary-600 hover:text-primary-700 dark:text-primary-400 px-3 py-1.5 rounded-lg bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/40 transition-colors"
-                                        >
-                                            <Users size={13} /> Manage
-                                        </button>
+                                        <div className="flex items-center justify-end gap-1">
+                                            <button
+                                                onClick={() => fetchRegistrations(item)}
+                                                className="flex items-center gap-1 text-xs font-bold text-primary-600 hover:text-primary-700 dark:text-primary-400 px-3 py-1.5 rounded-lg bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/40 transition-colors"
+                                            >
+                                                <Users size={13} /> Manage
+                                            </button>
+                                            <button
+                                                onClick={() => openEdit(item)}
+                                                className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
+                                                title="Edit event"
+                                            >
+                                                <Edit2 size={14} />
+                                            </button>
+                                            <button
+                                                onClick={() => setDeleteEventId(item.id)}
+                                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                title="Delete event"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -333,6 +449,34 @@ const AdminEvents = () => {
                     </table>
                 </div>
             </div>
+
+            {/* Events Pagination */}
+            {totalCount > PAGE_SIZE && (
+                <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Showing <span className="font-semibold text-gray-900 dark:text-white">{(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, totalCount)}</span> of <span className="font-semibold text-gray-900 dark:text-white">{totalCount}</span> events
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <ChevronLeft size={16} />
+                        </button>
+                        <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 px-2">
+                            Page {currentPage} of {Math.ceil(totalCount / PAGE_SIZE)}
+                        </span>
+                        <button
+                            onClick={() => setCurrentPage(p => p + 1)}
+                            disabled={currentPage >= Math.ceil(totalCount / PAGE_SIZE)}
+                            className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <ChevronRight size={16} />
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Registrations Drawer */}
             {selectedEvent && (
@@ -529,6 +673,32 @@ const AdminEvents = () => {
                                 </table>
                             )}
                         </div>
+
+                        {/* Registrations Pagination */}
+                        {regTotal > REG_PAGE_SIZE && (
+                            <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100 dark:border-gray-700 shrink-0">
+                                <p className="text-xs text-gray-500">
+                                    {(regPage - 1) * REG_PAGE_SIZE + 1}–{Math.min(regPage * REG_PAGE_SIZE, regTotal)} of {regTotal}
+                                </p>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => selectedEvent && fetchRegistrations(selectedEvent, regPage - 1)}
+                                        disabled={regPage === 1}
+                                        className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    >
+                                        ← Prev
+                                    </button>
+                                    <span className="px-3 py-1.5 text-xs text-gray-500">Pg {regPage} / {Math.ceil(regTotal / REG_PAGE_SIZE)}</span>
+                                    <button
+                                        onClick={() => selectedEvent && fetchRegistrations(selectedEvent, regPage + 1)}
+                                        disabled={regPage >= Math.ceil(regTotal / REG_PAGE_SIZE)}
+                                        className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    >
+                                        Next →
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -575,13 +745,15 @@ const AdminEvents = () => {
                     <div className="flex min-h-full items-start justify-center p-4 py-8">
                     <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-2xl">
                         <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Create New Event</h3>
-                            <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                                {editingEvent ? 'Edit Event' : 'Create New Event'}
+                            </h3>
+                            <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
                                 <X size={24} />
                             </button>
                         </div>
                         <div className="p-6 overflow-y-auto">
-                            <form onSubmit={handleSubmit} className="space-y-4">
+                            <form onSubmit={editingEvent ? handleEditSubmit : handleSubmit} className="space-y-4">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="md:col-span-2">
                                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Event Title</label>
@@ -714,13 +886,39 @@ const AdminEvents = () => {
                                         disabled={isSubmitting}
                                         className="w-full btn-primary py-3 flex justify-center items-center gap-2"
                                     >
-                                        {isSubmitting ? <span className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></span> : <Plus size={20} />}
-                                        {isSubmitting ? 'Creating...' : 'Create Event'}
+                                        {isSubmitting ? <span className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></span> : editingEvent ? <Edit2 size={20} /> : <Plus size={20} />}
+                                        {isSubmitting ? (editingEvent ? 'Saving...' : 'Creating...') : editingEvent ? 'Save Changes' : 'Create Event'}
                                     </button>
                                 </div>
                             </form>
                         </div>
                     </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Event Confirmation */}
+            {deleteEventId && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+                        <div className="w-14 h-14 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Trash2 size={24} className="text-red-600" />
+                        </div>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Delete Event?</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                            This will permanently delete the event and all its registrations.
+                        </p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setDeleteEventId(null)}
+                                className="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 transition-colors">
+                                Cancel
+                            </button>
+                            <button onClick={handleDeleteEvent} disabled={deletingEvent}
+                                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                                {deletingEvent ? <Loader size={15} className="animate-spin" /> : null}
+                                Delete
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

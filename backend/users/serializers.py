@@ -141,6 +141,29 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         return instance
 
 
+class AdminUserUpdateSerializer(serializers.ModelSerializer):
+    """Serializer for admins updating any user — allows role/province/is_active changes."""
+
+    class Meta:
+        model = User
+        fields = [
+            'first_name', 'last_name', 'email', 'phone', 'gender',
+            'role', 'province', 'is_active',
+            'zone', 'area', 'parish', 'bio',
+            'email_notifications', 'sms_notifications',
+        ]
+
+    def update(self, instance, validated_data):
+        new_role = validated_data.get('role', instance.role)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        # Keep is_staff / is_superuser in sync with role
+        instance.is_staff = (new_role == User.Role.ADMIN)
+        instance.is_superuser = (new_role == User.Role.ADMIN)
+        instance.save()
+        return instance
+
+
 class LoginSerializer(serializers.Serializer):
     """Serializer for user login"""
     username = serializers.CharField()

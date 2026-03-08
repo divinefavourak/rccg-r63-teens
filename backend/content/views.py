@@ -273,11 +273,71 @@ class ManualViewSet(viewsets.ModelViewSet):
         """Track manual download."""
         manual = self.get_object()
         manual.increment_download_count()
-        
+
         return Response({
             'success': True,
             'pdf_url': manual.pdf_url or (manual.pdf_file.url if manual.pdf_file else None),
         })
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAdmin])
+    def auto_import(self, request):
+        """
+        Create a manual stub and auto-fetch a topic-relevant cover image.
+
+        Body params:
+          - title            (str, required)
+          - week_start_date  (str, YYYY-MM-DD)
+          - target_age_group (str, default 'teen')
+          - theme            (str, optional - bible passage reference)
+          - memory_verse     (str, optional)
+        """
+        import requests as http_requests
+        from django.core.files.base import ContentFile
+
+        title = request.data.get('title', '').strip()
+        if not title:
+            return Response({'error': 'Title is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        week_start_date = request.data.get('week_start_date') or None
+        target_age_group = request.data.get('target_age_group', 'teen')
+        theme = request.data.get('theme', '')
+        memory_verse = request.data.get('memory_verse', '')
+
+        # Compute week_end (Saturday) from week_start (Sunday)
+        week_end_date = None
+        if week_start_date:
+            try:
+                start = date.fromisoformat(week_start_date)
+                week_end_date = (start + timedelta(days=6)).isoformat()
+            except ValueError:
+                pass
+
+        # Fetch topic-relevant cover image from loremflickr (no API key needed)
+        image_file = None
+        keywords = ','.join(title.split()[:4] + ['bible', 'youth'])
+        try:
+            img_url = f'https://loremflickr.com/800/450/{keywords}'
+            resp = http_requests.get(img_url, timeout=12, allow_redirects=True)
+            if resp.status_code == 200 and resp.headers.get('content-type', '').startswith('image'):
+                safe_name = title[:30].replace(' ', '_').lower().replace('/', '_') + '.jpg'
+                image_file = ContentFile(resp.content, name=safe_name)
+        except Exception:
+            pass  # Image fetch is best-effort — proceed without it
+
+        manual = Manual(
+            title=title,
+            week_start_date=week_start_date,
+            week_end_date=week_end_date,
+            target_age_group=target_age_group,
+            theme=theme,
+            memory_verse=memory_verse,
+            status='draft',
+        )
+        if image_file:
+            manual.cover_image.save(image_file.name, image_file, save=False)
+        manual.save()
+
+        return Response(ManualListSerializer(manual).data, status=status.HTTP_201_CREATED)
 
 
 class ArticleViewSet(viewsets.ModelViewSet):

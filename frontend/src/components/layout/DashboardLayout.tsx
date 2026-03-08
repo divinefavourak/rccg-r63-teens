@@ -41,6 +41,7 @@ const GenderBanner = () => {
 // ─── Notification Panel ───────────────────────────────────────────────────────
 const NotificationPanel = ({ onClose }: { onClose: () => void }) => {
     const { notifications, loading, markRead, markAllRead, unreadCount } = useNotifications();
+    const navigate = useNavigate();
 
     return (
         <motion.div
@@ -81,7 +82,10 @@ const NotificationPanel = ({ onClose }: { onClose: () => void }) => {
                 ) : notifications.map(n => (
                     <div
                         key={n.id}
-                        onClick={() => markRead(n.id)}
+                        onClick={() => {
+                            markRead(n.id);
+                            if (n.href) { onClose(); navigate(n.href); }
+                        }}
                         className={`flex gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${!n.read ? 'bg-primary-50/40 dark:bg-primary-900/10' : ''}`}
                     >
                         <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${n.iconColor}`}>

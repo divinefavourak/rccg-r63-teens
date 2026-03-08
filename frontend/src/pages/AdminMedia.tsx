@@ -23,6 +23,7 @@ const AdminMedia = () => {
     // Modal & Form State
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [editingMedia, setEditingMedia] = useState<MediaEpisode | null>(null);
     const [formData, setFormData] = useState({
         title: '',
         description: '',
@@ -114,6 +115,52 @@ const AdminMedia = () => {
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    const openEdit = (item: MediaEpisode) => {
+        setEditingMedia(item);
+        setFormData({
+            title: item.title,
+            description: item.description || '',
+            media_type: item.media_type,
+            file: null,
+            thumbnail: null,
+            published_at: item.published_at ? item.published_at.split('T')[0] : new Date().toISOString().split('T')[0],
+        });
+        setIsModalOpen(true);
+    };
+
+    const handleEditSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingMedia) return;
+        try {
+            setIsSubmitting(true);
+            const data = new FormData();
+            data.append('title', formData.title);
+            data.append('description', formData.description);
+            data.append('media_type', formData.media_type);
+            data.append('published_at', new Date(formData.published_at).toISOString());
+            if (formData.file) data.append('file', formData.file);
+            if (formData.thumbnail) data.append('thumbnail', formData.thumbnail);
+
+            await api.patch(`/media/episodes/${editingMedia.id}/`, data, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            toast.success('Media updated');
+            setIsModalOpen(false);
+            setEditingMedia(null);
+            fetchMedia();
+        } catch {
+            toast.error('Failed to update media');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const closeModal = () => {
+        setIsModalOpen(false);
+        setEditingMedia(null);
+        setFormData({ title: '', description: '', media_type: 'audio', file: null, thumbnail: null, published_at: new Date().toISOString().split('T')[0] });
     };
 
     const handleDelete = async (id: string) => {
@@ -208,7 +255,10 @@ const AdminMedia = () => {
                                     <Play size={12} /> {0} plays
                                 </div>
                                 <div className="flex gap-1">
-                                    <button className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors">
+                                    <button
+                                        onClick={() => openEdit(item)}
+                                        className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+                                    >
                                         <Edit2 size={14} />
                                     </button>
                                     <button 
@@ -229,13 +279,15 @@ const AdminMedia = () => {
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
                     <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-lg my-8">
                         <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Upload Media</h3>
-                            <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                                {editingMedia ? 'Edit Media' : 'Upload Media'}
+                            </h3>
+                            <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
                                 <X size={24} />
                             </button>
                         </div>
                         <div className="p-6">
-                            <form onSubmit={handleSubmit} className="space-y-4">
+                            <form onSubmit={editingMedia ? handleEditSubmit : handleSubmit} className="space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title</label>
                                     <input 
@@ -271,13 +323,14 @@ const AdminMedia = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Media File</label>
-                                    <input 
-                                        type="file" 
+                                    <input
+                                        type="file"
                                         accept={formData.media_type === 'audio' ? 'audio/*' : 'video/*'}
-                                        required
+                                        required={!editingMedia}
                                         className="file-input"
                                         onChange={(e) => handleFileChange(e, 'file')}
                                     />
+                                    {editingMedia && <p className="text-xs text-gray-400 mt-1">Leave blank to keep existing file</p>}
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Thumbnail (Optional)</label>

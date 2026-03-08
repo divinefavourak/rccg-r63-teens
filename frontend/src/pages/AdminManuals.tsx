@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
     Plus, Search, Edit2, Trash2, X, Upload,
-    FileText, Download, ChevronDown, ChevronUp
+    FileText, Download, ChevronDown, ChevronUp,
+    CloudDownload, Loader
 } from 'lucide-react';
 import api from '../api/axios';
 import type { Manual } from '../types';
@@ -55,6 +56,17 @@ const AdminManuals = () => {
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterAge, setFilterAge] = useState('all');
+
+    // Auto-import modal state
+    const [isImportOpen, setIsImportOpen] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
+    const [importForm, setImportForm] = useState({
+        title: '',
+        week_start_date: '',
+        target_age_group: 'teen',
+        theme: '',
+        memory_verse: '',
+    });
 
     // Modal state
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -199,6 +211,29 @@ const AdminManuals = () => {
         }
     };
 
+    const handleAutoImport = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!importForm.title.trim()) { toast.error('Topic/title is required'); return; }
+        setIsImporting(true);
+        const loadingToast = toast.loading('Generating manual with topic image…');
+        try {
+            const { data } = await api.post('/content/manuals/auto_import/', importForm);
+            toast.dismiss(loadingToast);
+            toast.success('Manual created — opening editor to fill in details');
+            setIsImportOpen(false);
+            setImportForm({ title: '', week_start_date: '', target_age_group: 'teen', theme: '', memory_verse: '' });
+            // Open the edit modal pre-filled with the created manual
+            openEdit(data);
+            fetchManuals();
+        } catch (err: any) {
+            toast.dismiss(loadingToast);
+            const msg = err?.response?.data?.error || 'Auto-import failed';
+            toast.error(msg);
+        } finally {
+            setIsImporting(false);
+        }
+    };
+
     const filtered = manuals.filter(m => {
         const matchSearch = m.title.toLowerCase().includes(searchQuery.toLowerCase());
         const matchAge = filterAge === 'all' || m.target_age_group === filterAge;
@@ -213,12 +248,21 @@ const AdminManuals = () => {
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Manuals Management</h2>
                     <p className="text-gray-500 dark:text-gray-400">Manage weekly study manuals and resources</p>
                 </div>
-                <button
-                    onClick={openCreate}
-                    className="btn-primary py-2.5 px-6 flex items-center gap-2 shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5"
-                >
-                    <Plus size={20} /> Add Manual
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setIsImportOpen(true)}
+                        className="btn-secondary py-2.5 px-4 flex items-center gap-2"
+                        title="Auto-generate manual with topic image"
+                    >
+                        <CloudDownload size={20} /> <span className="hidden md:inline">Auto-Import</span>
+                    </button>
+                    <button
+                        onClick={openCreate}
+                        className="btn-primary py-2.5 px-6 flex items-center gap-2 shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5"
+                    >
+                        <Plus size={20} /> Add Manual
+                    </button>
+                </div>
             </div>
 
             {/* Filters */}
@@ -682,6 +726,117 @@ const AdminManuals = () => {
                                 </div>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Auto-Import Modal */}
+            {isImportOpen && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
+                        <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-700">
+                            <div className="flex items-center gap-3">
+                                <CloudDownload size={22} className="text-green-600" />
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Auto-Import Manual</h3>
+                            </div>
+                            <button onClick={() => setIsImportOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-5">
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                                Creates a manual stub and auto-fetches a <span className="font-medium text-gray-700 dark:text-gray-300">topic-relevant cover image</span>. The editor opens afterwards so you can fill in the lesson content.
+                            </p>
+
+                            <div className="space-y-3">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Topic / Title <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    placeholder="e.g. Good Communication Skills"
+                                    value={importForm.title}
+                                    onChange={e => setImportForm(f => ({ ...f, title: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none text-sm"
+                                />
+                                <p className="text-xs text-gray-400">Also used as keywords for the cover image search</p>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Week Start (Sunday)
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={importForm.week_start_date}
+                                        onChange={e => setImportForm(f => ({ ...f, week_start_date: e.target.value }))}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none text-sm"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Age Group</label>
+                                    <select
+                                        value={importForm.target_age_group}
+                                        onChange={e => setImportForm(f => ({ ...f, target_age_group: e.target.value }))}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none text-sm"
+                                    >
+                                        <option value="teen">Teens (13-15)</option>
+                                        <option value="young_adult">Young Adults (16-19)</option>
+                                        <option value="pre_teen">Pre-Teens (8-12)</option>
+                                        <option value="all">All Ages</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Bible Text / Theme <span className="text-gray-400 font-normal">(optional)</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. James 1:2-4"
+                                    value={importForm.theme}
+                                    onChange={e => setImportForm(f => ({ ...f, theme: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none text-sm"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Memory Verse <span className="text-gray-400 font-normal">(optional)</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. Philippians 4:6"
+                                    value={importForm.memory_verse}
+                                    onChange={e => setImportForm(f => ({ ...f, memory_verse: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none text-sm"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 p-6 pt-0">
+                            <button
+                                onClick={() => setIsImportOpen(false)}
+                                className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleAutoImport as any}
+                                disabled={isImporting || !importForm.title.trim()}
+                                className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                            >
+                                {isImporting ? (
+                                    <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Importing...</>
+                                ) : (
+                                    <><CloudDownload size={16} /> Start Import</>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

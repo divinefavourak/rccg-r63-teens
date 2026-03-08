@@ -81,8 +81,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const updateProfile = async (data: Partial<User>) => {
     try {
-      // Assuming generic /auth/profile endpoint
-      const response = await api.patch('/auth/profile/', data);
+      const response = await api.patch('/auth/me/', data);
 
       if (user) {
         const updatedUser = { ...user, ...response.data };

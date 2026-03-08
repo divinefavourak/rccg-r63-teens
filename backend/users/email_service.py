@@ -48,9 +48,9 @@ def _send_in_thread(subject, html_content, recipients, sender='default', fail_si
             msg.send(fail_silently=fail_silently)
             try:
                 safe_subject = subject.encode('ascii', 'replace').decode('ascii')
-                logger.info('Email sent: %s → %s', safe_subject, recipients)
+                logger.info('Email sent: %s -> %s', safe_subject, recipients)
             except Exception:
-                logger.info('Email sent → %s', recipients)
+                logger.info('Email sent -> %s', recipients)
         except Exception as exc:
             logger.error('Email failed to %s: %s', recipients, exc)
             if not fail_silently:

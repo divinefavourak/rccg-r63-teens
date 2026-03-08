@@ -1,23 +1,99 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Link, useLocation } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
 import { useTheme } from "../hooks/useTheme";
-import { Sun, Moon, Menu, X, ChevronRight, LogOut, LayoutDashboard, User } from "lucide-react";
+import { Sun, Moon, Menu, X, ChevronRight, LogOut, LayoutDashboard, User, Bell, BookOpen, Calendar, FileText } from "lucide-react";
 import { cn } from "../lib/utils";
 import rccgLogo from "../assets/logo.jpg";
 import faithLogo from "../assets/faith_logo.jpg";
 import { useAuthContext } from "../context/AuthContext";
+import api from "../api/axios";
+
+interface UserNotif {
+    id: string;
+    title: string;
+    subtitle: string;
+    href: string;
+    icon: React.ReactNode;
+    time: string;
+}
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const { user, isAuthenticated, logout } = useAuthContext();
   const dashboardPath =
     (user as any)?.role === 'coordinator' ? '/coordinator/dashboard' :
     (user as any)?.role === 'admin' ? '/admin/dashboard' :
     '/dashboard';
+
+  // Notifications
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifs, setNotifs] = useState<UserNotif[]>([]);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setNotifOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const fetchUserNotifs = async () => {
+    setNotifLoading(true);
+    try {
+      const [devotRes, manualRes, eventRes] = await Promise.all([
+        api.get('/content/devotionals/?page_size=2&ordering=-date'),
+        api.get('/content/manuals/?page_size=2&ordering=-week_start_date'),
+        api.get('/events/events/?upcoming=true&page_size=2'),
+      ]);
+
+      const devots: UserNotif[] = (devotRes.data?.results ?? devotRes.data ?? []).map((d: any) => ({
+        id: `dev-${d.id}`,
+        title: d.title || 'New Devotional',
+        subtitle: d.date ? `Open Heavens — ${new Date(d.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : 'Daily devotional',
+        href: `/devotionals/${d.id}`,
+        icon: <BookOpen size={13} className="text-amber-500" />,
+        time: d.date || '',
+      }));
+
+      const manuals: UserNotif[] = (manualRes.data?.results ?? manualRes.data ?? []).map((m: any) => ({
+        id: `man-${m.id}`,
+        title: m.title || 'New Manual',
+        subtitle: m.week_start_date ? `Week of ${new Date(m.week_start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : 'Weekly manual',
+        href: `/manuals`,
+        icon: <FileText size={13} className="text-primary-500" />,
+        time: m.week_start_date || '',
+      }));
+
+      const events: UserNotif[] = (eventRes.data?.results ?? eventRes.data ?? []).map((ev: any) => ({
+        id: `evt-${ev.id}`,
+        title: ev.title || 'Upcoming Event',
+        subtitle: ev.start_datetime ? new Date(ev.start_datetime).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '',
+        href: `/events/${ev.id}`,
+        icon: <Calendar size={13} className="text-green-500" />,
+        time: ev.start_datetime || '',
+      }));
+
+      setNotifs([...events, ...devots, ...manuals].slice(0, 6));
+    } catch {
+      // silently fail
+    } finally {
+      setNotifLoading(false);
+    }
+  };
+
+  const handleNotifClick = (href: string) => {
+    setNotifOpen(false);
+    navigate(href);
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -99,6 +175,53 @@ const Navbar = () => {
               <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
               <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
             </button>
+
+            {isAuthenticated && user && (
+              <div className="relative" ref={notifRef}>
+                <button
+                  onClick={() => { if (!notifOpen) fetchUserNotifs(); setNotifOpen(o => !o); }}
+                  className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors relative"
+                  aria-label="Notifications"
+                >
+                  <Bell size={19} />
+                  {notifs.length > 0 && (
+                    <span className="absolute top-1 right-1 w-2 h-2 bg-primary-500 rounded-full" />
+                  )}
+                </button>
+
+                {notifOpen && (
+                  <div className="absolute right-0 mt-2 w-76 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 z-50 overflow-hidden" style={{ width: '300px' }}>
+                    <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                      <p className="font-bold text-sm text-gray-900 dark:text-white">What's New</p>
+                      <button onClick={() => setNotifOpen(false)} className="text-gray-400 hover:text-gray-600 p-0.5">
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <div className="max-h-72 overflow-y-auto">
+                      {notifLoading ? (
+                        <div className="py-6 text-center text-xs text-gray-400">Loading...</div>
+                      ) : notifs.length === 0 ? (
+                        <div className="py-6 text-center text-xs text-gray-400">Nothing new right now</div>
+                      ) : notifs.map(n => (
+                        <button
+                          key={n.id}
+                          onClick={() => handleNotifClick(n.href)}
+                          className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border-b border-gray-50 dark:border-gray-700/50 last:border-0 text-left"
+                        >
+                          <div className="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center shrink-0 mt-0.5">
+                            {n.icon}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{n.title}</p>
+                            <p className="text-xs text-gray-500 truncate">{n.subtitle}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {isAuthenticated && user ? (
               <div className="flex items-center gap-2 ml-2">

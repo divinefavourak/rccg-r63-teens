@@ -1,4 +1,5 @@
 from rest_framework import viewsets, generics, status, permissions
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -11,7 +12,7 @@ from .email_service import UserEmailService
 from .models import User, LoginHistory, AuditLog
 from .serializers import (
     UserSerializer, UserCreateSerializer, UserUpdateSerializer,
-    LoginSerializer, TokenResponseSerializer,
+    AdminUserUpdateSerializer, LoginSerializer, TokenResponseSerializer,
     LoginHistorySerializer, AuditLogSerializer
 )
 from .permissions import IsAdmin, IsSelfOrAdmin, ProvinceAccessPermission
@@ -128,6 +129,8 @@ class UserViewSet(viewsets.ModelViewSet):
         if self.action == 'create':
             return UserCreateSerializer
         elif self.action in ['update', 'partial_update']:
+            if self.request and self.request.user.role == User.Role.ADMIN:
+                return AdminUserUpdateSerializer
             return UserUpdateSerializer
         return UserSerializer
     
@@ -198,6 +201,13 @@ class UserViewSet(viewsets.ModelViewSet):
         
         instance.delete()
     
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated, IsAdmin])
+    def send_welcome_email(self, request, pk=None):
+        """Manually resend the welcome email for a user."""
+        user = self.get_object()
+        UserEmailService.send_welcome_email(user)
+        return Response({'detail': f'Welcome email sent to {user.email}.'})
+
     def get_client_ip(self, request):
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
         if x_forwarded_for:
@@ -208,12 +218,26 @@ class UserViewSet(viewsets.ModelViewSet):
 
 
 class CurrentUserView(APIView):
-    """Get current user info"""
+    """Get or update current user info"""
     permission_classes = [permissions.IsAuthenticated]
-    
+
     def get(self, request):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
+
+    def patch(self, request):
+        serializer = UserUpdateSerializer(
+            request.user,
+            data=request.data,
+            partial=True,
+            context={'request': request},
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(UserSerializer(request.user).data)
+
+    def put(self, request):
+        return self.patch(request)
 
 
 class ChangePasswordView(APIView):
