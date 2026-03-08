@@ -3,7 +3,7 @@ import { useAuthContext } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Loader, Eye, EyeOff } from 'lucide-react';
-import faithTribeLogo from '../assets/faith_tribe_logo.png';
+import faithTribeLogo from '../assets/faith_tribe_logo.jpg';
 import rccgLogo from '../assets/logo.jpg';
 import './GlowAuth.css';
 
