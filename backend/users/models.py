@@ -86,7 +86,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     )
     
     # Role and permissions
-    role = models.CharField(max_length=20, choices=Role.choices, default=Role.COORDINATOR)
+    role = models.CharField(max_length=20, choices=Role.choices, default=Role.TEEN)
     province = models.CharField(max_length=50, choices=Province.choices, null=True, blank=True)
     
     # Church hierarchy (for coordinators)
