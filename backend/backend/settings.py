@@ -49,9 +49,11 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'django_filters',
     'storages',
-    
+    'treebeard',
+
     # Local apps - Core
     'common',
+    'hierarchy',
     'users',
     'profiles',
     
