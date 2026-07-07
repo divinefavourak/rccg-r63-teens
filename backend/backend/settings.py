@@ -77,15 +77,21 @@ MIDDLEWARE = [
 ]
 
 # Cache
+# IGNORE_EXCEPTIONS makes cache operations fail *open* (return None) instead of
+# raising when Redis is unreachable. This matters now that DRF throttling is
+# backed by this cache: a Redis blip must not turn every request into a 500 —
+# it should degrade to "unthrottled" and keep serving. Ignored errors are logged.
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
         'LOCATION': os.getenv('REDIS_URL', default='redis://localhost:6379/0'),
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'IGNORE_EXCEPTIONS': True,
         }
     }
 }
+DJANGO_REDIS_LOG_IGNORED_EXCEPTIONS = True
 
 
 ROOT_URLCONF = 'backend.urls'
@@ -144,6 +150,17 @@ AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
+]
+
+# Password hashing — bcrypt primary (per docs/15-technical-architecture.md: argon2/bcrypt).
+# The first hasher is used for new/changed passwords; the rest remain available for
+# *verifying* legacy hashes, so existing PBKDF2 passwords still work and are transparently
+# upgraded to bcrypt on the user's next successful login. No forced resets.
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    'django.contrib.auth.hashers.BCryptPasswordHasher',
 ]
 
 
@@ -255,6 +272,21 @@ REST_FRAMEWORK = {
     'UPLOADED_FILES_USE_URL': True,
     'TEST_REQUEST_DEFAULT_FORMAT': 'json',
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # Rate limiting (docs/15-technical-architecture.md: "Rate limiting per user/IP;
+    # stricter on auth and OTP endpoints"). Global anon/user rates are generous so
+    # normal browsing is unaffected; the 'auth' scope is reserved for login/OTP views
+    # (attach `throttle_scope = 'auth'` on those views in a later phase).
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '60/min',
+        'user': '1000/min',
+        'auth': '10/min',
+        'otp': '5/min',
+    },
 }
 
 
