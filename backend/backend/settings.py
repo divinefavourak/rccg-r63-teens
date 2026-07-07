@@ -276,26 +276,36 @@ SIMPLE_JWT = {
     'USER_ID_CLAIM': 'user_id',
 }
 
-# CORS Settings
-CORS_ALLOW_ALL_ORIGINS = True
+# CORS Settings — open in dev, restricted to known origins in production
+_cors_env = os.getenv('CORS_ALLOWED_ORIGINS', '').strip()
+if _cors_env and not DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = False
+    import json as _json
+    try:
+        CORS_ALLOWED_ORIGINS = _json.loads(_cors_env)
+    except (_json.JSONDecodeError, ValueError):
+        CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_env.split(',') if o.strip()]
+else:
+    CORS_ALLOW_ALL_ORIGINS = True
 
 # Email Configuration - Brevo
 MAILING = True
 
 if MAILING:
     import sys
-    # On Linux (Railway/production) the OS SSL store works fine with the standard backend.
-    # On Windows, Python's SSL bundle sometimes can't verify Brevo's cert, so we use
-    # a custom backend that disables cert verification as a workaround.
+    # On Windows, Python's SSL bundle sometimes can't verify Brevo's cert via STARTTLS,
+    # so we use a custom backend that disables cert verification as a workaround.
+    # On Linux/Render, the standard backend works fine.
     if sys.platform == 'win32':
         EMAIL_BACKEND = 'backend.email_backend.BrevoEmailBackend'
     else:
         EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 
     EMAIL_HOST = 'smtp-relay.brevo.com'
-    EMAIL_PORT = 465
-    EMAIL_USE_SSL = True
-    EMAIL_USE_TLS = False
+    # Port 587 + STARTTLS — Render (and most hosts) block port 465 outbound.
+    EMAIL_PORT = 587
+    EMAIL_USE_SSL = False
+    EMAIL_USE_TLS = True
     EMAIL_HOST_USER = os.environ.get('BREVO_SMTP_USER', '')
     EMAIL_HOST_PASSWORD = os.environ.get('BREVO_SMTP_KEY', '')
     EMAIL_TIMEOUT = 30

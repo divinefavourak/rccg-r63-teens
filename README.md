@@ -300,5 +300,5 @@ Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines on how to contri
 | Name | Role |
 |---|---|
 | **Divine-favour Solomon Akanbi** | Project Lead / Full-Stack Developer |
-| **Koded0214h** | Frontend Developer |
-| **savebiz** | Backend Developer |
+<!-- | **Koded0214h** | Frontend Developer |
+| **savebiz** | Backend Developer | -->

@@ -320,7 +320,7 @@ class ArticleListSerializer(serializers.ModelSerializer):
 
 class ArticleDetailSerializer(serializers.ModelSerializer):
     """Full serializer for viewing an article."""
-    
+
     class Meta:
         model = Article
         fields = [
@@ -345,4 +345,19 @@ class ArticleDetailSerializer(serializers.ModelSerializer):
             'published_at',
             'created_at',
             'updated_at',
+        ]
+
+
+class ManualTeacherDetailSerializer(ManualDetailSerializer):
+    """
+    Extended manual serializer for teachers, coordinators, and admins.
+    Includes teacher edition fields: notes, resources, discussion guide.
+    """
+
+    class Meta(ManualDetailSerializer.Meta):
+        fields = ManualDetailSerializer.Meta.fields + [
+            'has_teacher_edition',
+            'teacher_notes',
+            'teacher_resources',
+            'discussion_guide',
         ]

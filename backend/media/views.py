@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from django.db.models import Count
 
 from common.permissions import ContentPermission, IsAdmin
+from content.views import get_age_group_filter
 from .models import MediaCategory, MediaSeries, MediaEpisode, Playlist
 from .serializers import (
     MediaCategorySerializer,
@@ -57,12 +58,15 @@ class MediaSeriesViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         queryset = self.queryset
-        
+
         if not self.request.user.is_authenticated or self.request.user.role != 'admin':
             queryset = queryset.filter(status='published')
-        
+
+        if self.request.user.is_authenticated and self.request.user.role not in ['admin', 'coordinator']:
+            queryset = queryset.filter(get_age_group_filter(self.request.user))
+
         return queryset
-    
+
     @action(detail=False, methods=['get'])
     def featured(self, request):
         """Get featured series."""
@@ -105,10 +109,13 @@ class MediaEpisodeViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         queryset = self.queryset
-        
+
         if not self.request.user.is_authenticated or self.request.user.role != 'admin':
             queryset = queryset.filter(status='published')
-        
+
+        if self.request.user.is_authenticated and self.request.user.role not in ['admin', 'coordinator']:
+            queryset = queryset.filter(get_age_group_filter(self.request.user))
+
         # Filter by media type
         media_type = self.request.query_params.get('media_type')
         if media_type:

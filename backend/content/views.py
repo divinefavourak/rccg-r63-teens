@@ -20,9 +20,39 @@ from .serializers import (
     ManualListSerializer,
     ManualDetailSerializer,
     ManualCreateUpdateSerializer,
+    ManualTeacherDetailSerializer,
     ArticleListSerializer,
     ArticleDetailSerializer,
 )
+
+
+def get_age_group_filter(user):
+    """
+    Returns a Q filter for age-group-targeted content.
+    Empty target_age_groups means show to all.
+    Admins and coordinators always see everything.
+    Teachers see content for their assigned age groups.
+    """
+    from django.db.models import Q
+    if not user or not user.is_authenticated:
+        return Q(target_age_groups=[]) | Q(target_age_groups__isnull=True)
+    if user.role in ['admin', 'coordinator']:
+        return Q()  # no filter — see all
+    if user.role == 'teacher':
+        try:
+            age_groups = user.teacher_profile.assigned_age_groups or []
+        except Exception:
+            age_groups = []
+        q = Q(target_age_groups=[])
+        for ag in age_groups:
+            q |= Q(target_age_groups__contains=ag)
+        return q
+    # Regular users — filter by their age group
+    try:
+        age_group = user.teen_profile.age_group
+    except Exception:
+        return Q(target_age_groups=[])
+    return Q(target_age_groups=[]) | Q(target_age_groups__contains=age_group)
 
 
 class DevotionalViewSet(viewsets.ModelViewSet):
@@ -49,7 +79,11 @@ class DevotionalViewSet(viewsets.ModelViewSet):
         # Non-admins only see published content
         if not self.request.user.is_authenticated or self.request.user.role != 'admin':
             queryset = queryset.filter(status='published')
-        
+
+        # Age group filtering for non-admin/non-coordinator users
+        if self.request.user.is_authenticated and self.request.user.role not in ['admin', 'coordinator']:
+            queryset = queryset.filter(get_age_group_filter(self.request.user))
+
         # Date range filtering
         date_from = self.request.query_params.get('date_from')
         date_to = self.request.query_params.get('date_to')
@@ -298,16 +332,44 @@ class ManualViewSet(viewsets.ModelViewSet):
             return ManualCreateUpdateSerializer
         elif self.action == 'list':
             return ManualListSerializer
+        # Teachers get teacher edition serializer on detail view
+        if self.action == 'retrieve' and self.request.user.is_authenticated and self.request.user.role in ['teacher', 'coordinator', 'admin']:
+            return ManualTeacherDetailSerializer
         return ManualDetailSerializer
-    
+
     def get_queryset(self):
         queryset = self.queryset
-        
+
         if not self.request.user.is_authenticated or self.request.user.role != 'admin':
             queryset = queryset.filter(status='published')
-        
+
+        # Age group filtering — Manual uses target_age_group (singular CharField),
+        # not the JSONField target_age_groups used by Devotional/Article.
+        if self.request.user.is_authenticated and self.request.user.role not in ['admin', 'coordinator']:
+            from django.db.models import Q as _Q
+            if self.request.user.role == 'teacher':
+                try:
+                    age_groups = self.request.user.teacher_profile.assigned_age_groups or []
+                except Exception:
+                    age_groups = []
+                q = _Q(target_age_group='all')
+                for ag in age_groups:
+                    q |= _Q(target_age_group=ag)
+                queryset = queryset.filter(q)
+            else:
+                try:
+                    age_group = self.request.user.teen_profile.age_group
+                except Exception:
+                    age_group = None
+                if age_group:
+                    queryset = queryset.filter(
+                        _Q(target_age_group='all') | _Q(target_age_group=age_group)
+                    )
+                else:
+                    queryset = queryset.filter(target_age_group='all')
+
         return queryset
-    
+
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
         instance.increment_view_count()

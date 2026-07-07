@@ -1,4 +1,8 @@
+import logging
+
 from rest_framework import viewsets, generics, status, permissions
+
+logger = logging.getLogger(__name__)
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -87,7 +91,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             'access': str(refresh.access_token),
             'refresh': str(refresh),
             'user': user_data,
-            'needs_gender': user.role == User.Role.TEEN and not user.gender,
+            'needs_gender': user.role not in [User.Role.ADMIN, User.Role.COORDINATOR] and not user.gender,
         }
 
         return Response(response_data)
@@ -105,11 +109,36 @@ class RegisterView(generics.CreateAPIView):
     """Public endpoint for user registration"""
     serializer_class = UserCreateSerializer
     permission_classes = [permissions.AllowAny]
-    
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        # Extract date_of_birth before saving (it's not on the User model)
+        date_of_birth = serializer.validated_data.get('date_of_birth', None)
+
         user = serializer.save()
+
+        # Auto-create TeenProfile so age_group is calculated immediately
+        try:
+            from profiles.models import TeenProfile
+            if not hasattr(user, 'teen_profile'):
+                TeenProfile.objects.create(
+                    user=user,
+                    date_of_birth=date_of_birth,
+                    gender=user.gender or '',
+                    province=user.province or '',
+                    guardian_name='',
+                    guardian_phone='',
+                    guardian_email='',
+                    guardian_relationship='',
+                    parish=user.parish or '',
+                )
+                logger.info('[Register] TeenProfile created for user=%s age_group=%s',
+                            user.username,
+                            user.teen_profile.age_group if date_of_birth else 'unknown')
+        except Exception as e:
+            logger.warning('[Register] Could not auto-create TeenProfile for user=%s: %s', user.username, e)
 
         UserEmailService.send_welcome_email(user)
 
@@ -124,6 +153,7 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    pagination_class = None  # Return all users — admin endpoint; dataset is bounded
     
     def get_serializer_class(self):
         if self.action == 'create':
@@ -310,12 +340,16 @@ class ForgotPasswordView(APIView):
 
     def post(self, request):
         email = request.data.get('email', '').strip().lower()
+        ip = request.META.get('REMOTE_ADDR', 'unknown')
+        logger.info('[ForgotPassword] Request received for email=%s ip=%s', email, ip)
+
         if email:
             try:
                 user = User.objects.get(email=email, is_active=True)
+                logger.info('[ForgotPassword] User found: username=%s id=%s — dispatching reset email', user.username, user.pk)
                 UserEmailService.send_password_reset_email(user)
             except User.DoesNotExist:
-                pass  # Silently ignore — never reveal whether email exists
+                logger.info('[ForgotPassword] No active account found for email=%s — no email sent', email)
 
         return Response(
             {"detail": "If that email is registered, a reset link has been sent."}
@@ -343,16 +377,19 @@ class ResetPasswordView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        ip = request.META.get('REMOTE_ADDR', 'unknown')
         try:
             user_id = force_str(urlsafe_base64_decode(uid))
             user = User.objects.get(pk=user_id, is_active=True)
         except (User.DoesNotExist, ValueError, TypeError):
+            logger.warning('[ResetPassword] Invalid uid — no matching user. ip=%s', ip)
             return Response(
                 {"detail": "Invalid reset link."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if not default_token_generator.check_token(user, token):
+            logger.warning('[ResetPassword] Expired or invalid token for user=%s ip=%s', user.username, ip)
             return Response(
                 {"detail": "Reset link is invalid or has expired."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -360,6 +397,7 @@ class ResetPasswordView(APIView):
 
         user.set_password(new_password)
         user.save()
+        logger.info('[ResetPassword] Password successfully reset for user=%s ip=%s', user.username, ip)
 
         return Response({"detail": "Password has been reset. You may now log in."})
 

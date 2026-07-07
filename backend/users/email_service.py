@@ -151,5 +151,6 @@ class UserEmailService:
             'reset_url': reset_url,
         }
         html = render_to_string('emails/password_reset.html', context)
+        logger.info('[PasswordReset] Dispatching reset email to %s (user=%s)', user.email, user.username)
         # Always send reset emails even if notifications are off — it's a security action
         _send_in_thread(subject, html, [user.email], sender='support', fail_silently=False)

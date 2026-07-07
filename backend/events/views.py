@@ -11,6 +11,7 @@ from common.permissions import (
     ContentPermission, IsAdmin, IsCoordinatorOrAdmin,
     ProvinceAccessPermission
 )
+from content.views import get_age_group_filter
 from .email_service import EventEmailService
 from .models import Event, EventRegistration, BulkUpload, RegistrationAuditLog
 from .serializers import (
@@ -62,7 +63,10 @@ class EventViewSet(viewsets.ModelViewSet):
         # Non-admins only see published events
         if not self.request.user.is_authenticated or self.request.user.role != 'admin':
             queryset = queryset.filter(status='published')
-        
+
+        if self.request.user.is_authenticated and self.request.user.role not in ['admin', 'coordinator']:
+            queryset = queryset.filter(get_age_group_filter(self.request.user))
+
         # Filter upcoming
         upcoming = self.request.query_params.get('upcoming')
         if upcoming == 'true':

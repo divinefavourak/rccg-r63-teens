@@ -39,6 +39,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     class Role(models.TextChoices):
         ADMIN = 'admin', 'Administrator'
         COORDINATOR = 'coordinator', 'Coordinator'
+        TEACHER = 'teacher', 'Teacher'
         TEEN = 'teen', 'Teen'
         INDIVIDUAL = 'individual', 'Individual'  # Legacy - use TEEN for new users
 
@@ -77,6 +78,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     last_name = models.CharField(max_length=100)
     phone = models.CharField(
         max_length=20,
+        blank=True,
         validators=[
             RegexValidator(
                 regex=r'^\+?1?\d{9,15}$',

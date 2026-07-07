@@ -10,9 +10,10 @@ import toast from 'react-hot-toast';
 
 const AGE_GROUP_LABELS: Record<string, string> = {
     all: 'All Ages',
-    pre_teen: 'Pre-Teens (8-12)',
-    teen: 'Teens (13-15)',
-    young_adult: 'Young Adults (16-19)',
+    children: 'Children (6-8)',
+    pre_teen: 'Pre-Teen (9-12)',
+    teen: 'Teens (13-19)',
+    superteen: 'Superteen (19+)',
 };
 
 const EMPTY_FORM = {
@@ -24,16 +25,22 @@ const EMPTY_FORM = {
     theme: '',
     memory_verse: '',
     memory_verse_text: '',
-    lesson_objectives: '',   // newline-separated
+    lesson_objectives: '',      // newline-separated
     lesson_content: '',
-    key_takeaways: '',       // newline-separated
-    discussion_questions: '', // newline-separated
+    key_takeaways: '',          // newline-separated
+    discussion_questions: '',   // newline-separated
+    opening_prayer_points: '',  // newline-separated
+    activity_suggestions: '',   // newline-separated
+    additional_resources: '',   // newline-separated
     practical_application: '',
     closing_prayer: '',
     pdf_url: '',
     pdf_file: null as File | null,
     cover_image: null as File | null,
     status: 'published',
+    has_teacher_edition: false,
+    teacher_notes: '',
+    discussion_guide: '',
 };
 
 type FormState = typeof EMPTY_FORM;
@@ -111,6 +118,9 @@ const AdminManuals = () => {
             lesson_content: manual.lesson_content || '',
             key_takeaways: (manual.key_takeaways || []).join('\n'),
             discussion_questions: (manual.discussion_questions || []).join('\n'),
+            opening_prayer_points: (manual.opening_prayer_points || []).join('\n'),
+            activity_suggestions: (manual.activity_suggestions || []).join('\n'),
+            additional_resources: (manual.additional_resources || []).join('\n'),
             practical_application: manual.practical_application || '',
             closing_prayer: manual.closing_prayer || '',
             pdf_url: manual.pdf_url || '',
@@ -172,6 +182,9 @@ const AdminManuals = () => {
             fd.append('lesson_objectives', JSON.stringify(toList(formData.lesson_objectives)));
             fd.append('key_takeaways', JSON.stringify(toList(formData.key_takeaways)));
             fd.append('discussion_questions', JSON.stringify(toList(formData.discussion_questions)));
+            fd.append('opening_prayer_points', JSON.stringify(toList(formData.opening_prayer_points)));
+            fd.append('activity_suggestions', JSON.stringify(toList(formData.activity_suggestions)));
+            fd.append('additional_resources', JSON.stringify(toList(formData.additional_resources)));
 
             if (formData.pdf_file) fd.append('pdf_file', formData.pdf_file);
             if (formData.cover_image) fd.append('cover_image', formData.cover_image);
@@ -283,9 +296,10 @@ const AdminManuals = () => {
                     onChange={e => setFilterAge(e.target.value)}
                 >
                     <option value="all">All Age Groups</option>
-                    <option value="teen">Teens (13-15)</option>
-                    <option value="young_adult">Young Adults (16-19)</option>
-                    <option value="pre_teen">Pre-Teens (8-12)</option>
+                    <option value="children">Children (6-8)</option>
+                    <option value="pre_teen">Pre-Teen (9-12)</option>
+                    <option value="teen">Teens (13-19)</option>
+                    <option value="superteen">Superteen (19+)</option>
                 </select>
             </div>
 
@@ -298,6 +312,8 @@ const AdminManuals = () => {
                                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Title</th>
                                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Age Group</th>
                                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Week Of</th>
+                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider hidden md:table-cell">Views</th>
+                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider hidden md:table-cell">Downloads</th>
                                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">PDF</th>
                                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
                                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
@@ -305,9 +321,9 @@ const AdminManuals = () => {
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                             {loading ? (
-                                <tr><td colSpan={6} className="p-8 text-center text-gray-500">Loading manuals...</td></tr>
+                                <tr><td colSpan={8} className="p-8 text-center text-gray-500">Loading manuals...</td></tr>
                             ) : filtered.length === 0 ? (
-                                <tr><td colSpan={6} className="p-8 text-center text-gray-500">No manuals found.</td></tr>
+                                <tr><td colSpan={8} className="p-8 text-center text-gray-500">No manuals found.</td></tr>
                             ) : filtered.map(item => (
                                 <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/20 transition-colors">
                                     <td className="p-4">
@@ -330,6 +346,12 @@ const AdminManuals = () => {
                                         {item.week_start_date
                                             ? new Date(item.week_start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
                                             : '—'}
+                                    </td>
+                                    <td className="p-4 text-sm text-gray-500 dark:text-gray-400 hidden md:table-cell">
+                                        {item.view_count ?? 0}
+                                    </td>
+                                    <td className="p-4 text-sm text-gray-500 dark:text-gray-400 hidden md:table-cell">
+                                        {item.download_count ?? 0}
                                     </td>
                                     <td className="p-4">
                                         {item.has_pdf || item.pdf_file || item.pdf_url ? (
@@ -470,10 +492,11 @@ const AdminManuals = () => {
                                                     value={formData.target_age_group}
                                                     onChange={handleChange}
                                                 >
-                                                    <option value="teen">Teens (13-15)</option>
-                                                    <option value="young_adult">Young Adults (16-19)</option>
-                                                    <option value="pre_teen">Pre-Teens (8-12)</option>
                                                     <option value="all">All Ages</option>
+                                                    <option value="children">Children (6-8)</option>
+                                                    <option value="pre_teen">Pre-Teen (9-12)</option>
+                                                    <option value="teen">Teens (13-19)</option>
+                                                    <option value="superteen">Superteen (19+)</option>
                                                 </select>
                                             </div>
                                             <div>
@@ -549,12 +572,64 @@ const AdminManuals = () => {
                                                 onChange={handleChange}
                                             />
                                         </div>
+
+                                        {/* Teacher Edition */}
+                                        <div className="border-t border-gray-100 dark:border-gray-700 pt-4 mt-2">
+                                            <label className="flex items-center gap-2 cursor-pointer mb-3">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={(formData as any).has_teacher_edition || false}
+                                                    onChange={e => setFormData(f => ({ ...f, has_teacher_edition: e.target.checked }))}
+                                                    className="w-4 h-4 accent-emerald-600"
+                                                />
+                                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Has Teacher Edition</span>
+                                            </label>
+                                            {(formData as any).has_teacher_edition && (
+                                                <div className="space-y-3 pl-6">
+                                                    <div>
+                                                        <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wide">Teacher Notes</label>
+                                                        <textarea
+                                                            value={(formData as any).teacher_notes || ''}
+                                                            onChange={e => setFormData(f => ({ ...f, teacher_notes: e.target.value }))}
+                                                            rows={4}
+                                                            placeholder="Lesson plan notes, teaching tips..."
+                                                            className="w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-2 text-sm text-gray-800 dark:text-white resize-none"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wide">Discussion Guide</label>
+                                                        <textarea
+                                                            value={(formData as any).discussion_guide || ''}
+                                                            onChange={e => setFormData(f => ({ ...f, discussion_guide: e.target.value }))}
+                                                            rows={4}
+                                                            placeholder="Discussion prompts, expected answers..."
+                                                            className="w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-2 text-sm text-gray-800 dark:text-white resize-none"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
                                     </>
                                 )}
 
                                 {/* ── Tab: Lesson Content ── */}
                                 {activeTab === 'content' && (
                                     <>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                Opening Prayer Points
+                                                <span className="text-xs text-gray-400 ml-2">(one per line)</span>
+                                            </label>
+                                            <textarea
+                                                name="opening_prayer_points"
+                                                rows={3}
+                                                placeholder={"Lord, open our hearts to receive your word\nGrant us understanding"}
+                                                className="form-input font-mono text-sm"
+                                                value={formData.opening_prayer_points}
+                                                onChange={handleChange}
+                                            />
+                                        </div>
+
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                 Lesson Objectives / Outlines
@@ -610,6 +685,21 @@ const AdminManuals = () => {
                                                 placeholder={"What pressures do you face daily?\nHow has your faith helped you overcome challenges?"}
                                                 className="form-input font-mono text-sm"
                                                 value={formData.discussion_questions}
+                                                onChange={handleChange}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                Activity Suggestions
+                                                <span className="text-xs text-gray-400 ml-2">(one per line)</span>
+                                            </label>
+                                            <textarea
+                                                name="activity_suggestions"
+                                                rows={3}
+                                                placeholder={"Group role-play on the lesson theme\nBible verse memory challenge"}
+                                                className="form-input font-mono text-sm"
+                                                value={formData.activity_suggestions}
                                                 onChange={handleChange}
                                             />
                                         </div>
@@ -672,6 +762,21 @@ const AdminManuals = () => {
                                                 placeholder="https://example.com/manual.pdf"
                                                 className="form-input"
                                                 value={formData.pdf_url}
+                                                onChange={handleChange}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                Additional Resources
+                                                <span className="text-xs text-gray-400 ml-2">(one per line — links or book references)</span>
+                                            </label>
+                                            <textarea
+                                                name="additional_resources"
+                                                rows={3}
+                                                placeholder={"https://example.com/article\nBook: The Purpose Driven Life"}
+                                                className="form-input font-mono text-sm"
+                                                value={formData.additional_resources}
                                                 onChange={handleChange}
                                             />
                                         </div>
@@ -783,10 +888,11 @@ const AdminManuals = () => {
                                         onChange={e => setImportForm(f => ({ ...f, target_age_group: e.target.value }))}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none text-sm"
                                     >
-                                        <option value="teen">Teens (13-15)</option>
-                                        <option value="young_adult">Young Adults (16-19)</option>
-                                        <option value="pre_teen">Pre-Teens (8-12)</option>
                                         <option value="all">All Ages</option>
+                                        <option value="children">Children (6-8)</option>
+                                        <option value="pre_teen">Pre-Teen (9-12)</option>
+                                        <option value="teen">Teens (13-19)</option>
+                                        <option value="superteen">Superteen (19+)</option>
                                     </select>
                                 </div>
                             </div>

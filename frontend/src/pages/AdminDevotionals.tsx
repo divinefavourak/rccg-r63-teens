@@ -29,6 +29,8 @@ const AdminDevotionals = () => {
         // Content
         content: '',
         key_point: '',
+        confession: '',
+        action_point: '',
         prayer: '',
         hymn: '',
         // Meta
@@ -69,6 +71,8 @@ const AdminDevotionals = () => {
             bible_in_one_year: '',
             content: '',
             key_point: '',
+            confession: '',
+            action_point: '',
             prayer: '',
             hymn: '',
             status: 'draft',
@@ -93,6 +97,8 @@ const AdminDevotionals = () => {
             
             content: devotional.content,
             key_point: devotional.key_point || '',
+            confession: devotional.confession || '',
+            action_point: devotional.action_point || '',
             prayer: devotional.prayer || devotional.prayer_point || '',
             hymn: devotional.hymn || '',
             status: devotional.status || 'draft',
@@ -296,7 +302,7 @@ const AdminDevotionals = () => {
                                             <div className="flex items-center gap-1.5">
                                                 <Eye size={13} className="text-gray-400" />
                                                 <span className="font-semibold text-gray-700 dark:text-gray-300">
-                                                    {(item as any).view_count ?? (item as any).read_count ?? 0}
+                                                    {item.view_count ?? item.read_count ?? 0}
                                                 </span>
                                             </div>
                                         </td>
@@ -482,6 +488,30 @@ const AdminDevotionals = () => {
                                 </div>
 
                                 <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Confession</label>
+                                    <textarea
+                                        name="confession"
+                                        rows={2}
+                                        placeholder="Daily confession statement..."
+                                        className="form-input"
+                                        value={formData.confession}
+                                        onChange={handleInputChange}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Action Point</label>
+                                    <input
+                                        type="text"
+                                        name="action_point"
+                                        placeholder="What to do today..."
+                                        className="form-input"
+                                        value={formData.action_point}
+                                        onChange={handleInputChange}
+                                    />
+                                </div>
+
+                                <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Prayer</label>
                                     <textarea
                                         name="prayer"
@@ -527,30 +557,101 @@ const AdminDevotionals = () => {
                 </div>
             )}
 
-            {/* View Modal logic remains largely same, just updated to show new fields if desired */}
             {viewDevotional && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-2xl my-8 flex flex-col max-h-[90vh]">
-                        <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-800 rounded-t-2xl z-10">
+                <div className="fixed inset-0 bg-black/50 z-50 overflow-y-auto">
+                    <div className="flex min-h-full items-start justify-center p-4 py-8">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-2xl shadow-2xl">
+                        {/* Header — sticky so it stays visible while scrolling */}
+                        <div className="sticky top-0 bg-white dark:bg-gray-800 rounded-t-2xl p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-start z-10">
                             <div>
                                 <h3 className="text-xl font-bold text-gray-900 dark:text-white">{viewDevotional.title}</h3>
-                                <p className="text-sm text-gray-500 mt-1">{new Date(viewDevotional.date).toLocaleDateString()}</p>
+                                <div className="flex items-center gap-3 mt-1">
+                                    <p className="text-sm text-gray-500">{new Date(viewDevotional.date).toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                                    {viewDevotional.author && <span className="text-xs text-gray-400">· {viewDevotional.author}</span>}
+                                </div>
                             </div>
-                            <button onClick={() => setViewDevotional(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                            <button onClick={() => setViewDevotional(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 flex-shrink-0 ml-4">
                                 <X size={24} />
                             </button>
                         </div>
-                        <div className="p-6 overflow-y-auto space-y-6">
-                            {/* Preview Content */}
-                            <div className="prose dark:prose-invert max-w-none">
-                                <p><strong>Memorise:</strong> {viewDevotional.memory_verse_content}</p>
-                                <p><strong>Read:</strong> {viewDevotional.bible_text_passage}</p>
-                                <hr />
-                                <div dangerouslySetInnerHTML={{ __html: viewDevotional.content }} />
-                                {viewDevotional.key_point && <p className="bg-blue-50 p-2 rounded"><strong>Key Point:</strong> {viewDevotional.key_point}</p>}
-                                {viewDevotional.hymn && <pre className="bg-gray-50 p-4 rounded text-sm font-sans whitespace-pre-wrap">{viewDevotional.hymn}</pre>}
+
+                        {/* Body — grows to full content height, no overflow needed */}
+                        <div className="p-6 space-y-5">
+
+                            {/* Memory Verse */}
+                            <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4">
+                                <p className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-1">Memorise</p>
+                                {viewDevotional.memory_verse_passage && (
+                                    <p className="text-xs text-amber-500 dark:text-amber-400 font-medium mb-1">{viewDevotional.memory_verse_passage}</p>
+                                )}
+                                <p className="text-sm text-gray-800 dark:text-gray-200 italic">"{viewDevotional.memory_verse_content}"</p>
                             </div>
+
+                            {/* Bible Reading */}
+                            <div className="rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4">
+                                <p className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-1">Bible Reading</p>
+                                <p className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-2">{viewDevotional.bible_text_passage}</p>
+                                {viewDevotional.bible_text_content && (
+                                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed font-serif whitespace-pre-wrap">{viewDevotional.bible_text_content}</p>
+                                )}
+                            </div>
+
+                            {/* Bible in One Year */}
+                            {viewDevotional.bible_in_one_year && (
+                                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                    <span className="font-semibold text-gray-700 dark:text-gray-300">Bible in One Year:</span>
+                                    <span>{viewDevotional.bible_in_one_year}</span>
+                                </div>
+                            )}
+
+                            <hr className="border-gray-200 dark:border-gray-700" />
+
+                            {/* Main Content */}
+                            <div className="prose prose-sm dark:prose-invert max-w-none">
+                                <div dangerouslySetInnerHTML={{ __html: viewDevotional.content }} />
+                            </div>
+
+                            {/* Key Point */}
+                            {viewDevotional.key_point && (
+                                <div className="rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4">
+                                    <p className="text-xs font-bold uppercase tracking-wider text-green-600 dark:text-green-400 mb-1">Key Point</p>
+                                    <p className="text-sm text-gray-800 dark:text-gray-200">{viewDevotional.key_point}</p>
+                                </div>
+                            )}
+
+                            {/* Confession */}
+                            {viewDevotional.confession && (
+                                <div className="rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 p-4">
+                                    <p className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 mb-1">Confession</p>
+                                    <p className="text-sm text-gray-800 dark:text-gray-200 italic">{viewDevotional.confession}</p>
+                                </div>
+                            )}
+
+                            {/* Action Point */}
+                            {viewDevotional.action_point && (
+                                <div className="rounded-xl bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 p-4">
+                                    <p className="text-xs font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400 mb-1">Action Point</p>
+                                    <p className="text-sm text-gray-800 dark:text-gray-200">{viewDevotional.action_point}</p>
+                                </div>
+                            )}
+
+                            {/* Prayer */}
+                            {viewDevotional.prayer && (
+                                <div className="rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 p-4">
+                                    <p className="text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 mb-1">Prayer</p>
+                                    <p className="text-sm text-gray-800 dark:text-gray-200 italic">{viewDevotional.prayer}</p>
+                                </div>
+                            )}
+
+                            {/* Hymn */}
+                            {viewDevotional.hymn && (
+                                <div>
+                                    <p className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">Hymn</p>
+                                    <pre className="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 p-4 rounded-xl text-sm font-sans whitespace-pre-wrap text-gray-700 dark:text-gray-300">{viewDevotional.hymn}</pre>
+                                </div>
+                            )}
                         </div>
+                    </div>
                     </div>
                 </div>
             )}

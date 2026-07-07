@@ -71,7 +71,12 @@ class Devotional(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     
     # Tags for categorization
     tags = models.JSONField(default=list, blank=True)
-    
+    target_age_groups = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Leave empty to show to all age groups. e.g. ['children', 'teen']"
+    )
+
     class Meta:
         ordering = ['-date']
         verbose_name = 'Devotional'
@@ -146,10 +151,11 @@ class Manual(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     """
     
     class TargetAgeGroup(models.TextChoices):
-        ALL = 'all', 'All Ages'
-        PRE_TEEN = 'pre_teen', 'Pre-Teens (8-12)'
-        TEEN = 'teen', 'Teens (13-17)'
-        YOUNG_ADULT = 'young_adult', 'Young Adults (18-19)'
+        ALL         = 'all',       'All Ages'
+        CHILDREN    = 'children',  'Children (6-8)'
+        PRE_TEEN    = 'pre_teen',  'Pre-Teen (9-12)'
+        TEEN        = 'teen',      'Teens (13-19)'
+        SUPERTEEN   = 'superteen', 'Superteen (19+)'
     
     # Series relationship
     series = models.ForeignKey(
@@ -203,7 +209,23 @@ class Manual(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     
     # Analytics
     download_count = models.PositiveIntegerField(default=0)
-    
+
+    # Teacher edition
+    has_teacher_edition = models.BooleanField(default=False, db_index=True)
+    teacher_notes = models.TextField(
+        blank=True,
+        help_text="Lesson plan notes visible to teachers only"
+    )
+    teacher_resources = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Extra resource links/files for teachers"
+    )
+    discussion_guide = models.TextField(
+        blank=True,
+        help_text="Teacher-only discussion guide with prompts and answers"
+    )
+
     class Meta:
         ordering = ['-week_start_date']
         unique_together = [['series', 'week_number']]
@@ -257,7 +279,12 @@ class Article(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     # Categorization
     category = models.CharField(max_length=20, choices=Category.choices)
     tags = models.JSONField(default=list, blank=True)
-    
+    target_age_groups = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Leave empty to show to all age groups"
+    )
+
     # Author
     author_name = models.CharField(max_length=255)
     author_bio = models.TextField(blank=True, max_length=500)

@@ -35,6 +35,8 @@ const CoordinatorDashboard = lazy(() => import('./pages/CoordinatorDashboard'));
 const BulkRegister = lazy(() => import('./pages/BulkRegister'));
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 // Teen Dashboard Pages
@@ -55,13 +57,13 @@ const AdminUsers = lazy(() => import('./pages/AdminUsers'));
 const AdminSettings = lazy(() => import('./pages/AdminSettings'));
 
 const Loading = () => (
-  <div className="min-h-screen flex items-center justify-center bg-[#2b0303] dark:bg-[#1a0505] transition-colors duration-500">
+  <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 transition-colors duration-300">
     <div className="flex flex-col items-center gap-4">
       <div className="relative w-16 h-16">
-        <div className="absolute inset-0 border-4 border-yellow-500/30 rounded-full animate-pulse"></div>
-        <div className="absolute inset-0 border-t-4 border-yellow-500 rounded-full animate-spin"></div>
+        <div className="absolute inset-0 border-4 border-amber-200 rounded-full"></div>
+        <div className="absolute inset-0 border-t-4 border-amber-500 rounded-full animate-spin"></div>
       </div>
-      <p className="text-yellow-500 font-bold tracking-widest text-xs animate-pulse">LOADING...</p>
+      <p className="text-amber-500 font-bold tracking-widest text-xs animate-pulse">LOADING...</p>
     </div>
   </div>
 );
@@ -74,8 +76,8 @@ function App() {
         position="top-center"
         toastOptions={{
           duration: 4000,
-          style: { background: '#1a0505', color: '#fff', border: '1px solid #8B0000', padding: '16px', borderRadius: '12px' },
-          success: { iconTheme: { primary: '#FFD700', secondary: '#1a0505' }, style: { border: '1px solid #FFD700' } },
+          style: { background: '#0F172A', color: '#fff', border: '1px solid rgba(245,158,11,0.25)', padding: '16px', borderRadius: '12px' },
+          success: { iconTheme: { primary: '#F59E0B', secondary: '#0F172A' }, style: { border: '1px solid #F59E0B' } },
           error: { iconTheme: { primary: '#ef4444', secondary: '#fff' }, style: { border: '1px solid #ef4444' } },
         }}
       />
@@ -161,6 +163,8 @@ function App() {
 
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>

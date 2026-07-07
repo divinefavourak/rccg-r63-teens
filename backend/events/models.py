@@ -36,10 +36,11 @@ class Event(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
         FULL = 'full', 'Full'
     
     class TargetAgeGroup(models.TextChoices):
-        ALL = 'all', 'All Ages'
-        PRE_TEEN = 'pre_teen', 'Pre-Teens (8-12)'
-        TEEN = 'teen', 'Teens (13-17)'
-        YOUNG_ADULT = 'young_adult', 'Young Adults (18-19)'
+        ALL       = 'all',       'All Ages'
+        CHILDREN  = 'children',  'Children (6-8)'
+        PRE_TEEN  = 'pre_teen',  'Pre-Teens (9-12)'
+        TEEN      = 'teen',      'Teens (13-19)'
+        SUPERTEEN = 'superteen', 'Superteens (19+)'
     
     # Event Details
     title = models.CharField(max_length=255)
@@ -199,6 +200,7 @@ class EventRegistration(UUIDMixin, TimestampMixin):
         CANCELLED = 'cancelled', 'Cancelled'
         WAITLISTED = 'waitlisted', 'Waitlisted'
         CHECKED_IN = 'checked_in', 'Checked In'
+        ATTENDED = 'attended', 'Attended'
         NO_SHOW = 'no_show', 'No Show'
     
     class PaymentStatus(models.TextChoices):

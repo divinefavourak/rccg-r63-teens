@@ -150,15 +150,48 @@ class ContentPermission(permissions.BasePermission):
     - Public: Read published content
     - Admin: Full CRUD access
     """
-    
+
     def has_permission(self, request, view):
         # Allow read access to published content for everyone
         if request.method in permissions.SAFE_METHODS:
             return True
-        
+
         # Only admins can create/update/delete content
         return (
-            request.user and 
-            request.user.is_authenticated and 
+            request.user and
+            request.user.is_authenticated and
             request.user.role == 'admin'
+        )
+
+
+class IsTeacher(permissions.BasePermission):
+    """Permission check for teacher users."""
+
+    def has_permission(self, request, view):
+        return bool(
+            request.user and
+            request.user.is_authenticated and
+            request.user.role == 'teacher'
+        )
+
+
+class IsTeacherOrAbove(permissions.BasePermission):
+    """Permission for teacher, coordinator, or admin users."""
+
+    def has_permission(self, request, view):
+        return bool(
+            request.user and
+            request.user.is_authenticated and
+            request.user.role in ['teacher', 'coordinator', 'admin']
+        )
+
+
+class IsTeacherOrCoordinatorOrAdmin(permissions.BasePermission):
+    """Alias for IsTeacherOrAbove — explicit naming for clarity."""
+
+    def has_permission(self, request, view):
+        return bool(
+            request.user and
+            request.user.is_authenticated and
+            request.user.role in ['teacher', 'coordinator', 'admin']
         )

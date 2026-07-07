@@ -1,12 +1,13 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import api from '../api/axios';
-import type { User, LoginCredentials, RegisterCredentials, AuthResponse } from '../types';
+import type { User, LoginCredentials, RegisterCredentials, AuthResponse, AgeGroup } from '../types';
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   needsGender: boolean;
+  ageGroup: AgeGroup;
   login: (credentials: LoginCredentials) => Promise<void>;
   register: (credentials: RegisterCredentials) => Promise<void>;
   logout: () => void;
@@ -79,6 +80,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     window.location.href = '/login';
   };
 
+  const ageGroup: AgeGroup = (user?.age_group as AgeGroup) || '';
+
   const updateProfile = async (data: Partial<User>) => {
     try {
       const response = await api.patch('/auth/me/', data);
@@ -95,7 +98,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, needsGender, login, register, logout, updateProfile }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, needsGender, ageGroup, login, register, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );
