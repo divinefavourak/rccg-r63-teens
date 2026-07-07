@@ -77,15 +77,21 @@ MIDDLEWARE = [
 ]
 
 # Cache
+# IGNORE_EXCEPTIONS makes cache operations fail *open* (return None) instead of
+# raising when Redis is unreachable. This matters now that DRF throttling is
+# backed by this cache: a Redis blip must not turn every request into a 500 —
+# it should degrade to "unthrottled" and keep serving. Ignored errors are logged.
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
         'LOCATION': os.getenv('REDIS_URL', default='redis://localhost:6379/0'),
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'IGNORE_EXCEPTIONS': True,
         }
     }
 }
+DJANGO_REDIS_LOG_IGNORED_EXCEPTIONS = True
 
 
 ROOT_URLCONF = 'backend.urls'
