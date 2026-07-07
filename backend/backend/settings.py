@@ -146,6 +146,17 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+# Password hashing — bcrypt primary (per docs/15-technical-architecture.md: argon2/bcrypt).
+# The first hasher is used for new/changed passwords; the rest remain available for
+# *verifying* legacy hashes, so existing PBKDF2 passwords still work and are transparently
+# upgraded to bcrypt on the user's next successful login. No forced resets.
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    'django.contrib.auth.hashers.BCryptPasswordHasher',
+]
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
@@ -255,6 +266,21 @@ REST_FRAMEWORK = {
     'UPLOADED_FILES_USE_URL': True,
     'TEST_REQUEST_DEFAULT_FORMAT': 'json',
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # Rate limiting (docs/15-technical-architecture.md: "Rate limiting per user/IP;
+    # stricter on auth and OTP endpoints"). Global anon/user rates are generous so
+    # normal browsing is unaffected; the 'auth' scope is reserved for login/OTP views
+    # (attach `throttle_scope = 'auth'` on those views in a later phase).
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '60/min',
+        'user': '1000/min',
+        'auth': '10/min',
+        'otp': '5/min',
+    },
 }
 
 
