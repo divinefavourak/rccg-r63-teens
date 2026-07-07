@@ -132,6 +132,57 @@ class MoveRescopesTests(TestCase):
         self.assertTrue(services.user_has_capability(coord_b, Capability.EVENT_MANAGE, moved))
 
 
+class MoveValidationTests(TestCase):
+    def test_move_to_wrong_parent_type_is_rejected(self):
+        t = TreeBuilder()
+        # A Parish cannot become a child of a Region.
+        with self.assertRaises(ValidationError):
+            services.move_node(t.parish_a, t.r1)
+
+
+class ModelInvariantTests(TestCase):
+    def test_clean_rejects_wrong_type_for_placed_node(self):
+        t = TreeBuilder()
+        # parish_a is correctly under area_a; corrupting its type must fail clean().
+        t.parish_a.node_type = NodeType.REGION
+        with self.assertRaises(ValidationError):
+            t.parish_a.clean()
+
+    def test_clean_passes_for_valid_node(self):
+        t = TreeBuilder()
+        t.parish_a.clean()  # should not raise
+
+
+class ScopingTests(TestCase):
+    def setUp(self):
+        self.t = TreeBuilder()
+        self.coord = make_user('coord_scope')
+        services.assign_role(self.coord, RoleAssignment.Role.COORDINATOR, self.t.area_a)
+
+    def test_nodes_visible_to_is_subtree_only(self):
+        names = set(services.nodes_visible_to(self.coord).values_list('name', flat=True))
+        self.assertEqual(names, {'Area A', 'Parish A'})
+
+    def test_scope_queryset_filters_by_path_prefix(self):
+        # Members inside vs outside the coordinator's subtree.
+        u_in = make_user('inside')
+        u_out = make_user('outside')
+        services.set_membership(u_in, self.t.parish_a)
+        services.set_membership(u_out, self.t.area_b)
+        from hierarchy.models import Membership
+        visible = services.scope_queryset(
+            Membership.objects.all(), self.coord, node_field='node',
+            capability=Capability.EVENT_MANAGE)
+        usernames = set(visible.values_list('user__username', flat=True))
+        self.assertEqual(usernames, {'inside'})
+
+    def test_any_capability_coarse_gate(self):
+        self.assertTrue(services.user_has_any_capability(self.coord, Capability.EVENT_MANAGE))
+        self.assertFalse(services.user_has_any_capability(self.coord, Capability.ROLES_ASSIGN))
+        nobody = make_user('nobody')
+        self.assertFalse(services.user_has_any_capability(nobody, Capability.EVENT_MANAGE))
+
+
 class MembershipTests(TestCase):
     def test_single_home_node_updates_in_place(self):
         t = TreeBuilder()

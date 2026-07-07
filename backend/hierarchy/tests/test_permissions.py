@@ -59,3 +59,30 @@ class HasCapabilityTests(TestCase):
         perm = HasCapability(Capability.EVENT_MANAGE)()
         request = self._request(AnonymousUser())
         self.assertFalse(perm.has_permission(request, None))
+
+    def test_has_permission_coarse_gate_denies_non_leader(self):
+        """The footgun fix: a plain authenticated user cannot pass the collection
+        gate on a capability-guarded endpoint (e.g. create)."""
+        teen = User.objects.create_user(
+            username='teen', email='teen@example.com', password='x',
+            first_name='Te', last_name='En',
+        )
+        perm = HasCapability(Capability.EVENT_MANAGE)()
+        self.assertFalse(perm.has_permission(self._request(teen), object()))
+
+    def test_has_permission_coarse_gate_allows_leader(self):
+        perm = HasCapability(Capability.EVENT_MANAGE)()
+        self.assertTrue(perm.has_permission(self._request(self.coord), object()))
+
+    def test_has_permission_uses_view_node_resolver(self):
+        class _View:
+            def __init__(self, node):
+                self._node = node
+            def get_capability_node(self, request):
+                return self._node
+
+        perm = HasCapability(Capability.EVENT_MANAGE)()
+        request = self._request(self.coord)
+        self.assertTrue(perm.has_permission(request, _View(self.parish)))       # in scope
+        request = self._request(self.coord)  # fresh (avoid cached assignments across asserts)
+        self.assertFalse(perm.has_permission(request, _View(self.other_area)))  # out of scope

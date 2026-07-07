@@ -6,39 +6,27 @@ tree traversal, and RBAC evaluation. It wraps treebeard so business rules (the
 level invariant, capability grants) are enforced in one place and callers never
 depend on treebeard's API directly.
 """
-from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 from django.utils.text import slugify
 
-from .models import HierarchyNode, Membership, NODE_LEVEL_ORDER, NodeType, RoleAssignment
+from .models import (
+    HierarchyNode,
+    Membership,
+    NodeType,
+    RoleAssignment,
+    child_type_of,
+    validate_parent_child,
+)
 
-
-# ---------------------------------------------------------------------------
-# Level invariant
-# ---------------------------------------------------------------------------
-
-def _level_index(node_type):
-    return NODE_LEVEL_ORDER.index(NodeType(node_type))
-
-
-def child_type_of(parent_type):
-    """The single node_type permitted directly beneath ``parent_type``."""
-    idx = _level_index(parent_type)
-    if idx + 1 >= len(NODE_LEVEL_ORDER):
-        return None
-    return NODE_LEVEL_ORDER[idx + 1]
-
-
-def validate_parent_child(parent_type, child_type):
-    """Raise ValidationError unless ``child_type`` may sit directly under ``parent_type``."""
-    expected = child_type_of(parent_type)
-    if expected is None:
-        raise ValidationError(f'{NodeType(parent_type).label} nodes cannot have children.')
-    if NodeType(child_type) != expected:
-        raise ValidationError(
-            f'A {NodeType(child_type).label} cannot be a child of a '
-            f'{NodeType(parent_type).label}; expected a {expected.label}.'
-        )
+# Re-exported for callers that historically imported these from services.
+__all__ = [
+    'child_type_of', 'validate_parent_child', 'create_root', 'add_child',
+    'get_or_create_child', 'move_node', 'is_ancestor_or_self', 'nodes_visible_to',
+    'scope_queryset', 'scoped_node_ids_for', 'set_membership', 'Capability',
+    'ROLE_CAPABILITIES', 'capabilities_for_role', 'assign_role', 'active_assignments',
+    'assignment_grants', 'user_has_capability', 'user_has_any_capability',
+]
 
 
 # ---------------------------------------------------------------------------
@@ -48,6 +36,7 @@ def validate_parent_child(parent_type, child_type):
 @transaction.atomic
 def create_root(name, node_type=NodeType.NATIONAL, code='', slug=''):
     """Create the tree root. Only a NATIONAL node may be a root."""
+    from django.core.exceptions import ValidationError
     if NodeType(node_type) != NodeType.NATIONAL:
         raise ValidationError('The root node must be of type National.')
     return HierarchyNode.add_root(
@@ -74,14 +63,16 @@ def add_child(parent, node_type, name, code='', slug=''):
 def get_or_create_child(parent, node_type, name, code=''):
     """
     Idempotent child creation keyed by (parent, node_type, normalized name).
-    Used by the provisional backfill so re-running is safe. Returns (node, created).
+    Returns (node, created). Note: dedup is case/space-insensitive but there is
+    no DB-level uniqueness on siblings (a treebeard limitation), so concurrent
+    creators can still race — callers doing bulk work should serialize or cache.
     """
     validate_parent_child(parent.node_type, node_type)
-    normalized = name.strip()
+    normalized = name.strip().casefold()
     for child in parent.get_children():
-        if child.node_type == node_type and child.name.strip().casefold() == normalized.casefold():
+        if child.node_type == node_type and child.name.strip().casefold() == normalized:
             return child, False
-    node = add_child(parent, node_type, normalized, code=code)
+    node = add_child(parent, node_type, name.strip(), code=code)
     return node, True
 
 
@@ -98,7 +89,7 @@ def move_node(node, new_parent):
 
 
 # ---------------------------------------------------------------------------
-# Traversal helpers
+# Traversal & scoping (materialized-path prefix, evaluated in the DB)
 # ---------------------------------------------------------------------------
 
 def is_ancestor_or_self(ancestor, target):
@@ -108,11 +99,55 @@ def is_ancestor_or_self(ancestor, target):
     return target.is_descendant_of(ancestor)
 
 
-def subtree_node_ids(node):
-    """IDs of ``node`` plus all its descendants — for scoping querysets."""
-    ids = [node.pk]
-    ids.extend(node.get_descendants().values_list('pk', flat=True))
-    return ids
+def nodes_visible_to(user, capability=None):
+    """
+    Queryset of nodes ``user`` may act on: the union of their role-node subtrees,
+    optionally restricted to roles granting ``capability``. Implemented as a
+    path-prefix filter (``path__startswith``) so the whole thing is evaluated in
+    the database — no materializing thousands of PKs into Python.
+    """
+    if not user or not user.is_authenticated:
+        return HierarchyNode.objects.none()
+    if getattr(user, 'is_superuser', False):
+        return HierarchyNode.objects.all()
+    query = Q()
+    matched = False
+    for assignment in active_assignments(user):
+        if capability is not None and capability not in capabilities_for_role(assignment.role):
+            continue
+        query |= Q(path__startswith=assignment.node.path)
+        matched = True
+    if not matched:
+        return HierarchyNode.objects.none()
+    return HierarchyNode.objects.filter(query)
+
+
+def scope_queryset(queryset, user, node_field='visibility_node', capability=None):
+    """
+    Restrict ``queryset`` to rows whose ``node_field`` falls within the user's
+    scope, via path-prefix (DB-side). ``node_field`` is the name of the FK to a
+    HierarchyNode on the queryset's model.
+    """
+    if getattr(user, 'is_superuser', False):
+        return queryset
+    if not user or not user.is_authenticated:
+        return queryset.none()
+    prefixes = [
+        a.node.path for a in active_assignments(user)
+        if capability is None or capability in capabilities_for_role(a.role)
+    ]
+    if not prefixes:
+        return queryset.none()
+    query = Q()
+    for prefix in prefixes:
+        query |= Q(**{f'{node_field}__path__startswith': prefix})
+    return queryset.filter(query)
+
+
+def scoped_node_ids_for(user, capability=None):
+    """IDs of the nodes in the user's scope. Prefer ``scope_queryset`` for
+    filtering — this exists for callers that genuinely need the id set."""
+    return set(nodes_visible_to(user, capability).values_list('pk', flat=True))
 
 
 # ---------------------------------------------------------------------------
@@ -187,31 +222,36 @@ def active_assignments(user):
     )
 
 
+def assignment_grants(assignment, capability, target_node):
+    """Pure predicate: does this single assignment grant ``capability`` at
+    ``target_node``? Lets callers evaluate against a pre-fetched assignment list
+    (e.g. cached on the request) without re-querying."""
+    return (
+        capability in capabilities_for_role(assignment.role)
+        and is_ancestor_or_self(assignment.node, target_node)
+    )
+
+
 def user_has_capability(user, capability, target_node):
-    """
-    True iff ``user`` holds an active role that grants ``capability`` at a node
-    that is an ancestor-or-self of ``target_node``. Superusers always pass.
-    """
+    """True iff the user holds an active role granting ``capability`` at an
+    ancestor-or-self of ``target_node``. Superusers always pass."""
     if not user or not user.is_authenticated:
         return False
     if getattr(user, 'is_superuser', False):
         return True
-    for assignment in active_assignments(user):
-        if capability in capabilities_for_role(assignment.role):
-            if is_ancestor_or_self(assignment.node, target_node):
-                return True
-    return False
+    return any(
+        assignment_grants(a, capability, target_node) for a in active_assignments(user)
+    )
 
 
-def scoped_node_ids_for(user, capability=None):
-    """
-    All node IDs a user can act on (subtrees of their role nodes). Optionally
-    restricted to nodes where they hold ``capability``. Used to scope list
-    querysets by ``visibility_node``.
-    """
-    node_ids = set()
-    for assignment in active_assignments(user):
-        if capability is not None and capability not in capabilities_for_role(assignment.role):
-            continue
-        node_ids.update(subtree_node_ids(assignment.node))
-    return node_ids
+def user_has_any_capability(user, capability):
+    """Coarse gate: does the user hold ``capability`` at *any* node? Used to
+    guard collection endpoints (create/list) where there is no object yet;
+    precise node scoping still happens on the object or via ``scope_queryset``."""
+    if not user or not user.is_authenticated:
+        return False
+    if getattr(user, 'is_superuser', False):
+        return True
+    return any(
+        capability in capabilities_for_role(a.role) for a in active_assignments(user)
+    )

@@ -24,6 +24,9 @@ class DeriveHierarchyTests(TestCase):
                   zone='Zone 1', area='Area A', parish='Ikorodu')
         make_user('funmi', role='admin', province='lagos_province_9')
         make_user('nomap', role='teen')  # no province -> Unassigned bucket
+        # A teacher whose parish is missing: fail-closed -> NO role assignment.
+        make_user('teacher_noparish', role='teacher', province='lagos_province_9',
+                  zone='Zone 1', area='Area A')
 
     def test_builds_tree_memberships_and_assignments(self):
         call_command('derive_hierarchy', '--region-name', 'Region 63', verbosity=0)
@@ -35,22 +38,28 @@ class DeriveHierarchyTests(TestCase):
             node_type=NodeType.PROVINCE, name='Lagos Province 9').exists())
 
         # Every user has a (provisional) membership.
-        self.assertEqual(Membership.objects.count(), 4)
+        self.assertEqual(Membership.objects.count(), 5)
         self.assertTrue(all(m.is_provisional for m in Membership.objects.all()))
 
         # Unmatched user landed in the Unassigned bucket.
         nomap = User.objects.get(username='nomap')
-        self.assertEqual(nomap.membership.node.name, 'Unassigned')
+        self.assertEqual(Membership.objects.get(user=nomap).node.name, 'Unassigned')
 
-        # Roles converted at the right level.
+        # Coordinator is scoped to their AREA (not the whole province).
         self.assertTrue(RoleAssignment.objects.filter(
             user__username='chinedu', role=RoleAssignment.Role.COORDINATOR,
-            node__node_type=NodeType.PROVINCE).exists())
+            node__node_type=NodeType.AREA).exists())
         self.assertTrue(RoleAssignment.objects.filter(
             user__username='funmi', role=RoleAssignment.Role.ADMIN,
             node__node_type=NodeType.REGION).exists())
         # Teens get no leadership assignment.
         self.assertFalse(RoleAssignment.objects.filter(user__username='tolu').exists())
+
+    def test_fail_closed_when_data_lacks_required_level(self):
+        """A teacher with no parish must NOT be granted a broader-scoped role."""
+        call_command('derive_hierarchy', verbosity=0)
+        self.assertFalse(
+            RoleAssignment.objects.filter(user__username='teacher_noparish').exists())
 
     def test_is_idempotent(self):
         call_command('derive_hierarchy', verbosity=0)
