@@ -6,12 +6,13 @@ logger = logging.getLogger(__name__)
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.utils import timezone
 from django.contrib.auth import authenticate
 from django.db.models import Q
 
+from .authentication import clear_auth_cookies, set_auth_cookies
 from .email_service import UserEmailService
 from .models import User, LoginHistory, AuditLog
 from .serializers import (
@@ -104,7 +105,10 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             'needs_gender': not has_any_permission(user, Perm.USERS_MANAGE) and not user.gender,
         }
 
-        return Response(response_data)
+        # Additive: also set HttpOnly cookies (Bearer clients keep using the body).
+        resp = Response(response_data)
+        set_auth_cookies(resp, access=str(refresh.access_token), refresh=str(refresh))
+        return resp
     
     def get_client_ip(self, request):
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
@@ -521,13 +525,55 @@ class VerifyOTPView(APIView):
                 return Response({"detail": "No account for that destination."},
                                 status=status.HTTP_400_BAD_REQUEST)
             refresh = RefreshToken.for_user(user)
-            return Response({
+            resp = Response({
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
                 'user': UserSerializer(user).data,
             })
+            set_auth_cookies(resp, access=str(refresh.access_token), refresh=str(refresh))
+            return resp
 
         return Response({"detail": "Verified."})
+
+
+class CookieTokenRefreshView(TokenRefreshView):
+    """Refresh access using a refresh token from the body OR the HttpOnly cookie,
+    and re-set the auth cookies."""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        from django.conf import settings as dj_settings
+        raw = request.data.get('refresh') or request.COOKIES.get(dj_settings.AUTH_COOKIE_REFRESH)
+        if not raw:
+            return Response({"detail": "No refresh token provided."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        serializer = self.get_serializer(data={'refresh': raw})
+        try:
+            serializer.is_valid(raise_exception=True)
+        except Exception:
+            return Response({"detail": "Invalid or expired refresh token."},
+                            status=status.HTTP_401_UNAUTHORIZED)
+        data = serializer.validated_data
+        resp = Response(data)
+        set_auth_cookies(resp, access=data.get('access'), refresh=data.get('refresh'))
+        return resp
+
+
+class LogoutView(APIView):
+    """Blacklist the refresh token (body or cookie) and clear auth cookies."""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        from django.conf import settings as dj_settings
+        raw = request.data.get('refresh') or request.COOKIES.get(dj_settings.AUTH_COOKIE_REFRESH)
+        if raw:
+            try:
+                RefreshToken(raw).blacklist()
+            except Exception:
+                pass  # best-effort; cookie clearing below is the guaranteed part
+        resp = Response({"detail": "Logged out."})
+        clear_auth_cookies(resp)
+        return resp
 
 
 class AuditLogView(generics.ListAPIView):

@@ -77,6 +77,8 @@ class OTPServiceTests(TestCase):
 @override_settings(OTP_PROVIDER='users.test_otp.CapturingProvider', CACHES=_LOCMEM)
 class OTPApiTests(APITestCase):
     def setUp(self):
+        from django.core.cache import cache
+        cache.clear()  # reset throttle counters between tests
         _SENT.clear()
         self.user = make_user('login')  # email == login@example.com
 
