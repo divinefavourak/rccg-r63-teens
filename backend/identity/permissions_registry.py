@@ -28,7 +28,8 @@ def perm(resource, verb):
 
 
 class Perm:
-    """Canonical permission codes for the identity/authorization domain."""
+    """Canonical permission codes."""
+    # Identity / authorization domain
     USERS_VIEW = 'users.view'
     USERS_MANAGE = 'users.manage'
     PROFILES_VIEW = 'profiles.view'
@@ -40,6 +41,19 @@ class Perm:
     ROLES_MANAGE = 'roles.manage'
     HIERARCHY_VIEW = 'hierarchy.view'
     HIERARCHY_MANAGE = 'hierarchy.manage'
+    # Content (devotionals, manuals, articles)
+    CONTENT_VIEW = 'content.view'
+    CONTENT_PUBLISH = 'content.publish'
+    CONTENT_MANAGE = 'content.manage'
+    # Media (podcasts, videos)
+    MEDIA_MANAGE = 'media.manage'
+    # Events, registrations, check-in
+    EVENTS_VIEW = 'events.view'
+    EVENTS_MANAGE = 'events.manage'
+    EVENTS_CHECKIN = 'events.checkin'
+    # Payments
+    PAYMENTS_VIEW = 'payments.view'
+    PAYMENTS_MANAGE = 'payments.manage'
 
 
 # (code, human label) — the full registered vocabulary for this phase.
@@ -55,6 +69,15 @@ REGISTRY = [
     (Perm.ROLES_MANAGE, 'Manage roles & permissions'),
     (Perm.HIERARCHY_VIEW, 'View organization hierarchy'),
     (Perm.HIERARCHY_MANAGE, 'Manage organization hierarchy'),
+    (Perm.CONTENT_VIEW, 'View unpublished/all content'),
+    (Perm.CONTENT_PUBLISH, 'Publish content'),
+    (Perm.CONTENT_MANAGE, 'Create/edit/delete content'),
+    (Perm.MEDIA_MANAGE, 'Create/edit/delete media'),
+    (Perm.EVENTS_VIEW, 'View event management data'),
+    (Perm.EVENTS_MANAGE, 'Create/edit events and registrations'),
+    (Perm.EVENTS_CHECKIN, 'Check in event attendees'),
+    (Perm.PAYMENTS_VIEW, 'View payments/reconciliation'),
+    (Perm.PAYMENTS_MANAGE, 'Manage payments/refunds'),
 ]
 
 ALL_PERMISSION_CODES = [code for code, _ in REGISTRY]
@@ -85,6 +108,9 @@ ROLE_SEED = [
             Perm.MEMBERSHIPS_VIEW, Perm.MEMBERSHIPS_MANAGE,
             Perm.ROLES_VIEW, Perm.ROLES_ASSIGN,
             Perm.HIERARCHY_VIEW, Perm.HIERARCHY_MANAGE,
+            Perm.CONTENT_VIEW, Perm.CONTENT_PUBLISH, Perm.CONTENT_MANAGE,
+            Perm.MEDIA_MANAGE, Perm.EVENTS_VIEW, Perm.EVENTS_MANAGE,
+            Perm.EVENTS_CHECKIN, Perm.PAYMENTS_VIEW, Perm.PAYMENTS_MANAGE,
         ],
         'is_system': True,
     },
@@ -96,6 +122,9 @@ ROLE_SEED = [
             Perm.USERS_VIEW, Perm.USERS_MANAGE, Perm.PROFILES_VIEW,
             Perm.MEMBERSHIPS_VIEW, Perm.MEMBERSHIPS_MANAGE,
             Perm.ROLES_VIEW, Perm.ROLES_ASSIGN, Perm.HIERARCHY_VIEW,
+            Perm.CONTENT_VIEW, Perm.CONTENT_PUBLISH, Perm.CONTENT_MANAGE,
+            Perm.MEDIA_MANAGE, Perm.EVENTS_VIEW, Perm.EVENTS_MANAGE,
+            Perm.EVENTS_CHECKIN, Perm.PAYMENTS_VIEW,
         ],
         'is_system': True,
     },
@@ -107,6 +136,8 @@ ROLE_SEED = [
             Perm.USERS_VIEW, Perm.PROFILES_VIEW,
             Perm.MEMBERSHIPS_VIEW, Perm.MEMBERSHIPS_MANAGE,
             Perm.ROLES_VIEW, Perm.HIERARCHY_VIEW,
+            Perm.CONTENT_VIEW, Perm.EVENTS_VIEW, Perm.EVENTS_MANAGE,
+            Perm.EVENTS_CHECKIN, Perm.PAYMENTS_VIEW,
         ],
         'is_system': True,
     },
@@ -117,6 +148,7 @@ ROLE_SEED = [
         'permissions': [
             Perm.USERS_VIEW, Perm.PROFILES_VIEW,
             Perm.MEMBERSHIPS_VIEW, Perm.HIERARCHY_VIEW,
+            Perm.CONTENT_VIEW, Perm.EVENTS_VIEW, Perm.EVENTS_CHECKIN,
         ],
         'is_system': True,
     },
@@ -124,7 +156,10 @@ ROLE_SEED = [
         'code': 'teacher',
         'label': 'Teacher',
         'allowed_node_types': [_PARISH, _AREA],
-        'permissions': [Perm.USERS_VIEW, Perm.PROFILES_VIEW],
+        'permissions': [
+            Perm.USERS_VIEW, Perm.PROFILES_VIEW,
+            Perm.CONTENT_VIEW, Perm.EVENTS_CHECKIN,
+        ],
         'is_system': True,
     },
     {

@@ -19,7 +19,8 @@ from .serializers import (
     AdminUserUpdateSerializer, LoginSerializer, TokenResponseSerializer,
     LoginHistorySerializer, AuditLogSerializer
 )
-from .permissions import IsAdmin, IsSelfOrAdmin, ProvinceAccessPermission
+from identity.authorization import HasPermission, IsSelfOrHasPermission, has_any_permission
+from identity.permissions_registry import Perm
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -91,7 +92,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             'access': str(refresh.access_token),
             'refresh': str(refresh),
             'user': user_data,
-            'needs_gender': user.role not in [User.Role.ADMIN, User.Role.COORDINATOR] and not user.gender,
+            'needs_gender': not has_any_permission(user, Perm.USERS_MANAGE) and not user.gender,
         }
 
         return Response(response_data)
@@ -152,21 +153,21 @@ class UserViewSet(viewsets.ModelViewSet):
     """ViewSet for User management"""
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, HasPermission(Perm.USERS_MANAGE)]
     pagination_class = None  # Return all users — admin endpoint; dataset is bounded
     
     def get_serializer_class(self):
         if self.action == 'create':
             return UserCreateSerializer
         elif self.action in ['update', 'partial_update']:
-            if self.request and self.request.user.role == User.Role.ADMIN:
+            if self.request and has_any_permission(self.request.user, Perm.USERS_MANAGE):
                 return AdminUserUpdateSerializer
             return UserUpdateSerializer
         return UserSerializer
     
     def get_permissions(self):
         if self.action in ['retrieve', 'update', 'partial_update', 'destroy']:
-            return [permissions.IsAuthenticated(), IsSelfOrAdmin()]
+            return [permissions.IsAuthenticated(), IsSelfOrHasPermission(Perm.USERS_MANAGE)()]
         return super().get_permissions()
     
     def get_queryset(self):
@@ -174,12 +175,12 @@ class UserViewSet(viewsets.ModelViewSet):
         
         if not user.is_authenticated:
             return User.objects.none()
-        
-        # Admins see all users
-        if user.role == User.Role.ADMIN:
+
+        # User managers see all users; everyone else sees only themselves.
+        # (Node-scoped user visibility via Membership is a documented follow-up.)
+        if has_any_permission(user, Perm.USERS_MANAGE):
             return User.objects.all()
-        
-        # Coordinators see only themselves
+
         return User.objects.filter(id=user.id)
     
     def perform_create(self, serializer):
@@ -231,7 +232,7 @@ class UserViewSet(viewsets.ModelViewSet):
         
         instance.delete()
     
-    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated, IsAdmin])
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated, HasPermission(Perm.USERS_MANAGE)])
     def send_welcome_email(self, request, pk=None):
         """Manually resend the welcome email for a user."""
         user = self.get_object()
@@ -320,7 +321,7 @@ class ChangePasswordView(APIView):
 class LoginHistoryView(generics.ListAPIView):
     """View user login history"""
     serializer_class = LoginHistorySerializer
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, HasPermission(Perm.USERS_MANAGE)]
     
     def get_queryset(self):
         user_id = self.kwargs.get('user_id')
@@ -405,7 +406,7 @@ class ResetPasswordView(APIView):
 class AuditLogView(generics.ListAPIView):
     """View audit logs"""
     serializer_class = AuditLogSerializer
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, HasPermission(Perm.USERS_MANAGE)]
     
     def get_queryset(self):
         queryset = AuditLog.objects.all()
