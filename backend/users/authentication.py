@@ -40,10 +40,16 @@ class CookieJWTAuthentication(JWTAuthentication):
 
 
 def _cookie_kwargs():
+    secure = settings.AUTH_COOKIE_SECURE
+    samesite = settings.AUTH_COOKIE_SAMESITE
+    # Browsers reject SameSite=None cookies unless Secure — force it (belt-and-braces
+    # with the settings-load guard) so cookies never silently fail to deliver.
+    if samesite == 'None' and not secure:
+        secure = True
     return dict(
         httponly=True,
-        secure=settings.AUTH_COOKIE_SECURE,
-        samesite=settings.AUTH_COOKIE_SAMESITE,
+        secure=secure,
+        samesite=samesite,
         domain=settings.AUTH_COOKIE_DOMAIN,
         path='/',
     )

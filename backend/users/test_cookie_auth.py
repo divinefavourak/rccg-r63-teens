@@ -64,6 +64,12 @@ class CookieAuthTests(APITestCase):
         req.COOKIES['access_token'] = 'not-a-valid-jwt'
         self.assertIsNone(CookieJWTAuthentication().authenticate(req))
 
+    @override_settings(AUTH_COOKIE_SAMESITE='None', AUTH_COOKIE_SECURE=False)
+    def test_samesite_none_forces_secure_cookie(self):
+        """SameSite=None must not silently break delivery: Secure is forced on."""
+        res = self._login()
+        self.assertTrue(res.cookies['access_token']['secure'])
+
     def test_logout_clears_cookies(self):
         self._login()
         res = self.client.post('/api/v1/auth/logout/', {}, format='json')
