@@ -38,6 +38,7 @@ urlpatterns = [
     
     # API v1 endpoints - New Platform
     path('api/v1/auth/', include('users.urls')),
+    path('api/v1/identity/', include('identity.urls')),
     path('api/v1/profiles/', include('profiles.urls')),
     path('api/v1/content/', include('content.urls')),
     path('api/v1/media/', include('media.urls')),
