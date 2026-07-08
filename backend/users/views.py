@@ -453,6 +453,83 @@ class VerifyEmailView(APIView):
         return Response({"detail": "Email verified. You can now log in."})
 
 
+def _find_user_by_destination(destination, channel):
+    from .models import OTPCode
+    destination = (destination or '').strip().lower()
+    if channel == OTPCode.Channel.EMAIL:
+        return User.objects.filter(email=destination, is_active=True).first()
+    return User.objects.filter(phone=destination, is_active=True).first()
+
+
+class RequestOTPView(APIView):
+    """Request a one-time code. Always 200 (no account enumeration)."""
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = 'otp'
+
+    def post(self, request):
+        from .models import OTPCode
+        from .otp import request_otp
+
+        destination = request.data.get('destination', '')
+        channel = request.data.get('channel', OTPCode.Channel.EMAIL)
+        purpose = request.data.get('purpose', OTPCode.Purpose.LOGIN)
+        generic = Response({"detail": "If the destination is valid, a code has been sent."})
+
+        if not destination or channel not in OTPCode.Channel.values or purpose not in OTPCode.Purpose.values:
+            return Response({"detail": "destination, channel and purpose are required."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        user = _find_user_by_destination(destination, channel)
+        # For login/reset we only send to known accounts, but never disclose that.
+        if purpose in (OTPCode.Purpose.LOGIN, OTPCode.Purpose.RESET) and user is None:
+            return generic
+        request_otp(destination, channel, purpose, user=user)
+        return generic
+
+
+class VerifyOTPView(APIView):
+    """Verify a one-time code. For purpose=login, returns JWT tokens."""
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = 'otp'
+
+    def post(self, request):
+        from .models import OTPCode
+        from .otp import verify_otp
+
+        destination = request.data.get('destination', '')
+        purpose = request.data.get('purpose', OTPCode.Purpose.LOGIN)
+        code = request.data.get('code', '')
+        if not destination or not code:
+            return Response({"detail": "destination and code are required."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        otp = verify_otp(destination, purpose, code)
+        if otp is None:
+            return Response({"detail": "Invalid or expired code."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        user = otp.user or _find_user_by_destination(destination, otp.channel)
+
+        if purpose == OTPCode.Purpose.VERIFY:
+            if user and not user.is_verified:
+                user.is_verified = True
+                user.save(update_fields=['is_verified'])
+            return Response({"detail": "Verified."})
+
+        if purpose == OTPCode.Purpose.LOGIN:
+            if user is None:
+                return Response({"detail": "No account for that destination."},
+                                status=status.HTTP_400_BAD_REQUEST)
+            refresh = RefreshToken.for_user(user)
+            return Response({
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+                'user': UserSerializer(user).data,
+            })
+
+        return Response({"detail": "Verified."})
+
+
 class AuditLogView(generics.ListAPIView):
     """View audit logs"""
     serializer_class = AuditLogSerializer

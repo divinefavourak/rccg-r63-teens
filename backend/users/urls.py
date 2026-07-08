@@ -14,6 +14,8 @@ urlpatterns = [
     path('forgot-password/', views.ForgotPasswordView.as_view(), name='forgot_password'),
     path('reset-password/', views.ResetPasswordView.as_view(), name='reset_password'),
     path('verify-email/', views.VerifyEmailView.as_view(), name='verify_email'),
+    path('otp/request/', views.RequestOTPView.as_view(), name='otp_request'),
+    path('otp/verify/', views.VerifyOTPView.as_view(), name='otp_verify'),
 
     # Current user
     path('me/', views.CurrentUserView.as_view(), name='current_user'),
