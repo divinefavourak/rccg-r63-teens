@@ -3,7 +3,7 @@ from django.test import TestCase
 from rest_framework.test import APIRequestFactory
 
 from identity import authorization as authz
-from identity.authorization import HasPermission
+from identity.authorization import HasPermission, HasPermissionOrReadOnly, IsSelfOrHasPermission
 from identity.models import Membership, Role, RoleAssignment
 from identity.permissions_registry import Perm
 from .base import build_tree, make_user, seed_rbac
@@ -149,3 +149,59 @@ class HasPermissionDRFTests(TestCase):
         m_out = Membership.objects.create(user=make_user('b'), organization_node=self.t['r2'])
         self.assertTrue(perm.has_object_permission(self._req(self.coord), None, m_in))
         self.assertFalse(perm.has_object_permission(self._req(self.coord), None, m_out))
+
+
+class HasPermissionOrReadOnlyTests(TestCase):
+    """The cutover primitive that replaced ContentPermission."""
+    def setUp(self):
+        seed_rbac()
+        self.t = build_tree()
+        self.factory = APIRequestFactory()
+        self.editor = make_user('editor')
+        RoleAssignment.objects.create(
+            user=self.editor, role=Role.objects.get(code='regional_coordinator'), node=self.t['r1'])
+
+    def _req(self, method, user):
+        from django.contrib.auth.models import AnonymousUser
+        r = getattr(self.factory, method)('/')
+        r.user = user or AnonymousUser()
+        return r
+
+    def test_read_is_public(self):
+        perm = HasPermissionOrReadOnly(Perm.CONTENT_MANAGE)()
+        self.assertTrue(perm.has_permission(self._req('get', None), None))  # anonymous read OK
+
+    def test_write_requires_permission(self):
+        perm = HasPermissionOrReadOnly(Perm.CONTENT_MANAGE)()
+        self.assertFalse(perm.has_permission(self._req('post', make_user('teen')), None))
+        self.assertTrue(perm.has_permission(self._req('post', self.editor), None))
+
+
+class IsSelfOrHasPermissionTests(TestCase):
+    """The cutover primitive that replaced IsSelfOrAdmin/IsOwnerOrAdmin."""
+    def setUp(self):
+        seed_rbac()
+        self.t = build_tree()
+        self.factory = APIRequestFactory()
+        self.owner = make_user('owner')
+        self.other = make_user('other')
+        self.manager = make_user('manager')
+        RoleAssignment.objects.create(
+            user=self.manager, role=Role.objects.get(code='regional_coordinator'), node=self.t['r1'])
+
+    def _req(self, user):
+        r = self.factory.get('/')
+        r.user = user
+        return r
+
+    def test_owner_allowed(self):
+        perm = IsSelfOrHasPermission(Perm.USERS_MANAGE)()
+        self.assertTrue(perm.has_object_permission(self._req(self.owner), None, self.owner))
+
+    def test_stranger_without_permission_denied(self):
+        perm = IsSelfOrHasPermission(Perm.USERS_MANAGE)()
+        self.assertFalse(perm.has_object_permission(self._req(self.other), None, self.owner))
+
+    def test_manager_allowed(self):
+        perm = IsSelfOrHasPermission(Perm.USERS_MANAGE)()
+        self.assertTrue(perm.has_object_permission(self._req(self.manager), None, self.owner))
