@@ -25,7 +25,8 @@ from identity.permissions_registry import Perm
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     """Custom token obtain view with login history tracking"""
-    
+    throttle_scope = 'auth'  # rate-limited via ScopedRateThrottle (settings)
+
     def post(self, request, *args, **kwargs):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -71,10 +72,18 @@ class CustomTokenObtainPairView(TokenObtainPairView):
                 status=status.HTTP_401_UNAUTHORIZED
             )
         
+        # Email-verification gate (enforced only when configured — non-breaking by default)
+        from django.conf import settings as dj_settings
+        if getattr(dj_settings, 'ENFORCE_EMAIL_VERIFICATION', False) and not user.is_verified:
+            return Response(
+                {"detail": "Please verify your email before logging in."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         # Successful login
         user.reset_failed_logins()
         user.last_login = timezone.now()
-        user.save()
+        user.save(update_fields=['failed_login_attempts', 'account_locked_until', 'last_login'])
         
         # Track login history
         LoginHistory.objects.create(
@@ -338,6 +347,7 @@ class ForgotPasswordView(APIView):
     Always returns 200 to prevent email enumeration attacks.
     """
     permission_classes = [permissions.AllowAny]
+    throttle_scope = 'otp'
 
     def post(self, request):
         email = request.data.get('email', '').strip().lower()
@@ -362,6 +372,7 @@ class ResetPasswordView(APIView):
     Accept uid + token (from the reset email) and a new password, then apply it.
     """
     permission_classes = [permissions.AllowAny]
+    throttle_scope = 'otp'
 
     def post(self, request):
         from django.contrib.auth.tokens import default_token_generator
@@ -401,6 +412,42 @@ class ResetPasswordView(APIView):
         logger.info('[ResetPassword] Password successfully reset for user=%s ip=%s', user.username, ip)
 
         return Response({"detail": "Password has been reset. You may now log in."})
+
+
+class VerifyEmailView(APIView):
+    """Verify a user's email via uid+token (same token scheme as password reset)."""
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = 'otp'
+
+    def post(self, request):
+        from django.contrib.auth.tokens import default_token_generator
+        from django.utils.encoding import force_str
+        from django.utils.http import urlsafe_base64_decode
+
+        uid = request.data.get('uid', '')
+        token = request.data.get('token', '')
+        if not uid or not token:
+            return Response(
+                {"detail": "uid and token are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            user_id = force_str(urlsafe_base64_decode(uid))
+            user = User.objects.get(pk=user_id)
+        except (User.DoesNotExist, ValueError, TypeError):
+            return Response(
+                {"detail": "Invalid verification link."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not default_token_generator.check_token(user, token):
+            return Response(
+                {"detail": "Verification link is invalid or has expired."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not user.is_verified:
+            user.is_verified = True
+            user.save(update_fields=['is_verified'])
+        return Response({"detail": "Email verified. You can now log in."})
 
 
 class AuditLogView(generics.ListAPIView):

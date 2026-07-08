@@ -120,6 +120,11 @@ class User(AbstractBaseUser, PermissionsMixin):
     sms_notifications = models.BooleanField(default=False)
     
     # Security
+    is_verified = models.BooleanField(
+        default=False,
+        help_text='Email/phone ownership verified. Enforced at login only when '
+                  'settings.ENFORCE_EMAIL_VERIFICATION is on.',
+    )
     password_reset_required = models.BooleanField(default=False)
     failed_login_attempts = models.IntegerField(default=0)
     account_locked_until = models.DateTimeField(null=True, blank=True)
