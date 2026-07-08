@@ -104,6 +104,15 @@ class Role(models.Model):
     def allows_node_type(self, node_type):
         return node_type in (self.allowed_node_types or [])
 
+    def clean(self):
+        # Validate allowed_node_types at the Role boundary, not just deferred to
+        # RoleAssignment.clean().
+        from hierarchy.models import NodeType
+        valid = {choice.value for choice in NodeType}
+        unknown = [t for t in (self.allowed_node_types or []) if t not in valid]
+        if unknown:
+            raise ValidationError({'allowed_node_types': f'Unknown node types: {unknown}'})
+
 
 class RolePermission(models.Model):
     """Explicit through table so grants are admin-manageable and auditable."""
@@ -176,6 +185,7 @@ class RoleAssignment(models.Model):
         related_name='role_assignments_made',
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         constraints = [

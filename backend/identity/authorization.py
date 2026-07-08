@@ -144,16 +144,28 @@ def can_assign(actor, role, node):
 
 
 @transaction.atomic
-def assign_role(user, role, node, appointed_by=None, start_date=None, enforce_escalation=True):
+def assign_role(user, role, node, appointed_by=None, start_date=None, end_date=None,
+                enforce_escalation=True):
     """Grant a role at a node (idempotent on the active triple). Validates level
-    and, when an actor is given, escalation."""
+    and, when an actor is given, escalation. Re-granting an already-active
+    assignment preserves its original ``start_date`` (get_or_create, not
+    update_or_create)."""
     validate_role_assignment(role, node)
     if enforce_escalation and appointed_by is not None and not can_assign(appointed_by, role, node):
         raise ValidationError('You cannot grant a role broader than your own authority here.')
-    assignment, _ = RoleAssignment.objects.update_or_create(
+    assignment, created = RoleAssignment.objects.get_or_create(
         user=user, role=role, node=node, is_active=True,
-        defaults={'appointed_by': appointed_by, 'start_date': start_date or timezone.localdate()},
+        defaults={
+            'appointed_by': appointed_by,
+            'start_date': start_date or timezone.localdate(),
+            'end_date': end_date,
+        },
     )
+    # Allow (re)scheduling an end date on an existing active assignment without
+    # disturbing its start_date.
+    if not created and end_date is not None and assignment.end_date != end_date:
+        assignment.end_date = end_date
+        assignment.save(update_fields=['end_date', 'updated_at'])
     return assignment
 
 
@@ -163,7 +175,7 @@ def revoke_role(assignment):
     assignment.is_active = False
     if assignment.end_date is None:
         assignment.end_date = timezone.localdate()
-    assignment.save(update_fields=['is_active', 'end_date'])
+    assignment.save(update_fields=['is_active', 'end_date', 'updated_at'])
     return assignment
 
 
@@ -182,19 +194,21 @@ def set_membership(user, node, is_primary=False):
 
 @transaction.atomic
 def transfer_primary_membership(user, to_node, transferred_by=None, reason=''):
-    """Move the user's primary (home) membership to a new node, recording it."""
+    """Move the user's primary (home) membership to a new node, recording it.
+
+    Delegates to ``set_membership`` (which demotes the old primary and
+    update-or-creates the destination membership in place) rather than repointing
+    the row — otherwise a pre-existing active membership at ``to_node`` would
+    collide with the unique (user, organization_node) constraint.
+    """
     current = Membership.objects.filter(user=user, is_primary=True, is_active=True).first()
     from_node = current.organization_node if current else None
-    if current:
-        current.organization_node = to_node
-        current.save(update_fields=['organization_node', 'updated_at'])
-    else:
-        current = set_membership(user, to_node, is_primary=True)
+    membership = set_membership(user, to_node, is_primary=True)
     MembershipTransfer.objects.create(
         user=user, from_node=from_node, to_node=to_node,
         transferred_by=transferred_by, reason=reason,
     )
-    return current
+    return membership
 
 
 # ---------------------------------------------------------------------------

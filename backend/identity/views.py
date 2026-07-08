@@ -82,7 +82,13 @@ class MembershipViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
                                     node_field='organization_node')
 
     def perform_create(self, serializer):
-        serializer.save()
+        # Route through the service so single-primary demotion and the active
+        # (user, node) uniqueness are handled consistently.
+        data = serializer.validated_data
+        serializer.instance = authz.set_membership(
+            data['user'], data['organization_node'],
+            is_primary=data.get('is_primary', False),
+        )
 
 
 class RoleAssignmentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
@@ -115,6 +121,7 @@ class RoleAssignmentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
             target_user, role, node,
             appointed_by=request.user,
             start_date=serializer.validated_data.get('start_date'),
+            end_date=serializer.validated_data.get('end_date'),
         )
         return Response(RoleAssignmentSerializer(assignment).data, status=status.HTTP_201_CREATED)
 

@@ -14,7 +14,8 @@ class ProfileTests(TestCase):
         u = make_user('tolu')
         Profile.objects.create(user=u, display_name='Tolu')
         with self.assertRaises(IntegrityError):
-            Profile.objects.create(user=u)
+            with transaction.atomic():
+                Profile.objects.create(user=u)
 
 
 class MembershipConstraintTests(TestCase):
@@ -33,6 +34,16 @@ class MembershipConstraintTests(TestCase):
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 Membership.objects.create(user=self.u, organization_node=self.t['parish_a'])
+
+
+class RoleValidationTests(TestCase):
+    def test_clean_rejects_unknown_node_type(self):
+        r = Role(code='weird', label='Weird', allowed_node_types=['galaxy'])
+        with self.assertRaises(ValidationError):
+            r.clean()
+
+    def test_clean_accepts_valid_node_types(self):
+        Role(code='ok', label='OK', allowed_node_types=['region', 'parish']).clean()
 
 
 class RoleAssignmentValidationTests(TestCase):

@@ -76,6 +76,16 @@ class AuthorizationTests(TestCase):
         with self.assertRaises(ValidationError):
             authz.assign_role(target, self.superadmin, self.t['national'], appointed_by=actor)
 
+    def test_assign_role_preserves_start_date_on_regrant(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        u = make_user('regrant')
+        earlier = timezone.localdate() - timedelta(days=30)
+        authz.assign_role(u, self.province, self.t['prov'], start_date=earlier)
+        authz.assign_role(u, self.province, self.t['prov'])  # idempotent re-grant
+        ra = RoleAssignment.objects.get(user=u, role=self.province, node=self.t['prov'], is_active=True)
+        self.assertEqual(ra.start_date, earlier)
+
     def test_revoke_preserves_history(self):
         u = make_user('rev')
         ra = self._assign(u, self.regional, self.t['r1'])
@@ -97,6 +107,18 @@ class TransferTests(TestCase):
         m = Membership.objects.get(user=u, is_primary=True, is_active=True)
         self.assertEqual(m.organization_node_id, self.t['area_b'].pk)
         self.assertEqual(MembershipTransfer.objects.filter(user=u).count(), 1)
+
+    def test_transfer_to_node_with_existing_membership(self):
+        """Transferring to a node the user already belongs to must not violate the
+        unique (user, organization_node) constraint."""
+        u = make_user('mover2')
+        authz.set_membership(u, self.t['parish_a'], is_primary=True)
+        authz.set_membership(u, self.t['area_b'])  # pre-existing non-primary at destination
+        authz.transfer_primary_membership(u, self.t['area_b'])  # must not raise
+        active_at_dest = Membership.objects.filter(
+            user=u, organization_node=self.t['area_b'], is_active=True)
+        self.assertEqual(active_at_dest.count(), 1)
+        self.assertTrue(active_at_dest.first().is_primary)
 
 
 class HasPermissionDRFTests(TestCase):
