@@ -35,6 +35,28 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',') if os.getenv('ALLOWED
 # field on User + /verify-email/ endpoint.
 ENFORCE_EMAIL_VERIFICATION = os.getenv('ENFORCE_EMAIL_VERIFICATION', 'False').lower() == 'true'
 
+# OTP (one-time codes). Provider-agnostic foundation; console backend by default.
+# Point OTP_PROVIDER at a real SMS backend (Termii/Africa's Talking) to go live.
+OTP_CODE_LENGTH = int(os.getenv('OTP_CODE_LENGTH', '6'))
+OTP_TTL_SECONDS = int(os.getenv('OTP_TTL_SECONDS', '600'))
+OTP_MAX_ATTEMPTS = int(os.getenv('OTP_MAX_ATTEMPTS', '5'))
+OTP_PROVIDER = os.getenv('OTP_PROVIDER', 'users.otp_providers.ConsoleOTPProvider')
+
+# Additive HttpOnly-cookie JWT auth (Bearer still accepted; header takes precedence).
+# SameSite=Lax (default) neutralises cross-site CSRF for the cookie path. Enabling
+# cross-site cookie auth (SameSite=None) requires a CSRF double-submit flow — deferred.
+AUTH_COOKIE_ACCESS = os.getenv('AUTH_COOKIE_ACCESS', 'access_token')
+AUTH_COOKIE_REFRESH = os.getenv('AUTH_COOKIE_REFRESH', 'refresh_token')
+AUTH_COOKIE_SECURE = os.getenv('AUTH_COOKIE_SECURE', str(not DEBUG)).lower() == 'true'
+AUTH_COOKIE_SAMESITE = os.getenv('AUTH_COOKIE_SAMESITE', 'Lax')
+AUTH_COOKIE_DOMAIN = os.getenv('AUTH_COOKIE_DOMAIN') or None
+# SameSite=None cookies are rejected by browsers unless Secure, and cross-site
+# use also needs a CSRF double-submit flow (not yet implemented). Fail safe.
+if AUTH_COOKIE_SAMESITE == 'None' and not AUTH_COOKIE_SECURE:
+    import warnings
+    warnings.warn('AUTH_COOKIE_SAMESITE=None requires Secure cookies; forcing AUTH_COOKIE_SECURE=True.')
+    AUTH_COOKIE_SECURE = True
+
 
 # Application definition
 
@@ -49,6 +71,7 @@ INSTALLED_APPS = [
     # Third party apps
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',  # refresh-token revocation on logout/rotation
     'corsheaders',
     'drf_yasg',
     'drf_spectacular',
@@ -261,7 +284,8 @@ class UUIDEncoder(json.JSONEncoder):
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        # Superset of JWTAuthentication: header first, HttpOnly cookie fallback.
+        'users.authentication.CookieJWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',

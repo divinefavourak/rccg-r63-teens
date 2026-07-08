@@ -6,12 +6,13 @@ logger = logging.getLogger(__name__)
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.utils import timezone
 from django.contrib.auth import authenticate
 from django.db.models import Q
 
+from .authentication import clear_auth_cookies, set_auth_cookies
 from .email_service import UserEmailService
 from .models import User, LoginHistory, AuditLog
 from .serializers import (
@@ -104,7 +105,10 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             'needs_gender': not has_any_permission(user, Perm.USERS_MANAGE) and not user.gender,
         }
 
-        return Response(response_data)
+        # Additive: also set HttpOnly cookies (Bearer clients keep using the body).
+        resp = Response(response_data)
+        set_auth_cookies(resp, access=str(refresh.access_token), refresh=str(refresh))
+        return resp
     
     def get_client_ip(self, request):
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
@@ -451,6 +455,148 @@ class VerifyEmailView(APIView):
             user.is_verified = True
             user.save(update_fields=['is_verified'])
         return Response({"detail": "Email verified. You can now log in."})
+
+
+def _find_user_by_destination(destination, channel):
+    from .models import OTPCode
+    destination = (destination or '').strip().lower()
+    if channel == OTPCode.Channel.EMAIL:
+        return User.objects.filter(email=destination, is_active=True).first()
+    return User.objects.filter(phone=destination, is_active=True).first()
+
+
+class RequestOTPView(APIView):
+    """Request a one-time code. Always 200 (no account enumeration)."""
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = 'otp'
+
+    def post(self, request):
+        from .models import OTPCode
+        from .otp import request_otp
+
+        destination = request.data.get('destination', '')
+        channel = request.data.get('channel', OTPCode.Channel.EMAIL)
+        purpose = request.data.get('purpose', OTPCode.Purpose.LOGIN)
+        generic = Response({"detail": "If the destination is valid, a code has been sent."})
+
+        if not destination or channel not in OTPCode.Channel.values or purpose not in OTPCode.Purpose.values:
+            return Response({"detail": "destination, channel and purpose are required."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        user = _find_user_by_destination(destination, channel)
+        # Only ever dispatch to a known account — for EVERY purpose. This prevents
+        # the endpoint from being used to send codes to arbitrary emails/phones
+        # (SMS-bombing / cost abuse once a live provider is attached). We never
+        # disclose whether the account exists.
+        if user is not None:
+            request_otp(destination, channel, purpose, user=user)
+        return generic
+
+
+class VerifyOTPView(APIView):
+    """Verify a one-time code. For purpose=login, returns JWT tokens."""
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = 'otp'
+
+    def post(self, request):
+        from .models import OTPCode
+        from .otp import verify_otp
+
+        destination = request.data.get('destination', '')
+        purpose = request.data.get('purpose', OTPCode.Purpose.LOGIN)
+        code = request.data.get('code', '')
+        if not destination or not code:
+            return Response({"detail": "destination and code are required."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        otp = verify_otp(destination, purpose, code)
+        if otp is None:
+            return Response({"detail": "Invalid or expired code."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        user = otp.user or _find_user_by_destination(destination, otp.channel)
+
+        if purpose == OTPCode.Purpose.VERIFY:
+            if user and not user.is_verified:
+                user.is_verified = True
+                user.save(update_fields=['is_verified'])
+            return Response({"detail": "Verified."})
+
+        if purpose == OTPCode.Purpose.LOGIN:
+            if user is None:
+                return Response({"detail": "No account for that destination."},
+                                status=status.HTTP_400_BAD_REQUEST)
+            # Full parity with password login (no weaker parallel auth path).
+            if user.account_locked_until and user.account_locked_until > timezone.now():
+                return Response({"detail": "Account is temporarily locked. Try again later."},
+                                status=status.HTTP_423_LOCKED)
+            from django.conf import settings as dj_settings
+            # An email OTP proves email ownership → mark verified rather than block.
+            newly_verified = False
+            if otp.channel == OTPCode.Channel.EMAIL and not user.is_verified:
+                user.is_verified = True
+                newly_verified = True
+            if getattr(dj_settings, 'ENFORCE_EMAIL_VERIFICATION', False) and not user.is_verified:
+                return Response({"detail": "Please verify your email before logging in."},
+                                status=status.HTTP_403_FORBIDDEN)
+            # Reset login state consistently with the password path.
+            user.failed_login_attempts = 0
+            user.account_locked_until = None
+            user.last_login = timezone.now()
+            update_fields = ['failed_login_attempts', 'account_locked_until', 'last_login']
+            if newly_verified:
+                update_fields.append('is_verified')
+            user.save(update_fields=update_fields)
+            refresh = RefreshToken.for_user(user)
+            resp = Response({
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+                'user': UserSerializer(user).data,
+            })
+            set_auth_cookies(resp, access=str(refresh.access_token), refresh=str(refresh))
+            return resp
+
+        return Response({"detail": "Verified."})
+
+
+class CookieTokenRefreshView(TokenRefreshView):
+    """Refresh access using a refresh token from the body OR the HttpOnly cookie,
+    and re-set the auth cookies."""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        from django.conf import settings as dj_settings
+        raw = request.data.get('refresh') or request.COOKIES.get(dj_settings.AUTH_COOKIE_REFRESH)
+        if not raw:
+            return Response({"detail": "No refresh token provided."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        serializer = self.get_serializer(data={'refresh': raw})
+        try:
+            serializer.is_valid(raise_exception=True)
+        except Exception:
+            return Response({"detail": "Invalid or expired refresh token."},
+                            status=status.HTTP_401_UNAUTHORIZED)
+        data = serializer.validated_data
+        resp = Response(data)
+        set_auth_cookies(resp, access=data.get('access'), refresh=data.get('refresh'))
+        return resp
+
+
+class LogoutView(APIView):
+    """Blacklist the refresh token (body or cookie) and clear auth cookies."""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        from django.conf import settings as dj_settings
+        raw = request.data.get('refresh') or request.COOKIES.get(dj_settings.AUTH_COOKIE_REFRESH)
+        if raw:
+            try:
+                RefreshToken(raw).blacklist()
+            except Exception as exc:
+                logger.warning('[Logout] refresh-token blacklist failed: %s', exc)
+        resp = Response({"detail": "Logged out."})
+        clear_auth_cookies(resp)
+        return resp
 
 
 class AuditLogView(generics.ListAPIView):

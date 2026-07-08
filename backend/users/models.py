@@ -249,3 +249,50 @@ class AuditLog(models.Model):
     
     def __str__(self):
         return f"{self.user.username if self.user else 'System'} - {self.action} - {self.entity_type}"
+
+
+class OTPCode(models.Model):
+    """A single-use, hashed, expiring one-time code. The plaintext code is never
+    stored — only an HMAC of it; verification is constant-time."""
+
+    class Channel(models.TextChoices):
+        SMS = 'sms', 'SMS'
+        EMAIL = 'email', 'Email'
+
+    class Purpose(models.TextChoices):
+        LOGIN = 'login', 'Login'
+        VERIFY = 'verify', 'Verify contact'
+        RESET = 'reset', 'Password reset'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, null=True, blank=True, related_name='otp_codes',
+    )
+    destination = models.CharField(max_length=255, db_index=True)  # phone/email (normalized)
+    channel = models.CharField(max_length=10, choices=Channel.choices)
+    purpose = models.CharField(max_length=10, choices=Purpose.choices)
+    code_hash = models.CharField(max_length=128)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['destination', 'purpose', 'consumed_at']),
+        ]
+
+    def __str__(self):
+        # Mask the destination — this shows up in admin, logs and tracebacks.
+        d = self.destination or ''
+        masked = (d[:2] + '***') if d else '***'
+        return f'OTP({self.purpose}) -> {masked}'
+
+    @property
+    def is_expired(self):
+        return timezone.now() >= self.expires_at
+
+    @property
+    def is_consumed(self):
+        return self.consumed_at is not None

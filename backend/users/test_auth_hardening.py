@@ -23,6 +23,10 @@ def make_user(username, verified=False, password='pass-12345'):
 
 @override_settings(CACHES=_LOCMEM)
 class EmailVerificationTests(APITestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()  # reset throttle counters between tests
+
     def test_verify_email_endpoint(self):
         user = make_user('tolu', verified=False)
         uid = urlsafe_base64_encode(force_bytes(user.pk))
