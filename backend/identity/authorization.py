@@ -257,3 +257,66 @@ def HasPermission(permission_code):
 
     _HasPermission.__name__ = f'HasPermission[{permission_code}]'
     return _HasPermission
+
+
+def HasPermissionOrReadOnly(permission_code):
+    """Public/authenticated read (SAFE methods), permissioned write. Replaces the
+    legacy ``ContentPermission``/``IsAdminOrReadOnly`` pattern. Object writes are
+    node-scoped when the object carries a scope node; otherwise the coarse gate
+    applies (resources without a hierarchy node yet — see expand-contract plan)."""
+    from rest_framework.permissions import SAFE_METHODS
+
+    class _HasPermissionOrReadOnly(BasePermission):
+        message = f'Missing required permission: {permission_code}.'
+
+        def has_permission(self, request, view):
+            if request.method in SAFE_METHODS:
+                return True
+            user = request.user
+            if not (user and user.is_authenticated):
+                return False
+            return user.is_superuser or has_any_permission(user, permission_code)
+
+        def has_object_permission(self, request, view, obj):
+            if request.method in SAFE_METHODS:
+                return True
+            user = request.user
+            if user and user.is_superuser:
+                return True
+            node = _scope_node(obj)
+            if node is not None:
+                return has_permission(user, permission_code, node)
+            return has_any_permission(user, permission_code)
+
+    _HasPermissionOrReadOnly.__name__ = f'HasPermissionOrReadOnly[{permission_code}]'
+    return _HasPermissionOrReadOnly
+
+
+def IsSelfOrHasPermission(permission_code, user_attr='user'):
+    """Owner (``obj.user`` is the requester, or the object *is* the user) OR a
+    holder of ``permission_code`` at the object's node. Replaces ``IsSelfOrAdmin``/
+    ``IsOwnerOrAdmin``."""
+
+    class _IsSelfOrHasPermission(BasePermission):
+        def has_permission(self, request, view):
+            return bool(request.user and request.user.is_authenticated)
+
+        def has_object_permission(self, request, view, obj):
+            user = request.user
+            if user and user.is_superuser:
+                return True
+            owner = obj if _looks_like_user(obj) else getattr(obj, user_attr, None)
+            if owner is not None and owner == user:
+                return True
+            node = _scope_node(obj)
+            if node is not None:
+                return has_permission(user, permission_code, node)
+            return has_any_permission(user, permission_code)
+
+    _IsSelfOrHasPermission.__name__ = f'IsSelfOrHasPermission[{permission_code}]'
+    return _IsSelfOrHasPermission
+
+
+def _looks_like_user(obj):
+    from django.contrib.auth import get_user_model
+    return isinstance(obj, get_user_model())

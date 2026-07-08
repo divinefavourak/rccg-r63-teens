@@ -7,10 +7,8 @@ from rest_framework.response import Response
 from django.utils import timezone
 from django.db.models import Count, Sum, Q
 
-from common.permissions import (
-    ContentPermission, IsAdmin, IsCoordinatorOrAdmin,
-    ProvinceAccessPermission
-)
+from identity.authorization import HasPermission, HasPermissionOrReadOnly, has_any_permission
+from identity.permissions_registry import Perm
 from content.views import get_age_group_filter
 from .email_service import EventEmailService
 from .models import Event, EventRegistration, BulkUpload, RegistrationAuditLog
@@ -34,7 +32,7 @@ class EventViewSet(viewsets.ModelViewSet):
     """ViewSet for events."""
     
     queryset = Event.objects.all()
-    permission_classes = [ContentPermission]
+    permission_classes = [HasPermissionOrReadOnly(Perm.EVENTS_MANAGE)]
     lookup_field = 'pk'
     filterset_fields = ['status', 'event_type', 'registration_status', 'is_featured']
     search_fields = ['title', 'description', 'venue']
@@ -60,11 +58,12 @@ class EventViewSet(viewsets.ModelViewSet):
             )
         )
 
-        # Non-admins only see published events
-        if not self.request.user.is_authenticated or self.request.user.role != 'admin':
+        # Only event managers see unpublished events.
+        if not has_any_permission(self.request.user, Perm.EVENTS_MANAGE):
             queryset = queryset.filter(status='published')
 
-        if self.request.user.is_authenticated and self.request.user.role not in ['admin', 'coordinator']:
+        # Non-leaders are additionally filtered to their age group.
+        if not has_any_permission(self.request.user, Perm.EVENTS_VIEW):
             queryset = queryset.filter(get_age_group_filter(self.request.user))
 
         # Filter upcoming
@@ -130,18 +129,12 @@ class EventViewSet(viewsets.ModelViewSet):
     @action(
         detail=True, 
         methods=['get'], 
-        permission_classes=[permissions.IsAuthenticated, IsCoordinatorOrAdmin]
+        permission_classes=[permissions.IsAuthenticated, HasPermission(Perm.EVENTS_MANAGE)]
     )
     def registrations(self, request, pk=None):
         """Get registrations for an event (coordinators/admins only)."""
         event = self.get_object()
         registrations = event.registrations.all()
-        
-        # Coordinators only see their province
-        if request.user.role == 'coordinator':
-            registrations = registrations.filter(
-                attendee_province=request.user.province
-            )
         
         # Apply filters
         status_filter = request.query_params.get('status')
@@ -185,18 +178,12 @@ class EventViewSet(viewsets.ModelViewSet):
     @action(
         detail=True,
         methods=['get'],
-        permission_classes=[permissions.IsAuthenticated, IsCoordinatorOrAdmin]
+        permission_classes=[permissions.IsAuthenticated, HasPermission(Perm.EVENTS_MANAGE)]
     )
     def dashboard(self, request, pk=None):
         """Get dashboard stats for an event."""
         event = self.get_object()
         registrations = event.registrations.all()
-        
-        # Coordinators only see their province
-        if request.user.role == 'coordinator':
-            registrations = registrations.filter(
-                attendee_province=request.user.province
-            )
         
         stats = {
             'total_registrations': registrations.count(),
@@ -235,7 +222,7 @@ class EventRegistrationViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         if self.action in ['update', 'partial_update', 'destroy']:
-            return [permissions.IsAuthenticated(), IsCoordinatorOrAdmin()]
+            return [permissions.IsAuthenticated(), HasPermission(Perm.EVENTS_MANAGE)()]
         return [permissions.IsAuthenticated()]
 
     def perform_create(self, serializer):
@@ -244,16 +231,11 @@ class EventRegistrationViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         user = self.request.user
-        
-        # Admins see all
-        if user.role == 'admin':
+        # Event managers see all registrations; everyone else only their own.
+        # (Finer node-scoped visibility follows when EventRegistration carries an
+        # organization_node — see phase1-completion notes.)
+        if has_any_permission(user, Perm.EVENTS_MANAGE):
             return self.queryset
-        
-        # Coordinators see their province
-        if user.role == 'coordinator':
-            return self.queryset.filter(attendee_province=user.province)
-        
-        # Teens see only their own
         return self.queryset.filter(user=user)
     
     @action(detail=False, methods=['get'])
@@ -268,7 +250,7 @@ class EventRegistrationViewSet(viewsets.ModelViewSet):
     @action(
         detail=True, 
         methods=['post'], 
-        permission_classes=[permissions.IsAuthenticated, IsCoordinatorOrAdmin]
+        permission_classes=[permissions.IsAuthenticated, HasPermission(Perm.EVENTS_MANAGE)]
     )
     def update_status(self, request, pk=None):
         """Update registration status."""
@@ -309,7 +291,7 @@ class EventRegistrationViewSet(viewsets.ModelViewSet):
     @action(
         detail=True,
         methods=['post'],
-        permission_classes=[permissions.IsAuthenticated, IsCoordinatorOrAdmin]
+        permission_classes=[permissions.IsAuthenticated, HasPermission(Perm.EVENTS_CHECKIN)]
     )
     def check_in(self, request, pk=None):
         """Check in an attendee."""
@@ -359,7 +341,7 @@ class EventBulkUploadViewSet(viewsets.ModelViewSet):
     """ViewSet for event bulk uploads."""
     
     queryset = BulkUpload.objects.select_related('event', 'uploaded_by').all()
-    permission_classes = [permissions.IsAuthenticated, IsCoordinatorOrAdmin]
+    permission_classes = [permissions.IsAuthenticated, HasPermission(Perm.EVENTS_MANAGE)]
     lookup_field = 'pk'
     filterset_fields = ['status', 'event']
     ordering = ['-created_at']
@@ -372,10 +354,9 @@ class EventBulkUploadViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         
-        if user.role == 'admin':
+        if has_any_permission(user, Perm.EVENTS_MANAGE):
             return self.queryset
-        
-        # Coordinators see only their uploads
+        # Non-managers see only their own uploads.
         return self.queryset.filter(uploaded_by=user)
     
     def perform_create(self, serializer):
@@ -389,17 +370,14 @@ class RegistrationAuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     
     queryset = RegistrationAuditLog.objects.select_related('registration', 'user').all()
     serializer_class = RegistrationAuditLogSerializer
-    permission_classes = [permissions.IsAuthenticated, IsCoordinatorOrAdmin]
+    permission_classes = [permissions.IsAuthenticated, HasPermission(Perm.EVENTS_MANAGE)]
     filterset_fields = ['registration', 'action']
     ordering = ['-timestamp']
     
     def get_queryset(self):
         user = self.request.user
         
-        if user.role == 'admin':
+        if has_any_permission(user, Perm.EVENTS_MANAGE):
             return self.queryset
-        
-        # Coordinators see logs for their province registrations
-        return self.queryset.filter(
-            registration__attendee_province=user.province
-        )
+        # Audit logs are leader-only.
+        return self.queryset.none()

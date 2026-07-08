@@ -13,7 +13,8 @@ from .serializers import (
 )
 from .services import PaymentService
 from tickets.models import Ticket
-from users.permissions import IsAdmin
+from identity.authorization import HasPermission, has_any_permission
+from identity.permissions_registry import Perm
 
 
 class PaymentViewSet(viewsets.ModelViewSet):
@@ -43,19 +44,9 @@ class PaymentViewSet(viewsets.ModelViewSet):
         if end_date:
             queryset = queryset.filter(initiated_at__lte=end_date)
         
-        # User-based filtering
-        if user.role == user.Role.COORDINATOR:
-            # Coordinators can see payments for tickets from their province
-            # OR payments they made themselves (bulk payments)
-            queryset = queryset.filter(
-                Q(payer_email=user.email) |  
-                Q(ticket__province=user.province)
-            )
-        elif user.role == user.Role.ADMIN:
-            # Admins see all payments
-            pass
-        else:
-            # Regular users see only their own payments
+        # Payment viewers/managers see all; everyone else sees only their own.
+        # (Node-scoped payment visibility follows the events/registration node work.)
+        if not has_any_permission(user, Perm.PAYMENTS_VIEW):
             queryset = queryset.filter(payer_email=user.email)
         
         return queryset.order_by('-initiated_at')
@@ -178,7 +169,7 @@ class PaymentPlanViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [permissions.IsAuthenticated(), IsAdmin()]
+            return [permissions.IsAuthenticated(), HasPermission(Perm.PAYMENTS_MANAGE)()]
         return [permissions.AllowAny()]
     
     def get_queryset(self):
@@ -200,7 +191,7 @@ class PaymentPlanViewSet(viewsets.ModelViewSet):
 
 class PaymentDashboardView(APIView):
     """Payment dashboard statistics"""
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, HasPermission(Perm.PAYMENTS_MANAGE)]
     
     def get(self, request):
         # Calculate statistics

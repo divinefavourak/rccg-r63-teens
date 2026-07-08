@@ -6,7 +6,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Count
 
-from common.permissions import ContentPermission, IsAdmin
+from identity.authorization import HasPermission, HasPermissionOrReadOnly, has_any_permission
+from identity.permissions_registry import Perm
 from content.views import get_age_group_filter
 from .models import MediaCategory, MediaSeries, MediaEpisode, Playlist
 from .serializers import (
@@ -25,7 +26,7 @@ class MediaCategoryViewSet(viewsets.ModelViewSet):
     
     queryset = MediaCategory.objects.filter(is_active=True)
     serializer_class = MediaCategorySerializer
-    permission_classes = [ContentPermission]
+    permission_classes = [HasPermissionOrReadOnly(Perm.MEDIA_MANAGE)]
     lookup_field = 'pk'
     ordering = ['order', 'name']
     
@@ -44,7 +45,7 @@ class MediaSeriesViewSet(viewsets.ModelViewSet):
     """ViewSet for media series."""
     
     queryset = MediaSeries.objects.select_related('category').all()
-    permission_classes = [ContentPermission]
+    permission_classes = [HasPermissionOrReadOnly(Perm.MEDIA_MANAGE)]
     lookup_field = 'pk'
     filterset_fields = ['status', 'category', 'is_featured']
     search_fields = ['title', 'description', 'host_name']
@@ -59,10 +60,10 @@ class MediaSeriesViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = self.queryset
 
-        if not self.request.user.is_authenticated or self.request.user.role != 'admin':
+        if not self.request.user.is_authenticated or not has_any_permission(self.request.user, Perm.MEDIA_MANAGE):
             queryset = queryset.filter(status='published')
 
-        if self.request.user.is_authenticated and self.request.user.role not in ['admin', 'coordinator']:
+        if not has_any_permission(self.request.user, Perm.CONTENT_VIEW):
             queryset = queryset.filter(get_age_group_filter(self.request.user))
 
         return queryset
@@ -93,7 +94,7 @@ class MediaEpisodeViewSet(viewsets.ModelViewSet):
     """ViewSet for media episodes."""
     
     queryset = MediaEpisode.objects.select_related('series', 'series__category').all()
-    permission_classes = [ContentPermission]
+    permission_classes = [HasPermissionOrReadOnly(Perm.MEDIA_MANAGE)]
     lookup_field = 'pk'
     filterset_fields = ['status', 'series', 'media_type', 'is_featured']
     search_fields = ['title', 'description', 'tags']
@@ -110,10 +111,10 @@ class MediaEpisodeViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = self.queryset
 
-        if not self.request.user.is_authenticated or self.request.user.role != 'admin':
+        if not self.request.user.is_authenticated or not has_any_permission(self.request.user, Perm.MEDIA_MANAGE):
             queryset = queryset.filter(status='published')
 
-        if self.request.user.is_authenticated and self.request.user.role not in ['admin', 'coordinator']:
+        if not has_any_permission(self.request.user, Perm.CONTENT_VIEW):
             queryset = queryset.filter(get_age_group_filter(self.request.user))
 
         # Filter by media type
@@ -251,7 +252,7 @@ class PlaylistViewSet(viewsets.ModelViewSet):
             )
         
         # Check permission
-        if playlist.created_by != request.user and request.user.role != 'admin':
+        if playlist.created_by != request.user and not has_any_permission(request.user, Perm.MEDIA_MANAGE):
             return Response(
                 {'detail': 'You cannot modify this playlist.'},
                 status=status.HTTP_403_FORBIDDEN
@@ -278,7 +279,7 @@ class PlaylistViewSet(viewsets.ModelViewSet):
         playlist = self.get_object()
         episode_id = request.data.get('episode_id')
         
-        if playlist.created_by != request.user and request.user.role != 'admin':
+        if playlist.created_by != request.user and not has_any_permission(request.user, Perm.MEDIA_MANAGE):
             return Response(
                 {'detail': 'You cannot modify this playlist.'},
                 status=status.HTTP_403_FORBIDDEN

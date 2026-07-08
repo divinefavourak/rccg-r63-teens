@@ -30,6 +30,11 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',') if os.getenv('ALLOWED_HOSTS') else ['*']
 
+# Email-verification enforcement at login. Off by default (non-breaking); turn on
+# once the verification email flow and frontend are ready. Foundation: is_verified
+# field on User + /verify-email/ endpoint.
+ENFORCE_EMAIL_VERIFICATION = os.getenv('ENFORCE_EMAIL_VERIFICATION', 'False').lower() == 'true'
+
 
 # Application definition
 

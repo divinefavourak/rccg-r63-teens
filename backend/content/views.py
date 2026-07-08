@@ -9,7 +9,8 @@ from django.utils import timezone
 from django.db.models import Q
 from datetime import date, timedelta
 
-from common.permissions import ContentPermission, IsAdmin
+from identity.authorization import HasPermission, HasPermissionOrReadOnly, has_any_permission
+from identity.permissions_registry import Perm
 from .models import Devotional, ManualSeries, Manual, Article, UserReadLog, UserLikeLog
 from .serializers import (
     DevotionalListSerializer,
@@ -36,9 +37,10 @@ def get_age_group_filter(user):
     from django.db.models import Q
     if not user or not user.is_authenticated:
         return Q(target_age_groups=[]) | Q(target_age_groups__isnull=True)
-    if user.role in ['admin', 'coordinator']:
+    # Leaders who can view all content (admins/coordinators via content.view).
+    if has_any_permission(user, Perm.CONTENT_VIEW):
         return Q()  # no filter — see all
-    if user.role == 'teacher':
+    if hasattr(user, 'teacher_profile'):
         try:
             age_groups = user.teacher_profile.assigned_age_groups or []
         except Exception:
@@ -59,7 +61,7 @@ class DevotionalViewSet(viewsets.ModelViewSet):
     """ViewSet for devotionals."""
     
     queryset = Devotional.objects.all()
-    permission_classes = [ContentPermission]
+    permission_classes = [HasPermissionOrReadOnly(Perm.CONTENT_MANAGE)]
     lookup_field = 'pk'
     filterset_fields = ['status', 'date']
     search_fields = ['title', 'content', 'anchor_scripture']
@@ -77,11 +79,11 @@ class DevotionalViewSet(viewsets.ModelViewSet):
         queryset = self.queryset
         
         # Non-admins only see published content
-        if not self.request.user.is_authenticated or self.request.user.role != 'admin':
+        if not self.request.user.is_authenticated or not has_any_permission(self.request.user, Perm.CONTENT_MANAGE):
             queryset = queryset.filter(status='published')
 
         # Age group filtering for non-admin/non-coordinator users
-        if self.request.user.is_authenticated and self.request.user.role not in ['admin', 'coordinator']:
+        if not has_any_permission(self.request.user, Perm.CONTENT_VIEW):
             queryset = queryset.filter(get_age_group_filter(self.request.user))
 
         # Date range filtering
@@ -243,7 +245,7 @@ class DevotionalViewSet(viewsets.ModelViewSet):
         )
         return Response({'success': True})
 
-    @action(detail=False, methods=['post'], permission_classes=[IsAdmin])
+    @action(detail=False, methods=['post'], permission_classes=[HasPermission(Perm.CONTENT_MANAGE)])
     def fetch_from_web(self, request):
         """
         Trigger scraping of devotionals from the web.
@@ -296,7 +298,7 @@ class ManualSeriesViewSet(viewsets.ModelViewSet):
     """ViewSet for manual series."""
     
     queryset = ManualSeries.objects.all()
-    permission_classes = [ContentPermission]
+    permission_classes = [HasPermissionOrReadOnly(Perm.CONTENT_MANAGE)]
     lookup_field = 'pk'
     filterset_fields = ['status']
     search_fields = ['title', 'description']
@@ -310,7 +312,7 @@ class ManualSeriesViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = self.queryset
         
-        if not self.request.user.is_authenticated or self.request.user.role != 'admin':
+        if not self.request.user.is_authenticated or not has_any_permission(self.request.user, Perm.CONTENT_MANAGE):
             queryset = queryset.filter(status='published')
         
         return queryset
@@ -320,7 +322,7 @@ class ManualViewSet(viewsets.ModelViewSet):
     """ViewSet for manuals."""
     
     queryset = Manual.objects.select_related('series').all()
-    permission_classes = [ContentPermission]
+    permission_classes = [HasPermissionOrReadOnly(Perm.CONTENT_MANAGE)]
     lookup_field = 'pk'
     filterset_fields = ['status', 'series', 'target_age_group']
     search_fields = ['title', 'theme', 'memory_verse']
@@ -333,21 +335,21 @@ class ManualViewSet(viewsets.ModelViewSet):
         elif self.action == 'list':
             return ManualListSerializer
         # Teachers get teacher edition serializer on detail view
-        if self.action == 'retrieve' and self.request.user.is_authenticated and self.request.user.role in ['teacher', 'coordinator', 'admin']:
+        if self.action == 'retrieve' and has_any_permission(self.request.user, Perm.CONTENT_VIEW):
             return ManualTeacherDetailSerializer
         return ManualDetailSerializer
 
     def get_queryset(self):
         queryset = self.queryset
 
-        if not self.request.user.is_authenticated or self.request.user.role != 'admin':
+        if not self.request.user.is_authenticated or not has_any_permission(self.request.user, Perm.CONTENT_MANAGE):
             queryset = queryset.filter(status='published')
 
         # Age group filtering — Manual uses target_age_group (singular CharField),
         # not the JSONField target_age_groups used by Devotional/Article.
-        if self.request.user.is_authenticated and self.request.user.role not in ['admin', 'coordinator']:
+        if not has_any_permission(self.request.user, Perm.CONTENT_VIEW):
             from django.db.models import Q as _Q
-            if self.request.user.role == 'teacher':
+            if hasattr(self.request.user, 'teacher_profile'):
                 try:
                     age_groups = self.request.user.teacher_profile.assigned_age_groups or []
                 except Exception:
@@ -417,7 +419,7 @@ class ManualViewSet(viewsets.ModelViewSet):
             'pdf_url': manual.pdf_url or (manual.pdf_file.url if manual.pdf_file else None),
         })
 
-    @action(detail=False, methods=['post'], permission_classes=[IsAdmin])
+    @action(detail=False, methods=['post'], permission_classes=[HasPermission(Perm.CONTENT_MANAGE)])
     def auto_import(self, request):
         """
         Create a manual stub and auto-fetch a topic-relevant cover image.
@@ -482,7 +484,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
     """ViewSet for articles."""
     
     queryset = Article.objects.all()
-    permission_classes = [ContentPermission]
+    permission_classes = [HasPermissionOrReadOnly(Perm.CONTENT_MANAGE)]
     lookup_field = 'pk'
     filterset_fields = ['status', 'category', 'is_featured']
     search_fields = ['title', 'content', 'excerpt']
@@ -497,7 +499,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = self.queryset
         
-        if not self.request.user.is_authenticated or self.request.user.role != 'admin':
+        if not self.request.user.is_authenticated or not has_any_permission(self.request.user, Perm.CONTENT_MANAGE):
             queryset = queryset.filter(status='published')
         
         return queryset

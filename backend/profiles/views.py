@@ -7,7 +7,8 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
-from common.permissions import IsOwnerOrAdmin, IsTeen, IsCoordinatorOrAdmin
+from identity.authorization import HasPermission, IsSelfOrHasPermission, has_any_permission
+from identity.permissions_registry import Perm
 from .models import TeenProfile, DevotionalProgress, ManualProgress, Favorite
 from .serializers import (
     TeenProfileSerializer,
@@ -35,26 +36,19 @@ class TeenProfileViewSet(viewsets.ModelViewSet):
         return TeenProfileSerializer
     
     def get_permissions(self):
-        if self.action == 'create':
-            return [permissions.IsAuthenticated(), IsTeen()]
-        elif self.action in ['list']:
-            return [permissions.IsAuthenticated(), IsCoordinatorOrAdmin()]
+        if self.action == 'list':
+            return [permissions.IsAuthenticated(), HasPermission(Perm.PROFILES_VIEW)()]
         elif self.action in ['retrieve', 'update', 'partial_update', 'destroy']:
-            return [permissions.IsAuthenticated(), IsOwnerOrAdmin()]
+            return [permissions.IsAuthenticated(), IsSelfOrHasPermission(Perm.PROFILES_MANAGE)()]
         return [permissions.IsAuthenticated()]
     
     def get_queryset(self):
         user = self.request.user
         
-        # Admins see all
-        if user.role == 'admin':
+        # Profile viewers see all; everyone else sees only their own.
+        # (Node-scoped profile visibility via Membership is a documented follow-up.)
+        if has_any_permission(user, Perm.PROFILES_VIEW):
             return self.queryset
-        
-        # Coordinators see their province
-        if user.role == 'coordinator':
-            return self.queryset.filter(province=user.province)
-        
-        # Teens see only their own
         return self.queryset.filter(user=user)
     
     @action(detail=False, methods=['get', 'patch'])
