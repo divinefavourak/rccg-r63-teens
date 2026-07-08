@@ -175,7 +175,10 @@ class UserViewSet(viewsets.ModelViewSet):
         return UserSerializer
     
     def get_permissions(self):
-        if self.action in ['retrieve', 'update', 'partial_update', 'destroy']:
+        # Self-service for reading/updating own account; deletion requires
+        # users.manage (falls through to the class-level permission) so users
+        # cannot delete their own accounts via this endpoint.
+        if self.action in ['retrieve', 'update', 'partial_update']:
             return [permissions.IsAuthenticated(), IsSelfOrHasPermission(Perm.USERS_MANAGE)()]
         return super().get_permissions()
     
@@ -433,7 +436,7 @@ class VerifyEmailView(APIView):
             )
         try:
             user_id = force_str(urlsafe_base64_decode(uid))
-            user = User.objects.get(pk=user_id)
+            user = User.objects.get(pk=user_id, is_active=True)
         except (User.DoesNotExist, ValueError, TypeError):
             return Response(
                 {"detail": "Invalid verification link."},

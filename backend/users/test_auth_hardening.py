@@ -63,3 +63,10 @@ class EmailVerificationTests(APITestCase):
         res = self.client.post('/api/v1/auth/login/',
                                {'username': 'anyone', 'password': 'secret-123'}, format='json')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    def test_user_cannot_delete_own_account(self):
+        """DELETE requires users.manage; ownership must not grant self-deletion."""
+        u = make_user('selfdel', verified=True)
+        self.client.force_authenticate(u)
+        res = self.client.delete(f'/api/v1/auth/users/{u.id}/')
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
