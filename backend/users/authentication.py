@@ -10,6 +10,7 @@ import logging
 
 from django.conf import settings
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
 logger = logging.getLogger('auth.usage')
 
@@ -24,7 +25,13 @@ class CookieJWTAuthentication(JWTAuthentication):
         raw_token = request.COOKIES.get(settings.AUTH_COOKIE_ACCESS)
         if not raw_token:
             return None
-        validated = self.get_validated_token(raw_token)
+        # A cookie is sent automatically on every request. If it is stale/invalid,
+        # fall back to anonymous (return None) rather than raising — otherwise a
+        # browser with an expired cookie would get 401 even on public endpoints.
+        try:
+            validated = self.get_validated_token(raw_token)
+        except (InvalidToken, TokenError):
+            return None
         request.auth_source = 'cookie'
         logger.debug('auth via cookie: %s', request.path)
         return self.get_user(validated), validated

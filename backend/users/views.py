@@ -484,10 +484,12 @@ class RequestOTPView(APIView):
                             status=status.HTTP_400_BAD_REQUEST)
 
         user = _find_user_by_destination(destination, channel)
-        # For login/reset we only send to known accounts, but never disclose that.
-        if purpose in (OTPCode.Purpose.LOGIN, OTPCode.Purpose.RESET) and user is None:
-            return generic
-        request_otp(destination, channel, purpose, user=user)
+        # Only ever dispatch to a known account — for EVERY purpose. This prevents
+        # the endpoint from being used to send codes to arbitrary emails/phones
+        # (SMS-bombing / cost abuse once a live provider is attached). We never
+        # disclose whether the account exists.
+        if user is not None:
+            request_otp(destination, channel, purpose, user=user)
         return generic
 
 
@@ -524,6 +526,10 @@ class VerifyOTPView(APIView):
             if user is None:
                 return Response({"detail": "No account for that destination."},
                                 status=status.HTTP_400_BAD_REQUEST)
+            # Honour account lockout, same as password login (no weaker parallel path).
+            if user.account_locked_until and user.account_locked_until > timezone.now():
+                return Response({"detail": "Account is temporarily locked. Try again later."},
+                                status=status.HTTP_423_LOCKED)
             refresh = RefreshToken.for_user(user)
             resp = Response({
                 'access': str(refresh.access_token),
@@ -569,8 +575,8 @@ class LogoutView(APIView):
         if raw:
             try:
                 RefreshToken(raw).blacklist()
-            except Exception:
-                pass  # best-effort; cookie clearing below is the guaranteed part
+            except Exception as exc:
+                logger.warning('[Logout] refresh-token blacklist failed: %s', exc)
         resp = Response({"detail": "Logged out."})
         clear_auth_cookies(resp)
         return resp

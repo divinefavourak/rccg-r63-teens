@@ -56,6 +56,14 @@ class CookieAuthTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertIn('access', res.data)
 
+    def test_stale_cookie_is_anonymous_not_401(self):
+        """M2: an invalid/expired access cookie must not 401 public endpoints."""
+        from rest_framework.test import APIRequestFactory
+        from users.authentication import CookieJWTAuthentication
+        req = APIRequestFactory().get('/')
+        req.COOKIES['access_token'] = 'not-a-valid-jwt'
+        self.assertIsNone(CookieJWTAuthentication().authenticate(req))
+
     def test_logout_clears_cookies(self):
         self._login()
         res = self.client.post('/api/v1/auth/logout/', {}, format='json')

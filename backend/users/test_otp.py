@@ -101,6 +101,26 @@ class OTPApiTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertIn('access', res.data)
 
+    def test_verify_to_unknown_destination_sends_nothing(self):
+        """M1: OTP is never dispatched to a destination with no account (no relay)."""
+        res = self.client.post('/api/v1/auth/otp/request/',
+                               {'destination': 'stranger@example.com', 'channel': 'email', 'purpose': 'verify'},
+                               format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(_SENT, [])
+
+    def test_otp_login_respects_account_lockout(self):
+        """M4: OTP login must honour account lockout like password login."""
+        from datetime import timedelta
+        self.user.account_locked_until = timezone.now() + timedelta(minutes=15)
+        self.user.save(update_fields=['account_locked_until'])
+        request_otp('login@example.com', OTPCode.Channel.EMAIL, OTPCode.Purpose.LOGIN, user=self.user)
+        code = _SENT[-1]['code']
+        res = self.client.post('/api/v1/auth/otp/verify/',
+                               {'destination': 'login@example.com', 'purpose': 'login', 'code': code},
+                               format='json')
+        self.assertEqual(res.status_code, status.HTTP_423_LOCKED)
+
     def test_verify_purpose_marks_user_verified(self):
         request_otp('login@example.com', OTPCode.Channel.EMAIL, OTPCode.Purpose.VERIFY, user=self.user)
         code = _SENT[-1]['code']
