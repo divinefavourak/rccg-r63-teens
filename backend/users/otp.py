@@ -18,6 +18,7 @@ import secrets
 from datetime import timedelta
 
 from django.conf import settings
+from django.db.models import F
 from django.utils import timezone
 
 from .models import OTPCode
@@ -78,9 +79,14 @@ def verify_otp(destination, purpose, code):
     if otp is None or otp.is_expired or otp.attempts >= _max_attempts():
         return None
     if hmac.compare_digest(hash_code(code), otp.code_hash):
-        otp.consumed_at = timezone.now()
-        otp.save(update_fields=['consumed_at'])
+        # Atomic consume: only the first concurrent request that flips
+        # consumed_at (while still NULL) wins — prevents a code being accepted twice.
+        won = OTPCode.objects.filter(pk=otp.pk, consumed_at__isnull=True).update(
+            consumed_at=timezone.now())
+        if won != 1:
+            return None
+        otp.refresh_from_db()
         return otp
-    otp.attempts += 1
-    otp.save(update_fields=['attempts'])
+    # Atomic increment so concurrent wrong attempts don't lose counts (brute-force cap).
+    OTPCode.objects.filter(pk=otp.pk).update(attempts=F('attempts') + 1)
     return None

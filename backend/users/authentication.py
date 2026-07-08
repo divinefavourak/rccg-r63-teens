@@ -33,7 +33,9 @@ class CookieJWTAuthentication(JWTAuthentication):
         except (InvalidToken, TokenError):
             return None
         request.auth_source = 'cookie'
-        logger.debug('auth via cookie: %s', request.path)
+        # Sanitize the path before logging (avoid CR/LF log injection).
+        safe_path = request.path.replace('\r', '').replace('\n', '')
+        logger.debug('auth via cookie: %s', safe_path)
         return self.get_user(validated), validated
 
 

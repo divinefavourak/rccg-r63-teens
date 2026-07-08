@@ -526,10 +526,27 @@ class VerifyOTPView(APIView):
             if user is None:
                 return Response({"detail": "No account for that destination."},
                                 status=status.HTTP_400_BAD_REQUEST)
-            # Honour account lockout, same as password login (no weaker parallel path).
+            # Full parity with password login (no weaker parallel auth path).
             if user.account_locked_until and user.account_locked_until > timezone.now():
                 return Response({"detail": "Account is temporarily locked. Try again later."},
                                 status=status.HTTP_423_LOCKED)
+            from django.conf import settings as dj_settings
+            # An email OTP proves email ownership → mark verified rather than block.
+            newly_verified = False
+            if otp.channel == OTPCode.Channel.EMAIL and not user.is_verified:
+                user.is_verified = True
+                newly_verified = True
+            if getattr(dj_settings, 'ENFORCE_EMAIL_VERIFICATION', False) and not user.is_verified:
+                return Response({"detail": "Please verify your email before logging in."},
+                                status=status.HTTP_403_FORBIDDEN)
+            # Reset login state consistently with the password path.
+            user.failed_login_attempts = 0
+            user.account_locked_until = None
+            user.last_login = timezone.now()
+            update_fields = ['failed_login_attempts', 'account_locked_until', 'last_login']
+            if newly_verified:
+                update_fields.append('is_verified')
+            user.save(update_fields=update_fields)
             refresh = RefreshToken.for_user(user)
             resp = Response({
                 'access': str(refresh.access_token),

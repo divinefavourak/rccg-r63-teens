@@ -50,6 +50,12 @@ AUTH_COOKIE_REFRESH = os.getenv('AUTH_COOKIE_REFRESH', 'refresh_token')
 AUTH_COOKIE_SECURE = os.getenv('AUTH_COOKIE_SECURE', str(not DEBUG)).lower() == 'true'
 AUTH_COOKIE_SAMESITE = os.getenv('AUTH_COOKIE_SAMESITE', 'Lax')
 AUTH_COOKIE_DOMAIN = os.getenv('AUTH_COOKIE_DOMAIN') or None
+# SameSite=None cookies are rejected by browsers unless Secure, and cross-site
+# use also needs a CSRF double-submit flow (not yet implemented). Fail safe.
+if AUTH_COOKIE_SAMESITE == 'None' and not AUTH_COOKIE_SECURE:
+    import warnings
+    warnings.warn('AUTH_COOKIE_SAMESITE=None requires Secure cookies; forcing AUTH_COOKIE_SECURE=True.')
+    AUTH_COOKIE_SECURE = True
 
 
 # Application definition

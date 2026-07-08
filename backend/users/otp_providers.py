@@ -10,6 +10,7 @@ import logging
 from abc import ABC, abstractmethod
 
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.utils.module_loading import import_string
 
 logger = logging.getLogger(__name__)
@@ -23,11 +24,27 @@ class OTPProvider(ABC):
         raise NotImplementedError
 
 
+def mask_destination(destination):
+    """Mask an email/phone for safe logging (no full PII in logs)."""
+    s = destination or ''
+    if '@' in s:
+        name, _, domain = s.partition('@')
+        return f'{name[:2]}***@{domain}'
+    return f'***{s[-4:]}' if len(s) > 4 else '***'
+
+
 class ConsoleOTPProvider(OTPProvider):
-    """Logs the code instead of sending it. Default for dev/test."""
+    """Logs the code instead of sending it. DEV/TEST ONLY."""
 
     def send(self, destination, channel, code, purpose):
-        logger.info('[OTP] (%s/%s) code for %s: %s', channel, purpose, destination, code)
+        if not settings.DEBUG:
+            raise ImproperlyConfigured(
+                'ConsoleOTPProvider must not be used in production. Set OTP_PROVIDER '
+                'to a real SMS/email backend.'
+            )
+        # INFO carries only masked context; the code itself is DEBUG-only.
+        logger.info('[OTP] (%s/%s) code issued for %s', channel, purpose, mask_destination(destination))
+        logger.debug('[OTP] code for %s: %s', destination, code)
 
 
 class NoOpOTPProvider(OTPProvider):

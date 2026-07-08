@@ -284,7 +284,10 @@ class OTPCode(models.Model):
         ]
 
     def __str__(self):
-        return f'OTP({self.purpose}) -> {self.destination}'
+        # Mask the destination — this shows up in admin, logs and tracebacks.
+        d = self.destination or ''
+        masked = (d[:2] + '***') if d else '***'
+        return f'OTP({self.purpose}) -> {masked}'
 
     @property
     def is_expired(self):

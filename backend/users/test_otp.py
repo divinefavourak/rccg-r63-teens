@@ -121,6 +121,19 @@ class OTPApiTests(APITestCase):
                                format='json')
         self.assertEqual(res.status_code, status.HTTP_423_LOCKED)
 
+    @override_settings(ENFORCE_EMAIL_VERIFICATION=True)
+    def test_email_otp_login_marks_verified_and_succeeds(self):
+        """Email OTP proves ownership: login works and verifies even when enforced."""
+        self.assertFalse(self.user.is_verified)
+        request_otp('login@example.com', OTPCode.Channel.EMAIL, OTPCode.Purpose.LOGIN, user=self.user)
+        code = _SENT[-1]['code']
+        res = self.client.post('/api/v1/auth/otp/verify/',
+                               {'destination': 'login@example.com', 'purpose': 'login', 'code': code},
+                               format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_verified)
+
     def test_verify_purpose_marks_user_verified(self):
         request_otp('login@example.com', OTPCode.Channel.EMAIL, OTPCode.Purpose.VERIFY, user=self.user)
         code = _SENT[-1]['code']
