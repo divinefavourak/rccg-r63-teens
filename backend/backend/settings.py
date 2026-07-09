@@ -10,7 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
-import os, dj_database_url
+import os, sys, dj_database_url
 from datetime import timedelta
 from dotenv import load_dotenv
 from pathlib import Path
@@ -164,6 +164,26 @@ else:
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
+
+# Run the test suite against a *local* Postgres.
+#
+# The dev DATABASE_URL points at a remote Neon instance ~184ms away. Django
+# issues one round trip per SQL statement, so a suite that takes seconds locally
+# takes tens of minutes there, and building the test database replays the whole
+# migration history over that link. Pointing tests at localhost removes the
+# latency multiplier entirely.
+#
+# Guarded on the `test` subcommand, not merely on the env var: a TEST_DATABASE_URL
+# left in the environment must never redirect `runserver`, and above all never
+# `migrate`, away from the real database. SQLite is not an option here — some
+# migrations use Postgres-only SQL (e.g. profiles/0004 reads information_schema).
+#
+# Note `parse()`, not `config(default=...)`: config() reads the DATABASE_URL env
+# var first and only falls back to `default` when it is unset, so it would
+# silently ignore TEST_DATABASE_URL whenever DATABASE_URL is present.
+TEST_DATABASE_URL = os.getenv('TEST_DATABASE_URL')
+if TEST_DATABASE_URL and sys.argv[1:2] == ['test']:
+    DATABASES['default'] = dj_database_url.parse(TEST_DATABASE_URL)
 
 
 # Password validation
