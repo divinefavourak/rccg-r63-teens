@@ -87,6 +87,7 @@ INSTALLED_APPS = [
     'profiles',
     
     # Local apps - Content
+    'bible',    # Scripture foundation; `content` depends on it, never the reverse
     'content',
     'media',  # Media & Podcasts app (uses label 'media_content' in apps.py)
     
@@ -205,6 +206,11 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 
 USE_TZ = True
+
+# The timezone that defines a calendar day for daily content (today's devotional,
+# Verse of the Day, reading-history day buckets). Storage stays UTC; only the
+# day boundary is Nigerian. See docs/07-feature-specifications.md §8.
+SCRIPTURE_TIMEZONE = os.getenv('SCRIPTURE_TIMEZONE', 'Africa/Lagos')
 
 
 # Static files (CSS, JavaScript, Images)
