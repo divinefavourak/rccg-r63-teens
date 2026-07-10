@@ -45,6 +45,9 @@ class Perm:
     CONTENT_VIEW = 'content.view'
     CONTENT_PUBLISH = 'content.publish'
     CONTENT_MANAGE = 'content.manage'
+    # Bible/Scripture text (translations, books, chapters, verses).
+    # Reading Scripture needs no permission — it is public. This gates writes only.
+    BIBLE_MANAGE = 'bible.manage'
     # Media (podcasts, videos)
     MEDIA_MANAGE = 'media.manage'
     # Events, registrations, check-in
@@ -72,6 +75,7 @@ REGISTRY = [
     (Perm.CONTENT_VIEW, 'View unpublished/all content'),
     (Perm.CONTENT_PUBLISH, 'Publish content'),
     (Perm.CONTENT_MANAGE, 'Create/edit/delete content'),
+    (Perm.BIBLE_MANAGE, 'Manage Bible translations and Scripture text'),
     (Perm.MEDIA_MANAGE, 'Create/edit/delete media'),
     (Perm.EVENTS_VIEW, 'View event management data'),
     (Perm.EVENTS_MANAGE, 'Create/edit events and registrations'),
@@ -109,6 +113,8 @@ ROLE_SEED = [
             Perm.ROLES_VIEW, Perm.ROLES_ASSIGN,
             Perm.HIERARCHY_VIEW, Perm.HIERARCHY_MANAGE,
             Perm.CONTENT_VIEW, Perm.CONTENT_PUBLISH, Perm.CONTENT_MANAGE,
+            # Scripture text is global content ops, not a regional concern.
+            Perm.BIBLE_MANAGE,
             Perm.MEDIA_MANAGE, Perm.EVENTS_VIEW, Perm.EVENTS_MANAGE,
             Perm.EVENTS_CHECKIN, Perm.PAYMENTS_VIEW, Perm.PAYMENTS_MANAGE,
         ],

@@ -23,9 +23,9 @@ Confirmed with product owner during this audit:
 | Church hierarchy as a **node tree**, scoped RBAC | ❌ Flat CharFields + hard-coded Lagos province enum | 🔴 Critical |
 | Region as tenant (**no hard-coded region**) | ❌ `Province` enum lists Lagos Provinces 9/28/… | 🔴 Critical |
 | RBAC = capabilities within assignment subtree | ⚠️ Flat `role == 'admin'` + string province equality | 🔴 Critical |
-| Integrated **Bible** | ❌ Absent entirely | 🔴 Critical |
-| **Today** unified daily experience | ⚠️ Devotional model exists; no assembling service | 🟠 High |
-| Memory verse = single-source Verse of the Day | ⚠️ Fields exist, not required/enforced | 🟠 High |
+| Integrated **Bible** | ✅ Schema + services (Phase 2A); text not yet imported | 🟢 Good |
+| **Today** unified daily experience | ⚠️ Devotional + daily service exist; Today assembler still to build | 🟡 Medium |
+| Memory verse = single-source Verse of the Day | ✅ `content.MemoryVerse`, one primary enforced; publish gate (Phase 2A) | 🟢 Good |
 | **Progress**: `spiritual_action` stream + Grace Days | ❌ Naive counter, no grace, no tz-safety | 🟠 High |
 | Auth: HTTP-only cookies, argon2/bcrypt, OTP, rate limiting | ⚠️ JWT Bearer, PBKDF2 default, no throttle, no OTP | 🟠 High |
 | Events / tickets / payments / check-in | ✅ Strong, near-complete | 🟢 Good |
@@ -38,7 +38,7 @@ Confirmed with product owner during this audit:
 ### 🔴 Critical
 - **C1 — Hierarchy hard-coded.** `common/models.py::Province` enumerates `LAGOS_PROVINCE_9…REGIONAL_HQ`, referenced by `User`, `TeenProfile`, `EventRegistration`. Violates non-negotiable #2/#3 and `15-technical-architecture.md` ("no code path may reference any node by ID or name"). Onboarding another region becomes a code change. Docs prescribe `hierarchy_node` (closure table / materialized path) + `role_assignment(user, role, node)`.
 - **C2 — RBAC flat, not scoped.** `common/permissions.py` checks `role == 'admin'` and compares `province` strings; no capability model, no subtree evaluation. `ProvinceAccessPermission` trusts a client-supplied `province` param → IDOR risk.
-- **C3 — Bible absent.** The documented foundation (translations, verse-addressable text, reading position, `ScriptureRef` parser) has no models.
+- **C3 — Bible absent.** ~~The documented foundation (translations, verse-addressable text, reading position, `ScriptureRef` parser) has no models.~~ **Resolved in Phase 2A** (`feature/scripture-foundation`): the `bible` app adds `BibleTranslation`/`BibleBook`/`BibleChapter`/`BibleVerse`, the personal layer (bookmarks, highlights, notes, reading history/progress/position), and a `ScriptureReference` resolver. Bible *text* is still unimported by design. See `docs/design/phase2a-scripture-foundation.md`.
 
 ### 🟠 High
 - **H1 — Auth/security divergence.** `ALLOWED_HOSTS` defaults to `['*']`; no `DEFAULT_THROTTLE_RATES` (fixed in Phase 0); no `PASSWORD_HASHERS` → PBKDF2 not argon2/bcrypt (fixed in Phase 0); JWT via `Bearer` header (docs mandate HTTP-only Secure cookies; a launch-gate item); no OTP/phone auth despite being the primary documented signup path. _(Note: CORS is already DEBUG-aware + env-driven — acceptable.)_
@@ -57,7 +57,7 @@ Confirmed with product owner during this audit:
 - **Phase 0 — Hygiene & guardrails** (`refactor/repo-hygiene`) — remove committed artifacts + gitignore; add bcrypt `PASSWORD_HASHERS`; add DRF throttle rates; ADR for the stack decision. **← in progress**
 - **Phase 1 — Hierarchy foundation** (`refactor/church-hierarchy`, keystone) — `HierarchyNode` (materialized path) + `RoleAssignment` + capability RBAC over subtrees; data-migrate province strings into nodes.
 - **Phase 2 — Progress engine** (`refactor/progress-system`) — append-only `SpiritualAction` stream + `StreakState`/`GraceDayLedger`, tz-safe.
-- **Phase 3 — Bible foundation** (`feat/bible-foundation`) — models + `ScriptureRef` parser only (no text import yet); wire devotional memory-verse as single Verse-of-the-Day source.
+- **Phase 3 — Bible foundation** (`feature/scripture-foundation`) — ✅ **done.** `bible` app (translations/books/chapters/verses + bookmarks, highlights, notes, reading history/progress/continue-reading), `ScriptureReference` resolver, and the devotional memory verse wired as the single Verse-of-the-Day source. No text imported yet. Design: `docs/design/phase2a-scripture-foundation.md`.
 - **Phase 4 — Library consolidation + auth hardening** — unify media; two-person review; JWT→HTTP-only cookies + OTP scaffolding.
 - **Later (V1.5/V2 order)** — Notifications ladder, Recognition, Journeys, Community/safeguarding.
 

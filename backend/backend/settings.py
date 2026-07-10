@@ -10,7 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
-import os, dj_database_url
+import os, sys, dj_database_url
 from datetime import timedelta
 from dotenv import load_dotenv
 from pathlib import Path
@@ -87,6 +87,7 @@ INSTALLED_APPS = [
     'profiles',
     
     # Local apps - Content
+    'bible',    # Scripture foundation; `content` depends on it, never the reverse
     'content',
     'media',  # Media & Podcasts app (uses label 'media_content' in apps.py)
     
@@ -164,6 +165,39 @@ else:
         }
     }
 
+# Run the test suite against a *local* Postgres.
+#
+# The dev DATABASE_URL points at a remote Neon instance ~184ms away. Django
+# issues one round trip per SQL statement, so a suite that takes seconds locally
+# takes tens of minutes there, and building the test database replays the whole
+# migration history over that link. Pointing tests at localhost removes the
+# latency multiplier entirely.
+#
+# Guarded on the `test` subcommand, not merely on the env var: a TEST_DATABASE_URL
+# left in the environment must never redirect `runserver`, and above all never
+# `migrate`, away from the real database. SQLite is not an option here — some
+# migrations use Postgres-only SQL (e.g. profiles/0004 reads information_schema).
+#
+# Note `parse()`, not `config(default=...)`: config() reads the DATABASE_URL env
+# var first and only falls back to `default` when it is unset, so it would
+# silently ignore TEST_DATABASE_URL whenever DATABASE_URL is present.
+def _running_tests():
+    """
+    True only for a test run — `manage.py test` or pytest.
+
+    pytest cannot be detected from argv: `pytest` puts the test paths in
+    sys.argv[1], and `python -m pytest` leaves `__main__.py` in sys.argv[0].
+    But pytest-django imports this settings module from inside a live pytest
+    process, so the `pytest` module is always in sys.modules by then — and no
+    other management command imports it.
+    """
+    return sys.argv[1:2] == ['test'] or 'pytest' in sys.modules
+
+
+TEST_DATABASE_URL = os.getenv('TEST_DATABASE_URL')
+if TEST_DATABASE_URL and _running_tests():
+    DATABASES['default'] = dj_database_url.parse(TEST_DATABASE_URL)
+
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -205,6 +239,11 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 
 USE_TZ = True
+
+# The timezone that defines a calendar day for daily content (today's devotional,
+# Verse of the Day, reading-history day buckets). Storage stays UTC; only the
+# day boundary is Nigerian. See docs/07-feature-specifications.md §8.
+SCRIPTURE_TIMEZONE = os.getenv('SCRIPTURE_TIMEZONE', 'Africa/Lagos')
 
 
 # Static files (CSS, JavaScript, Images)

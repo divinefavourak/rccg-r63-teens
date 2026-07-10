@@ -9,13 +9,25 @@ from django.utils import timezone
 from django.db.models import Q
 from datetime import date, timedelta
 
+from common.dates import app_today
+
+from rest_framework.permissions import AllowAny
+from rest_framework.views import APIView
+
 from identity.authorization import HasPermission, HasPermissionOrReadOnly, has_any_permission
 from identity.permissions_registry import Perm
-from .models import Devotional, ManualSeries, Manual, Article, UserReadLog, UserLikeLog
+from .models import (
+    Article, Devotional, DiscussionQuestion, Manual, ManualSeries, MemoryVerse,
+    ScriptureReference, UserLikeLog, UserReadLog,
+)
+from .services import daily
 from .serializers import (
     DevotionalListSerializer,
     DevotionalDetailSerializer,
     DevotionalCreateUpdateSerializer,
+    DiscussionQuestionSerializer,
+    MemoryVerseSerializer,
+    ScriptureReferenceSerializer,
     ManualSeriesListSerializer,
     ManualSeriesDetailSerializer,
     ManualListSerializer,
@@ -25,6 +37,11 @@ from .serializers import (
     ArticleListSerializer,
     ArticleDetailSerializer,
 )
+
+
+def can_manage_content(user):
+    """Whoever may edit devotionals may also see them before they are published."""
+    return has_any_permission(user, Perm.CONTENT_MANAGE)
 
 
 def get_age_group_filter(user):
@@ -79,8 +96,8 @@ class DevotionalViewSet(viewsets.ModelViewSet):
         queryset = self.queryset
         
         # Non-admins only see published content
-        if not self.request.user.is_authenticated or not has_any_permission(self.request.user, Perm.CONTENT_MANAGE):
-            queryset = queryset.filter(status='published')
+        if not can_manage_content(self.request.user):
+            queryset = queryset.filter(status=Devotional.Status.PUBLISHED)
 
         # Age group filtering for non-admin/non-coordinator users
         if not has_any_permission(self.request.user, Perm.CONTENT_VIEW):
@@ -105,19 +122,42 @@ class DevotionalViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def today(self, request):
-        """Get today's devotional."""
-        today = date.today()
-        devotional = self.get_queryset().filter(date=today).first()
-        
+        """
+        Get today's devotional.
+
+        "Today" is a calendar day in the app timezone (Africa/Lagos), not a UTC
+        day — otherwise the devotional would roll over at 1am Lagos time
+        (docs/07-feature-specifications.md §8). The queryset (not the service) is
+        used here so admins keep seeing drafts and age-group filtering still
+        applies.
+        """
+        devotional = self.get_queryset().filter(date=app_today()).first()
+
         if not devotional:
             return Response(
                 {'detail': 'No devotional found for today.'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
+
         devotional.increment_view_count()
         serializer = DevotionalDetailSerializer(devotional)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='today/memory-verse')
+    def todays_memory_verse(self, request):
+        """
+        Today's memory verse — the same object the Verse of the Day resolves to.
+
+        Delegates to the one service so this endpoint can never disagree with
+        `/verse-of-the-day/`.
+        """
+        verse = daily.todays_memory_verse()
+        if not verse:
+            return Response(
+                {'detail': 'No memory verse for today.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        return Response(MemoryVerseSerializer(verse).data)
     
     @action(detail=False, methods=['get'])
     def by_date(self, request):
@@ -516,3 +556,78 @@ class ArticleViewSet(viewsets.ModelViewSet):
         articles = self.get_queryset().filter(is_featured=True)[:10]
         serializer = ArticleListSerializer(articles, many=True)
         return Response(serializer.data)
+
+
+# =====================
+# SCRIPTURE / VERSE OF THE DAY
+# =====================
+
+class VerseOfTheDayView(APIView):
+    """
+    The Verse of the Day — public, and never randomly generated.
+
+    It resolves, through `content.services.daily`, to the primary memory verse of
+    today's devotional. This view holds no verse-selection logic of its own; that
+    is the entire point ("One Day. One Verse. One Message.",
+    `docs/08-bible-experience.md` §7).
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        verse = daily.verse_of_the_day()
+        if not verse:
+            return Response(
+                {'detail': 'No verse of the day is available.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(MemoryVerseSerializer(verse).data)
+
+
+class DevotionalChildViewSetMixin:
+    """
+    Read access to a devotional's parts follows the devotional itself.
+
+    These models hang off `Devotional` but are reachable by their own URLs, so
+    they need the published-only gate applied at their own queryset. Without it
+    `?devotional=<draft-id>` would serve unreleased content to anyone, even
+    though `/devotionals/<draft-id>/` correctly 404s.
+    """
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if not can_manage_content(self.request.user):
+            queryset = queryset.filter(devotional__status=Devotional.Status.PUBLISHED)
+        return queryset
+
+
+class MemoryVerseViewSet(DevotionalChildViewSetMixin, viewsets.ModelViewSet):
+    """Admin-managed devotional memory verses. Public read of published ones."""
+
+    queryset = MemoryVerse.objects.select_related(
+        'devotional', 'translation', 'start_verse__chapter__book__translation', 'end_verse'
+    )
+    serializer_class = MemoryVerseSerializer
+    permission_classes = [HasPermissionOrReadOnly(Perm.CONTENT_MANAGE)]
+    filterset_fields = ['devotional', 'is_primary', 'translation']
+    ordering = ['-devotional__date']
+
+
+class ScriptureReferenceViewSet(DevotionalChildViewSetMixin, viewsets.ModelViewSet):
+    """Admin-managed Scripture references on devotionals. Public read of published ones."""
+
+    queryset = ScriptureReference.objects.select_related('devotional')
+    serializer_class = ScriptureReferenceSerializer
+    permission_classes = [HasPermissionOrReadOnly(Perm.CONTENT_MANAGE)]
+    filterset_fields = ['devotional', 'kind', 'book_osis']
+    ordering = ['order']
+
+
+class DiscussionQuestionViewSet(DevotionalChildViewSetMixin, viewsets.ModelViewSet):
+    """Admin-managed discussion questions on devotionals. Public read of published ones."""
+
+    queryset = DiscussionQuestion.objects.select_related('devotional')
+    serializer_class = DiscussionQuestionSerializer
+    permission_classes = [HasPermissionOrReadOnly(Perm.CONTENT_MANAGE)]
+    filterset_fields = ['devotional']
+    ordering = ['order']
