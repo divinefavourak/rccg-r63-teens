@@ -13,7 +13,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from identity.authorization import HasPermissionOrReadOnly
+from identity.authorization import HasPermissionOrReadOnly, has_any_permission
 from identity.permissions_registry import Perm
 
 from . import services
@@ -44,8 +44,10 @@ class BibleTranslationViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        # Readers only ever see active translations; managers see everything.
-        if self.request.method in ('GET', 'HEAD', 'OPTIONS'):
+        # Readers only ever see active translations; managers see everything,
+        # including on reads — otherwise they could create a translation and
+        # then be unable to read it back.
+        if not has_any_permission(self.request.user, Perm.BIBLE_MANAGE):
             queryset = queryset.filter(is_active=True)
         return queryset
 

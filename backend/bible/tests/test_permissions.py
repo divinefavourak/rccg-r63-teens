@@ -77,6 +77,23 @@ class ScripturePermissionTests(APITestCase):
         )
         self.assertEqual(status.HTTP_201_CREATED, response.status_code)
 
+    def test_a_manager_can_read_back_an_inactive_translation(self):
+        """A manager who deactivates a translation must still be able to see it."""
+        self.translation.is_active = False
+        self.translation.save(update_fields=['is_active'])
+        manager = make_user('manager')
+        assign_role(
+            manager,
+            Role.objects.get(code='national_coordinator'),
+            self.national,
+            enforce_escalation=False,
+        )
+        self.client.force_authenticate(manager)
+        response = self.client.get(
+            reverse('bible-translation-detail', args=[self.translation.id])
+        )
+        self.assertEqual(status.HTTP_200_OK, response.status_code)
+
 
 class PersonalLayerPrivacyTests(APITestCase):
     """
