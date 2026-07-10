@@ -148,10 +148,15 @@ class DevotionalAdmin(admin.ModelAdmin):
             except ValidationError:
                 blocked.append(devotional)
             else:
-                publishable.append(devotional.pk)
+                publishable.append(devotional)
+
+        # `publish()` per row, not `queryset.update(status='published')`: the bulk
+        # update skips the model and leaves `published_at` null, so anything that
+        # orders or filters by publication time silently misses these rows.
+        for devotional in publishable:
+            devotional.publish()
 
         if publishable:
-            Devotional.objects.filter(pk__in=publishable).update(status='published')
             self.message_user(
                 request, f'Published {len(publishable)} devotional(s).', messages.SUCCESS
             )

@@ -86,9 +86,12 @@ def validate_publishable(devotional):
 
     The database already guarantees *at most* one primary (partial unique index
     on `MemoryVerse`); this enforces *at least* one.
+
+    Resolves through `primary_memory_verse` rather than a `.filter().count()` so
+    it reads any prefetched `memory_verses` instead of forcing a fresh COUNT per
+    devotional — the admin's bulk publish calls this once per selected row.
     """
-    primary_count = devotional.memory_verses.filter(is_primary=True).count()
-    if primary_count == 0:
+    if primary_memory_verse(devotional) is None:
         raise ValidationError(
             'A devotional cannot be published without a primary memory verse — '
             'that verse is the Verse of the Day.'
