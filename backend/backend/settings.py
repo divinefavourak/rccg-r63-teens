@@ -181,8 +181,21 @@ else:
 # Note `parse()`, not `config(default=...)`: config() reads the DATABASE_URL env
 # var first and only falls back to `default` when it is unset, so it would
 # silently ignore TEST_DATABASE_URL whenever DATABASE_URL is present.
+def _running_tests():
+    """
+    True only for a test run — `manage.py test` or pytest.
+
+    pytest cannot be detected from argv: `pytest` puts the test paths in
+    sys.argv[1], and `python -m pytest` leaves `__main__.py` in sys.argv[0].
+    But pytest-django imports this settings module from inside a live pytest
+    process, so the `pytest` module is always in sys.modules by then — and no
+    other management command imports it.
+    """
+    return sys.argv[1:2] == ['test'] or 'pytest' in sys.modules
+
+
 TEST_DATABASE_URL = os.getenv('TEST_DATABASE_URL')
-if TEST_DATABASE_URL and sys.argv[1:2] == ['test']:
+if TEST_DATABASE_URL and _running_tests():
     DATABASES['default'] = dj_database_url.parse(TEST_DATABASE_URL)
 
 
