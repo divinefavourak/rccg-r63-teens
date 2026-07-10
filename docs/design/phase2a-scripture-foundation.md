@@ -11,7 +11,7 @@ Scope is architecture only: **no Bible text is imported**, no streaks, no notifi
 
 ## 1. App layering
 
-```
+```text
 hierarchy/  -> org tree                (depends on nothing)
 identity/   -> who you are, what you may do   (-> hierarchy)
 bible/      -> Scripture + private engagement (depends on nothing)
@@ -72,7 +72,7 @@ Business logic lives in services; views orchestrate and serialise.
 
 **`content/services/daily.py` — the daily experience.** One resolution path, so nothing can disagree:
 
-```
+```text
 verse_of_the_day()  ->  todays_memory_verse()  ->  todays_devotional()  ->  primary_memory_verse()
 ```
 
