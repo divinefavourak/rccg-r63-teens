@@ -39,6 +39,11 @@ from .serializers import (
 )
 
 
+def can_manage_content(user):
+    """Whoever may edit devotionals may also see them before they are published."""
+    return has_any_permission(user, Perm.CONTENT_MANAGE)
+
+
 def get_age_group_filter(user):
     """
     Returns a Q filter for age-group-targeted content.
@@ -91,8 +96,8 @@ class DevotionalViewSet(viewsets.ModelViewSet):
         queryset = self.queryset
         
         # Non-admins only see published content
-        if not self.request.user.is_authenticated or not has_any_permission(self.request.user, Perm.CONTENT_MANAGE):
-            queryset = queryset.filter(status='published')
+        if not can_manage_content(self.request.user):
+            queryset = queryset.filter(status=Devotional.Status.PUBLISHED)
 
         # Age group filtering for non-admin/non-coordinator users
         if not has_any_permission(self.request.user, Perm.CONTENT_VIEW):
@@ -579,8 +584,25 @@ class VerseOfTheDayView(APIView):
         return Response(MemoryVerseSerializer(verse).data)
 
 
-class MemoryVerseViewSet(viewsets.ModelViewSet):
-    """Admin-managed devotional memory verses. Public read."""
+class DevotionalChildViewSetMixin:
+    """
+    Read access to a devotional's parts follows the devotional itself.
+
+    These models hang off `Devotional` but are reachable by their own URLs, so
+    they need the published-only gate applied at their own queryset. Without it
+    `?devotional=<draft-id>` would serve unreleased content to anyone, even
+    though `/devotionals/<draft-id>/` correctly 404s.
+    """
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if not can_manage_content(self.request.user):
+            queryset = queryset.filter(devotional__status=Devotional.Status.PUBLISHED)
+        return queryset
+
+
+class MemoryVerseViewSet(DevotionalChildViewSetMixin, viewsets.ModelViewSet):
+    """Admin-managed devotional memory verses. Public read of published ones."""
 
     queryset = MemoryVerse.objects.select_related(
         'devotional', 'translation', 'start_verse__chapter__book__translation', 'end_verse'
@@ -591,8 +613,8 @@ class MemoryVerseViewSet(viewsets.ModelViewSet):
     ordering = ['-devotional__date']
 
 
-class ScriptureReferenceViewSet(viewsets.ModelViewSet):
-    """Admin-managed Scripture references on devotionals. Public read."""
+class ScriptureReferenceViewSet(DevotionalChildViewSetMixin, viewsets.ModelViewSet):
+    """Admin-managed Scripture references on devotionals. Public read of published ones."""
 
     queryset = ScriptureReference.objects.select_related('devotional')
     serializer_class = ScriptureReferenceSerializer
@@ -601,8 +623,8 @@ class ScriptureReferenceViewSet(viewsets.ModelViewSet):
     ordering = ['order']
 
 
-class DiscussionQuestionViewSet(viewsets.ModelViewSet):
-    """Admin-managed discussion questions on devotionals. Public read."""
+class DiscussionQuestionViewSet(DevotionalChildViewSetMixin, viewsets.ModelViewSet):
+    """Admin-managed discussion questions on devotionals. Public read of published ones."""
 
     queryset = DiscussionQuestion.objects.select_related('devotional')
     serializer_class = DiscussionQuestionSerializer

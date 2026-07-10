@@ -370,6 +370,109 @@ class MemoryVerseWriteApiTests(APITestCase):
         self.assertEqual('John 3:16-17', response.data['reference_display'])
 
 
+class DraftDevotionalPartsArePrivateTests(APITestCase):
+    """
+    A devotional's parts are reachable by their own URLs, so the published-only
+    gate has to be applied to *their* querysets too. Filtering only
+    `/devotionals/` would still let anyone read an unreleased devotional's
+    memory verse via `/memory-verses/?devotional=<draft-id>`.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.draft = make_devotional(
+            datetime.date(2026, 7, 8), title='Unreleased', status=Devotional.Status.DRAFT
+        )
+        cls.published = make_devotional(datetime.date(2026, 7, 9))
+        cls.draft_verse = make_memory_verse(cls.draft, reference='Unreleased 1:1')
+        cls.public_verse = make_memory_verse(cls.published)
+        cls.draft_question = DiscussionQuestion.objects.create(
+            devotional=cls.draft, text='Unreleased question?'
+        )
+        cls.draft_reference = ScriptureReference.objects.create(
+            devotional=cls.draft, reference_display='Unreleased 1:1',
+            book_osis='John', chapter_number=1,
+        )
+
+    def _ids(self, url, **params):
+        response = self.client.get(url, params)
+        self.assertEqual(status.HTTP_200_OK, response.status_code)
+        results = response.data.get('results', response.data)
+        return {item['id'] for item in results}
+
+    def test_anonymous_memory_verse_list_omits_draft_verses(self):
+        ids = self._ids(reverse('memory-verse-list'))
+        self.assertIn(str(self.public_verse.id), ids)
+        self.assertNotIn(str(self.draft_verse.id), ids)
+
+    def test_filtering_by_a_draft_devotional_returns_nothing(self):
+        self.assertEqual(
+            set(), self._ids(reverse('memory-verse-list'), devotional=str(self.draft.id))
+        )
+
+    def test_anonymous_retrieve_of_a_draft_memory_verse_is_404(self):
+        response = self.client.get(reverse('memory-verse-detail', args=[self.draft_verse.id]))
+        self.assertEqual(status.HTTP_404_NOT_FOUND, response.status_code)
+
+    def test_anonymous_retrieve_of_a_draft_discussion_question_is_404(self):
+        response = self.client.get(
+            reverse('discussion-question-detail', args=[self.draft_question.id])
+        )
+        self.assertEqual(status.HTTP_404_NOT_FOUND, response.status_code)
+
+    def test_anonymous_retrieve_of_a_draft_scripture_reference_is_404(self):
+        response = self.client.get(
+            reverse('scripture-reference-detail', args=[self.draft_reference.id])
+        )
+        self.assertEqual(status.HTTP_404_NOT_FOUND, response.status_code)
+
+    def test_a_content_manager_still_sees_draft_parts(self):
+        from django.core.management import call_command
+        from hierarchy import services as hierarchy_services
+        from identity.authorization import assign_role
+        from identity.models import Role
+
+        call_command('seed_rbac', verbosity=0)
+        editor = make_user('draft-editor')
+        assign_role(
+            editor,
+            Role.objects.get(code='national_coordinator'),
+            hierarchy_services.create_root('RCCG National'),
+            enforce_escalation=False,
+        )
+        self.client.force_authenticate(editor)
+        self.assertIn(str(self.draft_verse.id), self._ids(reverse('memory-verse-list')))
+
+
+class PublishActionTests(TestCase):
+    """The admin's bulk publish must go through `publish()`, not a bulk UPDATE."""
+
+    def test_publishing_stamps_published_at(self):
+        from content.admin import DevotionalAdmin
+
+        devotional = make_devotional(
+            datetime.date(2026, 7, 9), status=Devotional.Status.DRAFT
+        )
+        make_memory_verse(devotional)
+        admin_instance = DevotionalAdmin(Devotional, mock.Mock())
+
+        with mock.patch.object(DevotionalAdmin, 'message_user'):
+            admin_instance.publish_selected(
+                mock.Mock(), Devotional.objects.filter(pk=devotional.pk)
+            )
+
+        devotional.refresh_from_db()
+        self.assertEqual(Devotional.Status.PUBLISHED, devotional.status)
+        self.assertIsNotNone(devotional.published_at)
+
+    def test_the_publish_gate_reads_prefetched_verses_without_extra_queries(self):
+        devotional = make_devotional(datetime.date(2026, 7, 9))
+        make_memory_verse(devotional)
+        prefetched = Devotional.objects.prefetch_related('memory_verses').get(pk=devotional.pk)
+        with self.assertNumQueries(0):
+            daily.validate_publishable(prefetched)
+
+
 class DevotionalRegressionTests(APITestCase):
     """Existing devotional behaviour must survive the Scripture phase."""
 
