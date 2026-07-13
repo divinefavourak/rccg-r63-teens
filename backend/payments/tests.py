@@ -14,6 +14,14 @@ from tickets.models import Ticket
 from .services import PaystackService, PaymentService
 from .serializers import PaymentSerializer, PaymentPlanSerializer
 
+
+def result_list(response):
+    """Items from a DRF list response, whether or not pagination is enabled."""
+    data = response.data
+    if isinstance(data, dict) and 'results' in data:
+        return data['results']
+    return data
+
 # PaystackService.__init__ refuses to construct without keys. The tests below
 # mock every outbound Paystack call, so these dummy values only need to be
 # non-empty — no request ever reaches Paystack.
@@ -462,13 +470,8 @@ class PaymentAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         
         # Check response structure
-        if isinstance(response.data, dict) and 'results' in response.data:
-            payments = response.data['results']
-            self.assertGreaterEqual(len(payments), 2)
-        else:
-            payments = response.data
-            self.assertGreaterEqual(len(payments), 2)
-        
+        self.assertGreaterEqual(len(result_list(response)), 2)
+
     
     def test_list_payments_as_coordinator(self):
         """Test listing payments as coordinator"""
@@ -481,11 +484,8 @@ class PaymentAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         
         # Coordinator should see payments for their province
-        if isinstance(response.data, dict) and 'results' in response.data:
-            payments = response.data['results']
-        else:
-            payments = response.data
-        
+        result_list(response)
+
     
     def test_my_payments_endpoint(self):
         """Test my_payments endpoint"""
@@ -497,19 +497,10 @@ class PaymentAPITests(APITestCase):
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         
-        # Should see coordinator's own payments
-        if isinstance(response.data, dict) and 'results' in response.data:
-            payments = response.data['results']
-            
-            # All payments should belong to the coordinator
-            for payment in payments:
-                self.assertEqual(payment['payer_email'], self.coordinator.email)
-        else:
-            payments = response.data
-            
-            for payment in payments:
-                self.assertEqual(payment['payer_email'], self.coordinator.email)
-        
+        # All payments should belong to the coordinator
+        for payment in result_list(response):
+            self.assertEqual(payment['payer_email'], self.coordinator.email)
+
     
     @patch('payments.services.PaystackService.initialize_payment')
     @patch('payments.services.PaystackService.generate_reference')
@@ -591,13 +582,8 @@ class PaymentAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         
         # Should see active payment plans
-        if isinstance(response.data, dict) and 'results' in response.data:
-            plans = response.data['results']
-            self.assertGreaterEqual(len(plans), 1)
-        else:
-            plans = response.data
-            self.assertGreaterEqual(len(plans), 1)
-        
+        self.assertGreaterEqual(len(result_list(response)), 1)
+
     
     def test_create_payment_plan_as_admin(self):
         """Test creating payment plan as admin"""
