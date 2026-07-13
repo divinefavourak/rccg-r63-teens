@@ -8,7 +8,7 @@ This module is the *only* writer of `StreakState` and the Grace-Day ledger.
 from datetime import date, timedelta
 
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Count, Sum
 
 from common.dates import user_today
 
@@ -154,3 +154,28 @@ def streak_for(user):
     """The user's streak state, created lazily so a first read never 404s."""
     state, _ = StreakState.objects.get_or_create(user=user)
     return state
+
+
+def action_type_counts(user):
+    """How many actions of each type the user has logged, e.g. for stats tiles."""
+    rows = (
+        SpiritualAction.objects
+        .filter(user=user)
+        .values('action_type')
+        .annotate(total=Count('id'))
+    )
+    return {row['action_type']: row['total'] for row in rows}
+
+
+def active_days(user, start, end):
+    """
+    The distinct local days (inclusive range) the user did something — the raw
+    material for a monthly heat-map. One row per active day, not per action.
+    """
+    return list(
+        SpiritualAction.objects
+        .filter(user=user, occurred_on__range=(start, end))
+        .values_list('occurred_on', flat=True)
+        .distinct()
+        .order_by('occurred_on')
+    )

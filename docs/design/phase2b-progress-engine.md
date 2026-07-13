@@ -58,17 +58,38 @@ stored"). `common.dates.user_today(user)` resolves the user's day, falling back
 to the app timezone until a stored per-user field lands — the seam is in place so
 no caller assumes UTC.
 
-## 5. Deferred to later increments (this phase)
+## 5. Grace Days (done)
 
-- **Grace Days** — `GraceDayLedger`; 2/month base, earnable to a held cap of 4,
-  covering at most 2 consecutive missed days (3rd resets). Intercepts the *gap*
-  branch of `_advance_streak`. (`12-gamification.md` "Grace Days".)
+`GraceDayLedger` is an append-only ledger; balance is the sum of `delta`. Base
+2/month (idempotent via a partial unique index on `(user, effective_month)`),
+earnable to a held cap of 4 enforced at grant time. On a gap, `_advance_streak`
+offers the miss to `_try_cover_gap`, which bridges **at most 2 consecutive**
+missed days, **all-or-nothing** (a partly-covered gap is still broken, so nothing
+is spent) and only when the balance covers every missed day. A covered day counts
+toward length, so `Mon → Tue(grace) → Wed` reads as a 3-day streak.
+
+## 6. Read API (done) — private, owner-only
+
+`/api/v1/progress/` (alias `/api/progress/`): `streak/`, `summary/`, `calendar/`,
+`actions/`. All scoped to `request.user`; no leaderboards (`§8`). `IsOwner` gives
+no role/superuser bypass, so a foreign action 404s.
+
+**Cross-context composition.** `summary/` reports Progress figures *and*
+Bible-derived reading stats (distinct chapters/books). The Progress *domain*
+stays free of any Bible import; composition happens only in
+`ProgressSummaryView`, which reaches Bible through its public
+`bible.services.reading_stats(user)` — never Bible tables. Because that import is
+in the view layer (a leaf nothing imports), it creates no cycle even after Bible
+starts calling `progress.services` to emit actions. "Chapters read" is therefore
+the *distinct* chapters from Bible (translation-agnostic by OSIS), not the raw
+`chapter_read` action count, which would inflate on re-reads.
+
+## 7. Deferred to later increments (this phase)
+
+- **Integration** — `bible`/`content` emit `record_action` on chapter read /
+  devotional completion; retire `TeenProfile.update_streak`. Separate branch/PR.
 - **Grace earning + pause** — +1 per completed 7-day week and per Journey;
   proactive streak pause (14 days, twice a year).
-- **API + admin surfacing** — current/longest streak, chapters read, devotionals
-  completed, monthly heat-map; private by default.
-- **Integration** — `bible`/`content` emit `record_action` on chapter read /
-  devotional completion; retire `TeenProfile.update_streak`.
 
 ## 6. Out of scope
 

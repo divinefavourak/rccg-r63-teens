@@ -42,6 +42,7 @@ urlpatterns = [
     path('api/v1/profiles/', include('profiles.urls')),
     path('api/v1/content/', include('content.urls')),
     path('api/v1/bible/', include('bible.urls')),
+    path('api/v1/progress/', include('progress.urls')),
     path('api/v1/media/', include('media.urls')),
     path('api/v1/events/', include('events.urls')),
     path('api/v1/payments/', include('payments.urls')),
@@ -51,6 +52,7 @@ urlpatterns = [
     path('api/users/', include('users.urls')),  # Added for AdminUsers page
     path('api/content/', include('content.urls')),  # Added for content pages
     path('api/bible/', include('bible.urls')),  # Bible reader + personal layer
+    path('api/progress/', include('progress.urls')),  # Streaks, grace, history
     path('api/media/', include('media.urls')),  # Added for media pages
     path('api/events/', include('events.urls')),  # Added for events pages
     path('api/profiles/', include('profiles.urls')),  # Added for profiles
