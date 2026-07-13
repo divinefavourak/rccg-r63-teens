@@ -20,6 +20,7 @@ from .models import (
 GRACE_CAP = 4                    # a teen holds at most this many at once
 MONTHLY_GRACE_ALLOCATION = 2     # granted on the 1st of each calendar month
 MAX_CONSECUTIVE_GRACE_COVER = 2  # grace bridges at most 2 consecutive misses
+DAYS_PER_EARNED_WEEK = 7         # +1 Grace Day per 7 genuinely-active days
 
 
 @transaction.atomic
@@ -65,24 +66,36 @@ def _advance_streak(user, day):
         state.current_length = 1
         state.started_on = day
         state.last_active_on = day
+        state.active_days_this_week = 1
     elif day <= last:
         # Same day (repeat action) or an out-of-order backfill: no forward move.
         return state
     elif day == last + timedelta(days=1):
         state.current_length += 1
         state.last_active_on = day
+        state.active_days_this_week += 1
     elif _try_cover_gap(user, last, day):
-        # Grace bridged the missed days; the run is continuous through `day`.
+        # Grace bridged the missed days; the run is continuous through `day`, but
+        # the covered days were not active, so the active-week run restarts.
         state.current_length += (day - last).days
         state.last_active_on = day
+        state.active_days_this_week = 1
     else:
         # An unbridgeable gap — reset with fresh-start framing.
         state.current_length = 1
         state.started_on = day
         state.last_active_on = day
+        state.active_days_this_week = 1
 
     if state.current_length > state.longest_length:
         state.longest_length = state.current_length
+
+    # A completed 7-active-day week funds one Grace Day (capped; excess doesn't
+    # accrue). The week is consumed either way, so the counter resets.
+    if state.active_days_this_week >= DAYS_PER_EARNED_WEEK:
+        grant_grace(user, 1, GraceReason.WEEKLY_EARNED)
+        state.active_days_this_week = 0
+
     state.save()
     return state
 

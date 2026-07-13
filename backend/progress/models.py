@@ -93,6 +93,12 @@ class StreakState(UUIDMixin, TimestampMixin):
     last_active_on = models.DateField(null=True, blank=True)
     started_on = models.DateField(null=True, blank=True)
 
+    # Consecutive *genuinely active* days toward the next earned Grace Day. Reset
+    # to 0 when a 7-day week completes (granting +1) and to 1 whenever the active
+    # run is interrupted — a grace-covered or paused day is not "active", so it
+    # does not fund earning (`docs/12-gamification.md`: "all 7 days active").
+    active_days_this_week = models.PositiveSmallIntegerField(default=0)
+
     class Meta:
         indexes = [models.Index(fields=['user'])]
 
