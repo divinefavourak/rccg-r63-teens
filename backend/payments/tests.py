@@ -28,7 +28,7 @@ class PaymentModelTests(TestCase):
             last_name='Coordinator',
             phone='+2348012345678',
             role=User.Role.COORDINATOR,
-            province=User.Province.PROVINCE_1,
+            province=User.Province.LAGOS_PROVINCE_9,
             zone='Test Zone',
             area='Test Area',
             parish='Test Parish'
@@ -42,7 +42,7 @@ class PaymentModelTests(TestCase):
             gender=Ticket.Gender.MALE,
             phone='+2348012345679',
             email='teen@example.com',
-            province='province_1',
+            province='lagos_province_9',
             zone='Zone A',
             area='Area 1',
             parish='Parish XYZ',
@@ -247,7 +247,7 @@ class PaymentServiceTests(TestCase):
             last_name='User',
             phone='+2348012345678',
             role=User.Role.COORDINATOR,
-            province=User.Province.PROVINCE_1
+            province=User.Province.LAGOS_PROVINCE_9
         )
         
         self.ticket = Ticket.objects.create(
@@ -257,7 +257,7 @@ class PaymentServiceTests(TestCase):
             gender=Ticket.Gender.MALE,
             phone='+2348012345679',
             email='teen@example.com',
-            province='province_1',
+            province='lagos_province_9',
             zone='Zone A',
             area='Area 1',
             parish='Parish XYZ',
@@ -398,7 +398,7 @@ class PaymentAPITests(APITestCase):
             first_name='Coord',
             last_name='Inator',
             role=User.Role.COORDINATOR,
-            province=User.Province.PROVINCE_1,
+            province=User.Province.LAGOS_PROVINCE_9,
             zone='Test Zone',
             area='Test Area',
             parish='Test Parish'
@@ -411,7 +411,7 @@ class PaymentAPITests(APITestCase):
             first_name='Regular',
             last_name='User',
             role=User.Role.COORDINATOR,
-            province=User.Province.PROVINCE_2
+            province=User.Province.LAGOS_PROVINCE_28
         )
         
         # Create a ticket
@@ -422,7 +422,7 @@ class PaymentAPITests(APITestCase):
             gender=Ticket.Gender.FEMALE,
             phone='+2348012345670',
             email='api_test@example.com',
-            province='province_1',
+            province='lagos_province_9',
             zone='Zone B',
             area='Area 2',
             parish='Parish ABC',
@@ -707,7 +707,7 @@ class PaymentDashboardTests(APITestCase):
             first_name='Dashboard',
             last_name='Coord',
             role=User.Role.COORDINATOR,
-            province=User.Province.PROVINCE_1
+            province=User.Province.LAGOS_PROVINCE_9
         )
         
         # Create tickets and payments
@@ -718,7 +718,7 @@ class PaymentDashboardTests(APITestCase):
             gender=Ticket.Gender.FEMALE,
             phone='+2348012345000',
             email='dashboard@example.com',
-            province='province_1',
+            province='lagos_province_9',
             zone='Zone C',
             area='Area 3',
             parish='Parish Dashboard',

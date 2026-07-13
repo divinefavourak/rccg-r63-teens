@@ -16,9 +16,9 @@ class UserModelTests(TestCase):
             last_name='Doe',
             phone='+1234567890',
             role=User.Role.COORDINATOR,
-            province=User.Province.PROVINCE_1
+            province=User.Province.LAGOS_PROVINCE_9
         )
-        
+
         self.assertEqual(user.username, 'coordinator1')
         self.assertEqual(user.role, User.Role.COORDINATOR)
         self.assertTrue(user.check_password('testpass123'))
@@ -52,9 +52,9 @@ class AuthenticationTests(APITestCase):
             first_name='Test',
             last_name='User',
             role=User.Role.COORDINATOR,
-            province=User.Province.PROVINCE_1
+            province=User.Province.LAGOS_PROVINCE_9
         )
-    
+
     def test_login(self):
         """Test user login"""
         url = '/api/auth/login/'  # Use direct URL instead of reverse
