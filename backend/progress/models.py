@@ -98,3 +98,56 @@ class StreakState(UUIDMixin, TimestampMixin):
 
     def __str__(self):
         return f'{self.user_id}: {self.current_length}d (best {self.longest_length})'
+
+
+class GraceReason(models.TextChoices):
+    """Why a Grace-Day ledger entry exists."""
+    MONTHLY_ALLOCATION = 'monthly_allocation', 'Monthly allocation'
+    WEEKLY_EARNED = 'weekly_earned', 'Earned: completed 7-day week'
+    JOURNEY_EARNED = 'journey_earned', 'Earned: completed Journey'
+    STREAK_COVER = 'streak_cover', 'Consumed: covered a missed day'
+
+
+class GraceDayLedger(UUIDMixin, models.Model):
+    """
+    Append-only ledger of Grace-Day movements; a user's balance is the sum of
+    `delta`. A ledger (not a bare counter) because grace is *earned and spent*
+    over time and the product must be able to say exactly why a day was covered
+    ("Grace covered Tuesday 🌱", `docs/12-gamification.md`).
+
+    Grants are positive (`+2` monthly, `+1` earned); a cover is `-1` and records
+    the `covered_on` day it bridged. The held cap of 4 is enforced at *grant*
+    time (excess simply isn't written — "no hoarding economy"), so the summed
+    balance never needs clamping on read.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='grace_ledger',
+    )
+    delta = models.SmallIntegerField()
+    reason = models.CharField(max_length=32, choices=GraceReason.choices)
+
+    # A cover records the missed local day it bridged; a monthly grant records
+    # the month it belongs to so re-running allocation is idempotent.
+    covered_on = models.DateField(null=True, blank=True)
+    effective_month = models.DateField(null=True, blank=True)  # 1st of the month
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['user', 'created_at'])]
+        ordering = ['-created_at']
+        constraints = [
+            # One monthly allocation per user per month, no matter how often the
+            # allocation job runs.
+            models.UniqueConstraint(
+                fields=['user', 'effective_month'],
+                condition=models.Q(reason='monthly_allocation'),
+                name='progress_one_monthly_allocation_per_month',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.user_id} {self.delta:+d} ({self.reason})'

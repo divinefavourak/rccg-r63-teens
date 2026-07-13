@@ -7,7 +7,7 @@ in the admin can't desynchronise the streak from the events that produced it.
 """
 from django.contrib import admin
 
-from .models import SpiritualAction, StreakState
+from .models import GraceDayLedger, SpiritualAction, StreakState
 
 
 class ReadOnlyAdmin(admin.ModelAdmin):
@@ -37,3 +37,12 @@ class StreakStateAdmin(ReadOnlyAdmin):
     list_display = ('user', 'current_length', 'longest_length', 'last_active_on', 'started_on')
     search_fields = ('user__username', 'user__email')
     ordering = ('-current_length',)
+
+
+@admin.register(GraceDayLedger)
+class GraceDayLedgerAdmin(ReadOnlyAdmin):
+    list_display = ('user', 'delta', 'reason', 'covered_on', 'effective_month', 'created_at')
+    list_filter = ('reason',)
+    search_fields = ('user__username', 'user__email')
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
