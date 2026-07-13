@@ -35,6 +35,15 @@ class _AppendOnlyQuerySet(models.QuerySet):
     def bulk_update(self, *args, **kwargs):
         raise AppendOnlyError(f'{self.model.__name__} is append-only; rows cannot be updated.')
 
+    def bulk_create(self, objs, *args, update_conflicts=False, **kwargs):
+        # Plain inserts are the point of an append-only log; only the upsert form
+        # (`update_conflicts=True`) would rewrite existing rows behind `save()`.
+        if update_conflicts:
+            raise AppendOnlyError(
+                f'{self.model.__name__} is append-only; upserts are not allowed.'
+            )
+        return super().bulk_create(objs, *args, update_conflicts=update_conflicts, **kwargs)
+
 
 class AppendOnlyModel(models.Model):
     """

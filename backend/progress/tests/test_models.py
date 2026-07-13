@@ -92,6 +92,19 @@ class AppendOnlyEnforcementTests(TestCase):
         SpiritualAction.objects.filter(user=self.user).delete()
         self.assertEqual(0, SpiritualAction.objects.filter(user=self.user).count())
 
+    def test_bulk_create_upsert_is_refused(self):
+        # Plain bulk_create (inserts) is fine — the cover path uses it — but the
+        # upsert form would rewrite existing rows behind save().
+        action = SpiritualAction(
+            user=self.user, action_type=ActionType.CHAPTER_READ,
+            occurred_on=datetime.date(2026, 7, 13),
+        )
+        with self.assertRaises(AppendOnlyError):
+            SpiritualAction.objects.bulk_create(
+                [action], update_conflicts=True,
+                update_fields=['action_type'], unique_fields=['id'],
+            )
+
 
 class GraceLedgerConstraintTests(TestCase):
     def setUp(self):
