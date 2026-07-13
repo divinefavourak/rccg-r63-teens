@@ -47,7 +47,8 @@ requests can't both increment. Relative to `last_active_on`:
 - **backfilled earlier day** (`day < last_active_on`) → logged, but never
   rewrites the streak.
 - **next day** (`day == last_active_on + 1`) → length += 1.
-- **gap** (`day > last_active_on + 1`) → reset to 1, fresh `started_on`.
+- **gap** (`day > last_active_on + 1`) → offered to Grace Days first (§5); resets
+  to 1 with a fresh `started_on` only when grace cannot fully bridge it.
 
 `longest_length = max(longest_length, current_length)` on every advance.
 

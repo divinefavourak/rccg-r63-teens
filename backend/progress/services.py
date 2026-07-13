@@ -119,11 +119,24 @@ def grace_balance(user):
         total=Sum('delta'))['total'] or 0
 
 
+def _lock_user_grace(user):
+    """
+    Per-user mutex for Grace mutations. Locking the user's `StreakState` row
+    (the same row `_advance_streak` locks, so covers and grants serialize on one
+    mutex) makes read-balance-then-write atomic — without it two concurrent
+    grants can both see room and push the ledger past the cap.
+    """
+    StreakState.objects.get_or_create(user=user)
+    StreakState.objects.select_for_update().get(user=user)
+
+
+@transaction.atomic
 def grant_grace(user, amount, reason, *, effective_month=None):
     """
     Grant up to `amount` Grace Days, honoring the held cap of 4. Returns the
     number actually granted; excess simply isn't written (no hoarding economy).
     """
+    _lock_user_grace(user)
     grantable = min(amount, GRACE_CAP - grace_balance(user))
     if grantable <= 0:
         return 0
@@ -133,21 +146,27 @@ def grant_grace(user, amount, reason, *, effective_month=None):
     return grantable
 
 
+@transaction.atomic
 def grant_monthly_allocation(user, month=None):
     """
-    Grant the month's base allocation, once. Idempotent: a partial unique index
-    on (user, effective_month) for monthly grants means re-running the allocation
-    job never double-grants. `month` is normalized to the 1st.
+    Grant the month's base allocation, once. Idempotent: always writes exactly one
+    MONTHLY_ALLOCATION row per user per month — reserving the slot even when the
+    balance is already capped (delta 0) so a later run, after grace has been
+    spent, can't grant the month a second time. The per-user lock makes the
+    check-then-insert atomic; the partial unique index is the backstop.
     """
     month = (month or user_today(user)).replace(day=1)
+    _lock_user_grace(user)
     if GraceDayLedger.objects.filter(
         user=user, reason=GraceReason.MONTHLY_ALLOCATION, effective_month=month,
     ).exists():
         return 0
-    return grant_grace(
-        user, MONTHLY_GRACE_ALLOCATION, GraceReason.MONTHLY_ALLOCATION,
+    grantable = max(0, min(MONTHLY_GRACE_ALLOCATION, GRACE_CAP - grace_balance(user)))
+    GraceDayLedger.objects.create(
+        user=user, delta=grantable, reason=GraceReason.MONTHLY_ALLOCATION,
         effective_month=month,
     )
+    return grantable
 
 
 def streak_for(user):

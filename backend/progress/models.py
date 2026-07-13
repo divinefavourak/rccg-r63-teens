@@ -13,7 +13,7 @@ domain.
 from django.conf import settings
 from django.db import models
 
-from common.models import TimestampMixin, UUIDMixin
+from common.models import AppendOnlyModel, TimestampMixin, UUIDMixin
 
 
 class ActionType(models.TextChoices):
@@ -30,7 +30,7 @@ class ActionType(models.TextChoices):
     VERSE_REVIEWED = 'verse_reviewed', 'Memory verse reviewed'
 
 
-class SpiritualAction(UUIDMixin, models.Model):
+class SpiritualAction(UUIDMixin, AppendOnlyModel):
     """
     An append-only record that a user did one qualifying spiritual thing.
 
@@ -108,7 +108,7 @@ class GraceReason(models.TextChoices):
     STREAK_COVER = 'streak_cover', 'Consumed: covered a missed day'
 
 
-class GraceDayLedger(UUIDMixin, models.Model):
+class GraceDayLedger(UUIDMixin, AppendOnlyModel):
     """
     Append-only ledger of Grace-Day movements; a user's balance is the sum of
     `delta`. A ledger (not a bare counter) because grace is *earned and spent*
@@ -141,11 +141,29 @@ class GraceDayLedger(UUIDMixin, models.Model):
         ordering = ['-created_at']
         constraints = [
             # One monthly allocation per user per month, no matter how often the
-            # allocation job runs.
+            # allocation job runs. Paired with the check below (month is never
+            # NULL for a monthly grant) so this partial index can't be bypassed
+            # by NULLs — which Postgres treats as mutually distinct.
             models.UniqueConstraint(
                 fields=['user', 'effective_month'],
-                condition=models.Q(reason='monthly_allocation'),
+                condition=models.Q(reason=GraceReason.MONTHLY_ALLOCATION),
                 name='progress_one_monthly_allocation_per_month',
+            ),
+            # A monthly grant must carry the month it belongs to.
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(reason=GraceReason.MONTHLY_ALLOCATION)
+                    | models.Q(effective_month__isnull=False)
+                ),
+                name='progress_monthly_allocation_has_month',
+            ),
+            # A cover spends grace: its delta is negative.
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(reason=GraceReason.STREAK_COVER)
+                    | models.Q(delta__lt=0)
+                ),
+                name='progress_streak_cover_is_negative',
             ),
         ]
 

@@ -23,17 +23,17 @@ class GraceBalanceTests(TestCase):
         self.assertEqual(0, services.grace_balance(self.user))
 
     def test_grant_increases_balance(self):
-        services.grant_grace(self.user, 2, GraceReason.MONTHLY_ALLOCATION)
+        services.grant_grace(self.user, 2, GraceReason.WEEKLY_EARNED)
         self.assertEqual(2, services.grace_balance(self.user))
 
     def test_grant_is_capped_at_four(self):
-        services.grant_grace(self.user, 3, GraceReason.MONTHLY_ALLOCATION)
+        services.grant_grace(self.user, 3, GraceReason.WEEKLY_EARNED)
         granted = services.grant_grace(self.user, 3, GraceReason.WEEKLY_EARNED)
         self.assertEqual(1, granted)                 # only room for one more
         self.assertEqual(4, services.grace_balance(self.user))
 
     def test_grant_at_cap_writes_nothing(self):
-        services.grant_grace(self.user, 4, GraceReason.MONTHLY_ALLOCATION)
+        services.grant_grace(self.user, 4, GraceReason.WEEKLY_EARNED)
         granted = services.grant_grace(self.user, 2, GraceReason.JOURNEY_EARNED)
         self.assertEqual(0, granted)
         self.assertEqual(4, services.grace_balance(self.user))
@@ -56,6 +56,22 @@ class MonthlyAllocationTests(TestCase):
         services.grant_monthly_allocation(self.user, D(2026, 7, 1))
         services.grant_monthly_allocation(self.user, D(2026, 8, 1))
         self.assertEqual(4, services.grace_balance(self.user))
+
+    def test_capped_month_reserves_slot_and_is_not_regranted_after_spending(self):
+        # Fill to the cap by other means, then allocate: the month is reserved
+        # (a zero-delta marker) even though there is no room to grant.
+        services.grant_grace(self.user, 4, GraceReason.WEEKLY_EARNED)
+        self.assertEqual(0, services.grant_monthly_allocation(self.user, D(2026, 7, 1)))
+        self.assertTrue(GraceDayLedger.objects.filter(
+            user=self.user, reason=GraceReason.MONTHLY_ALLOCATION,
+            effective_month=D(2026, 7, 1)).exists())
+
+        # Spend one grace, then re-run July: the reserved slot blocks a re-grant.
+        GraceDayLedger.objects.create(
+            user=self.user, delta=-1, reason=GraceReason.STREAK_COVER,
+            covered_on=D(2026, 7, 10))
+        self.assertEqual(0, services.grant_monthly_allocation(self.user, D(2026, 7, 1)))
+        self.assertEqual(3, services.grace_balance(self.user))
 
     def test_duplicate_monthly_ledger_row_is_rejected_at_the_db(self):
         month = D(2026, 7, 1)
@@ -80,7 +96,7 @@ class GraceAwareStreakTests(TestCase):
         )
 
     def test_one_missed_day_is_covered_when_grace_available(self):
-        services.grant_grace(self.user, 2, GraceReason.MONTHLY_ALLOCATION)
+        services.grant_grace(self.user, 2, GraceReason.WEEKLY_EARNED)
         self._record(13)
         self._record(15)  # missed the 14th
         state = services.streak_for(self.user)
@@ -89,7 +105,7 @@ class GraceAwareStreakTests(TestCase):
         self.assertEqual(D(2026, 7, 13), state.started_on)
 
     def test_two_missed_days_consume_two_grace(self):
-        services.grant_grace(self.user, 2, GraceReason.MONTHLY_ALLOCATION)
+        services.grant_grace(self.user, 2, GraceReason.WEEKLY_EARNED)
         self._record(13)
         self._record(16)  # missed 14 and 15
         state = services.streak_for(self.user)
@@ -97,7 +113,7 @@ class GraceAwareStreakTests(TestCase):
         self.assertEqual(0, services.grace_balance(self.user))
 
     def test_three_missed_days_reset_even_with_grace(self):
-        services.grant_grace(self.user, 4, GraceReason.MONTHLY_ALLOCATION)
+        services.grant_grace(self.user, 4, GraceReason.WEEKLY_EARNED)
         self._record(13)
         self._record(17)  # missed 14, 15, 16 — beyond the 2-consecutive limit
         state = services.streak_for(self.user)
@@ -106,7 +122,7 @@ class GraceAwareStreakTests(TestCase):
         self.assertEqual(D(2026, 7, 17), state.started_on)
 
     def test_insufficient_grace_resets_and_spends_nothing(self):
-        services.grant_grace(self.user, 1, GraceReason.MONTHLY_ALLOCATION)
+        services.grant_grace(self.user, 1, GraceReason.WEEKLY_EARNED)
         self._record(13)
         self._record(16)  # 2 missed days, only 1 grace — cannot bridge
         state = services.streak_for(self.user)
@@ -114,7 +130,7 @@ class GraceAwareStreakTests(TestCase):
         self.assertEqual(1, services.grace_balance(self.user))  # not partially spent
 
     def test_cover_records_the_bridged_day(self):
-        services.grant_grace(self.user, 2, GraceReason.MONTHLY_ALLOCATION)
+        services.grant_grace(self.user, 2, GraceReason.WEEKLY_EARNED)
         self._record(13)
         self._record(15)
         cover = GraceDayLedger.objects.get(user=self.user, reason=GraceReason.STREAK_COVER)

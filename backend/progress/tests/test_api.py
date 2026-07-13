@@ -48,7 +48,7 @@ class SummaryApiTests(APITestCase):
         # Progress-owned actions.
         services.record_action(
             self.user, ActionType.DEVOTIONAL_COMPLETED, occurred_on=D(2026, 7, 13))
-        services.grant_grace(self.user, 2, GraceReason.MONTHLY_ALLOCATION)
+        services.grant_grace(self.user, 2, GraceReason.WEEKLY_EARNED)
 
         self.client.force_authenticate(self.user)
         response = self.client.get(reverse('progress-summary'))

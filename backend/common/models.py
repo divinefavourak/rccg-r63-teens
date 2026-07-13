@@ -24,6 +24,40 @@ class UUIDMixin(models.Model):
         abstract = True
 
 
+class AppendOnlyError(Exception):
+    """Raised when code tries to modify an append-only record."""
+
+
+class _AppendOnlyQuerySet(models.QuerySet):
+    def update(self, *args, **kwargs):
+        raise AppendOnlyError(f'{self.model.__name__} is append-only; rows cannot be updated.')
+
+    def bulk_update(self, *args, **kwargs):
+        raise AppendOnlyError(f'{self.model.__name__} is append-only; rows cannot be updated.')
+
+
+class AppendOnlyModel(models.Model):
+    """
+    A model whose rows may be inserted and (for account erasure) deleted, but
+    never edited — enforcing at the persistence boundary the immutability that an
+    event log only *claims* in its docstring. `save()` refuses to rewrite an
+    existing row, and the manager refuses `update()`/`bulk_update()`; `delete()`
+    is intentionally left open so an account cascade can erase a user's history.
+    """
+
+    objects = _AppendOnlyQuerySet.as_manager()
+
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise AppendOnlyError(
+                f'{type(self).__name__} is append-only; existing rows cannot be modified.'
+            )
+        super().save(*args, **kwargs)
+
+
 class PublishableMixin(models.Model):
     """Adds publishing status and scheduling for content models."""
     
