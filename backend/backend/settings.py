@@ -85,7 +85,8 @@ INSTALLED_APPS = [
     'identity',
     'users',
     'profiles',
-    
+    'progress',  # Spiritual-action stream, streaks, Grace Days; foundational (depends on nothing)
+
     # Local apps - Content
     'bible',    # Scripture foundation; `content` depends on it, never the reverse
     'content',
