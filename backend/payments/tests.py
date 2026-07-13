@@ -482,11 +482,12 @@ class PaymentAPITests(APITestCase):
         
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        
-        # Coordinator should see payments for their province
-        result_list(response)
 
-    
+        # Coordinator receives a readable, list-shaped payments payload.
+        # (Province-scoped visibility is not yet enforced; see audit C2.)
+        self.assertIsInstance(result_list(response), list)
+
+
     def test_my_payments_endpoint(self):
         """Test my_payments endpoint"""
         
