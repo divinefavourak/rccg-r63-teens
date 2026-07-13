@@ -5,6 +5,9 @@ These assert on `IntegrityError`, not on serializer validation — a constraint
 that only lives in a serializer is not an invariant, because the admin, the
 shell and management commands all bypass it.
 """
+import datetime
+from unittest import mock
+
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
@@ -140,7 +143,12 @@ class NoteTests(TestCase):
         note = Note.objects.create(user=self.user, verse=self.verses[0], content='draft')
         original = note.updated_at
         note.content = 'revised'
-        note.save()
+        # Pin a strictly-later save instant: `auto_now` can tie on Windows'
+        # coarse (~15ms) clock, and the assertion is about the edit advancing
+        # the timestamp, not about how fast the two saves ran.
+        later = original + datetime.timedelta(seconds=1)
+        with mock.patch('django.utils.timezone.now', return_value=later):
+            note.save()
         note.refresh_from_db()
         self.assertGreater(note.updated_at, original)
         self.assertEqual('revised', note.content)

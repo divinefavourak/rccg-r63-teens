@@ -162,3 +162,22 @@ def reading_history(user):
         .filter(user=user)
         .select_related('chapter', 'chapter__book', 'chapter__book__translation')
     )
+
+
+def reading_stats(user):
+    """
+    Distinct chapters and books a user has read, counted by their
+    translation-agnostic identity (OSIS code + chapter number) so reading the
+    same chapter in two translations is not double-counted.
+
+    This is `bible`'s public reading-metric surface: other bounded contexts (the
+    Progress API) compose it rather than querying reading tables directly, so
+    Bible internals stay owned by Bible.
+    """
+    progress = ReadingProgress.objects.filter(user=user)
+    return {
+        'distinct_chapters_read': progress.values(
+            'chapter__book__osis_code', 'chapter__number').distinct().count(),
+        'distinct_books_read': progress.values(
+            'chapter__book__osis_code').distinct().count(),
+    }
