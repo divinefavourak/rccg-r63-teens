@@ -118,8 +118,16 @@ class DevotionalProgressViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         profile = self.request.user.teen_profile
         devotional_progress = serializer.save(profile=profile)
-        
-        # Update profile streak
+
+        # Progress spiritual-action stream — the authoritative streak source.
+        from progress import services as progress_services
+        from progress.models import ActionType
+        progress_services.record_action(
+            self.request.user, ActionType.DEVOTIONAL_COMPLETED,
+            source_reference=f'content.devotional:{devotional_progress.devotional_id}',
+        )
+
+        # Legacy TeenProfile streak — dual-written pending frontend migration.
         profile.update_streak(timezone.now().date())
 
 

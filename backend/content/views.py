@@ -200,14 +200,23 @@ class DevotionalViewSet(viewsets.ModelViewSet):
         if created:
             devotional.increment_read_count()
 
-            # Update streak only for users that have a full TeenProfile
+            # Progress spiritual-action stream — the authoritative streak source.
+            from progress import services as progress_services
+            from progress.models import ActionType
+            progress_services.record_action(
+                request.user, ActionType.DEVOTIONAL_COMPLETED,
+                source_reference=f'content.devotional:{devotional.id}',
+            )
+
+            # Legacy TeenProfile streak — dual-written until the frontend reads
+            # from /api/progress/ (expand-contract).
             try:
                 profile = request.user.teen_profile
                 profile.update_streak(date.today())
                 streak_days = profile.streak_days
                 total_read = profile.devotionals_read_count
             except Exception:
-                # No TeenProfile — streak not tracked, that's fine
+                # No TeenProfile — legacy streak not tracked, that's fine
                 pass
 
         else:
