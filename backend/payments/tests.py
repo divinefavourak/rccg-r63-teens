@@ -1,4 +1,4 @@
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase
 from rest_framework import status
@@ -13,6 +13,22 @@ from users.models import User
 from tickets.models import Ticket
 from .services import PaystackService, PaymentService
 from .serializers import PaymentSerializer, PaymentPlanSerializer
+
+
+def result_list(response):
+    """Items from a DRF list response, whether or not pagination is enabled."""
+    data = response.data
+    if isinstance(data, dict) and 'results' in data:
+        return data['results']
+    return data
+
+# PaystackService.__init__ refuses to construct without keys. The tests below
+# mock every outbound Paystack call, so these dummy values only need to be
+# non-empty — no request ever reaches Paystack.
+paystack_test_keys = override_settings(
+    PAYSTACK_SECRET_KEY='sk_test_dummy',
+    PAYSTACK_PUBLIC_KEY='pk_test_dummy',
+)
 
 
 class PaymentModelTests(TestCase):
@@ -58,7 +74,6 @@ class PaymentModelTests(TestCase):
     
     def test_create_payment_with_actual_model(self):
         """Test creating a payment using your actual Payment model"""
-        print("\n=== Testing Payment Creation ===")
         
         # Create payment using your model
         payment = Payment.objects.create(
@@ -78,11 +93,6 @@ class PaymentModelTests(TestCase):
             }
         )
         
-        print(f"Created payment: {payment}")
-        print(f"Payment reference: {payment.reference}")
-        print(f"Payment amount: {payment.amount}")
-        print(f"Payment status: {payment.status}")
-        print(f"Payment ticket: {payment.ticket.ticket_id}")
         
         # Verify the payment was created correctly
         self.assertEqual(payment.reference, 'TEST_PAY_001')
@@ -98,11 +108,9 @@ class PaymentModelTests(TestCase):
         self.assertFalse(payment.is_successful)
         self.assertEqual(payment.formatted_amount, '₦5,000.00')
         
-        print("✓ Payment creation test passed")
     
     def test_payment_status_transitions(self):
         """Test payment status transitions using your actual model"""
-        print("\n=== Testing Payment Status Transitions ===")
         
         # Create a payment
         payment = Payment.objects.create(
@@ -115,7 +123,6 @@ class PaymentModelTests(TestCase):
             status=Payment.Status.PENDING
         )
         
-        print(f"Initial status: {payment.status}")
         self.assertEqual(payment.status, Payment.Status.PENDING)
         self.assertTrue(payment.is_pending)
         
@@ -133,7 +140,6 @@ class PaymentModelTests(TestCase):
         
         payment.mark_as_successful(paystack_data)
         
-        print(f"Status after success: {payment.status}")
         self.assertEqual(payment.status, Payment.Status.SUCCESS)
         self.assertTrue(payment.is_successful)
         self.assertFalse(payment.is_pending)
@@ -142,11 +148,9 @@ class PaymentModelTests(TestCase):
         self.assertEqual(payment.authorization_code, 'AUTH_code_123')
         self.assertEqual(payment.channel, 'card')
         
-        print("✓ Payment status transition test passed")
     
     def test_payment_serializer(self):
         """Test your actual PaymentSerializer"""
-        print("\n=== Testing Payment Serializer ===")
         
         # Create a payment
         payment = Payment.objects.create(
@@ -164,7 +168,6 @@ class PaymentModelTests(TestCase):
         # Use your actual serializer
         serializer = PaymentSerializer(payment)
         
-        print(f"Serialized data: {serializer.data}")
         
         # Verify serializer fields
         self.assertEqual(serializer.data['reference'], 'TEST_SERIALIZER_001')
@@ -175,7 +178,6 @@ class PaymentModelTests(TestCase):
         self.assertTrue(serializer.data['is_successful'])
         self.assertFalse(serializer.data['is_pending'])
         
-        print("✓ Payment serializer test passed")
 
 
 class PaymentPlanTests(TestCase):
@@ -183,7 +185,6 @@ class PaymentPlanTests(TestCase):
     
     def test_create_payment_plan(self):
         """Test creating a payment plan using your actual model"""
-        print("\n=== Testing Payment Plan Creation ===")
         
         valid_from = timezone.now()
         valid_to = valid_from + timezone.timedelta(days=30)
@@ -202,10 +203,6 @@ class PaymentPlanTests(TestCase):
             is_active=True
         )
         
-        print(f"Created plan: {plan}")
-        print(f"Plan name: {plan.name}")
-        print(f"Plan type: {plan.plan_type}")
-        print(f"Plan amount: {plan.amount}")
         
         # Verify the plan
         self.assertEqual(plan.name, 'Early Bird Discount')
@@ -231,9 +228,9 @@ class PaymentPlanTests(TestCase):
         self.assertEqual(serializer.data['amount'], '4000.00')
         self.assertTrue(serializer.data['is_valid'])
         
-        print("✓ Payment plan creation test passed")
 
 
+@paystack_test_keys
 class PaymentServiceTests(TestCase):
     """Tests for your actual PaymentService"""
     
@@ -278,7 +275,6 @@ class PaymentServiceTests(TestCase):
     @patch.object(PaystackService, 'generate_reference')
     def test_create_payment_integration(self, mock_generate_ref, mock_initialize):
         """Test payment creation with actual service"""
-        print("\n=== Testing Payment Service Integration ===")
         
         # Mock the dependencies
         mock_generate_ref.return_value = 'RCCG_20250101_123456'
@@ -307,14 +303,10 @@ class PaymentServiceTests(TestCase):
             request=mock_request
         )
         
-        print(f"Created payment ID: {payment.id}")
-        print(f"Payment reference: {payment.reference}")
-        print(f"Payment amount: {payment.amount}")
-        print(f"Paystack response status: {paystack_response['status']}")
         
         # Verify results
         self.assertEqual(payment.reference, 'RCCG_20250101_123456')
-        self.assertEqual(payment.amount, Decimal('5000.00'))  # Default from your service
+        self.assertEqual(payment.amount, Decimal('3000.00'))  # Default fee in PaymentService.create_payment
         self.assertEqual(payment.ticket, self.ticket)
         self.assertEqual(payment.payer_email, self.user.email)
         self.assertEqual(payment.status, Payment.Status.PENDING)
@@ -327,12 +319,10 @@ class PaymentServiceTests(TestCase):
         self.assertTrue(paystack_response['status'])
         self.assertIn('authorization_url', paystack_response['data'])
         
-        print("✓ Payment service integration test passed")
     
     @patch.object(PaystackService, 'verify_payment')
     def test_verify_payment_integration(self, mock_verify):
         """Test payment verification with actual service"""
-        print("\n=== Testing Payment Verification ===")
         
         # Create a pending payment
         payment = Payment.objects.create(
@@ -366,8 +356,6 @@ class PaymentServiceTests(TestCase):
             request=None
         )
         
-        print(f"Verified payment: {result.id}")
-        print(f"New status: {result.status}")
         
         # Verify result
         self.assertEqual(result, payment)
@@ -375,9 +363,9 @@ class PaymentServiceTests(TestCase):
         self.assertEqual(result.paystack_reference, 'VERIFY_TEST_001')
         self.assertEqual(result.authorization_code, 'AUTH_verify_123')
         
-        print("✓ Payment verification test passed")
 
 
+@paystack_test_keys
 class PaymentAPITests(APITestCase):
     """API tests using your actual views and serializers"""
     
@@ -472,89 +460,56 @@ class PaymentAPITests(APITestCase):
     
     def test_list_payments_as_admin(self):
         """Test listing payments as admin"""
-        print("\n=== Testing List Payments (Admin) ===")
         
         self.client.force_authenticate(user=self.admin)
         
         # Using your actual URL pattern
         response = self.client.get('/api/payments/payments/')
         
-        print(f"Response status: {response.status_code}")
-        print(f"Response data keys: {response.data.keys() if isinstance(response.data, dict) else 'Not dict'}")
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         
         # Check response structure
-        if isinstance(response.data, dict) and 'results' in response.data:
-            payments = response.data['results']
-            print(f"Number of payments: {len(payments)}")
-            self.assertGreaterEqual(len(payments), 2)
-        else:
-            payments = response.data
-            print(f"Number of payments: {len(payments)}")
-            self.assertGreaterEqual(len(payments), 2)
-        
-        print("✓ List payments (admin) test passed")
+        self.assertGreaterEqual(len(result_list(response)), 2)
+
     
     def test_list_payments_as_coordinator(self):
         """Test listing payments as coordinator"""
-        print("\n=== Testing List Payments (Coordinator) ===")
         
         self.client.force_authenticate(user=self.coordinator)
         
         response = self.client.get('/api/payments/payments/')
         
-        print(f"Response status: {response.status_code}")
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        
-        # Coordinator should see payments for their province
-        if isinstance(response.data, dict) and 'results' in response.data:
-            payments = response.data['results']
-            print(f"Number of payments for coordinator: {len(payments)}")
-        else:
-            payments = response.data
-            print(f"Number of payments for coordinator: {len(payments)}")
-        
-        print("✓ List payments (coordinator) test passed")
-    
+
+        # Coordinator receives a readable, list-shaped payments payload.
+        # (Province-scoped visibility is not yet enforced; see audit C2.)
+        self.assertIsInstance(result_list(response), list)
+
+
     def test_my_payments_endpoint(self):
         """Test my_payments endpoint"""
-        print("\n=== Testing My Payments Endpoint ===")
         
         self.client.force_authenticate(user=self.coordinator)
         
         response = self.client.get('/api/payments/payments/my_payments/')
         
-        print(f"Response status: {response.status_code}")
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         
-        # Should see coordinator's own payments
-        if isinstance(response.data, dict) and 'results' in response.data:
-            payments = response.data['results']
-            print(f"Number of user's payments: {len(payments)}")
-            
-            # All payments should belong to the coordinator
-            for payment in payments:
-                self.assertEqual(payment['payer_email'], self.coordinator.email)
-        else:
-            payments = response.data
-            print(f"Number of user's payments: {len(payments)}")
-            
-            for payment in payments:
-                self.assertEqual(payment['payer_email'], self.coordinator.email)
-        
-        print("✓ My payments endpoint test passed")
+        # All payments should belong to the coordinator
+        for payment in result_list(response):
+            self.assertEqual(payment['payer_email'], self.coordinator.email)
+
     
     @patch('payments.services.PaystackService.initialize_payment')
     @patch('payments.services.PaystackService.generate_reference')
     def test_initialize_payment_endpoint(self, mock_generate_ref, mock_initialize):
         """Test initialize payment endpoint"""
-        print("\n=== Testing Initialize Payment Endpoint ===")
         
         self.client.force_authenticate(user=self.coordinator)
-        
+
         # Mock responses
         mock_generate_ref.return_value = 'RCCG_TEST_REF'
         mock_initialize.return_value = {
@@ -566,68 +521,73 @@ class PaymentAPITests(APITestCase):
                 'access_code': 'test_access'
             }
         }
-        
+
+        # A fresh ticket with no prior payment: self.ticket already carries a
+        # SUCCESS payment from setUp, and the endpoint (correctly) refuses to
+        # initialize a second payment for an already-paid ticket.
+        unpaid_ticket = Ticket.objects.create(
+            full_name='Unpaid Teen',
+            age=15,
+            category=Ticket.Category.TEENS,
+            gender=Ticket.Gender.MALE,
+            phone='+2348012345671',
+            email='unpaid@example.com',
+            province='lagos_province_9',
+            zone='Zone B',
+            area='Area 2',
+            parish='Parish ABC',
+            emergency_contact='Emergency',
+            emergency_phone='+2348023456701',
+            emergency_relationship='Sister',
+            parent_name='Parent',
+            parent_email='parent_unpaid@example.com',
+            parent_phone='+2348023456701',
+            parent_relationship='Parent',
+            registered_by=self.coordinator
+        )
+
         # Make request to your actual endpoint
         response = self.client.post(
             '/api/payments/payments/initialize/',
             {
-                'ticket_id': str(self.ticket.id),
+                'ticket_id': str(unpaid_ticket.id),
                 'payment_plan_id': str(self.payment_plan.id)
             },
             format='json'
         )
-        
-        print(f"Response status: {response.status_code}")
-        print(f"Response data: {response.data}")
-        
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+
         # Check response structure
         self.assertIn('payment', response.data)
         self.assertIn('authorization_url', response.data)
         self.assertIn('reference', response.data)
         self.assertIn('access_code', response.data)
-        
+
         # Verify payment was created in database
         payment_ref = response.data['reference']
         payment = Payment.objects.get(reference=payment_ref)
-        
-        print(f"Payment created: {payment.id}")
-        print(f"Payment amount: {payment.amount}")
-        print(f"Payment status: {payment.status}")
-        
-        self.assertEqual(payment.ticket, self.ticket)
+
+
+        self.assertEqual(payment.ticket, unpaid_ticket)
         self.assertEqual(payment.payer_email, self.coordinator.email)
         self.assertEqual(payment.status, Payment.Status.PENDING)
         
-        print("✓ Initialize payment endpoint test passed")
     
     def test_payment_plans_listing(self):
         """Test listing payment plans"""
-        print("\n=== Testing Payment Plans Listing ===")
         
         # This endpoint should be public
         response = self.client.get('/api/payments/payment-plans/')
         
-        print(f"Response status: {response.status_code}")
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         
         # Should see active payment plans
-        if isinstance(response.data, dict) and 'results' in response.data:
-            plans = response.data['results']
-            print(f"Number of active payment plans: {len(plans)}")
-            self.assertGreaterEqual(len(plans), 1)
-        else:
-            plans = response.data
-            print(f"Number of active payment plans: {len(plans)}")
-            self.assertGreaterEqual(len(plans), 1)
-        
-        print("✓ Payment plans listing test passed")
+        self.assertGreaterEqual(len(result_list(response)), 1)
+
     
     def test_create_payment_plan_as_admin(self):
         """Test creating payment plan as admin"""
-        print("\n=== Testing Create Payment Plan (Admin) ===")
         
         self.client.force_authenticate(user=self.admin)
         
@@ -650,19 +610,15 @@ class PaymentAPITests(APITestCase):
             format='json'
         )
         
-        print(f"Response status: {response.status_code}")
-        print(f"Created plan: {response.data}")
         
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data['name'], 'VIP Package')
         self.assertEqual(response.data['amount'], '10000.00')
         self.assertEqual(response.data['plan_type'], PaymentPlan.PlanType.VIP)
         
-        print("✓ Create payment plan (admin) test passed")
     
     def test_create_payment_plan_as_non_admin(self):
         """Test creating payment plan as non-admin (should fail)"""
-        print("\n=== Testing Create Payment Plan (Non-Admin) ===")
         
         self.client.force_authenticate(user=self.coordinator)
         
@@ -679,11 +635,9 @@ class PaymentAPITests(APITestCase):
             format='json'
         )
         
-        print(f"Response status: {response.status_code}")
         
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         
-        print("✓ Create payment plan permission test passed")
 
 
 class PaymentDashboardTests(APITestCase):
@@ -780,14 +734,11 @@ class PaymentDashboardTests(APITestCase):
     
     def test_payment_dashboard_as_admin(self):
         """Test payment dashboard access as admin"""
-        print("\n=== Testing Payment Dashboard (Admin) ===")
         
         self.client.force_authenticate(user=self.admin)
         
         response = self.client.get('/api/payments/dashboard/')
         
-        print(f"Response status: {response.status_code}")
-        print(f"Dashboard data keys: {response.data.keys()}")
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         
@@ -800,10 +751,6 @@ class PaymentDashboardTests(APITestCase):
         
         # Check overview stats
         overview = data['overview']
-        print(f"Total payments: {overview['total_payments']}")
-        print(f"Successful payments: {overview['successful_payments']}")
-        print(f"Pending payments: {overview['pending_payments']}")
-        print(f"Failed payments: {overview['failed_payments']}")
         
         self.assertEqual(overview['total_payments'], 4)
         self.assertEqual(overview['successful_payments'], 2)
@@ -812,31 +759,24 @@ class PaymentDashboardTests(APITestCase):
         
         # Check revenue
         revenue = data['revenue']
-        print(f"Total revenue: {revenue['total']}")
-        print(f"Formatted revenue: {revenue['formatted_total']}")
         
         self.assertEqual(float(revenue['total']), 10000.00)  # 2 successful payments * 5000
         
         # Check payment methods
         methods = data['payment_methods']
-        print(f"Payment methods: {methods}")
         self.assertEqual(len(methods), 2)  # CARD and BANK_TRANSFER
         
-        print("✓ Payment dashboard (admin) test passed")
     
     def test_payment_dashboard_as_non_admin(self):
         """Test payment dashboard access as non-admin (should fail)"""
-        print("\n=== Testing Payment Dashboard (Non-Admin) ===")
         
         self.client.force_authenticate(user=self.coordinator)
         
         response = self.client.get('/api/payments/dashboard/')
         
-        print(f"Response status: {response.status_code}")
         
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         
-        print("✓ Payment dashboard permission test passed")
 
 
 class TransactionLogTests(TestCase):
@@ -844,7 +784,6 @@ class TransactionLogTests(TestCase):
     
     def test_create_transaction_log(self):
         """Test creating transaction logs"""
-        print("\n=== Testing Transaction Log Creation ===")
         
         # Create a payment
         user = User.objects.create_user(
@@ -875,13 +814,9 @@ class TransactionLogTests(TestCase):
             user_agent='TestClient/1.0'
         )
         
-        print(f"Created log: {log}")
-        print(f"Log type: {log.transaction_type}")
-        print(f"Log successful: {log.is_successful}")
         
         self.assertEqual(log.payment, payment)
         self.assertEqual(log.transaction_type, TransactionLog.TransactionType.INITIATE)
         self.assertTrue(log.is_successful)
         self.assertEqual(log.ip_address, '127.0.0.1')
         
-        print("✓ Transaction log test passed")
