@@ -131,7 +131,14 @@ class TeenProfile(UUIDMixin, TimestampMixin):
         )
     
     def update_streak(self, read_date):
-        """Update devotional reading streak."""
+        """
+        DEPRECATED — legacy streak counter. The authoritative streak now lives in
+        the Progress engine (`progress.services.record_action` +
+        `StreakState`/Grace Days). This is dual-written only to keep the existing
+        `streak_days`/`longest_streak` API fields populated until the frontend
+        reads from `/api/progress/`; it has no Grace Days and no tz-safe day
+        boundary. Remove once the contract migration lands (audit H2).
+        """
         from datetime import date, timedelta
         
         if self.last_devotional_date:

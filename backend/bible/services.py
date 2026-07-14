@@ -101,6 +101,15 @@ def record_chapter_read(user, chapter, furthest_verse_number=None, completed=Fal
 
     history = ReadingHistory.objects.create(user=user, chapter=chapter, read_on=app_today())
 
+    # Feed the Progress spiritual-action stream (Phase 2 integration). Imported
+    # locally so the dependency runs bible -> progress at call time only, never at
+    # module import.
+    from progress import services as progress_services
+    from progress.models import ActionType
+    progress_services.record_action(
+        user, ActionType.CHAPTER_READ, source_reference=f'bible.chapter:{chapter.id}',
+    )
+
     progress, _ = ReadingProgress.objects.get_or_create(user=user, chapter=chapter)
     target = furthest_verse_number or progress.furthest_verse_number
     if target > progress.furthest_verse_number:

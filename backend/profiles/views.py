@@ -116,11 +116,27 @@ class DevotionalProgressViewSet(viewsets.ModelViewSet):
         )
     
     def perform_create(self, serializer):
+        from django.db import transaction
+        from common.dates import app_today
+
         profile = self.request.user.teen_profile
-        devotional_progress = serializer.save(profile=profile)
-        
-        # Update profile streak
-        profile.update_streak(timezone.now().date())
+
+        # The DevotionalProgress row and its Progress action commit together, so a
+        # record_action failure can't leave an orphaned progress row (which on
+        # retry would either duplicate or hit the unique constraint).
+        with transaction.atomic():
+            devotional_progress = serializer.save(profile=profile)
+
+            # Progress spiritual-action stream — the authoritative streak source.
+            from progress import services as progress_services
+            from progress.models import ActionType
+            progress_services.record_action(
+                self.request.user, ActionType.DEVOTIONAL_COMPLETED,
+                source_reference=f'content.devotional:{devotional_progress.devotional_id}',
+            )
+
+            # Legacy TeenProfile streak — dual-written pending frontend migration.
+            profile.update_streak(app_today())
 
 
 class ManualProgressViewSet(viewsets.ModelViewSet):
