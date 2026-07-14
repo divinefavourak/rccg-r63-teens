@@ -16,7 +16,7 @@ from rest_framework.views import APIView
 from identity.authorization import HasPermissionOrReadOnly, has_any_permission
 from identity.permissions_registry import Perm
 
-from . import services
+from . import references, services
 from .models import (
     BibleBook, BibleChapter, BibleTranslation, BibleVerse, Bookmark,
     Highlight, Note, ReadingHistory, ReadingProgress,
@@ -123,37 +123,24 @@ class BibleVerseViewSet(viewsets.ModelViewSet):
 
 class ScriptureLookupView(APIView):
     """
-    Resolve a translation-agnostic reference: the `ScriptureRef` read path.
+    Resolve a reference: the `ScriptureRef` read path.
 
-    `GET /bible/lookup/?book=John&chapter=3&start_verse=16&translation=WEB`
+    Two input shapes, one output shape:
+
+    * **Free text** — `?q=jn 3:16`, `?q=1 cor 13`, `?q=ps 23`. What the reader's
+      search field and any content-side reference detection send. Parsed by
+      `bible.references`, the one parser (`docs/08-bible-experience.md` §12).
+    * **Structured** — `?book=John&chapter=3&start_verse=16`. What a caller that
+      already holds an address sends (a devotional's stored anchor Scripture).
 
     Omitting `translation` uses the default. Omitting the verse numbers returns
-    the whole chapter. An unimported passage yields an empty `verses` list, not
-    a 404 — the address is valid even before the text lands.
+    the whole chapter. An unimported passage yields an empty `verses` list, not a
+    404 — the address is valid even before the text lands.
     """
 
     permission_classes = [AllowAny]
 
     def get(self, request, *args, **kwargs):
-        book = request.query_params.get('book')
-        chapter = request.query_params.get('chapter')
-        if not book or not chapter:
-            return Response(
-                {'detail': 'book and chapter are required.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        try:
-            chapter_number = int(chapter)
-            start = request.query_params.get('start_verse')
-            end = request.query_params.get('end_verse')
-            start_verse = int(start) if start else None
-            end_verse = int(end) if end else None
-        except (TypeError, ValueError):
-            return Response(
-                {'detail': 'chapter, start_verse and end_verse must be integers.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         translation = services.resolve_translation(request.query_params.get('translation'))
         if translation is None:
             return Response(
@@ -161,19 +148,63 @@ class ScriptureLookupView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        query = (request.query_params.get('q') or '').strip()
+        if query:
+            parsed = references.parse_reference(query, translation)
+            if parsed is None:
+                # Not a reference. A 404 would imply the passage is missing; this
+                # is a shape problem, and the caller (search) needs to tell the two
+                # apart so it can fall through to keyword search.
+                return Response(
+                    {'detail': f'{query!r} is not a Scripture reference.',
+                     'parsed': False},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            book_osis = parsed['osis_code']
+            book_name = parsed['book'].name
+            chapter_number = parsed['chapter']
+            start_verse = parsed['start_verse']
+            end_verse = parsed['end_verse']
+        else:
+            book_osis = request.query_params.get('book')
+            chapter = request.query_params.get('chapter')
+            if not book_osis or not chapter:
+                return Response(
+                    {'detail': 'Provide either q, or book and chapter.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            try:
+                chapter_number = int(chapter)
+                start = request.query_params.get('start_verse')
+                end = request.query_params.get('end_verse')
+                start_verse = int(start) if start else None
+                end_verse = int(end) if end else None
+            except (TypeError, ValueError):
+                return Response(
+                    {'detail': 'chapter, start_verse and end_verse must be integers.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            resolved = references.resolve_book(translation, book_osis)
+            book_name = resolved.name if resolved else book_osis
+
         verses = services.resolve_reference(
             translation=translation,
-            book_osis=book,
+            book_osis=book_osis,
             chapter_number=chapter_number,
             start_verse_number=start_verse,
             end_verse_number=end_verse,
         )
         return Response({
             'translation': BibleTranslationSerializer(translation).data,
-            'book': book,
+            'book': book_osis,
+            'book_name': book_name,
             'chapter': chapter_number,
             'start_verse': start_verse,
             'end_verse': end_verse,
+            # The canonical rendering of the address — every surface that displays
+            # a reference uses this, so they cannot drift apart.
+            'reference': references.format_reference(
+                book_name, chapter_number, start_verse, end_verse),
             'verses': BibleVerseSerializer(verses, many=True).data,
         })
 
