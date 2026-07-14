@@ -23,7 +23,7 @@ chose which province's data to ask for.
 from django.db.models import Q
 
 from hierarchy.models import HierarchyNode
-from identity.authorization import has_any_permission, scope_queryset
+from identity.authorization import scope_queryset
 from identity.models import Membership
 from identity.permissions_registry import Perm
 
@@ -91,19 +91,3 @@ def manageable_by(queryset, user):
     string array.
     """
     return scope_queryset(queryset, user, Perm.EVENTS_MANAGE, node_field='scope_node')
-
-
-def can_manage(user, event):
-    """May this user manage this specific event?"""
-    if getattr(user, 'is_superuser', False):
-        return True
-    if not has_any_permission(user, Perm.EVENTS_MANAGE):
-        return False
-    if event.scope_node_id is None:
-        # An unscoped event belongs to nobody in particular; anyone who may manage
-        # events at all may manage it. The alternative — nobody may — would strand
-        # every legacy event that migrated to NULL.
-        return True
-    return manageable_by(
-        type(event).objects.filter(pk=event.pk), user,
-    ).exists()
