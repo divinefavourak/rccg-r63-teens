@@ -179,7 +179,9 @@ class SendTests(TestCase):
         subscribe(self.user, endpoint='https://push.example/second')
         calls = []
 
-        def flaky(subscription, notification):
+        # Patching an unbound method on the class means it is still called as a
+        # bound method — hence `self`.
+        def flaky(self, subscription, notification):
             calls.append(subscription.endpoint)
             if subscription.endpoint.endswith('abc'):
                 raise Exception('dead')
