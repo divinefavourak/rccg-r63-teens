@@ -71,7 +71,7 @@ class EventAdmin(admin.ModelAdmin):
         }),
         ('Eligibility', {
             'fields': (
-                'target_provinces', 'target_age_groups', 'min_age', 'max_age',
+                'scope_node', 'target_age_groups', 'min_age', 'max_age',
                 'requires_guardian_consent'
             ),
             'classes': ('collapse',)

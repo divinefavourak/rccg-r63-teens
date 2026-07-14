@@ -4,6 +4,9 @@ Serializers for the events app (events, registrations, bulk uploads).
 from rest_framework import serializers
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
+
+from identity.authorization import has_any_permission
+from identity.permissions_registry import Perm
 from .models import Event, EventRegistration, BulkUpload, RegistrationAuditLog
 
 
@@ -115,7 +118,7 @@ class EventDetailSerializer(serializers.ModelSerializer):
             'current_price',
             
             # Eligibility
-            'target_provinces',
+            'scope_node',
             'target_age_groups',
             'min_age',
             'max_age',
@@ -192,7 +195,7 @@ class EventCreateUpdateSerializer(serializers.ModelSerializer):
             'early_bird_deadline',
             'group_discount_threshold',
             'group_discount_price',
-            'target_provinces',
+            'scope_node',
             'target_age_groups',
             'min_age',
             'max_age',
@@ -419,11 +422,14 @@ class EventRegistrationCreateSerializer(serializers.ModelSerializer):
                 validated_data['profile'] = request.user.teen_profile
             validated_data['registered_by'] = request.user
         
-        # Set registration type
+        # Set registration type — a *provenance label* ("who entered this row"),
+        # not an authorization decision. Derived from capabilities rather than the
+        # legacy `User.role` string, which Phase 1 replaced with RoleAssignments and
+        # which is scheduled for removal (backend audit, C2c).
         if request and request.user.is_authenticated:
-            if request.user.role == 'admin':
+            if request.user.is_superuser:
                 validated_data['registration_type'] = EventRegistration.RegistrationType.ADMIN
-            elif request.user.role == 'coordinator':
+            elif has_any_permission(request.user, Perm.EVENTS_MANAGE):
                 validated_data['registration_type'] = EventRegistration.RegistrationType.COORDINATOR
             else:
                 validated_data['registration_type'] = EventRegistration.RegistrationType.SELF
