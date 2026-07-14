@@ -20,7 +20,9 @@ from .models import (
     Article, Devotional, DiscussionQuestion, Manual, ManualSeries, MemoryVerse,
     ScriptureReference, UserLikeLog, UserReadLog,
 )
-from .services import daily
+from .review_views import ReviewWorkflowMixin
+from .services import calendar as calendar_service
+from .services import daily, review
 from .serializers import (
     DevotionalListSerializer,
     DevotionalDetailSerializer,
@@ -74,7 +76,7 @@ def get_age_group_filter(user):
     return Q(target_age_groups=[]) | Q(target_age_groups__contains=age_group)
 
 
-class DevotionalViewSet(viewsets.ModelViewSet):
+class DevotionalViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
     """ViewSet for devotionals."""
     
     queryset = Devotional.objects.all()
@@ -159,6 +161,61 @@ class DevotionalViewSet(viewsets.ModelViewSet):
             )
         return Response(MemoryVerseSerializer(verse).data)
     
+    @action(detail=False, methods=['get'],
+            permission_classes=[HasPermission(Perm.CONTENT_VIEW)])
+    def calendar(self, request):
+        """
+        The devotional calendar with gap detection
+        (`docs/07-feature-specifications.md` §5).
+
+        `GET /content/devotionals/calendar/?start=2026-07-01&end=2026-07-31`
+
+        Returns one entry per day *including the empty ones* — the empty ones are
+        the entire point of the view. `gaps` lists the uncovered dates and
+        `buffer_days` reports the consecutive covered run from today, which is the
+        number `docs/02-roadmap.md` asks the editorial team to hold at 60 before
+        launch.
+
+        Leader-only: this is a console surface, not a teen one.
+        """
+        today = app_today()
+        try:
+            start = date.fromisoformat(request.query_params['start']) \
+                if 'start' in request.query_params else today
+            end = date.fromisoformat(request.query_params['end']) \
+                if 'end' in request.query_params else today + timedelta(days=30)
+        except ValueError:
+            return Response(
+                {'detail': 'start and end must be ISO dates (YYYY-MM-DD).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if end < start:
+            return Response(
+                {'detail': 'end must not precede start.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        entries = calendar_service.calendar(start, end)
+        return Response({
+            'start': start,
+            'end': end,
+            'days': [
+                {
+                    'date': entry['date'],
+                    'status': entry['status'],
+                    'is_covered': entry['is_covered'],
+                    'devotional': (
+                        DevotionalListSerializer(entry['devotional']).data
+                        if entry['devotional'] else None
+                    ),
+                }
+                for entry in entries
+            ],
+            'gaps': [e['date'] for e in entries if not e['is_covered']],
+            'imminent_gaps': calendar_service.imminent_gaps(today=today),
+            'buffer_days': calendar_service.buffer_days(today=today),
+        })
+
     @action(detail=False, methods=['get'])
     def by_date(self, request):
         """Get devotional by specific date."""
@@ -348,7 +405,7 @@ class DevotionalViewSet(viewsets.ModelViewSet):
         })
 
 
-class ManualSeriesViewSet(viewsets.ModelViewSet):
+class ManualSeriesViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
     """ViewSet for manual series."""
     
     queryset = ManualSeries.objects.all()
@@ -372,7 +429,7 @@ class ManualSeriesViewSet(viewsets.ModelViewSet):
         return queryset
 
 
-class ManualViewSet(viewsets.ModelViewSet):
+class ManualViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
     """ViewSet for manuals."""
     
     queryset = Manual.objects.select_related('series').all()
@@ -534,7 +591,7 @@ class ManualViewSet(viewsets.ModelViewSet):
         return Response(ManualListSerializer(manual).data, status=status.HTTP_201_CREATED)
 
 
-class ArticleViewSet(viewsets.ModelViewSet):
+class ArticleViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
     """ViewSet for articles."""
     
     queryset = Article.objects.all()

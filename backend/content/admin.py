@@ -131,41 +131,39 @@ class DevotionalAdmin(admin.ModelAdmin):
     @admin.action(description='Publish selected devotionals')
     def publish_selected(self, request, queryset):
         """
-        Publish, enforcing the memory-verse gate.
+        Publish through the review gate.
 
-        A devotional without a primary memory verse cannot be published — that
-        verse is the Verse of the Day, and publishing without one would leave the
-        whole day without a verse (docs/07-feature-specifications.md §5).
+        Routed through `services.review.publish` rather than `devotional.publish()`
+        so the admin cannot become the hole in the two-person rule
+        (`docs/07-feature-specifications.md` §5). An unapproved devotional, or one
+        the acting admin approved themselves, is skipped with a reason — the same
+        answer the API gives.
+
+        The memory-verse gate still applies inside `review.publish`: that verse is
+        the Verse of the Day, and publishing without one would leave the whole day
+        without a verse.
         """
         from django.contrib import messages
-        from django.core.exceptions import ValidationError
-        from .services.daily import validate_publishable
+        from django.core.exceptions import PermissionDenied, ValidationError
+        from .services import review
 
-        publishable, blocked = [], []
+        published, blocked = [], []
         for devotional in queryset.prefetch_related('memory_verses'):
             try:
-                validate_publishable(devotional)
-            except ValidationError:
-                blocked.append(devotional)
+                review.publish(devotional, request.user)
+            except (PermissionDenied, ValidationError) as exc:
+                reason = getattr(exc, 'messages', None) or [str(exc)]
+                blocked.append((devotional, reason[0]))
             else:
-                publishable.append(devotional)
+                published.append(devotional)
 
-        # `publish()` per row, not `queryset.update(status='published')`: the bulk
-        # update skips the model and leaves `published_at` null, so anything that
-        # orders or filters by publication time silently misses these rows.
-        for devotional in publishable:
-            devotional.publish()
-
-        if publishable:
+        if published:
             self.message_user(
-                request, f'Published {len(publishable)} devotional(s).', messages.SUCCESS
+                request, f'Published {len(published)} devotional(s).', messages.SUCCESS
             )
-        if blocked:
-            names = ', '.join(str(d.date) for d in blocked)
+        for devotional, reason in blocked:
             self.message_user(
-                request,
-                f'Skipped {len(blocked)} devotional(s) with no primary memory verse: {names}.',
-                messages.WARNING,
+                request, f'Skipped {devotional.date}: {reason}', messages.WARNING,
             )
     
     @admin.action(description='Archive selected devotionals')
