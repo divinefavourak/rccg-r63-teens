@@ -155,14 +155,20 @@ def _gap_covered_by_pause(user, last_active_on, day):
     )
 
 
+@transaction.atomic
 def pause_streak(user, start_on, days):
     """
     Declare a streak pause of `days` (1..14) starting on `start_on`. Raises
     ValueError if the length or the twice-a-year budget is exceeded. The pause is
     inclusive: `days=3` from the 10th covers the 10th, 11th and 12th.
+
+    The per-user lock makes the budget check-then-insert atomic — without it two
+    concurrent requests can both see room under the yearly cap and each create a
+    pause, exceeding it.
     """
     if not 1 <= days <= MAX_PAUSE_DAYS:
         raise ValueError(f'A pause must be between 1 and {MAX_PAUSE_DAYS} days.')
+    _lock_user_grace(user)
     used_this_year = StreakPause.objects.filter(
         user=user, start_on__year=start_on.year,
     ).count()
