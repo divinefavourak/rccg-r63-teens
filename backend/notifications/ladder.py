@@ -216,16 +216,21 @@ def close_out_day(on=None):
 
     Run after quiet hours begin, when no further rung can fire.
     """
-    from common.dates import app_today
+    from common.dates import app_today, day_bounds
 
     on = on or app_today()
     devotional, _ = _devotional_context()
 
+    # Bounded by the Lagos day, not `created_at__date` — that lookup resolves in
+    # settings.TIME_ZONE (UTC), so it would mis-file anything sent in the first hour
+    # of a Nigerian day and could count a reminded teen as never reminded.
+    start, end = day_bounds(on)
     reminded_user_ids = set(
         Notification.objects
         .filter(
             notification_type=NotificationType.HABIT_REMINDER,
-            created_at__date=on,
+            created_at__gte=start,
+            created_at__lt=end,
             pushed_at__isnull=False,     # it actually reached them
         )
         .values_list('user_id', flat=True)
