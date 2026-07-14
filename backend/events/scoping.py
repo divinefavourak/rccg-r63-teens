@@ -40,11 +40,11 @@ def user_node(user):
 
     membership = (
         Membership.objects
-        .filter(user=user, is_primary=True)
-        .select_related('node')
+        .filter(user=user, is_primary=True, is_active=True)
+        .select_related('organization_node')
         .first()
     )
-    return membership.node if membership else None
+    return membership.organization_node if membership else None
 
 
 def visible_to(queryset, user):
