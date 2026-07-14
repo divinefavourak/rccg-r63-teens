@@ -16,13 +16,14 @@ from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.utils.text import slugify
 from common.models import (
-    TimestampMixin, UUIDMixin, PublishableMixin,
+    TimestampMixin, UUIDMixin, PublishableMixin, ReviewableMixin,
     SlugMixin, ViewableMixin
 )
 import uuid
 
 
-class Devotional(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
+class Devotional(UUIDMixin, TimestampMixin, PublishableMixin, ReviewableMixin,
+                 ViewableMixin):
     """
     Daily devotional entry (Teenage Open Heaven).
     One devotional per day, date-based identification.
@@ -298,7 +299,7 @@ class DiscussionQuestion(UUIDMixin, TimestampMixin):
         return self.text[:60]
 
 
-class ManualSeries(UUIDMixin, TimestampMixin, PublishableMixin):
+class ManualSeries(UUIDMixin, TimestampMixin, PublishableMixin, ReviewableMixin):
     """
     A series/collection of manuals (e.g., Q1 2026 Sunday School).
     Groups weekly manuals together.
@@ -337,7 +338,8 @@ class ManualSeries(UUIDMixin, TimestampMixin, PublishableMixin):
         return self.manuals.count()
 
 
-class Manual(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
+class Manual(UUIDMixin, TimestampMixin, PublishableMixin, ReviewableMixin,
+             ViewableMixin):
     """
     Weekly Sunday-to-Sunday teaching manual for RCCG Teenagers Church.
     """
@@ -448,7 +450,8 @@ class Manual(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
         )
 
 
-class Article(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
+class Article(UUIDMixin, TimestampMixin, PublishableMixin, ReviewableMixin,
+              ViewableMixin):
     """
     General articles and blog posts for teens.
     """

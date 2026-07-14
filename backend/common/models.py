@@ -1,6 +1,7 @@
 """
 Common base models and mixins for the RCCG R63 Teens platform.
 """
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
@@ -69,9 +70,15 @@ class AppendOnlyModel(models.Model):
 
 class PublishableMixin(models.Model):
     """Adds publishing status and scheduling for content models."""
-    
+
     class Status(models.TextChoices):
+        # The documented pipeline (`docs/07-feature-specifications.md` §5):
+        # draft -> in-review -> approved -> scheduled -> published -> archived.
+        # IN_REVIEW and APPROVED are the two states the review gate needs; models
+        # that do not run a review (events, media) simply never enter them.
         DRAFT = 'draft', 'Draft'
+        IN_REVIEW = 'in_review', 'In review'
+        APPROVED = 'approved', 'Approved'
         SCHEDULED = 'scheduled', 'Scheduled'
         PUBLISHED = 'published', 'Published'
         ARCHIVED = 'archived', 'Archived'
@@ -112,6 +119,44 @@ class PublishableMixin(models.Model):
     @property
     def is_draft(self):
         return self.status == self.Status.DRAFT
+
+
+class ReviewableMixin(models.Model):
+    """
+    Authorship and review provenance for content that passes a two-person gate.
+
+    `docs/07-feature-specifications.md` §5 requires a "two-person rule for
+    region-wide+ publishing". Enforcing it needs two facts the publishing status
+    alone cannot carry: who put the item up for review, and who approved it. The
+    rule is then simply that they are not the same person.
+
+    Applied only to the models that actually run a review (the `content` app).
+    Events and media publish without one, and giving them dormant reviewer columns
+    would imply a workflow that does not exist.
+
+    The transitions live in `content.services.review`, never on the model: a state
+    machine spread across `save()` overrides is a state machine nobody can read.
+    """
+
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='%(class)s_submitted',
+        help_text='Who submitted this for review.',
+    )
+    submitted_at = models.DateTimeField(null=True, blank=True)
+
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='%(class)s_approved',
+        help_text='Who approved this. Never the same person as submitted_by.',
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+
+    # Why it was sent back, shown to the author. Cleared on re-submission.
+    review_notes = models.TextField(blank=True)
+
+    class Meta:
+        abstract = True
 
 
 class SlugMixin(models.Model):
