@@ -101,6 +101,11 @@ INSTALLED_APPS = [
     'events',
     'tickets',  # Legacy - will be deprecated after migration
     'payments',
+
+    # Composition layer. Owns no models; imports downward from content/bible/
+    # progress/profiles and is imported by none of them. Listed last so that
+    # dependency direction is visible here too.
+    'today',
 ]
 
 MIDDLEWARE = [
