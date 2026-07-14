@@ -37,11 +37,15 @@ def make_event(**kwargs):
 
 
 def make_registration(event, user=None, **kwargs):
+    # EventRegistration is unique on (event, attendee_email), so each attendee on a
+    # given event needs their own address — otherwise a test that registers three
+    # teens for one camp trips the constraint rather than testing what it meant to.
+    name = user.username if user else 'guest'
     defaults = dict(
         event=event,
         user=user,
-        attendee_name='Tolu A',
-        attendee_email='tolu@example.com',
+        attendee_name=name.title(),
+        attendee_email=f'{name}@example.com',
         attendee_phone='08000000000',
         attendee_age=15,
         status=EventRegistration.Status.PENDING,
