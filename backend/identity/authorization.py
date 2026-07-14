@@ -44,6 +44,43 @@ def _role_permission_map(assignments):
     return mapping
 
 
+def users_with_permission(permission_code):
+    """
+    Every user who currently holds ``permission_code`` anywhere in the tree.
+
+    The reverse of `has_any_permission`: that answers "may this user?", this
+    answers "who may?" — which is what a system alert needs when it must reach
+    whoever is responsible ("page the admin", `docs/07` §5).
+
+    Deliberately *not* scoped to a node. Callers that need "the coordinators of
+    Area X" should filter the result by assignment node; a broadcast alert about a
+    region-wide pipeline gap should reach everyone who can act on it.
+
+    Superusers are included: they hold every permission implicitly, and an alert
+    that reached nobody because no role happened to be seeded would be worse than
+    one that reached one extra person.
+    """
+    from django.contrib.auth import get_user_model
+
+    User = get_user_model()
+    today = timezone.localdate()
+
+    holders = (
+        RoleAssignment.objects
+        .filter(
+            is_active=True,
+            start_date__lte=today,
+            role__role_permissions__permission__code=permission_code,
+        )
+        .filter(Q(end_date__isnull=True) | Q(end_date__gte=today))
+        .values_list('user_id', flat=True)
+    )
+
+    return User.objects.filter(
+        Q(id__in=holders) | Q(is_superuser=True), is_active=True,
+    ).distinct()
+
+
 def permission_codes_at(user, node):
     """All permission codes the user holds at ``node`` (via ancestor-or-self
     assignments). Superusers implicitly hold everything (returns None sentinel)."""
