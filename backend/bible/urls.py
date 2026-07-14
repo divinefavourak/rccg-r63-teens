@@ -18,6 +18,7 @@ router.register(r'reading-history', views.ReadingHistoryViewSet, basename='bible
 router.register(r'reading-progress', views.ReadingProgressViewSet, basename='bible-reading-progress')
 
 urlpatterns = [
+    path('search/', views.ScriptureSearchView.as_view(), name='bible-search'),
     path('lookup/', views.ScriptureLookupView.as_view(), name='bible-lookup'),
     path('continue-reading/', views.ContinueReadingView.as_view(), name='bible-continue-reading'),
     path('', include(router.urls)),

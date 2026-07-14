@@ -67,7 +67,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
+    # Registers the Postgres-only field and index types Scripture search needs
+    # (SearchVectorField, GinIndex — see bible/search.py). The project is already
+    # Postgres-only: some migrations use Postgres-specific SQL, and the test suite
+    # runs against a local Postgres (see the DATABASES note below).
+    'django.contrib.postgres',
+
     # Third party apps
     'rest_framework',
     'rest_framework_simplejwt',

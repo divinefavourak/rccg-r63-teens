@@ -16,7 +16,7 @@ from rest_framework.views import APIView
 from identity.authorization import HasPermissionOrReadOnly, has_any_permission
 from identity.permissions_registry import Perm
 
-from . import references, services
+from . import references, search, services
 from .models import (
     BibleBook, BibleChapter, BibleTranslation, BibleVerse, Bookmark,
     Highlight, Note, ReadingHistory, ReadingProgress,
@@ -27,6 +27,7 @@ from .serializers import (
     BibleTranslationSerializer, BibleVerseSerializer, BookmarkSerializer,
     ContinueReadingSerializer, HighlightSerializer, NoteSerializer,
     ReadingHistorySerializer, ReadingProgressSerializer, RecordReadSerializer,
+    ScriptureSearchGroupSerializer,
 )
 
 
@@ -117,8 +118,10 @@ class BibleVerseViewSet(viewsets.ModelViewSet):
     serializer_class = BibleVerseSerializer
     permission_classes = [HasPermissionOrReadOnly(Perm.BIBLE_MANAGE)]
     filterset_fields = ['chapter', 'number']
-    search_fields = ['text']
     ordering = ['chapter', 'number']
+    # No `search_fields` here on purpose. DRF's SearchFilter would compile to an
+    # unindexed ILIKE '%...%' over every verse in the Bible. Scripture search is
+    # `/bible/search/` (see `bible/search.py`), which is full-text and indexed.
 
 
 class ScriptureLookupView(APIView):
@@ -207,6 +210,73 @@ class ScriptureLookupView(APIView):
                 book_name, chapter_number, start_verse, end_verse),
             'verses': BibleVerseSerializer(verses, many=True).data,
         })
+
+
+class ScriptureSearchView(APIView):
+    """
+    Scripture search — one field, two behaviours (`docs/08-bible-experience.md` §4).
+
+    `GET /bible/search/?q=...&translation=WEB&testament=new&book=John&limit=50`
+
+    The response's `kind` tells the client which it got:
+
+    * `reference` — the query was an address ("jn 3:16"); `verses` is the passage.
+      The client opens the reader there rather than rendering a result list.
+    * `keyword`  — `results` is a list of `{book, verses}` groups, best match first.
+
+    Public: reading Scripture never requires an account.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        query = (request.query_params.get('q') or '').strip()
+        if not query:
+            return Response(
+                {'detail': 'q is required.'}, status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        translation = services.resolve_translation(request.query_params.get('translation'))
+        if translation is None:
+            return Response(
+                {'detail': 'No translation is available yet.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            limit = int(request.query_params.get('limit', search.DEFAULT_LIMIT))
+        except (TypeError, ValueError):
+            return Response(
+                {'detail': 'limit must be an integer.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        kind, payload = search.search(
+            translation,
+            query,
+            testament=request.query_params.get('testament'),
+            book_osis=request.query_params.get('book'),
+            limit=limit,
+        )
+
+        body = {
+            'query': query,
+            'kind': kind,
+            'translation': BibleTranslationSerializer(translation).data,
+        }
+        if kind == 'reference':
+            parsed = payload['parsed']
+            body['reference'] = references.format_reference(
+                parsed['book'].name, parsed['chapter'],
+                parsed['start_verse'], parsed['end_verse'],
+            )
+            body['book'] = parsed['osis_code']
+            body['chapter'] = parsed['chapter']
+            body['verses'] = BibleVerseSerializer(payload['verses'], many=True).data
+        else:
+            body['results'] = ScriptureSearchGroupSerializer(payload, many=True).data
+            body['total'] = sum(len(group['verses']) for group in payload)
+        return Response(body)
 
 
 # ---------------------------------------------------------------------------

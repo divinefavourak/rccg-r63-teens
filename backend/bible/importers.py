@@ -24,6 +24,7 @@ from django.utils import timezone
 
 from .canon import book_meta, canonical_osis
 from .models import BibleBook, BibleChapter, BibleTranslation, BibleVerse
+from .search import build_search_vectors
 
 VERSE_BATCH_SIZE = 1000
 
@@ -141,7 +142,12 @@ def _import_book(translation, raw, position):
         chapter, _ = BibleChapter.objects.update_or_create(
             book=book, number=number, defaults={'verse_count': len(verse_texts)},
         )
-        verses_written += _import_verses(chapter, verse_texts)
+        written = _import_verses(chapter, verse_texts)
+        verses_written += written
+        if written:
+            # Only when the text actually moved. A no-op re-import of a whole
+            # Bible would otherwise issue ~1,200 pointless UPDATE statements.
+            build_search_vectors(chapter)
 
     return book, verses_written
 
