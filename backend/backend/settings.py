@@ -102,6 +102,10 @@ INSTALLED_APPS = [
     'tickets',  # Legacy - will be deprecated after migration
     'payments',
 
+    # The one channel to a teen's phone. Every feature sends through
+    # notifications.services.send; nothing sends around it (docs/07 §10).
+    'notifications',
+
     # Composition layer. Owns no models; imports downward from content/bible/
     # progress/profiles and is imported by none of them. Listed last so that
     # dependency direction is visible here too.
@@ -448,6 +452,17 @@ FRONTEND_URL = os.getenv("FRONTEND_URL")
 # docs/08-bible-experience.md §3). A setting, not a literal, so the brand is not
 # scattered through the codebase.
 APP_NAME = os.getenv("APP_NAME", "Faith Tribe")
+
+# Notifications. The default backend logs instead of delivering: real WebPush
+# needs a VAPID key pair, which is an ops task. Until the keys exist the product
+# behaves correctly in every respect except the interruption itself — inbox rows
+# are written, preferences honoured, dedupe enforced. See notifications/push.py.
+NOTIFICATIONS_PUSH_BACKEND = os.getenv(
+    "NOTIFICATIONS_PUSH_BACKEND", "notifications.push.LoggingPushBackend",
+)
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY")
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY")
+VAPID_ADMIN_EMAIL = os.getenv("VAPID_ADMIN_EMAIL", "")
 
 # PayStack payment gateway
 PAYSTACK_SECRET_KEY=os.getenv("PAYSTACK_SECRET_KEY")
