@@ -47,6 +47,7 @@ urlpatterns = [
     path('api/v1/events/', include('events.urls')),
     path('api/v1/payments/', include('payments.urls')),
     path('api/v1/today/', include('today.urls')),
+    path('api/v1/notifications/', include('notifications.urls')),
 
     # Legacy API endpoints (for backward compatibility with frontend)
     path('api/auth/', include('users.urls')),
