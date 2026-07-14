@@ -445,25 +445,57 @@ class DraftDevotionalPartsArePrivateTests(APITestCase):
 
 
 class PublishActionTests(TestCase):
-    """The admin's bulk publish must go through `publish()`, not a bulk UPDATE."""
+    """
+    The admin's bulk publish must go through the review service — not a bulk
+    UPDATE (which would leave `published_at` null), and not `devotional.publish()`
+    (which would make the admin a one-click hole in the two-person rule).
+    """
 
-    def test_publishing_stamps_published_at(self):
+    def _publish_via_admin(self, devotional):
         from content.admin import DevotionalAdmin
 
-        devotional = make_devotional(
-            datetime.date(2026, 7, 9), status=Devotional.Status.DRAFT
-        )
-        make_memory_verse(devotional)
         admin_instance = DevotionalAdmin(Devotional, mock.Mock())
-
         with mock.patch.object(DevotionalAdmin, 'message_user'):
             admin_instance.publish_selected(
                 mock.Mock(), Devotional.objects.filter(pk=devotional.pk)
             )
 
+    def _approved_devotional(self, on=datetime.date(2026, 7, 9)):
+        """A devotional that has passed the two-person gate."""
+        from content.services import review
+
+        devotional = make_devotional(on, status=Devotional.Status.DRAFT)
+        make_memory_verse(devotional)
+
+        review.submit_for_review(devotional, make_user('pub-author'))
+        review.approve(devotional, make_user('pub-reviewer'))
+        return devotional
+
+    def test_publishing_an_approved_devotional_stamps_published_at(self):
+        devotional = self._approved_devotional()
+
+        self._publish_via_admin(devotional)
+
         devotional.refresh_from_db()
         self.assertEqual(Devotional.Status.PUBLISHED, devotional.status)
         self.assertIsNotNone(devotional.published_at)
+
+    def test_the_admin_cannot_publish_an_unreviewed_draft(self):
+        """
+        docs/07-feature-specifications.md §5 — the two-person rule. An admin action
+        that called `devotional.publish()` directly would let one person push
+        region-wide content live alone, which is precisely what the rule forbids.
+        """
+        devotional = make_devotional(
+            datetime.date(2026, 7, 10), status=Devotional.Status.DRAFT
+        )
+        make_memory_verse(devotional)
+
+        self._publish_via_admin(devotional)
+
+        devotional.refresh_from_db()
+        self.assertEqual(Devotional.Status.DRAFT, devotional.status)
+        self.assertIsNone(devotional.published_at)
 
     def test_the_publish_gate_reads_prefetched_verses_without_extra_queries(self):
         devotional = make_devotional(datetime.date(2026, 7, 9))

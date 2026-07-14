@@ -218,7 +218,7 @@ def transfer_primary_membership(user, to_node, transferred_by=None, reason=''):
 def _scope_node(obj):
     if hasattr(obj, 'get_scope_node'):
         return obj.get_scope_node()
-    for attr in ('visibility_node', 'organization_node', 'node'):
+    for attr in ('visibility_node', 'organization_node', 'scope_node', 'node'):
         node = getattr(obj, attr, None)
         if node is not None:
             return node
@@ -228,7 +228,16 @@ def _scope_node(obj):
 def HasPermission(permission_code):
     """DRF permission requiring ``permission_code``. Coarse gate on the
     collection (create/list) so non-authorized users can't POST; precise
-    node-scoped check on the object."""
+    node-scoped check on the object *when the object carries a node*.
+
+    Objects that do not yet carry a hierarchy node fall back to the coarse gate —
+    the same expand-contract rule ``HasPermissionOrReadOnly`` already applies.
+    Denying them outright (the previous behaviour) made every object-level action
+    on a node-less model unreachable: content is the live example, since
+    ``Devotional`` has no scope node until content adopts the hierarchy, so a
+    reviewer holding ``content.publish`` could not approve anything. It was also
+    self-inconsistent — the very same user could already ``PATCH`` that devotional
+    through ``HasPermissionOrReadOnly``, which falls back to the coarse gate."""
 
     class _HasPermission(BasePermission):
         message = f'Missing required permission: {permission_code}.'
@@ -251,9 +260,9 @@ def HasPermission(permission_code):
             if user and user.is_superuser:
                 return True
             node = _scope_node(obj)
-            if node is None:
-                return False
-            return has_permission(user, permission_code, node)
+            if node is not None:
+                return has_permission(user, permission_code, node)
+            return has_any_permission(user, permission_code)
 
     _HasPermission.__name__ = f'HasPermission[{permission_code}]'
     return _HasPermission
