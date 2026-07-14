@@ -93,6 +93,12 @@ class StreakState(UUIDMixin, TimestampMixin):
     last_active_on = models.DateField(null=True, blank=True)
     started_on = models.DateField(null=True, blank=True)
 
+    # Consecutive *genuinely active* days toward the next earned Grace Day. Reset
+    # to 0 when a 7-day week completes (granting +1) and to 1 whenever the active
+    # run is interrupted — a grace-covered or paused day is not "active", so it
+    # does not fund earning (`docs/12-gamification.md`: "all 7 days active").
+    active_days_this_week = models.PositiveSmallIntegerField(default=0)
+
     class Meta:
         indexes = [models.Index(fields=['user'])]
 
@@ -169,3 +175,35 @@ class GraceDayLedger(UUIDMixin, AppendOnlyModel):
 
     def __str__(self):
         return f'{self.user_id} {self.delta:+d} ({self.reason})'
+
+
+class StreakPause(UUIDMixin, models.Model):
+    """
+    A proactively-declared window during which missed days don't break the
+    streak — for exams, illness, camps (`docs/12-gamification.md` "Grace Days" →
+    "Extended absences"). An honest mechanism so grace isn't stretched into
+    fiction: a paused streak resumes exactly where it left off (paused days add no
+    length), and the budget is capped (14 days, twice a year) in the service.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='streak_pauses',
+    )
+    start_on = models.DateField()
+    end_on = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['user', 'start_on'])]
+        ordering = ['-start_on']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(end_on__gte=models.F('start_on')),
+                name='progress_pause_end_after_start',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.user_id} paused {self.start_on}..{self.end_on}'

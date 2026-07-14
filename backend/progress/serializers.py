@@ -1,7 +1,8 @@
 """Serializers for the Progress read API."""
 from rest_framework import serializers
 
-from .models import SpiritualAction, StreakState
+from . import services
+from .models import SpiritualAction, StreakPause, StreakState
 
 
 class StreakStateSerializer(serializers.ModelSerializer):
@@ -30,3 +31,15 @@ class ProgressSummarySerializer(serializers.Serializer):
     devotionals_completed = serializers.IntegerField()
     chapters_read = serializers.IntegerField()
     books_read = serializers.IntegerField()
+
+
+class StreakPauseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StreakPause
+        fields = ['id', 'start_on', 'end_on', 'created_at']
+
+
+class CreatePauseSerializer(serializers.Serializer):
+    """Input for declaring a pause: a start date and a length in days."""
+    start_on = serializers.DateField()
+    days = serializers.IntegerField(min_value=1, max_value=services.MAX_PAUSE_DAYS)

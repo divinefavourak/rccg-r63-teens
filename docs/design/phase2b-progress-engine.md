@@ -85,13 +85,28 @@ starts calling `progress.services` to emit actions. "Chapters read" is therefore
 the *distinct* chapters from Bible (translation-agnostic by OSIS), not the raw
 `chapter_read` action count, which would inflate on re-reads.
 
-## 7. Deferred to later increments (this phase)
+## 7. Grace earning + streak pause (done)
 
-- **Integration** — `bible`/`content` emit `record_action` on chapter read /
-  devotional completion; retire `TeenProfile.update_streak`. Separate branch/PR.
-- **Grace earning + pause** — +1 per completed 7-day week and per Journey;
-  proactive streak pause (14 days, twice a year).
+**Weekly earning.** `StreakState.active_days_this_week` counts *genuinely active*
+consecutive days; a completed 7-day week grants +1 (capped at 4; excess doesn't
+accrue) and resets the counter. A grace-covered, paused or reset day restarts the
+counter at 1 — so a week containing a covered day earns nothing, and grace never
+funds more grace. `current_length` and the earning counter deliberately diverge:
+the streak is honored through a covered day, the earning week is not. (Per-Journey
+earning waits on Journeys.)
 
-## 6. Out of scope
+**Streak pause.** `StreakPause` records a proactively-declared window (`pause_streak`,
+1–14 days, twice per calendar year). In `_advance_streak`, a gap whose missed days
+are *entirely* within a pause resumes the streak where it left off — paused days
+add no length (unlike a grace bridge) and consume no Grace. Pause is checked
+before grace (a planned absence is free); a gap extending past the pause falls
+through to grace, then reset. Endpoint: `POST /api/v1/progress/pause/`.
+
+## 8. Deferred (separate branch/PR)
+
+- **Integration** — `bible`/`content` emit `record_action`; retire
+  `TeenProfile.update_streak` (dual-written in the meantime).
+
+## 9. Out of scope
 
 Milestones/Recognition, notifications ladder, journeys, leaderboards (banned).
