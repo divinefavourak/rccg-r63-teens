@@ -64,6 +64,7 @@ class DevotionalReadIntegrationTests(APITestCase):
 
         # record_action blows up: the whole mark_read must roll back, or the
         # UserReadLog dedup would swallow the read permanently on retry.
+        original_read_count = self.devotional.read_count
         with mock.patch('progress.services.record_action', side_effect=RuntimeError('boom')):
             self.client.raise_request_exception = False
             failed = self.client.post(url)
@@ -71,6 +72,10 @@ class DevotionalReadIntegrationTests(APITestCase):
         self.assertFalse(
             UserReadLog.objects.filter(user=self.user, devotional=self.devotional).exists())
         self.assertEqual(0, SpiritualAction.objects.filter(user=self.user).count())
+        # increment_read_count() is inside the same atomic block, so it must roll
+        # back too — the whole group is all-or-nothing, not just the two above.
+        self.devotional.refresh_from_db()
+        self.assertEqual(original_read_count, self.devotional.read_count)
 
         # The retry now succeeds and the action is recorded.
         self.client.raise_request_exception = True
