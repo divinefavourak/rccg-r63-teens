@@ -28,7 +28,8 @@ from . import services
 from .models import ActionType, SpiritualAction
 from .permissions import IsOwner
 from .serializers import (
-    ProgressSummarySerializer, SpiritualActionSerializer, StreakStateSerializer,
+    CreatePauseSerializer, ProgressSummarySerializer, SpiritualActionSerializer,
+    StreakPauseSerializer, StreakStateSerializer,
 )
 
 
@@ -101,3 +102,22 @@ class CalendarView(APIView):
         last = first.replace(day=calendar.monthrange(first.year, first.month)[1])
         days = services.active_days(request.user, first, last)
         return Response({'month': first.strftime('%Y-%m'), 'active_days': days})
+
+
+class PauseStreakView(APIView):
+    """Declare a proactive streak pause (Settings → Progress)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = CreatePauseSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            pause = services.pause_streak(
+                request.user,
+                serializer.validated_data['start_on'],
+                serializer.validated_data['days'],
+            )
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=400)
+        return Response(StreakPauseSerializer(pause).data, status=201)

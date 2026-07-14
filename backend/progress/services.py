@@ -13,7 +13,8 @@ from django.db.models import Count, Sum
 from common.dates import user_today
 
 from .models import (
-    ActionType, GraceDayLedger, GraceReason, SpiritualAction, StreakState,
+    ActionType, GraceDayLedger, GraceReason, SpiritualAction, StreakPause,
+    StreakState,
 )
 
 # Grace-Day policy (docs/12-gamification.md "Grace Days").
@@ -21,6 +22,10 @@ GRACE_CAP = 4                    # a teen holds at most this many at once
 MONTHLY_GRACE_ALLOCATION = 2     # granted on the 1st of each calendar month
 MAX_CONSECUTIVE_GRACE_COVER = 2  # grace bridges at most 2 consecutive misses
 DAYS_PER_EARNED_WEEK = 7         # +1 Grace Day per 7 genuinely-active days
+
+# Streak-pause policy.
+MAX_PAUSE_DAYS = 14              # a single pause spans at most two weeks
+MAX_PAUSES_PER_YEAR = 2         # ...and a teen may do this twice a calendar year
 
 
 @transaction.atomic
@@ -74,6 +79,12 @@ def _advance_streak(user, day):
         state.current_length += 1
         state.last_active_on = day
         state.active_days_this_week += 1
+    elif _gap_covered_by_pause(user, last, day):
+        # A planned pause resumes the streak where it left off: paused days add no
+        # length (unlike a grace bridge), and the active-week run restarts.
+        state.current_length += 1
+        state.last_active_on = day
+        state.active_days_this_week = 1
     elif _try_cover_gap(user, last, day):
         # Grace bridged the missed days; the run is continuous through `day`, but
         # the covered days were not active, so the active-week run restarts.
@@ -124,6 +135,44 @@ def _try_cover_gap(user, last_active_on, day):
         for missed in missed_days
     ])
     return True
+
+
+def _gap_covered_by_pause(user, last_active_on, day):
+    """
+    True when every missed day between `last_active_on` and `day` falls inside a
+    declared pause window — a planned absence the streak should survive intact.
+    """
+    missed_days = [last_active_on + timedelta(days=n)
+                   for n in range(1, (day - last_active_on).days)]
+    if not missed_days:
+        return False
+    pauses = list(StreakPause.objects.filter(
+        user=user, start_on__lte=missed_days[-1], end_on__gte=missed_days[0],
+    ))
+    return all(
+        any(p.start_on <= missed <= p.end_on for p in pauses)
+        for missed in missed_days
+    )
+
+
+def pause_streak(user, start_on, days):
+    """
+    Declare a streak pause of `days` (1..14) starting on `start_on`. Raises
+    ValueError if the length or the twice-a-year budget is exceeded. The pause is
+    inclusive: `days=3` from the 10th covers the 10th, 11th and 12th.
+    """
+    if not 1 <= days <= MAX_PAUSE_DAYS:
+        raise ValueError(f'A pause must be between 1 and {MAX_PAUSE_DAYS} days.')
+    used_this_year = StreakPause.objects.filter(
+        user=user, start_on__year=start_on.year,
+    ).count()
+    if used_this_year >= MAX_PAUSES_PER_YEAR:
+        raise ValueError(
+            f'At most {MAX_PAUSES_PER_YEAR} streak pauses per calendar year.'
+        )
+    return StreakPause.objects.create(
+        user=user, start_on=start_on, end_on=start_on + timedelta(days=days - 1),
+    )
 
 
 def grace_balance(user):
