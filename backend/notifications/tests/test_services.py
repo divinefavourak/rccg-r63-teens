@@ -257,6 +257,32 @@ class AnnouncementCapTests(TestCase):
 
         self.assertIsNotNone(event.pushed_at)
 
+    def test_the_cap_is_bounded_by_the_lagos_day_not_the_utc_day(self):
+        """
+        Midnight to 01:00 in Lagos is still *yesterday* in UTC. A cap keyed on
+        `created_at__date` — which resolves in settings.TIME_ZONE, i.e. UTC — files
+        a 00:30-Lagos announcement under yesterday and lets a second push through.
+        Once a night, every night.
+        """
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        from common.dates import app_today
+
+        first = services.send(
+            self.user, NotificationType.ANNOUNCEMENT, 'Camp', 'Open.')
+        # Backdate it to 00:30 Lagos today == 23:30 UTC yesterday.
+        Notification.objects.filter(pk=first.pk).update(
+            created_at=datetime.combine(
+                app_today(), time(0, 30), tzinfo=ZoneInfo('Africa/Lagos')),
+        )
+
+        second = services.send(
+            self.user, NotificationType.ANNOUNCEMENT, 'Choir', 'Rehearsal moved.')
+
+        self.assertIsNone(second.pushed_at)
+        self.assertEqual(second.data['suppressed'], 'announcement_cap')
+
 
 class StepDownTests(TestCase):
     """docs/12: "7 consecutive days of ignored reminders auto-steps intensity down"."""

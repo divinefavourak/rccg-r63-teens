@@ -25,7 +25,7 @@ import logging
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from common.dates import app_today
+from common.dates import app_today, day_bounds
 
 from .models import (
     IGNORED_DAYS_BEFORE_STEP_DOWN, STEP_DOWN, Notification, NotificationPreference,
@@ -62,12 +62,21 @@ def _local_now(preference):
 
 
 def _announcement_cap_spent(user, today):
-    """Has an announcement already been *pushed* to this user today? (§10, §17)"""
+    """
+    Has an announcement already been *pushed* to this user today? (§10, §17)
+
+    Bounded by the app day in Lagos, not by `created_at__date`. That lookup extracts
+    the date in `settings.TIME_ZONE`, which is UTC — so it would compare a Lagos date
+    against a UTC one and mis-file everything sent in the first hour of a Nigerian
+    day, letting a second announcement through the cap.
+    """
+    start, end = day_bounds(today)
     return Notification.objects.filter(
         user=user,
         notification_type=NotificationType.ANNOUNCEMENT,
         pushed_at__isnull=False,
-        created_at__date=today,
+        created_at__gte=start,
+        created_at__lt=end,
     ).exists()
 
 
