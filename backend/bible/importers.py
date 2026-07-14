@@ -101,8 +101,20 @@ def _import_book(translation, raw, position):
     # it may not renumber the canon — number and testament define the address.
     meta['name'] = raw.get('name') or meta['name']
     meta['abbreviation'] = raw.get('abbreviation') or meta['abbreviation']
-    for alias in raw.get('alternate_names') or []:
-        alias = str(alias).strip().lower()
+
+    # Validated as a list before iterating, for the same reason the translation
+    # fields are validated: a string here would be walked character by character,
+    # quietly seeding single-letter aliases ('j', 'n') into the fuzzy parser. Those
+    # would then compete with the real ones and make reference lookup ambiguous —
+    # a data-quality failure that only surfaces much later, in the reader.
+    aliases = raw.get('alternate_names') or []
+    if not isinstance(aliases, list):
+        raise ImportError_(
+            f'Book {osis}: `alternate_names` must be a list, got '
+            f'{type(aliases).__name__}.'
+        )
+    for raw_alias in aliases:
+        alias = str(raw_alias).strip().lower()
         if alias and alias not in meta['alternate_names']:
             meta['alternate_names'].append(alias)
 

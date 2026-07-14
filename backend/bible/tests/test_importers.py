@@ -157,6 +157,18 @@ class ImportTranslationTests(TestCase):
         self.assertTrue(BibleTranslation.objects.get(code='KJV').is_default)
         self.assertEqual(BibleTranslation.objects.filter(is_default=True).count(), 1)
 
+    def test_a_string_of_alternate_names_is_rejected(self):
+        """
+        A bare string would be iterated character by character, seeding 'j' and 'n'
+        as aliases. Those compete with the real ones and make reference lookup
+        ambiguous — corruption that only surfaces later, in the reader.
+        """
+        data = payload()
+        data['books'][0]['alternate_names'] = 'jn'      # should have been ['jn']
+
+        with self.assertRaisesMessage(ImportError_, 'must be a list'):
+            import_translation(data)
+
     def test_unknown_osis_code_is_rejected(self):
         data = payload(books=[{'osis_code': 'Hezekiah', 'chapters': [['text']]}])
         with self.assertRaisesMessage(ImportError_, 'Hezekiah'):
@@ -202,3 +214,8 @@ class ImportBibleCommandTests(TestCase):
     def test_command_errors_on_a_missing_file(self):
         with self.assertRaises(CommandError):
             call_command('import_bible', 'no/such/file.json', '--quiet')
+
+    def test_command_errors_cleanly_on_an_unreadable_path(self):
+        """A directory passed by mistake is operator error, not a traceback."""
+        with self.assertRaises(CommandError):
+            call_command('import_bible', tempfile.mkdtemp(), '--quiet')

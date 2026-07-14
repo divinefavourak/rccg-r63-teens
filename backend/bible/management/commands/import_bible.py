@@ -30,10 +30,13 @@ class Command(BaseCommand):
         try:
             with open(path, encoding='utf-8') as handle:
                 payload = json.load(handle)
-        except FileNotFoundError:
-            raise CommandError(f'No such file: {path}')
+        except OSError as exc:
+            # OSError, not FileNotFoundError: a directory passed by mistake, or a
+            # file the worker cannot read, is the same class of operator error and
+            # deserves the same clean message rather than a traceback.
+            raise CommandError(f'Could not read {path}: {exc}') from exc
         except json.JSONDecodeError as exc:
-            raise CommandError(f'{path} is not valid JSON: {exc}')
+            raise CommandError(f'{path} is not valid JSON: {exc}') from exc
 
         progress = None if options['quiet'] else (
             lambda message: self.stdout.write(f'  {message}')
@@ -44,7 +47,7 @@ class Command(BaseCommand):
         except ImportError_ as exc:
             # A malformed file is operator error, not a crash: report it as a
             # clean command failure with the reason, not a traceback.
-            raise CommandError(str(exc))
+            raise CommandError(str(exc)) from exc
 
         translation = stats['translation']
         verb = 'Created' if stats['created'] else 'Updated'
