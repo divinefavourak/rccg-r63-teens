@@ -110,19 +110,25 @@ def may_push(user, notification_type, preference=None, at=None, today=None):
 
 
 def send(user, notification_type, title, body, *, deep_link='', data=None,
-         rung='', dedupe_key=''):
+         rung='', dedupe_key='', at=None):
     """
     The one way a notification reaches a teen.
 
     Always writes the inbox row. Pushes only if `may_push` allows it. Returns the
     `Notification`, or None if `dedupe_key` says this exact message was already
     delivered (the scheduler fired twice).
+
+    `at` is the teen's *local* time to evaluate quiet hours against. Callers that
+    know it should pass it — the ladder does, because it dispatches for a specific
+    local moment, which is not necessarily the moment the worker happens to run.
+    Omitted, it is derived from the clock.
     """
     if not user or not getattr(user, 'is_authenticated', False):
         return None
 
     preference = preferences_for(user)
-    allowed, reason = may_push(user, notification_type, preference=preference)
+    allowed, reason = may_push(
+        user, notification_type, preference=preference, at=at)
 
     try:
         with transaction.atomic():
