@@ -37,7 +37,7 @@ TRANSLATION_FIELDS = {
     'name', 'full_name', 'language_code', 'language_name', 'source_type',
     'is_public_domain', 'copyright_notice', 'license_source',
     'attribution_required', 'is_offline_capable', 'is_default', 'sort_order',
-    'is_active',
+    'is_active', 'max_consecutive_verses',
 }
 
 
