@@ -65,6 +65,15 @@ class BibleTranslation(UUIDMixin, TimestampMixin):
     # Licensed texts often forbid offline storage; the reader consults this flag.
     is_offline_capable = models.BooleanField(default=False)
 
+    # Some licences cap how many consecutive verses may be displayed or shared at
+    # once (`docs/08-bible-experience.md` §11, operating rule 3). NULL means no
+    # cap — the normal case for public-domain texts. A field, not a code branch,
+    # because adding a translation is content ops, not engineering.
+    max_consecutive_verses = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        help_text='Licence cap on consecutive verses shared at once. Blank = no cap.',
+    )
+
     is_default = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True, db_index=True)
     sort_order = models.PositiveIntegerField(default=0)

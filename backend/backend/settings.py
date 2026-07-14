@@ -439,6 +439,11 @@ if not os.environ.get('BREVO_SMTP_KEY') and MAILING:
 
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 
+# The product name rendered in shared verse cards ("...via Faith Tribe" —
+# docs/08-bible-experience.md §3). A setting, not a literal, so the brand is not
+# scattered through the codebase.
+APP_NAME = os.getenv("APP_NAME", "Faith Tribe")
+
 # PayStack payment gateway
 PAYSTACK_SECRET_KEY=os.getenv("PAYSTACK_SECRET_KEY")
 PAYSTACK_PUBLIC_KEY=os.getenv("PAYSTACK_PUBLIC_KEY")

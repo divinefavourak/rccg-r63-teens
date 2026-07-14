@@ -19,6 +19,7 @@ router.register(r'reading-progress', views.ReadingProgressViewSet, basename='bib
 
 urlpatterns = [
     path('search/', views.ScriptureSearchView.as_view(), name='bible-search'),
+    path('share/', views.VerseShareView.as_view(), name='bible-share'),
     path('lookup/', views.ScriptureLookupView.as_view(), name='bible-lookup'),
     path('continue-reading/', views.ContinueReadingView.as_view(), name='bible-continue-reading'),
     path('', include(router.urls)),

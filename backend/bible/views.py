@@ -16,7 +16,7 @@ from rest_framework.views import APIView
 from identity.authorization import HasPermissionOrReadOnly, has_any_permission
 from identity.permissions_registry import Perm
 
-from . import references, search, services
+from . import references, search, services, sharing
 from .models import (
     BibleBook, BibleChapter, BibleTranslation, BibleVerse, Bookmark,
     Highlight, Note, ReadingHistory, ReadingProgress,
@@ -27,7 +27,7 @@ from .serializers import (
     BibleTranslationSerializer, BibleVerseSerializer, BookmarkSerializer,
     ContinueReadingSerializer, HighlightSerializer, NoteSerializer,
     ReadingHistorySerializer, ReadingProgressSerializer, RecordReadSerializer,
-    ScriptureSearchGroupSerializer,
+    ScriptureSearchGroupSerializer, VerseShareSerializer,
 )
 
 
@@ -277,6 +277,76 @@ class ScriptureSearchView(APIView):
             body['results'] = ScriptureSearchGroupSerializer(payload, many=True).data
             body['total'] = sum(len(group['verses']) for group in payload)
         return Response(body)
+
+
+class VerseShareView(APIView):
+    """
+    The share payload for a passage (`docs/08-bible-experience.md` §3).
+
+    `GET /bible/share/?q=John 3:16&translation=WEB`
+    `GET /bible/share/?book=John&chapter=3&start_verse=16&end_verse=18`
+
+    Returns the licence-correct content — text, canonical reference, required
+    attribution, and a deep link back into the reader — for the client to compose
+    into a share card. The backend owns what is legal to display; the client owns
+    how it looks.
+
+    Public: a verse card is how someone who has never heard of us first meets the
+    product.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        translation = services.resolve_translation(request.query_params.get('translation'))
+        if translation is None:
+            return Response(
+                {'detail': 'No translation is available yet.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        query = (request.query_params.get('q') or '').strip()
+        if query:
+            parsed = references.parse_reference(query, translation)
+            if parsed is None:
+                return Response(
+                    {'detail': f'{query!r} is not a Scripture reference.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            book_osis = parsed['osis_code']
+            chapter = parsed['chapter']
+            start_verse, end_verse = parsed['start_verse'], parsed['end_verse']
+        else:
+            book_osis = request.query_params.get('book')
+            try:
+                chapter = int(request.query_params['chapter'])
+                start = request.query_params.get('start_verse')
+                end = request.query_params.get('end_verse')
+                start_verse = int(start) if start else None
+                end_verse = int(end) if end else None
+            except (KeyError, TypeError, ValueError):
+                return Response(
+                    {'detail': 'Provide either q, or book and an integer chapter.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not book_osis:
+                return Response(
+                    {'detail': 'Provide either q, or book and chapter.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        try:
+            payload = sharing.share_payload(
+                translation, book_osis, chapter, start_verse, end_verse,
+            )
+        except sharing.ShareLimitExceeded as exc:
+            # 403, not 400: the request is well-formed, we are simply not licensed
+            # to serve that much of this translation at once.
+            return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except LookupError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(VerseShareSerializer(payload).data)
 
 
 # ---------------------------------------------------------------------------
