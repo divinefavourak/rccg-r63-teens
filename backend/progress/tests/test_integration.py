@@ -54,3 +54,26 @@ class DevotionalReadIntegrationTests(APITestCase):
         self.client.post(url)
         self.client.post(url)  # deduped by UserReadLog -> no second action
         self.assertEqual(1, SpiritualAction.objects.filter(user=self.user).count())
+
+    def test_a_failed_action_rolls_back_the_read_log_so_a_retry_re_emits(self):
+        from unittest import mock
+
+        from content.models import UserReadLog
+
+        url = reverse('devotional-mark-read', args=[self.devotional.id])
+
+        # record_action blows up: the whole mark_read must roll back, or the
+        # UserReadLog dedup would swallow the read permanently on retry.
+        with mock.patch('progress.services.record_action', side_effect=RuntimeError('boom')):
+            self.client.raise_request_exception = False
+            failed = self.client.post(url)
+        self.assertEqual(500, failed.status_code)
+        self.assertFalse(
+            UserReadLog.objects.filter(user=self.user, devotional=self.devotional).exists())
+        self.assertEqual(0, SpiritualAction.objects.filter(user=self.user).count())
+
+        # The retry now succeeds and the action is recorded.
+        self.client.raise_request_exception = True
+        retried = self.client.post(url)
+        self.assertEqual(200, retried.status_code)
+        self.assertEqual(1, SpiritualAction.objects.filter(user=self.user).count())

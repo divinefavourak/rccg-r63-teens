@@ -188,38 +188,43 @@ class DevotionalViewSet(viewsets.ModelViewSet):
         """
         devotional = self.get_object()
 
-        # Deduplicate via UserReadLog — works for ALL users
-        log, created = UserReadLog.objects.get_or_create(
-            user=request.user,
-            devotional=devotional,
-        )
-
         streak_days = 0
         total_read = 0
 
-        if created:
-            devotional.increment_read_count()
-
-            # Progress spiritual-action stream — the authoritative streak source.
-            from progress import services as progress_services
-            from progress.models import ActionType
-            progress_services.record_action(
-                request.user, ActionType.DEVOTIONAL_COMPLETED,
-                source_reference=f'content.devotional:{devotional.id}',
+        # The dedup log, the read counter and the Progress action must commit
+        # together: UserReadLog is what makes this idempotent, so if record_action
+        # failed after the log committed, the retry would find created=False and
+        # the action would be lost forever. One transaction keeps them consistent.
+        from django.db import transaction
+        with transaction.atomic():
+            log, created = UserReadLog.objects.get_or_create(
+                user=request.user,
+                devotional=devotional,
             )
 
-            # Legacy TeenProfile streak — dual-written until the frontend reads
-            # from /api/progress/ (expand-contract).
-            try:
-                profile = request.user.teen_profile
-                profile.update_streak(date.today())
-                streak_days = profile.streak_days
-                total_read = profile.devotionals_read_count
-            except Exception:
-                # No TeenProfile — legacy streak not tracked, that's fine
-                pass
+            if created:
+                devotional.increment_read_count()
 
-        else:
+                # Progress spiritual-action stream — the authoritative streak source.
+                from progress import services as progress_services
+                from progress.models import ActionType
+                progress_services.record_action(
+                    request.user, ActionType.DEVOTIONAL_COMPLETED,
+                    source_reference=f'content.devotional:{devotional.id}',
+                )
+
+                # Legacy TeenProfile streak — dual-written until the frontend
+                # reads from /api/progress/ (expand-contract).
+                try:
+                    profile = request.user.teen_profile
+                    profile.update_streak(app_today())
+                    streak_days = profile.streak_days
+                    total_read = profile.devotionals_read_count
+                except Exception:
+                    # No TeenProfile — legacy streak not tracked, that's fine
+                    pass
+
+        if not created:
             # Already read — return current streak if profile exists
             try:
                 profile = request.user.teen_profile
