@@ -10,6 +10,7 @@ from django.db.models import Count, Sum, Q
 from identity.authorization import HasPermission, HasPermissionOrReadOnly, has_any_permission
 from identity.permissions_registry import Perm
 from content.views import get_age_group_filter
+from . import notifications as event_notifications
 from .email_service import EventEmailService
 from .models import Event, EventRegistration, BulkUpload, RegistrationAuditLog
 from .serializers import (
@@ -119,7 +120,10 @@ class EventViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         registration = serializer.save()
 
+        # E-mail is the transactional fallback (docs/07 §10); push + inbox are the
+        # primary channel. Both, not either.
         EventEmailService.send_registration_confirmation(registration)
+        event_notifications.notify_registration_received(registration)
 
         return Response(
             EventRegistrationDetailSerializer(registration).data,
@@ -228,6 +232,7 @@ class EventRegistrationViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         registration = serializer.save()
         EventEmailService.send_registration_confirmation(registration)
+        event_notifications.notify_registration_received(registration)
     
     def get_queryset(self):
         user = self.request.user
@@ -283,8 +288,11 @@ class EventRegistrationViewSet(viewsets.ModelViewSet):
         # Send email notification
         if new_status == 'confirmed':
             EventEmailService.send_registration_confirmed(registration)
+            event_notifications.notify_registration_confirmed(registration)
         else:
             EventEmailService.send_status_update(registration, old_status, new_status)
+            event_notifications.notify_status_changed(
+                registration, old_status, new_status)
 
         return Response(EventRegistrationDetailSerializer(registration).data)
     
