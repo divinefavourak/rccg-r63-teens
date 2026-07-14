@@ -34,24 +34,29 @@ class IsSelfOrAdmin(permissions.BasePermission):
 
 
 class ProvinceAccessPermission(permissions.BasePermission):
-    """Permission for province-based access control"""
-    def has_permission(self, request, view):
-        user = request.user
-        
-        if not user or not user.is_authenticated:
-            return False
-        
-        # Admins can access all provinces
-        if user.role == User.Role.ADMIN:
-            return True
-        
-        # Coordinators can only access their own province
+    """
+    Province-based access control. **Deprecated** — use
+    `identity.authorization.HasPermission` / `scope_queryset`, which evaluate
+    capabilities across a real hierarchy subtree. This class survives only because
+    the legacy `tickets` app still imports it, and `tickets` is slated for removal.
+
+    The collection-level check used to read a `province` value *from the request*
+    and allow the call outright when the client simply left it out:
+
         province_param = request.query_params.get('province') or request.data.get('province')
         if province_param:
             return user.province == province_param
-        
-        return True
-    
+        return True          # <- omit the parameter, skip the check entirely
+
+    That let the caller decide whether they were checked, which is the IDOR the
+    backend audit flagged (C2). Client input no longer influences this decision:
+    the collection level only authenticates, and the province comparison happens on
+    the object, always against the user's *own* province.
+    """
+
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated)
+
     def has_object_permission(self, request, view, obj):
         user = request.user
         

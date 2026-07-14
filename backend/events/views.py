@@ -11,6 +11,7 @@ from identity.authorization import HasPermission, HasPermissionOrReadOnly, has_a
 from identity.permissions_registry import Perm
 from content.views import get_age_group_filter
 from . import notifications as event_notifications
+from . import scoping
 from .email_service import EventEmailService
 from .models import Event, EventRegistration, BulkUpload, RegistrationAuditLog
 from .serializers import (
@@ -59,9 +60,27 @@ class EventViewSet(viewsets.ModelViewSet):
             )
         )
 
-        # Only event managers see unpublished events.
-        if not has_any_permission(self.request.user, Perm.EVENTS_MANAGE):
+        is_manager = has_any_permission(self.request.user, Perm.EVENTS_MANAGE)
+
+        if is_manager:
+            # A manager sees published events like anyone else, plus the
+            # unpublished ones *inside their own subtree* — not every draft in the
+            # region. This is the row-level scoping the backend audit (C2) said was
+            # blocked until events carried a hierarchy node.
+            queryset = queryset.filter(
+                Q(status='published')
+                | Q(pk__in=scoping.manageable_by(
+                    Event.objects.exclude(status='published'), self.request.user,
+                ).values('pk'))
+            )
+        else:
             queryset = queryset.filter(status='published')
+
+        # Published events are scoped to the tree: a teen sees events at or above
+        # their position (docs/07 §3). Applied to everyone, managers included —
+        # a manager browsing the events list is browsing as a member of their own
+        # part of the church.
+        queryset = scoping.visible_to(queryset, self.request.user)
 
         # Non-leaders are additionally filtered to their age group.
         if not has_any_permission(self.request.user, Perm.EVENTS_VIEW):
@@ -71,14 +90,16 @@ class EventViewSet(viewsets.ModelViewSet):
         upcoming = self.request.query_params.get('upcoming')
         if upcoming == 'true':
             queryset = queryset.filter(end_datetime__gt=timezone.now())
-        
-        # Filter by province
-        province = self.request.query_params.get('province')
-        if province:
-            queryset = queryset.filter(
-                Q(target_provinces=[]) | Q(target_provinces__contains=[province])
-            )
-        
+
+        # Narrow to one node's subtree. Note what this *cannot* do: widen access.
+        # It filters within what `visible_to` already allowed, so asking for another
+        # province's node returns nothing rather than that province's events — which
+        # is precisely what the old `?province=` filter got wrong (the client chose
+        # whose data to read).
+        node_id = self.request.query_params.get('node')
+        if node_id:
+            queryset = queryset.filter(scope_node__id=node_id)
+
         return queryset
     
     def retrieve(self, request, *args, **kwargs):
