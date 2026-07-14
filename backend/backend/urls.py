@@ -46,7 +46,8 @@ urlpatterns = [
     path('api/v1/media/', include('media.urls')),
     path('api/v1/events/', include('events.urls')),
     path('api/v1/payments/', include('payments.urls')),
-    
+    path('api/v1/today/', include('today.urls')),
+
     # Legacy API endpoints (for backward compatibility with frontend)
     path('api/auth/', include('users.urls')),
     path('api/users/', include('users.urls')),  # Added for AdminUsers page

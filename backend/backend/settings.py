@@ -67,7 +67,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
+    # Registers the Postgres-only field and index types Scripture search needs
+    # (SearchVectorField, GinIndex — see bible/search.py). The project is already
+    # Postgres-only: some migrations use Postgres-specific SQL, and the test suite
+    # runs against a local Postgres (see the DATABASES note below).
+    'django.contrib.postgres',
+
     # Third party apps
     'rest_framework',
     'rest_framework_simplejwt',
@@ -96,6 +101,11 @@ INSTALLED_APPS = [
     'events',
     'tickets',  # Legacy - will be deprecated after migration
     'payments',
+
+    # Composition layer. Owns no models; imports downward from content/bible/
+    # progress/profiles and is imported by none of them. Listed last so that
+    # dependency direction is visible here too.
+    'today',
 ]
 
 MIDDLEWARE = [
@@ -433,6 +443,11 @@ if not os.environ.get('BREVO_SMTP_KEY') and MAILING:
     warnings.warn('BREVO_SMTP_KEY not set. Email functionality will not work.')
 
 FRONTEND_URL = os.getenv("FRONTEND_URL")
+
+# The product name rendered in shared verse cards ("...via Faith Tribe" —
+# docs/08-bible-experience.md §3). A setting, not a literal, so the brand is not
+# scattered through the codebase.
+APP_NAME = os.getenv("APP_NAME", "Faith Tribe")
 
 # PayStack payment gateway
 PAYSTACK_SECRET_KEY=os.getenv("PAYSTACK_SECRET_KEY")

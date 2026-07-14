@@ -16,6 +16,8 @@ This app is foundational: it imports nothing from `content`, `identity` or
 the reverse.
 """
 from django.conf import settings
+from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.search import SearchVectorField
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
@@ -62,6 +64,15 @@ class BibleTranslation(UUIDMixin, TimestampMixin):
 
     # Licensed texts often forbid offline storage; the reader consults this flag.
     is_offline_capable = models.BooleanField(default=False)
+
+    # Some licences cap how many consecutive verses may be displayed or shared at
+    # once (`docs/08-bible-experience.md` §11, operating rule 3). NULL means no
+    # cap — the normal case for public-domain texts. A field, not a code branch,
+    # because adding a translation is content ops, not engineering.
+    max_consecutive_verses = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        help_text='Licence cap on consecutive verses shared at once. Blank = no cap.',
+    )
 
     is_default = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True, db_index=True)
@@ -176,6 +187,16 @@ class BibleVerse(UUIDMixin, TimestampMixin):
     number = models.PositiveSmallIntegerField()
     text = models.TextField()
 
+    # The full-text index backing keyword search (`bible/search.py`). Stored
+    # rather than computed per query: a `to_tsvector` over ~31,000 verses on every
+    # keystroke is a sequential scan, and the reader's search field is used on
+    # Nigerian phone connections (`docs/03-user-personas.md`).
+    #
+    # Nullable because it is populated *after* the verse row is written (the
+    # importer fills it per chapter), and because a verse whose vector has not yet
+    # been built must still be readable — search degrades, Scripture does not.
+    search_vector = SearchVectorField(null=True, blank=True, editable=False)
+
     class Meta:
         ordering = ['chapter', 'number']
         verbose_name = 'Bible Verse'
@@ -183,7 +204,10 @@ class BibleVerse(UUIDMixin, TimestampMixin):
         constraints = [
             models.UniqueConstraint(fields=['chapter', 'number'], name='bible_uniq_verse'),
         ]
-        indexes = [models.Index(fields=['chapter', 'number'])]
+        indexes = [
+            models.Index(fields=['chapter', 'number']),
+            GinIndex(fields=['search_vector'], name='bible_verse_search_gin'),
+        ]
 
     def __str__(self):
         return f'{self.reference} ({self.translation.code})'

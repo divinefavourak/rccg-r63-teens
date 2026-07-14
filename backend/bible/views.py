@@ -16,7 +16,7 @@ from rest_framework.views import APIView
 from identity.authorization import HasPermissionOrReadOnly, has_any_permission
 from identity.permissions_registry import Perm
 
-from . import services
+from . import references, search, services, sharing
 from .models import (
     BibleBook, BibleChapter, BibleTranslation, BibleVerse, Bookmark,
     Highlight, Note, ReadingHistory, ReadingProgress,
@@ -27,6 +27,7 @@ from .serializers import (
     BibleTranslationSerializer, BibleVerseSerializer, BookmarkSerializer,
     ContinueReadingSerializer, HighlightSerializer, NoteSerializer,
     ReadingHistorySerializer, ReadingProgressSerializer, RecordReadSerializer,
+    ScriptureSearchGroupSerializer, VerseShareSerializer,
 )
 
 
@@ -117,41 +118,122 @@ class BibleVerseViewSet(viewsets.ModelViewSet):
     serializer_class = BibleVerseSerializer
     permission_classes = [HasPermissionOrReadOnly(Perm.BIBLE_MANAGE)]
     filterset_fields = ['chapter', 'number']
-    search_fields = ['text']
     ordering = ['chapter', 'number']
+    # No `search_fields` here on purpose. DRF's SearchFilter would compile to an
+    # unindexed ILIKE '%...%' over every verse in the Bible. Scripture search is
+    # `/bible/search/` (see `bible/search.py`), which is full-text and indexed.
 
 
 class ScriptureLookupView(APIView):
     """
-    Resolve a translation-agnostic reference: the `ScriptureRef` read path.
+    Resolve a reference: the `ScriptureRef` read path.
 
-    `GET /bible/lookup/?book=John&chapter=3&start_verse=16&translation=WEB`
+    Two input shapes, one output shape:
+
+    * **Free text** — `?q=jn 3:16`, `?q=1 cor 13`, `?q=ps 23`. What the reader's
+      search field and any content-side reference detection send. Parsed by
+      `bible.references`, the one parser (`docs/08-bible-experience.md` §12).
+    * **Structured** — `?book=John&chapter=3&start_verse=16`. What a caller that
+      already holds an address sends (a devotional's stored anchor Scripture).
 
     Omitting `translation` uses the default. Omitting the verse numbers returns
-    the whole chapter. An unimported passage yields an empty `verses` list, not
-    a 404 — the address is valid even before the text lands.
+    the whole chapter. An unimported passage yields an empty `verses` list, not a
+    404 — the address is valid even before the text lands.
     """
 
     permission_classes = [AllowAny]
 
     def get(self, request, *args, **kwargs):
-        book = request.query_params.get('book')
-        chapter = request.query_params.get('chapter')
-        if not book or not chapter:
+        translation = services.resolve_translation(request.query_params.get('translation'))
+        if translation is None:
             return Response(
-                {'detail': 'book and chapter are required.'},
-                status=status.HTTP_400_BAD_REQUEST,
+                {'detail': 'No translation is available yet.'},
+                status=status.HTTP_404_NOT_FOUND,
             )
-        try:
-            chapter_number = int(chapter)
-            start = request.query_params.get('start_verse')
-            end = request.query_params.get('end_verse')
-            start_verse = int(start) if start else None
-            end_verse = int(end) if end else None
-        except (TypeError, ValueError):
+
+        query = (request.query_params.get('q') or '').strip()
+        if query:
+            parsed = references.parse_reference(query, translation)
+            if parsed is None:
+                # Not a reference. A 404 would imply the passage is missing; this
+                # is a shape problem, and the caller (search) needs to tell the two
+                # apart so it can fall through to keyword search.
+                return Response(
+                    {'detail': f'{query!r} is not a Scripture reference.',
+                     'parsed': False},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            book_osis = parsed['osis_code']
+            book_name = parsed['book'].name
+            chapter_number = parsed['chapter']
+            start_verse = parsed['start_verse']
+            end_verse = parsed['end_verse']
+        else:
+            book_osis = request.query_params.get('book')
+            chapter = request.query_params.get('chapter')
+            if not book_osis or not chapter:
+                return Response(
+                    {'detail': 'Provide either q, or book and chapter.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            try:
+                chapter_number = int(chapter)
+                start = request.query_params.get('start_verse')
+                end = request.query_params.get('end_verse')
+                start_verse = int(start) if start else None
+                end_verse = int(end) if end else None
+            except (TypeError, ValueError):
+                return Response(
+                    {'detail': 'chapter, start_verse and end_verse must be integers.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            resolved = references.resolve_book(translation, book_osis)
+            book_name = resolved.name if resolved else book_osis
+
+        verses = services.resolve_reference(
+            translation=translation,
+            book_osis=book_osis,
+            chapter_number=chapter_number,
+            start_verse_number=start_verse,
+            end_verse_number=end_verse,
+        )
+        return Response({
+            'translation': BibleTranslationSerializer(translation).data,
+            'book': book_osis,
+            'book_name': book_name,
+            'chapter': chapter_number,
+            'start_verse': start_verse,
+            'end_verse': end_verse,
+            # The canonical rendering of the address — every surface that displays
+            # a reference uses this, so they cannot drift apart.
+            'reference': references.format_reference(
+                book_name, chapter_number, start_verse, end_verse),
+            'verses': BibleVerseSerializer(verses, many=True).data,
+        })
+
+
+class ScriptureSearchView(APIView):
+    """
+    Scripture search — one field, two behaviours (`docs/08-bible-experience.md` §4).
+
+    `GET /bible/search/?q=...&translation=WEB&testament=new&book=John&limit=50`
+
+    The response's `kind` tells the client which it got:
+
+    * `reference` — the query was an address ("jn 3:16"); `verses` is the passage.
+      The client opens the reader there rather than rendering a result list.
+    * `keyword`  — `results` is a list of `{book, verses}` groups, best match first.
+
+    Public: reading Scripture never requires an account.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        query = (request.query_params.get('q') or '').strip()
+        if not query:
             return Response(
-                {'detail': 'chapter, start_verse and end_verse must be integers.'},
-                status=status.HTTP_400_BAD_REQUEST,
+                {'detail': 'q is required.'}, status=status.HTTP_400_BAD_REQUEST,
             )
 
         translation = services.resolve_translation(request.query_params.get('translation'))
@@ -161,21 +243,110 @@ class ScriptureLookupView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        verses = services.resolve_reference(
-            translation=translation,
-            book_osis=book,
-            chapter_number=chapter_number,
-            start_verse_number=start_verse,
-            end_verse_number=end_verse,
+        try:
+            limit = int(request.query_params.get('limit', search.DEFAULT_LIMIT))
+        except (TypeError, ValueError):
+            return Response(
+                {'detail': 'limit must be an integer.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        kind, payload = search.search(
+            translation,
+            query,
+            testament=request.query_params.get('testament'),
+            book_osis=request.query_params.get('book'),
+            limit=limit,
         )
-        return Response({
+
+        body = {
+            'query': query,
+            'kind': kind,
             'translation': BibleTranslationSerializer(translation).data,
-            'book': book,
-            'chapter': chapter_number,
-            'start_verse': start_verse,
-            'end_verse': end_verse,
-            'verses': BibleVerseSerializer(verses, many=True).data,
-        })
+        }
+        if kind == 'reference':
+            parsed = payload['parsed']
+            body['reference'] = references.format_reference(
+                parsed['book'].name, parsed['chapter'],
+                parsed['start_verse'], parsed['end_verse'],
+            )
+            body['book'] = parsed['osis_code']
+            body['chapter'] = parsed['chapter']
+            body['verses'] = BibleVerseSerializer(payload['verses'], many=True).data
+        else:
+            body['results'] = ScriptureSearchGroupSerializer(payload, many=True).data
+            body['total'] = sum(len(group['verses']) for group in payload)
+        return Response(body)
+
+
+class VerseShareView(APIView):
+    """
+    The share payload for a passage (`docs/08-bible-experience.md` §3).
+
+    `GET /bible/share/?q=John 3:16&translation=WEB`
+    `GET /bible/share/?book=John&chapter=3&start_verse=16&end_verse=18`
+
+    Returns the licence-correct content — text, canonical reference, required
+    attribution, and a deep link back into the reader — for the client to compose
+    into a share card. The backend owns what is legal to display; the client owns
+    how it looks.
+
+    Public: a verse card is how someone who has never heard of us first meets the
+    product.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        translation = services.resolve_translation(request.query_params.get('translation'))
+        if translation is None:
+            return Response(
+                {'detail': 'No translation is available yet.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        query = (request.query_params.get('q') or '').strip()
+        if query:
+            parsed = references.parse_reference(query, translation)
+            if parsed is None:
+                return Response(
+                    {'detail': f'{query!r} is not a Scripture reference.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            book_osis = parsed['osis_code']
+            chapter = parsed['chapter']
+            start_verse, end_verse = parsed['start_verse'], parsed['end_verse']
+        else:
+            book_osis = request.query_params.get('book')
+            try:
+                chapter = int(request.query_params['chapter'])
+                start = request.query_params.get('start_verse')
+                end = request.query_params.get('end_verse')
+                start_verse = int(start) if start else None
+                end_verse = int(end) if end else None
+            except (KeyError, TypeError, ValueError):
+                return Response(
+                    {'detail': 'Provide either q, or book and an integer chapter.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not book_osis:
+                return Response(
+                    {'detail': 'Provide either q, or book and chapter.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        try:
+            payload = sharing.share_payload(
+                translation, book_osis, chapter, start_verse, end_verse,
+            )
+        except sharing.ShareLimitExceeded as exc:
+            # 403, not 400: the request is well-formed, we are simply not licensed
+            # to serve that much of this translation at once.
+            return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except LookupError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(VerseShareSerializer(payload).data)
 
 
 # ---------------------------------------------------------------------------

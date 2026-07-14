@@ -205,3 +205,41 @@ class RecordReadSerializer(serializers.Serializer):
     chapter = serializers.PrimaryKeyRelatedField(queryset=BibleChapter.objects.all())
     furthest_verse_number = serializers.IntegerField(required=False, min_value=1)
     completed = serializers.BooleanField(required=False, default=False)
+
+
+class ScriptureSearchGroupSerializer(serializers.Serializer):
+    """
+    One book's worth of keyword hits (`bible.search.group_by_book`).
+
+    Read-only projection of a plain dict, not a model — the group is a shape the
+    search service builds, and nothing persists it.
+    """
+
+    osis_code = serializers.CharField(read_only=True)
+    name = serializers.CharField(read_only=True)
+    testament = serializers.CharField(read_only=True)
+    verses = BibleVerseSerializer(many=True, read_only=True)
+
+
+class VerseShareSerializer(serializers.Serializer):
+    """
+    The share payload (`bible.sharing.share_payload`).
+
+    A read-only projection of a dict, not a model. `attribution` is always
+    present, never conditional — a client cannot render a share card without it
+    and cannot be trusted to remember to ask.
+    """
+
+    reference = serializers.CharField(read_only=True)
+    book = serializers.CharField(read_only=True)
+    chapter = serializers.IntegerField(read_only=True)
+    start_verse = serializers.IntegerField(read_only=True, allow_null=True)
+    end_verse = serializers.IntegerField(read_only=True, allow_null=True)
+    text = serializers.CharField(read_only=True)
+    verses = BibleVerseSerializer(many=True, read_only=True)
+    translation_code = serializers.CharField(read_only=True)
+    attribution = serializers.CharField(read_only=True)
+    attribution_required = serializers.BooleanField(read_only=True)
+    deep_link = serializers.CharField(read_only=True)
+    share_text = serializers.CharField(read_only=True)
+    copy_text = serializers.CharField(read_only=True)
