@@ -112,3 +112,8 @@ logs/
 prod-copy.sql
 *.sql
 !**/migrations/*.sql
+
+# Bible source/import files are content, not code — operators source them (docs/ops/03).
+backend/*.json
+!backend/**/migrations/*.json
+!backend/package*.json
