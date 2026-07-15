@@ -90,7 +90,12 @@ class Command(BaseCommand):
 
         translation = payload['translation']
         book_count = len(payload['books'])
-        verse_count = sum(len(ch) for b in payload['books'] for ch in b['chapters'])
+        # A chapter is either a compact list of verse texts or an explicit
+        # {'number', 'verses': {...}} object (see `_chapter_payload`); count both.
+        verse_count = sum(
+            len(ch['verses']) if isinstance(ch, dict) else len(ch)
+            for b in payload['books'] for ch in b['chapters']
+        )
         self.stdout.write(self.style.SUCCESS(
             f'Wrote {options["out"]}: {translation["code"]} '
             f'({translation["name"]}), {book_count} books, {verse_count} verses.'
@@ -146,10 +151,10 @@ class Command(BaseCommand):
         for osis, number, *_ in CANON:
             if osis not in books:
                 continue
-            chapters = []
-            for chapter_number in sorted(books[osis]):
-                verse_map = books[osis][chapter_number]
-                chapters.append([verse_map[v] for v in sorted(verse_map)])
+            chapters = [
+                _chapter_payload(chapter_number, books[osis][chapter_number])
+                for chapter_number in sorted(books[osis])
+            ]
             book_list.append({'osis_code': osis, 'chapters': chapters})
 
         return {
@@ -188,6 +193,30 @@ class Command(BaseCommand):
             translation['attribution_required'] = True
 
         return translation
+
+
+def _chapter_payload(chapter_number, verse_map):
+    """
+    Compact array when the verses are a clean 1..n run; explicit object otherwise.
+
+    The compact form (`["v1 text", "v2 text", ...]`) encodes the verse number as the
+    array *position* — position i is verse i+1 — so it cannot represent a gap. Many
+    translations legitimately omit verses: WEB, following the critical text, has no
+    Matthew 17:21, John 5:4, Acts 8:37, and about a dozen others. Packing a gapped
+    chapter into an array would silently renumber every verse after the gap (verse 22
+    becomes 21, 23 becomes 22, …) — quiet Scripture corruption.
+
+    So when the verse numbers are not exactly 1..n, emit the explicit
+    `{'number', 'verses': {num: text}}` form, which `import_bible` supports natively
+    and which preserves the real numbering, gap and all.
+    """
+    numbers = sorted(verse_map)
+    if numbers == list(range(1, len(numbers) + 1)):
+        return [verse_map[v] for v in numbers]
+    return {
+        'number': chapter_number,
+        'verses': {str(v): verse_map[v] for v in numbers},
+    }
 
 
 def _is_zeroish(value):

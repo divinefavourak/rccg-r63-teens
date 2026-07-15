@@ -97,6 +97,50 @@ class ConvertBibleTests(TestCase):
 
         self.assertNotIn('max_consecutive_verses', payload['translation'])
 
+    def test_a_verse_gap_does_not_shift_later_verses(self):
+        """
+        WEB omits verses (Matthew 17:21, John 5:4, …). A compact array would renumber
+        every verse after the gap; the converter must preserve the real numbers.
+        """
+        data = flat_source()
+        data['verses'] = [
+            {'book': 1, 'chapter': 1, 'verse': 1, 'text': 'one'},
+            {'book': 1, 'chapter': 1, 'verse': 2, 'text': 'two'},
+            {'book': 1, 'chapter': 1, 'verse': 4, 'text': 'four'},   # 3 omitted
+        ]
+
+        payload = self._convert(data)
+
+        chapter = payload['books'][0]['chapters'][0]
+        # Explicit object form, not a compact array that would collapse the gap.
+        self.assertIsInstance(chapter, dict)
+        self.assertEqual(chapter['verses'], {'1': 'one', '2': 'two', '4': 'four'})
+
+    def test_a_gapped_chapter_round_trips_with_correct_numbers(self):
+        """The end-to-end proof: verse 4 imports as verse 4, and verse 3 does not exist."""
+        data = flat_source()
+        data['verses'] = [
+            {'book': 1, 'chapter': 1, 'verse': 1, 'text': 'one'},
+            {'book': 1, 'chapter': 1, 'verse': 2, 'text': 'two'},
+            {'book': 1, 'chapter': 1, 'verse': 4, 'text': 'four'},
+        ]
+
+        import_translation(self._convert(data, '--default'))
+
+        four = BibleVerse.objects.get(
+            chapter__book__osis_code='Gen', chapter__number=1, number=4)
+        self.assertEqual(four.text, 'four')     # NOT shifted to verse 3
+        self.assertFalse(
+            BibleVerse.objects.filter(
+                chapter__book__osis_code='Gen', chapter__number=1, number=3).exists()
+        )
+
+    def test_a_contiguous_chapter_still_uses_the_compact_form(self):
+        """The common case stays compact — the explicit form is only for gaps."""
+        payload = self._convert(flat_source())
+
+        self.assertIsInstance(payload['books'][0]['chapters'][0], list)
+
     def test_non_canonical_book_numbers_are_skipped(self):
         """Some dumps append apocrypha as book 67+; those cannot map to the 66-book canon."""
         data = flat_source()

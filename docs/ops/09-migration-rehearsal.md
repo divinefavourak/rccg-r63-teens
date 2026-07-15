@@ -59,22 +59,30 @@ e-mail addresses, phone numbers, registrations. A dump written inside the workin
 tree can be swept into a commit by a careless `git add` (this has happened). Put it
 in your home directory:
 
+**Never type or paste the production password.** A password on the command line
+lands in your shell history and is visible to anyone who can list processes. Read the
+existing `DATABASE_URL` from `.env` (the same one the app uses) into a variable, and
+hand it to the container through an environment variable — never as a command-line
+argument to `pg_dump`.
+
 ```bash
 DUMP=~/faithtribe-prod-copy.sql
 
-# The dump. --no-owner/--no-privileges strips Neon's own roles (neondb_owner)
-# which do not exist locally. Reads production; writes only the local file.
-docker run --rm postgres:16-alpine \
-  pg_dump --no-owner --no-privileges \
-  "postgresql://neondb_owner:PASSWORD@ep-tiny-moon-a4bkgmyt-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require" \
-  > "$DUMP"
+# Read the production URL the same way the app does — never retype the password.
+SRC=$(./venv/Scripts/python.exe -c "import os; from dotenv import load_dotenv; load_dotenv(); print(os.environ['DATABASE_URL'])")
+
+# Pass the URL to the container via -e, and let pg_dump read it from the
+# environment. --no-owner/--no-privileges strips Neon's own roles (neondb_owner),
+# which do not exist locally. This only reads production; it writes the local file.
+docker run --rm -e PGURL="$SRC" postgres:16-alpine \
+  sh -c 'pg_dump --no-owner --no-privileges "$PGURL"' > "$DUMP"
 ```
 
 (`*.sql` is also in `.gitignore` as a backstop, but keeping the file out of the tree
 entirely is the real protection.)
 
-Replace `PASSWORD` (from `.env`). If Neon reports a server version newer than 16,
-bump the image tag (`postgres:17-alpine`) so `pg_dump` is not older than the server.
+If Neon reports a server version newer than 16, bump the image tag
+(`postgres:17-alpine`) so `pg_dump` is not older than the server.
 
 Sanity-check the dump before trusting it:
 
@@ -178,9 +186,25 @@ You now know that list *before* deployment day.
 DATABASE_URL=$REHEARSAL_DB ./venv/Scripts/python.exe manage.py verify_deployment
 ```
 
-Everything green except the Bible (no text imported in the rehearsal unless you also
-run `import_bible`) and possibly push (no VAPID keys locally). Those two are known
-and covered by their own runbooks — every *other* check going green is your
+Some checks are **expected** to be non-green in a rehearsal and are *not* signs of a
+problem with the migration. Confirm each of yours falls into this list before you
+trust anything else:
+
+- **Bible** — red until you run `convert_bible` + `import_bible` on the copy.
+- **notification backend** — a warning unless you set VAPID keys locally.
+- **devotional exists for today** — **date-sensitive.** The dump is a point-in-time
+  snapshot; if you rehearse on a *later* date than the dump, production may have no
+  published devotional for the copy's "today", so this legitimately fails or warns.
+  That is an artifact of the dump's age, not a migration issue — confirm it against
+  the dump date rather than treating it as a real failure.
+- **critical settings** — red because the rehearsal uses your local `.env`
+  (`ALLOWED_HOSTS=*`, `DEBUG` may be on). Set in the real production environment.
+- **role assignments** — a warning if the only content-publisher is a superuser (see
+  `04-rbac-bootstrap.md`; the deploy fixes it with one `grant_role`).
+- **event scoping** — a warning for legitimately region-wide events.
+
+Any check *outside* this list going red is a real finding — investigate it before the
+deploy. Everything in the list going green (or being an understood warning) is your
 assurance the real deploy will too.
 
 Confirm the load-bearing data survived the migration:
