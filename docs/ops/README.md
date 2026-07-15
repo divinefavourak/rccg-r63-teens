@@ -40,6 +40,7 @@ description of it.
 | [06](06-push-notifications.md) | Push notification setup | Turning on real WebPush delivery |
 | [07](07-production-secrets.md) | Production secrets | Every environment variable, and which are load-bearing |
 | [08](08-rollback.md) | Rollback | When a deployment goes wrong |
+| [09](09-migration-rehearsal.md) | Migration rehearsal | Dry-run the migrations against a throwaway copy of production **before** the real deploy |
 
 ## The commands, at a glance
 

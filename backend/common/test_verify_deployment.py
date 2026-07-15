@@ -467,6 +467,38 @@ class BootstrapProductionTests(TestCase):
             HierarchyNode.objects.filter(node_type='national').count(), 1)
         self.assertEqual(Membership.objects.filter(is_primary=True).count(), 1)
 
+    def test_dry_run_writes_nothing(self):
+        """
+        --dry-run promises "write nothing". derive_hierarchy rolled back, but
+        seed_rbac wrote for real — and the runbook tells operators to preview
+        against production with exactly this flag.
+
+        To make this bite, first introduce registry drift (delete a permission).
+        On a freshly-migrated database the registry already matches the code, so a
+        seed_rbac that ran for real would write nothing anyway and the bug would
+        hide. With a permission missing, a real seed_rbac would re-create it — so a
+        correct dry-run must leave it absent.
+        """
+        from identity.models import Permission, RoleAssignment
+        from identity.permissions_registry import ALL_PERMISSION_CODES
+
+        make_user('admin-user', role='admin', province='lagos_province_9')
+        dropped = ALL_PERMISSION_CODES[-1]
+        Permission.objects.filter(code=dropped).delete()
+
+        try:
+            call_command('bootstrap_production', '--dry-run',
+                         stdout=StringIO(), stderr=StringIO())
+        except SystemExit:
+            pass
+
+        self.assertFalse(
+            Permission.objects.filter(code=dropped).exists(),
+            'dry-run re-created a dropped permission — seed_rbac wrote for real',
+        )
+        self.assertEqual(RoleAssignment.objects.count(), 0,
+                         'dry-run created role assignments')
+
     def test_bootstrap_refuses_to_run_against_a_stale_schema(self):
         """
         Seeding a database whose migrations are behind half-succeeds and leaves rows

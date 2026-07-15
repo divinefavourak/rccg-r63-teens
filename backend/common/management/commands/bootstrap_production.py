@@ -24,8 +24,9 @@ See `docs/ops/01-first-deployment.md` for the full runbook.
 """
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
-from django.db import connection
-from django.db.migrations.executor import MigrationExecutor
+from django.db import transaction
+
+from common.deploy import unapplied_migration_plan
 
 
 class Command(BaseCommand):
@@ -51,10 +52,8 @@ class Command(BaseCommand):
         # Refuse to seed a database whose schema is behind the code. Seeding against
         # a stale schema half-succeeds and leaves rows that the real migration then
         # has to reconcile — a worse position than not having started.
-        executor = MigrationExecutor(connection)
-        plan = executor.migration_plan(executor.loader.graph.leaf_nodes())
+        plan, apps = unapplied_migration_plan()
         if plan:
-            apps = sorted({migration.app_label for migration, _ in plan})
             raise CommandError(
                 f'{len(plan)} unapplied migration(s) in: {", ".join(apps)}.\n'
                 f'Run `python manage.py migrate` first — bootstrapping a stale '
@@ -62,8 +61,16 @@ class Command(BaseCommand):
             )
 
         self._step('1/3  seed_rbac — permissions and roles from the code registry')
-        call_command('seed_rbac', verbosity=0)
-        self._done('RBAC reconciled to the registry')
+        # seed_rbac has no --dry-run of its own, so honour ours by running it inside
+        # a transaction we roll back. Without this, `bootstrap_production --dry-run`
+        # would still write the Permission/Role tables — and the runbook tells
+        # operators to run exactly that against production to preview.
+        with transaction.atomic():
+            call_command('seed_rbac', verbosity=0)
+            if dry_run:
+                transaction.set_rollback(True)
+        self._done('RBAC reconciled to the registry' if not dry_run
+                   else 'RBAC reconciliation previewed (dry run — nothing written)')
 
         self._step('2/3  derive_hierarchy — tree, memberships, legacy role assignments')
         call_command(

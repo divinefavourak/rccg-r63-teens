@@ -13,6 +13,9 @@ Read this once before running anything.
 
 ## Before you start
 
+- [ ] You have **rehearsed this migration against a copy of production** and it ran
+      clean ([09 — Migration rehearsal](09-migration-rehearsal.md)). This is the
+      single highest-value de-risking step; do it first.
 - [ ] You have a **verified database backup** taken minutes ago (see
       [08 — Rollback](08-rollback.md) §Backup). This is the non-negotiable step.
       443 people's camp registrations are in this database.

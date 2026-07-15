@@ -18,8 +18,8 @@ Exit code is non-zero if any check FAILs, so this can gate a deploy pipeline.
 """
 from django.conf import settings
 from django.core.management.base import BaseCommand
-from django.db import connection
-from django.db.migrations.executor import MigrationExecutor
+
+from common.deploy import unapplied_migration_plan
 
 OK, WARN, FAIL = 'OK', 'WARN', 'FAIL'
 
@@ -59,15 +59,11 @@ class Result:
 
 def check_migrations():
     """Unapplied migrations mean the code and the database disagree about reality."""
-    executor = MigrationExecutor(connection)
-    targets = executor.loader.graph.leaf_nodes()
-    plan = executor.migration_plan(targets)
+    plan, apps = unapplied_migration_plan()
 
     if not plan:
-        return Result('migrations applied', OK,
-                      f'{len(executor.loader.applied_migrations)} applied')
+        return Result('migrations applied', OK, 'schema is current')
 
-    apps = sorted({migration.app_label for migration, _ in plan})
     return Result(
         'migrations applied', FAIL,
         f'{len(plan)} unapplied migration(s) in: {", ".join(apps)}',
