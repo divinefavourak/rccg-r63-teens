@@ -117,23 +117,36 @@ migrations, empty tree, zero assignments. That confirms the copy is faithful.
 
 ### 6. Rehearse the migration
 
-```bash
-# Preview the one data migration first (read-only).
-DATABASE_URL=$REHEARSAL_DB ./venv/Scripts/python.exe manage.py migrate events 0007 --plan
+**Run these three commands one at a time, in order — not as one paste.** The
+province count *must* run before `migrate`, because `migrate` drops the column it
+reads.
 
-# Count province-targeted events via RAW SQL, not the ORM. This must run BEFORE
-# migrating, while the target_provinces column still exists — but the current code's
-# Event model has already dropped that field (migration 0008 removes it), so
-# `Event.objects.exclude(target_provinces=[])` raises FieldError. Query the column
-# directly instead:
+```bash
+# 6a. Preview the data migration (read-only).
+DATABASE_URL=$REHEARSAL_DB ./venv/Scripts/python.exe manage.py migrate events 0007 --plan
+```
+
+```bash
+# 6b. Count province-targeted events, via RAW SQL. Two reasons it must be raw SQL run
+# before migrating: the current code's Event model has already dropped the
+# target_provinces field (so the ORM raises FieldError), and migration 0008 drops the
+# column itself (so after `migrate` the column is gone and this errors with
+# "column does not exist" — which simply means you already migrated; read 6c's output
+# instead).
 DATABASE_URL=$REHEARSAL_DB ./venv/Scripts/python.exe manage.py shell -c \
   "from django.db import connection; cur=connection.cursor(); cur.execute(\"SELECT count(*) FROM events_event WHERE target_provinces IS NOT NULL AND target_provinces::text <> '[]'\"); print('province-targeted events:', cur.fetchone()[0])"
 # expect 0 — if not, read events/migrations/0007's docstring before the real deploy.
-# (The migration itself also prints every widened/unresolved event as it runs.)
+```
 
-# Apply everything.
+```bash
+# 6c. Apply everything. Watch events/0007: it prints one line per widened/unresolved
+# event as it runs. Silence there = a clean no-op, which is the expected result.
 DATABASE_URL=$REHEARSAL_DB ./venv/Scripts/python.exe manage.py migrate
 ```
+
+The primary signal is 6c's output: `events/0007` reports every event it touches, so
+even if you skip 6b, a no-op migration is visible as `Applying events.0007… OK` with
+no lines in between.
 
 Watch for any migration that errors or runs suspiciously long. This is the moment
 the rehearsal exists for.
