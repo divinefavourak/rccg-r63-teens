@@ -68,14 +68,20 @@ argument to `pg_dump`.
 ```bash
 DUMP=~/faithtribe-prod-copy.sql
 
-# Read the production URL the same way the app does — never retype the password.
-SRC=$(./venv/Scripts/python.exe -c "import os; from dotenv import load_dotenv; load_dotenv(); print(os.environ['DATABASE_URL'])")
+# Read the production URL explicitly from backend/.env. override=True is important:
+# without it, load_dotenv() would NOT replace an already-exported DATABASE_URL — so a
+# stale value (e.g. a leftover $REHEARSAL_DB) could make pg_dump quietly dump the
+# WRONG database while appearing to succeed.
+SRC=$(./venv/Scripts/python.exe -c "import os; from dotenv import load_dotenv; load_dotenv('.env', override=True); print(os.environ['DATABASE_URL'])")
 
-# Pass the URL to the container via -e, and let pg_dump read it from the
-# environment. --no-owner/--no-privileges strips Neon's own roles (neondb_owner),
-# which do not exist locally. This only reads production; it writes the local file.
-docker run --rm -e PGURL="$SRC" postgres:16-alpine \
+# Hand the URL to the container through a restricted, short-lived env-file — never on
+# a command line. (`docker run -e PGURL=...` would put the password in docker's own
+# argv, visible to `ps`.) The file is chmod 600 and deleted immediately after.
+ENVFILE=$(mktemp); chmod 600 "$ENVFILE"
+printf 'PGURL=%s\n' "$SRC" > "$ENVFILE"
+docker run --rm --env-file "$ENVFILE" postgres:16-alpine \
   sh -c 'pg_dump --no-owner --no-privileges "$PGURL"' > "$DUMP"
+rm -f "$ENVFILE"
 ```
 
 (`*.sql` is also in `.gitignore` as a backstop, but keeping the file out of the tree
