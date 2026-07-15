@@ -48,9 +48,29 @@ A translation is one JSON file. Full schema and reasoning: `backend/bible/import
 
 ## Where to get the text
 
-Public-domain source texts (WEB, KJV, ASV) are freely available; convert them to
-the format above. The WEB is the recommended V1 default: contemporary language,
-zero licensing risk, safe to cache offline (`docs/08-bible-experience.md` §11).
+Public-domain source texts (WEB, KJV, ASV) are freely available. The WEB is the
+recommended V1 default: contemporary language, zero licensing risk, safe to cache
+offline (`docs/08-bible-experience.md` §11).
+
+### Converting a flat-verse-list dump
+
+Most public-domain Bible JSON is distributed as a **flat list of verses** —
+`{"metadata": {...}, "verses": [{"book": 1, "chapter": 1, "verse": 1, "text": "..."}]}`
+— not the nested shape above. `convert_bible` bridges the two:
+
+```
+python manage.py convert_bible kjv.json --out kjv-import.json --default
+python manage.py import_bible kjv-import.json
+```
+
+It maps the 1–66 `book` number to an OSIS code via `bible/canon.py`, strips
+paragraph pilcrows (`¶`), keeps the KJV's `[supplied-word]` brackets, and **infers
+the licence flags** from the source metadata (`copyright`/`restrict` zero ⇒ public
+domain; a positive `citation_limit` ⇒ a consecutive-verse cap). Because licence is
+inferred, the converter prints what it decided and **you should read the converted
+file's `translation` block before importing** — override with `--public-domain` /
+`--not-public-domain` / `--code` if the inference is wrong. Books numbered outside
+1–66 (apocrypha some dumps append) are skipped and reported.
 
 **Licensed translations** (NIV, ESV, …) carry constraints — attribution lines,
 consecutive-verse caps. Set `is_public_domain: false`, provide `copyright_notice`,

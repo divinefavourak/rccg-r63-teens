@@ -108,3 +108,7 @@ backups/
 # Logs
 logs/
 *.log
+# Never commit database dumps — they contain real user data (see docs/ops/09).
+prod-copy.sql
+*.sql
+!**/migrations/*.sql
