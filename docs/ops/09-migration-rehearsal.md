@@ -76,12 +76,14 @@ SRC=$(./venv/Scripts/python.exe -c "import os; from dotenv import load_dotenv; l
 
 # Hand the URL to the container through a restricted, short-lived env-file — never on
 # a command line. (`docker run -e PGURL=...` would put the password in docker's own
-# argv, visible to `ps`.) The file is chmod 600 and deleted immediately after.
+# argv, visible to `ps`.) The trap deletes the file even if you Ctrl-C or the shell
+# exits abnormally — an unconditional `rm` at the end would be skipped on interrupt,
+# leaving the production credential on disk.
 ENVFILE=$(mktemp); chmod 600 "$ENVFILE"
+trap 'rm -f -- "$ENVFILE"' EXIT HUP INT TERM
 printf 'PGURL=%s\n' "$SRC" > "$ENVFILE"
 docker run --rm --env-file "$ENVFILE" postgres:16-alpine \
   sh -c 'pg_dump --no-owner --no-privileges "$PGURL"' > "$DUMP"
-rm -f "$ENVFILE"
 ```
 
 (`*.sql` is also in `.gitignore` as a backstop, but keeping the file out of the tree
