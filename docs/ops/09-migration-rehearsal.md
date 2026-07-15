@@ -28,6 +28,12 @@ it, once, with `pg_dump`.
 - The production `DATABASE_URL` (in `backend/.env`).
 - ~10 minutes.
 
+**You do not need a local `psql` or `pg_dump`.** This project's dev machines don't
+have the Postgres client on PATH, so every Postgres command here runs *inside* the
+Docker container (`docker run` / `docker exec`), and every "which database am I on?"
+check uses the Django ORM. If a step ever asks you for host `psql`, that step is
+wrong — tell us.
+
 ---
 
 ## Procedure
@@ -90,9 +96,15 @@ For every command below, prefix `DATABASE_URL=$REHEARSAL_DB` so nothing you run
 touches production. Confirm you are aimed at the copy first:
 
 ```bash
-DATABASE_URL=$REHEARSAL_DB ./venv/Scripts/python.exe manage.py dbshell -c "\conninfo"
-# -> must say localhost:5433, NOT neon.tech
+DATABASE_URL=$REHEARSAL_DB ./venv/Scripts/python.exe manage.py shell -c \
+  "from django.db import connection; d = connection.settings_dict; print(d['HOST'], d['PORT'], d['NAME'])"
+# -> must print:  localhost 5433 faithtribe
+# If you see anything with neon.tech, STOP — you are aimed at production.
 ```
+
+(This uses the Django ORM rather than `manage.py dbshell`, which would shell out to
+a host `psql` you do not have installed — all Postgres tooling in this runbook runs
+inside the Docker container instead.)
 
 ### 5. Verify the *starting* state matches production
 
