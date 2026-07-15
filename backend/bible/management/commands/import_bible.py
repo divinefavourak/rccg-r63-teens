@@ -38,6 +38,8 @@ class Command(BaseCommand):
         except json.JSONDecodeError as exc:
             raise CommandError(f'{path} is not valid JSON: {exc}') from exc
 
+        self._require_schema()
+
         progress = None if options['quiet'] else (
             lambda message: self.stdout.write(f'  {message}')
         )
@@ -63,3 +65,32 @@ class Command(BaseCommand):
                 f'{translation.code} is not public domain but carries no '
                 f'copyright_notice — its licence almost certainly requires one.'
             ))
+
+    def _require_schema(self):
+        """
+        Fail clearly if the bible tables are not on the connected database.
+
+        Without this, importing against an unmigrated database raises a raw
+        `UndefinedTable` from deep inside the ORM. The overwhelmingly common cause
+        is being pointed at the *wrong database* — forgetting the
+        `DATABASE_URL=...` prefix and hitting an unmigrated production, or reloading
+        a rehearsal copy without re-running `migrate`. So the message names the
+        database you are actually connected to, which is the thing you need to see.
+        """
+        from django.db import connection
+
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT to_regclass('public.bible_bibletranslation')")
+            if cursor.fetchone()[0] is not None:
+                return
+
+        db = connection.settings_dict
+        raise CommandError(
+            f'The bible tables do not exist on the database you are connected to '
+            f'({db.get("HOST") or "default"}:{db.get("PORT") or "?"}/'
+            f'{db.get("NAME")}).\n'
+            f'Either that database has not been migrated (run `python manage.py '
+            f'migrate`), or — far more likely — you are pointed at the wrong '
+            f'database. Confirm DATABASE_URL points where you intend before '
+            f'importing.'
+        )
