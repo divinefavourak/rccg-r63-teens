@@ -54,14 +54,24 @@ test runner uses a separate `test_faithtribe` database, so the rehearsal copy in
 
 `pg_dump`/`psql` are not on the host PATH, so run them from the Postgres image.
 
+**Write the dump OUTSIDE the git repository.** It contains real user data — names,
+e-mail addresses, phone numbers, registrations. A dump written inside the working
+tree can be swept into a commit by a careless `git add` (this has happened). Put it
+in your home directory:
+
 ```bash
+DUMP=~/faithtribe-prod-copy.sql
+
 # The dump. --no-owner/--no-privileges strips Neon's own roles (neondb_owner)
 # which do not exist locally. Reads production; writes only the local file.
 docker run --rm postgres:16-alpine \
   pg_dump --no-owner --no-privileges \
   "postgresql://neondb_owner:PASSWORD@ep-tiny-moon-a4bkgmyt-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require" \
-  > prod-copy.sql
+  > "$DUMP"
 ```
+
+(`*.sql` is also in `.gitignore` as a backstop, but keeping the file out of the tree
+entirely is the real protection.)
 
 Replace `PASSWORD` (from `.env`). If Neon reports a server version newer than 16,
 bump the image tag (`postgres:17-alpine`) so `pg_dump` is not older than the server.
@@ -69,8 +79,8 @@ bump the image tag (`postgres:17-alpine`) so `pg_dump` is not older than the ser
 Sanity-check the dump before trusting it:
 
 ```bash
-ls -lh prod-copy.sql          # non-trivial size
-grep -c "CREATE TABLE" prod-copy.sql   # a couple of dozen tables
+ls -lh "$DUMP"                     # non-trivial size
+grep -c "CREATE TABLE" "$DUMP"     # a couple of dozen tables
 ```
 
 ### 3. Load it into the local Postgres
@@ -80,7 +90,7 @@ grep -c "CREATE TABLE" prod-copy.sql   # a couple of dozen tables
 docker exec -i faithtribe-test-db psql -U faithtribe -d postgres \
   -c "DROP DATABASE IF EXISTS faithtribe;" -c "CREATE DATABASE faithtribe;"
 
-docker exec -i faithtribe-test-db psql -U faithtribe -d faithtribe < prod-copy.sql
+docker exec -i faithtribe-test-db psql -U faithtribe -d faithtribe < "$DUMP"
 ```
 
 Some `GRANT`/`OWNER` notices are normal (Neon's roles are absent) — the `--no-owner`
@@ -185,7 +195,7 @@ DATABASE_URL=$REHEARSAL_DB ./venv/Scripts/python.exe manage.py shell -c \
 
 ```bash
 docker compose -f docker-compose.test.yml down
-rm prod-copy.sql        # it contains real user data — do not leave it lying around
+rm "$DUMP"              # it contains real user data — do not leave it lying around
 ```
 
 ---
