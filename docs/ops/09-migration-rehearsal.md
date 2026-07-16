@@ -42,7 +42,7 @@ All commands from `backend/`.
 
 ### 1. Start the local Postgres
 
-```
+```bash
 docker compose -f docker-compose.test.yml up -d
 ```
 

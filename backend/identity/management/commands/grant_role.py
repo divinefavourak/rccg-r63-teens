@@ -25,7 +25,7 @@ from django.db.models import Q
 
 from hierarchy.models import HierarchyNode
 from identity.authorization import assign_role
-from identity.models import Role
+from identity.models import Role, RoleAssignment
 
 User = get_user_model()
 
@@ -77,8 +77,15 @@ class Command(BaseCommand):
             ))
             return
 
+        # Detect "already held" *before* granting: assign_role uses get_or_create
+        # and always returns a saved row, so its return value can never tell us
+        # whether anything changed. Checked here rather than by changing
+        # assign_role's signature, which 14 other call sites rely on.
+        already_held = RoleAssignment.objects.filter(
+            user=user, role=role, node=node, is_active=True).exists()
+
         try:
-            assignment = assign_role(user, role, node, enforce_escalation=False)
+            assign_role(user, role, node, enforce_escalation=False)
         except ValidationError as exc:
             raise CommandError('; '.join(exc.messages)) from exc
 
@@ -89,7 +96,7 @@ class Command(BaseCommand):
         self.stdout.write(
             f'  capabilities: {", ".join(sorted(role.permission_codes())) or "(none)"}'
         )
-        if not assignment.pk:
+        if already_held:
             self.stdout.write('  (already held — nothing changed)')
 
     # -- resolution --------------------------------------------------------

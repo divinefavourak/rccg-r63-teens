@@ -16,7 +16,7 @@ Everything here exists to close that gap and make closing it repeatable.
 
 ## The verification command is the source of truth
 
-```
+```bash
 python manage.py verify_deployment          # report; non-zero exit if not ready
 python manage.py verify_deployment --strict  # warnings count as failures too
 ```

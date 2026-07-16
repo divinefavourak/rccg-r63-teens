@@ -19,7 +19,7 @@ Set the secrets in [07 — Production secrets](07-production-secrets.md). At min
 
 ### 2. Schema
 
-```
+```bash
 python manage.py migrate
 ```
 
@@ -33,7 +33,7 @@ There is no one to log in as yet, and RBAC assignments require a node that does 
 exist. Create a superuser from the shell — the one account that bypasses the
 hierarchy:
 
-```
+```bash
 python manage.py createsuperuser
 ```
 
@@ -46,7 +46,7 @@ region, or nothing can be scoped.
 
 ### 5. Grant the first real roles
 
-```
+```bash
 python manage.py grant_role <username> regional_coordinator "Region 63"
 ```
 
@@ -57,7 +57,7 @@ escalation rules.
 
 ### 6. Bible text
 
-```
+```bash
 python manage.py import_bible web.json
 ```
 
@@ -71,7 +71,7 @@ before a real launch.
 
 ### 8. Verify
 
-```
+```bash
 python manage.py verify_deployment --strict
 ```
 

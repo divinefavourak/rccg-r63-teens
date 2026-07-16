@@ -26,7 +26,7 @@ Region 63 can act anywhere under Region 63, and nowhere else.
 
 ## Keeping roles and permissions current
 
-```
+```bash
 python manage.py seed_rbac
 ```
 
@@ -45,7 +45,7 @@ for them) but leaves custom roles and their grants untouched.
 
 ### From legacy user data (the production path)
 
-```
+```bash
 python manage.py derive_hierarchy
 ```
 
@@ -65,7 +65,7 @@ Read the command's `unresolved:` output — those people need a manual grant bel
 
 ### By hand (the escape hatch)
 
-```
+```bash
 python manage.py grant_role <username-or-email> <role-code> "<node name>"
 python manage.py grant_role --list      # show available roles and the tree
 python manage.py grant_role tolu teacher "Parish A" --dry-run
@@ -87,7 +87,7 @@ grant should go through the console so it is audit-logged and escalation-checked
 
 ## Verification
 
-```
+```bash
 python manage.py verify_deployment    # "role assignments exist"
 ```
 

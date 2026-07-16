@@ -13,7 +13,7 @@ The production audit found **zero nodes**. This runbook builds them.
 
 ### A. Derive it from existing users (production)
 
-```
+```bash
 python manage.py derive_hierarchy
 ```
 
@@ -27,7 +27,7 @@ parish just adds the missing node and moves nobody unexpectedly.
 
 Options:
 
-```
+```bash
 python manage.py derive_hierarchy --dry-run                 # build, report, roll back
 python manage.py derive_hierarchy --region-name "Region 63" # the region to build under
 ```
@@ -71,7 +71,7 @@ role assignments — see [04 — RBAC bootstrap](04-rbac-bootstrap.md).
 
 ## Verification
 
-```
+```bash
 python manage.py verify_deployment    # "hierarchy exists" and "memberships exist"
 python manage.py grant_role --list     # prints the tree, indented, to eyeball it
 ```

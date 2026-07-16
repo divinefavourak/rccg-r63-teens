@@ -41,14 +41,15 @@ No existing user, event, registration, or devotional is deleted or rewritten.
 
 ### 1. Snapshot
 
-```
-# Take and verify a backup FIRST. See 08-rollback.md.
-pg_dump "$DATABASE_URL" > backup-$(date +%Y%m%d-%H%M).sql
-```
+Take **and restore-test** a backup first, using the hardened procedure in
+[08 — Rollback §Backup](08-rollback.md#backup-do-this-first-every-time) — it keeps the
+password off the command line and writes the file outside the repo (both matter: this
+dump is minors' data). Do not use a bare `pg_dump "$DATABASE_URL" > backup.sql`; it
+puts the password in your shell history and the file in the working tree.
 
 ### 2. Deploy the code, then check readiness *before* migrating
 
-```
+```bash
 python manage.py verify_deployment
 ```
 
@@ -58,11 +59,13 @@ failure, a database it cannot reach).
 
 ### 3. Preview the one data migration
 
-```
+```bash
 python manage.py migrate events 0007 --plan
-# and confirm the no-op, read-only:
-python manage.py shell -c "from events.models import Event; \
-print('events with province targeting:', Event.objects.exclude(target_provinces=[]).count())"
+# Confirm the no-op with RAW SQL, read-only. It must be raw SQL, not the ORM: the
+# current Event model has already dropped the target_provinces field, so
+# Event.objects.exclude(target_provinces=[]) raises FieldError even though the column
+# still exists pre-migration.
+python manage.py shell -c "from django.db import connection; cur=connection.cursor(); cur.execute(\"SELECT count(*) FROM events_event WHERE target_provinces IS NOT NULL AND target_provinces::text <> '[]'\"); print('province-targeted events:', cur.fetchone()[0])"
 ```
 
 Expect `0`. If it is not zero, **stop** and read `events/migrations/0007`'s
@@ -71,7 +74,7 @@ decision, not an ops one.
 
 ### 4. Apply migrations
 
-```
+```bash
 python manage.py migrate
 ```
 
@@ -80,7 +83,7 @@ scope columns. Additive; safe.
 
 ### 5. Bootstrap RBAC and the hierarchy
 
-```
+```bash
 python manage.py bootstrap_production --dry-run   # preview the tree it will build
 python manage.py bootstrap_production
 ```
@@ -99,7 +102,7 @@ need a manual `grant_role` (see [04](04-rbac-bootstrap.md)).
 
 The schema now exists but has no text. See [03 — Bible import](03-bible-import.md).
 
-```
+```bash
 python manage.py import_bible web.json     # the V1 default translation
 ```
 
@@ -110,7 +113,7 @@ Until this is done, notifications reach the in-app inbox but never a phone. See
 
 ### 8. Final verification
 
-```
+```bash
 python manage.py verify_deployment --strict
 ```
 

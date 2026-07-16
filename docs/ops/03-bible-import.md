@@ -58,7 +58,7 @@ Most public-domain Bible JSON is distributed as a **flat list of verses** —
 `{"metadata": {...}, "verses": [{"book": 1, "chapter": 1, "verse": 1, "text": "..."}]}`
 — not the nested shape above. `convert_bible` bridges the two:
 
-```
+```bash
 python manage.py convert_bible kjv.json --out kjv-import.json --default
 python manage.py import_bible kjv-import.json
 ```
@@ -81,7 +81,7 @@ sharing. The verse-share endpoint enforces those from the data.
 
 ## Procedure
 
-```
+```bash
 # 1. Import (idempotent — safe to re-run, resumable if interrupted)
 python manage.py import_bible web.json
 
@@ -104,7 +104,7 @@ annotations. Re-import is safe for their data.
 Only needed for text imported before the search index existed, or after a
 stemmer-config change:
 
-```
+```bash
 python manage.py rebuild_bible_search --translation WEB
 ```
 
@@ -112,7 +112,7 @@ python manage.py rebuild_bible_search --translation WEB
 
 ## Adding a second translation
 
-```
+```bash
 python manage.py import_bible kjv.json     # is_default: false
 ```
 

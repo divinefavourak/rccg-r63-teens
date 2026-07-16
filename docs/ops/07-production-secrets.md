@@ -78,7 +78,7 @@ Never commit secret values. Set them in the deployment platform's secret store.
 
 ## Minimum viable production set
 
-```
+```bash
 SECRET_KEY=...
 DEBUG=False
 ALLOWED_HOSTS=faithtribe.app,api.faithtribe.app
