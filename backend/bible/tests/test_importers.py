@@ -219,3 +219,22 @@ class ImportBibleCommandTests(TestCase):
         """A directory passed by mistake is operator error, not a traceback."""
         with self.assertRaises(CommandError):
             call_command('import_bible', tempfile.mkdtemp(), '--quiet')
+
+    def test_import_against_a_schema_less_db_names_the_database(self):
+        """
+        Importing against an unmigrated database (usually: pointed at the wrong DB by
+        forgetting the DATABASE_URL prefix) must give a clean, database-naming error,
+        not a raw UndefinedTable traceback from deep in the ORM.
+        """
+        from unittest import mock
+
+        from django.db import connection
+
+        fake_cursor = mock.MagicMock()
+        fake_cursor.fetchone.return_value = [None]      # to_regclass -> NULL: no table
+        fake_ctx = mock.MagicMock()
+        fake_ctx.__enter__.return_value = fake_cursor
+
+        with mock.patch.object(connection, 'cursor', return_value=fake_ctx):
+            with self.assertRaisesMessage(CommandError, 'bible tables do not exist'):
+                call_command('import_bible', self._write(payload()), '--quiet')
