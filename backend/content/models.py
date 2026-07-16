@@ -1,18 +1,29 @@
 """
 Content models for the RCCG R63 Teens platform.
 Includes Devotionals (Teenage Open Heaven) and Manuals (weekly teaching material).
+
+`Devotional` is the canonical daily devotional — one row per calendar date. Its
+primary `MemoryVerse` is the single source of the Verse of the Day: no other
+model in the product defines a competing daily verse
+(`docs/08-bible-experience.md` §7, `docs/07-feature-specifications.md` §4).
+
+This app depends on `bible` (for verse/translation links); `bible` never imports
+`content`.
 """
 from django.db import models
 from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.db.models import Q
 from django.utils.text import slugify
 from common.models import (
-    TimestampMixin, UUIDMixin, PublishableMixin,
+    TimestampMixin, UUIDMixin, PublishableMixin, ReviewableMixin,
     SlugMixin, ViewableMixin
 )
 import uuid
 
 
-class Devotional(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
+class Devotional(UUIDMixin, TimestampMixin, PublishableMixin, ReviewableMixin,
+                 ViewableMixin):
     """
     Daily devotional entry (Teenage Open Heaven).
     One devotional per day, date-based identification.
@@ -71,7 +82,12 @@ class Devotional(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     
     # Tags for categorization
     tags = models.JSONField(default=list, blank=True)
-    
+    target_age_groups = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Leave empty to show to all age groups. e.g. ['children', 'teen']"
+    )
+
     class Meta:
         ordering = ['-date']
         verbose_name = 'Devotional'
@@ -101,7 +117,189 @@ class Devotional(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
         )
 
 
-class ManualSeries(UUIDMixin, TimestampMixin, PublishableMixin):
+class MemoryVerse(UUIDMixin, TimestampMixin):
+    """
+    The verse a devotional asks a teen to hide in their heart.
+
+    **This is the Verse of the Day.** "One Day. One Verse. One Message."
+    (`docs/01-vision.md`). Resolving today's verse means resolving today's
+    devotional's primary memory verse — see `content.services.daily`.
+
+    Bible text is not imported yet, so a memory verse is usable in three stages:
+
+    1. `reference_display` + `text_override` only — works today, no Bible rows.
+    2. `translation` set — the text carries a correct attribution line.
+    3. `start_verse` (and optionally `end_verse`) linked — the reference becomes a
+       live link into the reader, and `text` can be derived from Scripture.
+
+    Exactly one primary per devotional. The partial unique constraint enforces
+    *at most* one in the database; requiring *at least* one is a publish-time
+    rule (`docs/07-feature-specifications.md` §5 — "the publish workflow blocks a
+    devotional without one"), applied by `validate_publishable`.
+    """
+
+    devotional = models.ForeignKey(
+        Devotional, on_delete=models.CASCADE, related_name='memory_verses'
+    )
+    is_primary = models.BooleanField(
+        default=True,
+        help_text='The Verse of the Day. Exactly one per devotional.',
+    )
+
+    # Human-readable reference, e.g. "John 3:16". Always present.
+    reference_display = models.CharField(max_length=255)
+
+    translation = models.ForeignKey(
+        'bible.BibleTranslation', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='memory_verses',
+    )
+    start_verse = models.ForeignKey(
+        'bible.BibleVerse', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='memory_verse_starts',
+    )
+    end_verse = models.ForeignKey(
+        'bible.BibleVerse', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='memory_verse_ends',
+        help_text='Set only for multi-verse memory passages.',
+    )
+
+    # The quoted text, when Scripture rows are absent or the devotional quotes a
+    # translation we do not host.
+    text_override = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-is_primary', 'created_at']
+        verbose_name = 'Memory Verse'
+        verbose_name_plural = 'Memory Verses'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['devotional'],
+                condition=Q(is_primary=True),
+                name='content_one_primary_memory_verse',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['devotional', 'is_primary']),
+        ]
+
+    def __str__(self):
+        return f'{self.reference_display} ({self.devotional.date})'
+
+    def clean(self):
+        super().clean()
+        if self.end_verse_id and not self.start_verse_id:
+            raise ValidationError('end_verse requires start_verse.')
+        if not self.text_override and not self.start_verse_id:
+            raise ValidationError(
+                'Provide text_override, or link a start_verse to derive the text.'
+            )
+
+    @property
+    def text(self):
+        """The verse text to render. Explicit override wins over derived Scripture."""
+        if self.text_override:
+            return self.text_override
+        if not self.start_verse_id:
+            return ''
+        return ' '.join(v.text for v in self.verses())
+
+    def verses(self):
+        """The verse rows this memory verse spans (empty when unlinked)."""
+        from bible.models import BibleVerse
+        if not self.start_verse_id:
+            return BibleVerse.objects.none()
+        start = self.start_verse
+        end = self.end_verse or start
+        return (
+            BibleVerse.objects
+            .filter(chapter=start.chapter, number__gte=start.number, number__lte=end.number)
+            .order_by('number')
+        )
+
+
+class ScriptureReference(UUIDMixin, TimestampMixin):
+    """
+    A Scripture citation attached to a devotional — the `ScriptureRef` the docs
+    require as "one implementation, everywhere"
+    (`docs/08-bible-experience.md` §12).
+
+    Deliberately stores a *translation-agnostic address* (`book_osis` + chapter +
+    verse range) rather than a `BibleVerse` FK, so a single reference resolves in
+    whichever translation the reader currently has open. `resolve(translation)`
+    turns the address into verse rows.
+    """
+
+    class Kind(models.TextChoices):
+        ANCHOR = 'anchor', 'Anchor Scripture'
+        READING = 'reading', 'Bible Reading'
+        CROSS_REFERENCE = 'cross_reference', 'Cross Reference'
+
+    devotional = models.ForeignKey(
+        Devotional, on_delete=models.CASCADE, related_name='scripture_references'
+    )
+    kind = models.CharField(max_length=20, choices=Kind.choices, default=Kind.ANCHOR)
+
+    reference_display = models.CharField(max_length=255)  # "Psalm 139:14-15"
+    book_osis = models.CharField(max_length=20, db_index=True)  # "Ps"
+    chapter_number = models.PositiveSmallIntegerField()
+    start_verse_number = models.PositiveSmallIntegerField(null=True, blank=True)
+    end_verse_number = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order', 'created_at']
+        verbose_name = 'Scripture Reference'
+        verbose_name_plural = 'Scripture References'
+        indexes = [
+            models.Index(fields=['devotional', 'kind']),
+            models.Index(fields=['book_osis', 'chapter_number']),
+        ]
+
+    def __str__(self):
+        return f'{self.reference_display} ({self.get_kind_display()})'
+
+    def clean(self):
+        super().clean()
+        if self.end_verse_number and not self.start_verse_number:
+            raise ValidationError('end_verse_number requires start_verse_number.')
+        if (
+            self.start_verse_number
+            and self.end_verse_number
+            and self.end_verse_number < self.start_verse_number
+        ):
+            raise ValidationError('end_verse_number must not precede start_verse_number.')
+
+    def resolve(self, translation):
+        """The verses this reference points at, within ``translation``."""
+        from bible.services import resolve_reference
+        return resolve_reference(
+            translation=translation,
+            book_osis=self.book_osis,
+            chapter_number=self.chapter_number,
+            start_verse_number=self.start_verse_number,
+            end_verse_number=self.end_verse_number,
+        )
+
+
+class DiscussionQuestion(UUIDMixin, TimestampMixin):
+    """An ordered discussion prompt for a devotional."""
+
+    devotional = models.ForeignKey(
+        Devotional, on_delete=models.CASCADE, related_name='discussion_questions'
+    )
+    text = models.TextField()
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order', 'created_at']
+        indexes = [models.Index(fields=['devotional', 'order'])]
+
+    def __str__(self):
+        return self.text[:60]
+
+
+class ManualSeries(UUIDMixin, TimestampMixin, PublishableMixin, ReviewableMixin):
     """
     A series/collection of manuals (e.g., Q1 2026 Sunday School).
     Groups weekly manuals together.
@@ -140,16 +338,18 @@ class ManualSeries(UUIDMixin, TimestampMixin, PublishableMixin):
         return self.manuals.count()
 
 
-class Manual(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
+class Manual(UUIDMixin, TimestampMixin, PublishableMixin, ReviewableMixin,
+             ViewableMixin):
     """
     Weekly Sunday-to-Sunday teaching manual for RCCG Teenagers Church.
     """
     
     class TargetAgeGroup(models.TextChoices):
-        ALL = 'all', 'All Ages'
-        PRE_TEEN = 'pre_teen', 'Pre-Teens (8-12)'
-        TEEN = 'teen', 'Teens (13-17)'
-        YOUNG_ADULT = 'young_adult', 'Young Adults (18-19)'
+        ALL         = 'all',       'All Ages'
+        CHILDREN    = 'children',  'Children (6-8)'
+        PRE_TEEN    = 'pre_teen',  'Pre-Teen (9-12)'
+        TEEN        = 'teen',      'Teens (13-19)'
+        SUPERTEEN   = 'superteen', 'Superteen (19+)'
     
     # Series relationship
     series = models.ForeignKey(
@@ -203,7 +403,23 @@ class Manual(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     
     # Analytics
     download_count = models.PositiveIntegerField(default=0)
-    
+
+    # Teacher edition
+    has_teacher_edition = models.BooleanField(default=False, db_index=True)
+    teacher_notes = models.TextField(
+        blank=True,
+        help_text="Lesson plan notes visible to teachers only"
+    )
+    teacher_resources = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Extra resource links/files for teachers"
+    )
+    discussion_guide = models.TextField(
+        blank=True,
+        help_text="Teacher-only discussion guide with prompts and answers"
+    )
+
     class Meta:
         ordering = ['-week_start_date']
         unique_together = [['series', 'week_number']]
@@ -234,7 +450,8 @@ class Manual(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
         )
 
 
-class Article(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
+class Article(UUIDMixin, TimestampMixin, PublishableMixin, ReviewableMixin,
+              ViewableMixin):
     """
     General articles and blog posts for teens.
     """
@@ -257,7 +474,12 @@ class Article(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     # Categorization
     category = models.CharField(max_length=20, choices=Category.choices)
     tags = models.JSONField(default=list, blank=True)
-    
+    target_age_groups = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Leave empty to show to all age groups"
+    )
+
     # Author
     author_name = models.CharField(max_length=255)
     author_bio = models.TextField(blank=True, max_length=500)

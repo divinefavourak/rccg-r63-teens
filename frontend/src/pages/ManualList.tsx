@@ -4,6 +4,14 @@ import api from '../api/axios';
 import { type Manual } from '../types';
 import { FaBook, FaDownload, FaEye } from 'react-icons/fa';
 
+const AGE_LABELS: Record<string, string> = {
+    all: 'All Ages',
+    children: 'Children (6–8)',
+    pre_teen: 'Pre-Teen (9–12)',
+    teen: 'Teen (13–19)',
+    superteen: 'Superteen (19+)',
+};
+
 const ManualList = () => {
     const [manuals, setManuals] = useState<Manual[]>([]);
     const [loading, setLoading] = useState(true);
@@ -30,7 +38,7 @@ const ManualList = () => {
 
                 <div className="text-center mb-12">
                     <h1 className="text-4xl font-black text-gray-900 dark:text-white uppercase mb-4">
-                        TEACHING MANUALS
+                        TEACHING MANUALS(Upload for categories)
                     </h1>
                     <div className="w-24 h-1 bg-yellow-500 mx-auto rounded-full"></div>
                     <p className="mt-4 text-gray-600 dark:text-gray-400">
@@ -57,26 +65,47 @@ const ManualList = () => {
                                     )}
                                 </div>
                                 <div className="p-6">
-                                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{manual.title}</h3>
-                                    <p className="text-gray-500 text-sm mb-6 line-clamp-2">{manual.description}</p>
-
-                                    <div className="flex gap-4">
-                                        <a
-                                            href={manual.file_url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="flex-1 btn-primary py-3 flex items-center justify-center gap-2 text-sm"
-                                        >
-                                            <FaEye /> View
-                                        </a>
-                                        <a
-                                            href={manual.file_url}
-                                            download
-                                            className="btn-secondary px-4 flex items-center justify-center"
-                                        >
-                                            <FaDownload />
-                                        </a>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        {manual.target_age_group && (
+                                            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                                {AGE_LABELS[manual.target_age_group] || manual.target_age_group}
+                                            </span>
+                                        )}
+                                        {manual.week_number > 0 && (
+                                            <span className="text-xs text-gray-400">Week {manual.week_number}</span>
+                                        )}
                                     </div>
+                                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1">{manual.title}</h3>
+                                    {manual.theme && (
+                                        <p className="text-gray-500 text-sm mb-1 line-clamp-1">{manual.theme}</p>
+                                    )}
+                                    {manual.week_start_date && (
+                                        <p className="text-xs text-gray-400 mb-4">
+                                            {new Date(manual.week_start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                        </p>
+                                    )}
+
+                                    {(manual.pdf_file || manual.pdf_url) ? (
+                                        <div className="flex gap-4">
+                                            <a
+                                                href={manual.pdf_file || manual.pdf_url || ''}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex-1 btn-primary py-3 flex items-center justify-center gap-2 text-sm"
+                                            >
+                                                <FaEye /> View
+                                            </a>
+                                            <a
+                                                href={manual.pdf_file || manual.pdf_url || ''}
+                                                download
+                                                className="btn-secondary px-4 flex items-center justify-center"
+                                            >
+                                                <FaDownload />
+                                            </a>
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-center text-gray-400 py-2">No PDF available</p>
+                                    )}
                                 </div>
                             </div>
                         ))}

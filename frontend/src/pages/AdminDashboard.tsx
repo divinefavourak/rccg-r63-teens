@@ -11,7 +11,7 @@ import {
     RefreshCw
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart } from 'recharts';
 
 const AdminDashboard = () => {
     useAuthContext(); // Verify authentication
@@ -23,6 +23,7 @@ const AdminDashboard = () => {
         events: 0
     });
     const [loading, setLoading] = useState(true);
+    const [roleStats, setRoleStats] = useState<Record<string, number>>({});
     const [chartData, setChartData] = useState<{ name: string; active: number }[]>([]);
     const [chartLoading, setChartLoading] = useState(true);
     const [selectedPeriod, setSelectedPeriod] = useState('7');
@@ -45,11 +46,10 @@ const AdminDashboard = () => {
                 api.get('/events/events/')
             ]);
 
-            // Helper to get count from paginated or non-paginated response
             const getCount = (res: any) => {
-                if (res.data?.count !== undefined) return res.data.count;
                 if (Array.isArray(res.data)) return res.data.length;
-                if (Array.isArray(res.data?.results)) return res.data.results.length; // Fallback if count missing
+                if (res.data?.count !== undefined) return res.data.count;
+                if (Array.isArray(res.data?.results)) return res.data.results.length;
                 return 0;
             };
 
@@ -61,6 +61,17 @@ const AdminDashboard = () => {
                 media: getCount(mediaRes),
                 events: upcomingEvents
             });
+            try {
+                // Pagination is disabled on UserViewSet — this returns the full list
+                const users: any[] = Array.isArray(usersRes.data)
+                    ? usersRes.data
+                    : usersRes.data?.results || [];
+                const counts: Record<string, number> = {};
+                users.forEach((u: any) => {
+                    counts[u.role] = (counts[u.role] || 0) + 1;
+                });
+                setRoleStats(counts);
+            } catch {}
         } catch (error) {
             console.error("Failed to fetch dashboard stats", error);
         } finally {
@@ -161,6 +172,27 @@ const AdminDashboard = () => {
                         <p className="text-sm text-gray-500 dark:text-gray-400">{stat.title}</p>
                     </div>
                 ))}
+            </div>
+
+            {/* Role Breakdown */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-6 shadow-sm">
+                <h3 className="font-bold text-gray-800 dark:text-white mb-4">Users by Role</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                    {[
+                        { role: 'toddler', label: 'Toddlers', color: 'bg-pink-50 dark:bg-pink-900/20 text-pink-700 dark:text-pink-400' },
+                        { role: 'child', label: 'Children', color: 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400' },
+                        { role: 'teen', label: 'Teens', color: 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400' },
+                        { role: 'teacher', label: 'Teachers', color: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' },
+                        { role: 'coordinator', label: 'Coordinators', color: 'bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400' },
+                        { role: 'admin', label: 'Admins', color: 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400' },
+                        { role: 'individual', label: 'Individual', color: 'bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300' },
+                    ].map(({ role, label, color }) => (
+                        <div key={role} className={`${color} rounded-xl p-3 text-center`}>
+                            <p className="text-2xl font-black">{roleStats[role] || 0}</p>
+                            <p className="text-xs font-semibold mt-1">{label}</p>
+                        </div>
+                    ))}
+                </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

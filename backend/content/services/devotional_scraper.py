@@ -100,6 +100,50 @@ class DevotionalScraper:
             except KeyError:
                 continue
         return urls
+
+    def _title_suffixes(self, title: str) -> List[str]:
+        """Generate URL-suffix candidates from a title hint.
+
+        openheavens.com.ng appends the first word(s) of the title as a slug
+        suffix, e.g. "Set Boundaries" → open-heaven-for-teens-24-may-2026-set.html
+        We produce a short ranked list to try without too many extra requests.
+        """
+        words = re.findall(r'[a-zA-Z]+', title.lower())
+        if not words:
+            return []
+        candidates = [
+            words[0],                   # "set"
+            '-'.join(words[:2]),        # "set-boundaries"
+            '-'.join(words),            # full slug
+        ]
+        return list(dict.fromkeys(candidates))
+
+    def build_candidate_urls(self, target_date: date, title_hint: str = None) -> List[str]:
+        """Return all candidate URLs in priority order, deduplicated."""
+        day = target_date.day
+        month = target_date.month
+        year = target_date.year
+        month_name = self.MONTH_NAMES[month]
+        month_name_short = self.MONTH_NAMES_SHORT[month]
+        base = f"https://www.openheavens.com.ng/{year}/{month:02d}/"
+
+        candidates = [
+            f"{base}open-heaven-for-teens-{day}-{month_name}-{year}.html",
+            f"{base}open-heaven-for-teens-{day:02d}-{month_name}-{year}.html",
+            f"{base}teen-open-heaven-{day}-{month_name}-{year}.html",
+            f"{base}open-heaven-for-teens-{day}-{month_name_short}-{year}.html",
+        ]
+
+        if title_hint:
+            for suffix in self._title_suffixes(title_hint):
+                candidates.append(
+                    f"{base}open-heaven-for-teens-{day}-{month_name}-{year}-{suffix}.html"
+                )
+                candidates.append(
+                    f"{base}open-heaven-for-teens-{day:02d}-{month_name}-{year}-{suffix}.html"
+                )
+
+        return list(dict.fromkeys(candidates))
     
     def fetch_page(self, url: str) -> Optional[str]:
         """Fetch a page with proper error handling."""
@@ -471,44 +515,33 @@ class DevotionalScraper:
         logger.warning(f"No URL found in archive for {target_date}")
         return None
 
-    def scrape(self, target_date: date) -> Optional[Dict[str, Any]]:
-        """Scrape devotional for a specific date."""
-        # First, try to discover the actual URL from the monthly archive
-        url = self.discover_url_from_archive(target_date)
+    def scrape(self, target_date: date, title_hint: str = None) -> Optional[Dict[str, Any]]:
+        """Scrape devotional for a specific date.
 
-        # Fall back to guessing the primary URL pattern
-        if not url:
-            url = self.build_url(target_date)
-            logger.info(f"Falling back to guessed URL: {url}")
+        title_hint — optional title string from rccgonline.org used to build
+        suffix-based URL guesses (e.g. "Set Boundaries" → -set suffix).
+        """
+        # Archive discovery handles unpredictable suffixes without needing a hint
+        discovered_url = self.discover_url_from_archive(target_date)
+        if discovered_url:
+            html = self.fetch_page(discovered_url)
+            if html:
+                data = self.parse_html(html, target_date, discovered_url)
+                if data and self.validate_data(data):
+                    return data
+                logger.warning(f"Archive URL found but parse/validation failed for {target_date}")
 
-        logger.info(f"Scraping devotional for {target_date} from {url}")
-        html = self.fetch_page(url)
+        # Try all deduplicated candidate URLs, with title-hint suffixes appended
+        for url in self.build_candidate_urls(target_date, title_hint):
+            logger.info(f"Trying candidate URL: {url}")
+            html = self.fetch_page(url)
+            if html:
+                data = self.parse_html(html, target_date, url)
+                if data and self.validate_data(data):
+                    return data
 
-        # If that also fails, try remaining alternative URL patterns
-        if not html:
-            alt_urls = self.build_alt_urls(target_date)
-            for alt_url in alt_urls:
-                logger.info(f"Trying alternative URL: {alt_url}")
-                html = self.fetch_page(alt_url)
-                if html:
-                    url = alt_url
-                    break
-
-        if not html:
-            logger.warning(f"Could not fetch devotional for {target_date}")
-            return None
-        
-        data = self.parse_html(html, target_date, url)
-        
-        if not data:
-            return None
-        
-        # Validate data before returning
-        if not self.validate_data(data):
-            logger.error(f"Validation failed for devotional on {target_date}")
-            return None
-        
-        return data
+        logger.warning(f"Could not fetch devotional for {target_date} from any URL")
+        return None
 
 
 class RCCGOnlineScraper:
@@ -739,15 +772,24 @@ class RCCGOnlineScraper:
         logger.info(f"[RCCGOnline] Parsed {target_date}: title='{title}', passage='{mem_passage}'")
         return data
 
-    def scrape(self, target_date: date) -> Optional[Dict[str, Any]]:
+    def scrape(self, target_date: date, require_content: bool = True) -> Optional[Dict[str, Any]]:
+        """Scrape rccgonline.org for target_date.
+
+        When require_content=False, returns partial data (title + memory verse)
+        even if the message body is missing — useful as a title hint for the
+        openheavens.com.ng URL suffix guesser.
+        """
         url = self.build_url(target_date)
         logger.info(f"[RCCGOnline] Scraping {target_date} from {url}")
         html = self.fetch_page(url)
         if not html:
             return None
         data = self.parse_html(html, target_date, url)
-        if not data or not data.get('title') or not data.get('content'):
-            logger.warning(f"[RCCGOnline] Incomplete data for {target_date}")
+        if not data or not data.get('title'):
+            logger.warning(f"[RCCGOnline] No title found for {target_date}")
+            return None
+        if require_content and not data.get('content'):
+            logger.warning(f"[RCCGOnline] Incomplete data (no message content) for {target_date}")
             return None
         return data
 
@@ -756,27 +798,48 @@ def scrape_and_save_devotional(target_date: date = None, force: bool = False) ->
     """
     Scrape a devotional and save it to the database.
     If force=True, replaces an existing record only after a successful scrape.
+
+    Scraping strategy (single rccgonline.org HTTP request):
+    1. Fetch rccgonline.org with require_content=False to get title + memory verse.
+    2. If the page has a full message body, use it directly (done).
+    3. Otherwise, pass the title as a suffix hint to DevotionalScraper which
+       tries openheavens.com.ng with both guessed and title-based URLs.
+    4. If all sources fail but we have a title + memory verse from rccgonline,
+       save a 'draft' so it can be completed later by an admin.
     """
     from content.models import Devotional
 
     if target_date is None:
         target_date = date.today()
 
-    # Check if already exists
     if Devotional.objects.filter(date=target_date).exists() and not force:
         logger.info(f"Devotional for {target_date} already exists, skipping.")
         return None
 
-    # Scrape first — do not touch DB until we have good data.
-    # Try rccgonline.org first; fall back to openheavens.com.ng if it fails.
-    data = RCCGOnlineScraper().scrape(target_date)
-    if not data:
-        logger.info(f"[RCCGOnline] No data for {target_date}, trying openheavens.com.ng fallback")
-        data = DevotionalScraper().scrape(target_date)
+    # One rccgonline request gives us either full data or a title hint
+    partial_rccg = RCCGOnlineScraper().scrape(target_date, require_content=False)
 
-    if not data:
-        logger.warning(f"Failed to scrape devotional for {target_date} from all sources")
-        return None
+    if partial_rccg and partial_rccg.get('content'):
+        data = partial_rccg
+    else:
+        title_hint = partial_rccg.get('title') if partial_rccg else None
+        logger.info(
+            f"[RCCGOnline] No full content for {target_date}, trying openheavens.com.ng"
+            + (f" with title hint: '{title_hint}'" if title_hint else "")
+        )
+        data = DevotionalScraper().scrape(target_date, title_hint=title_hint)
+
+        if not data:
+            # Save partial data as a draft so admins can complete it
+            if partial_rccg and partial_rccg.get('title') and partial_rccg.get('memory_verse_content'):
+                partial_rccg['status'] = 'draft'
+                data = partial_rccg
+                logger.warning(
+                    f"Saving partial draft for {target_date}: title='{partial_rccg['title']}'"
+                )
+            else:
+                logger.warning(f"Failed to scrape devotional for {target_date} from all sources")
+                return None
 
     # Remove source_url from data as it's not a model field
     source_url = data.pop('source_url', '')
@@ -792,7 +855,6 @@ def scrape_and_save_devotional(target_date: date = None, force: bool = False) ->
 
     try:
         if force:
-            # Delete old record only after we have fresh data
             deleted, _ = Devotional.objects.filter(date=target_date).delete()
             if deleted:
                 logger.info(f"Replaced existing devotional for {target_date}")

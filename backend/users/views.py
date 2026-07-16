@@ -1,13 +1,18 @@
+import logging
+
 from rest_framework import viewsets, generics, status, permissions
+
+logger = logging.getLogger(__name__)
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.utils import timezone
 from django.contrib.auth import authenticate
 from django.db.models import Q
 
+from .authentication import clear_auth_cookies, set_auth_cookies
 from .email_service import UserEmailService
 from .models import User, LoginHistory, AuditLog
 from .serializers import (
@@ -15,12 +20,14 @@ from .serializers import (
     AdminUserUpdateSerializer, LoginSerializer, TokenResponseSerializer,
     LoginHistorySerializer, AuditLogSerializer
 )
-from .permissions import IsAdmin, IsSelfOrAdmin, ProvinceAccessPermission
+from identity.authorization import HasPermission, IsSelfOrHasPermission, has_any_permission
+from identity.permissions_registry import Perm
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     """Custom token obtain view with login history tracking"""
-    
+    throttle_scope = 'auth'  # rate-limited via ScopedRateThrottle (settings)
+
     def post(self, request, *args, **kwargs):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -66,10 +73,18 @@ class CustomTokenObtainPairView(TokenObtainPairView):
                 status=status.HTTP_401_UNAUTHORIZED
             )
         
+        # Email-verification gate (enforced only when configured — non-breaking by default)
+        from django.conf import settings as dj_settings
+        if getattr(dj_settings, 'ENFORCE_EMAIL_VERIFICATION', False) and not user.is_verified:
+            return Response(
+                {"detail": "Please verify your email before logging in."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         # Successful login
         user.reset_failed_logins()
         user.last_login = timezone.now()
-        user.save()
+        user.save(update_fields=['failed_login_attempts', 'account_locked_until', 'last_login'])
         
         # Track login history
         LoginHistory.objects.create(
@@ -87,10 +102,13 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             'access': str(refresh.access_token),
             'refresh': str(refresh),
             'user': user_data,
-            'needs_gender': user.role == User.Role.TEEN and not user.gender,
+            'needs_gender': not has_any_permission(user, Perm.USERS_MANAGE) and not user.gender,
         }
 
-        return Response(response_data)
+        # Additive: also set HttpOnly cookies (Bearer clients keep using the body).
+        resp = Response(response_data)
+        set_auth_cookies(resp, access=str(refresh.access_token), refresh=str(refresh))
+        return resp
     
     def get_client_ip(self, request):
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
@@ -105,11 +123,36 @@ class RegisterView(generics.CreateAPIView):
     """Public endpoint for user registration"""
     serializer_class = UserCreateSerializer
     permission_classes = [permissions.AllowAny]
-    
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        # Extract date_of_birth before saving (it's not on the User model)
+        date_of_birth = serializer.validated_data.get('date_of_birth', None)
+
         user = serializer.save()
+
+        # Auto-create TeenProfile so age_group is calculated immediately
+        try:
+            from profiles.models import TeenProfile
+            if not hasattr(user, 'teen_profile'):
+                TeenProfile.objects.create(
+                    user=user,
+                    date_of_birth=date_of_birth,
+                    gender=user.gender or '',
+                    province=user.province or '',
+                    guardian_name='',
+                    guardian_phone='',
+                    guardian_email='',
+                    guardian_relationship='',
+                    parish=user.parish or '',
+                )
+                logger.info('[Register] TeenProfile created for user=%s age_group=%s',
+                            user.username,
+                            user.teen_profile.age_group if date_of_birth else 'unknown')
+        except Exception as e:
+            logger.warning('[Register] Could not auto-create TeenProfile for user=%s: %s', user.username, e)
 
         UserEmailService.send_welcome_email(user)
 
@@ -123,20 +166,24 @@ class UserViewSet(viewsets.ModelViewSet):
     """ViewSet for User management"""
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, HasPermission(Perm.USERS_MANAGE)]
+    pagination_class = None  # Return all users — admin endpoint; dataset is bounded
     
     def get_serializer_class(self):
         if self.action == 'create':
             return UserCreateSerializer
         elif self.action in ['update', 'partial_update']:
-            if self.request and self.request.user.role == User.Role.ADMIN:
+            if self.request and has_any_permission(self.request.user, Perm.USERS_MANAGE):
                 return AdminUserUpdateSerializer
             return UserUpdateSerializer
         return UserSerializer
     
     def get_permissions(self):
-        if self.action in ['retrieve', 'update', 'partial_update', 'destroy']:
-            return [permissions.IsAuthenticated(), IsSelfOrAdmin()]
+        # Self-service for reading/updating own account; deletion requires
+        # users.manage (falls through to the class-level permission) so users
+        # cannot delete their own accounts via this endpoint.
+        if self.action in ['retrieve', 'update', 'partial_update']:
+            return [permissions.IsAuthenticated(), IsSelfOrHasPermission(Perm.USERS_MANAGE)()]
         return super().get_permissions()
     
     def get_queryset(self):
@@ -144,12 +191,12 @@ class UserViewSet(viewsets.ModelViewSet):
         
         if not user.is_authenticated:
             return User.objects.none()
-        
-        # Admins see all users
-        if user.role == User.Role.ADMIN:
+
+        # User managers see all users; everyone else sees only themselves.
+        # (Node-scoped user visibility via Membership is a documented follow-up.)
+        if has_any_permission(user, Perm.USERS_MANAGE):
             return User.objects.all()
-        
-        # Coordinators see only themselves
+
         return User.objects.filter(id=user.id)
     
     def perform_create(self, serializer):
@@ -201,7 +248,7 @@ class UserViewSet(viewsets.ModelViewSet):
         
         instance.delete()
     
-    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated, IsAdmin])
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated, HasPermission(Perm.USERS_MANAGE)])
     def send_welcome_email(self, request, pk=None):
         """Manually resend the welcome email for a user."""
         user = self.get_object()
@@ -290,7 +337,7 @@ class ChangePasswordView(APIView):
 class LoginHistoryView(generics.ListAPIView):
     """View user login history"""
     serializer_class = LoginHistorySerializer
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, HasPermission(Perm.USERS_MANAGE)]
     
     def get_queryset(self):
         user_id = self.kwargs.get('user_id')
@@ -307,15 +354,20 @@ class ForgotPasswordView(APIView):
     Always returns 200 to prevent email enumeration attacks.
     """
     permission_classes = [permissions.AllowAny]
+    throttle_scope = 'otp'
 
     def post(self, request):
         email = request.data.get('email', '').strip().lower()
+        ip = request.META.get('REMOTE_ADDR', 'unknown')
+        logger.info('[ForgotPassword] Request received for email=%s ip=%s', email, ip)
+
         if email:
             try:
                 user = User.objects.get(email=email, is_active=True)
+                logger.info('[ForgotPassword] User found: username=%s id=%s — dispatching reset email', user.username, user.pk)
                 UserEmailService.send_password_reset_email(user)
             except User.DoesNotExist:
-                pass  # Silently ignore — never reveal whether email exists
+                logger.info('[ForgotPassword] No active account found for email=%s — no email sent', email)
 
         return Response(
             {"detail": "If that email is registered, a reset link has been sent."}
@@ -327,6 +379,7 @@ class ResetPasswordView(APIView):
     Accept uid + token (from the reset email) and a new password, then apply it.
     """
     permission_classes = [permissions.AllowAny]
+    throttle_scope = 'otp'
 
     def post(self, request):
         from django.contrib.auth.tokens import default_token_generator
@@ -343,16 +396,19 @@ class ResetPasswordView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        ip = request.META.get('REMOTE_ADDR', 'unknown')
         try:
             user_id = force_str(urlsafe_base64_decode(uid))
             user = User.objects.get(pk=user_id, is_active=True)
         except (User.DoesNotExist, ValueError, TypeError):
+            logger.warning('[ResetPassword] Invalid uid — no matching user. ip=%s', ip)
             return Response(
                 {"detail": "Invalid reset link."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if not default_token_generator.check_token(user, token):
+            logger.warning('[ResetPassword] Expired or invalid token for user=%s ip=%s', user.username, ip)
             return Response(
                 {"detail": "Reset link is invalid or has expired."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -360,14 +416,193 @@ class ResetPasswordView(APIView):
 
         user.set_password(new_password)
         user.save()
+        logger.info('[ResetPassword] Password successfully reset for user=%s ip=%s', user.username, ip)
 
         return Response({"detail": "Password has been reset. You may now log in."})
+
+
+class VerifyEmailView(APIView):
+    """Verify a user's email via uid+token (same token scheme as password reset)."""
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = 'otp'
+
+    def post(self, request):
+        from django.contrib.auth.tokens import default_token_generator
+        from django.utils.encoding import force_str
+        from django.utils.http import urlsafe_base64_decode
+
+        uid = request.data.get('uid', '')
+        token = request.data.get('token', '')
+        if not uid or not token:
+            return Response(
+                {"detail": "uid and token are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            user_id = force_str(urlsafe_base64_decode(uid))
+            user = User.objects.get(pk=user_id, is_active=True)
+        except (User.DoesNotExist, ValueError, TypeError):
+            return Response(
+                {"detail": "Invalid verification link."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not default_token_generator.check_token(user, token):
+            return Response(
+                {"detail": "Verification link is invalid or has expired."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not user.is_verified:
+            user.is_verified = True
+            user.save(update_fields=['is_verified'])
+        return Response({"detail": "Email verified. You can now log in."})
+
+
+def _find_user_by_destination(destination, channel):
+    from .models import OTPCode
+    destination = (destination or '').strip().lower()
+    if channel == OTPCode.Channel.EMAIL:
+        return User.objects.filter(email=destination, is_active=True).first()
+    return User.objects.filter(phone=destination, is_active=True).first()
+
+
+class RequestOTPView(APIView):
+    """Request a one-time code. Always 200 (no account enumeration)."""
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = 'otp'
+
+    def post(self, request):
+        from .models import OTPCode
+        from .otp import request_otp
+
+        destination = request.data.get('destination', '')
+        channel = request.data.get('channel', OTPCode.Channel.EMAIL)
+        purpose = request.data.get('purpose', OTPCode.Purpose.LOGIN)
+        generic = Response({"detail": "If the destination is valid, a code has been sent."})
+
+        if not destination or channel not in OTPCode.Channel.values or purpose not in OTPCode.Purpose.values:
+            return Response({"detail": "destination, channel and purpose are required."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        user = _find_user_by_destination(destination, channel)
+        # Only ever dispatch to a known account — for EVERY purpose. This prevents
+        # the endpoint from being used to send codes to arbitrary emails/phones
+        # (SMS-bombing / cost abuse once a live provider is attached). We never
+        # disclose whether the account exists.
+        if user is not None:
+            request_otp(destination, channel, purpose, user=user)
+        return generic
+
+
+class VerifyOTPView(APIView):
+    """Verify a one-time code. For purpose=login, returns JWT tokens."""
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = 'otp'
+
+    def post(self, request):
+        from .models import OTPCode
+        from .otp import verify_otp
+
+        destination = request.data.get('destination', '')
+        purpose = request.data.get('purpose', OTPCode.Purpose.LOGIN)
+        code = request.data.get('code', '')
+        if not destination or not code:
+            return Response({"detail": "destination and code are required."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        otp = verify_otp(destination, purpose, code)
+        if otp is None:
+            return Response({"detail": "Invalid or expired code."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        user = otp.user or _find_user_by_destination(destination, otp.channel)
+
+        if purpose == OTPCode.Purpose.VERIFY:
+            if user and not user.is_verified:
+                user.is_verified = True
+                user.save(update_fields=['is_verified'])
+            return Response({"detail": "Verified."})
+
+        if purpose == OTPCode.Purpose.LOGIN:
+            if user is None:
+                return Response({"detail": "No account for that destination."},
+                                status=status.HTTP_400_BAD_REQUEST)
+            # Full parity with password login (no weaker parallel auth path).
+            if user.account_locked_until and user.account_locked_until > timezone.now():
+                return Response({"detail": "Account is temporarily locked. Try again later."},
+                                status=status.HTTP_423_LOCKED)
+            from django.conf import settings as dj_settings
+            # An email OTP proves email ownership → mark verified rather than block.
+            newly_verified = False
+            if otp.channel == OTPCode.Channel.EMAIL and not user.is_verified:
+                user.is_verified = True
+                newly_verified = True
+            if getattr(dj_settings, 'ENFORCE_EMAIL_VERIFICATION', False) and not user.is_verified:
+                return Response({"detail": "Please verify your email before logging in."},
+                                status=status.HTTP_403_FORBIDDEN)
+            # Reset login state consistently with the password path.
+            user.failed_login_attempts = 0
+            user.account_locked_until = None
+            user.last_login = timezone.now()
+            update_fields = ['failed_login_attempts', 'account_locked_until', 'last_login']
+            if newly_verified:
+                update_fields.append('is_verified')
+            user.save(update_fields=update_fields)
+            refresh = RefreshToken.for_user(user)
+            resp = Response({
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+                'user': UserSerializer(user).data,
+            })
+            set_auth_cookies(resp, access=str(refresh.access_token), refresh=str(refresh))
+            return resp
+
+        return Response({"detail": "Verified."})
+
+
+class CookieTokenRefreshView(TokenRefreshView):
+    """Refresh access using a refresh token from the body OR the HttpOnly cookie,
+    and re-set the auth cookies."""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        from django.conf import settings as dj_settings
+        raw = request.data.get('refresh') or request.COOKIES.get(dj_settings.AUTH_COOKIE_REFRESH)
+        if not raw:
+            return Response({"detail": "No refresh token provided."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        serializer = self.get_serializer(data={'refresh': raw})
+        try:
+            serializer.is_valid(raise_exception=True)
+        except Exception:
+            return Response({"detail": "Invalid or expired refresh token."},
+                            status=status.HTTP_401_UNAUTHORIZED)
+        data = serializer.validated_data
+        resp = Response(data)
+        set_auth_cookies(resp, access=data.get('access'), refresh=data.get('refresh'))
+        return resp
+
+
+class LogoutView(APIView):
+    """Blacklist the refresh token (body or cookie) and clear auth cookies."""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        from django.conf import settings as dj_settings
+        raw = request.data.get('refresh') or request.COOKIES.get(dj_settings.AUTH_COOKIE_REFRESH)
+        if raw:
+            try:
+                RefreshToken(raw).blacklist()
+            except Exception as exc:
+                logger.warning('[Logout] refresh-token blacklist failed: %s', exc)
+        resp = Response({"detail": "Logged out."})
+        clear_auth_cookies(resp)
+        return resp
 
 
 class AuditLogView(generics.ListAPIView):
     """View audit logs"""
     serializer_class = AuditLogSerializer
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, HasPermission(Perm.USERS_MANAGE)]
     
     def get_queryset(self):
         queryset = AuditLog.objects.all()

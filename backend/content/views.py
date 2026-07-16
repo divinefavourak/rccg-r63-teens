@@ -9,27 +9,78 @@ from django.utils import timezone
 from django.db.models import Q
 from datetime import date, timedelta
 
-from common.permissions import ContentPermission, IsAdmin
-from .models import Devotional, ManualSeries, Manual, Article, UserReadLog, UserLikeLog
+from common.dates import app_today
+
+from rest_framework.permissions import AllowAny
+from rest_framework.views import APIView
+
+from identity.authorization import HasPermission, HasPermissionOrReadOnly, has_any_permission
+from identity.permissions_registry import Perm
+from .models import (
+    Article, Devotional, DiscussionQuestion, Manual, ManualSeries, MemoryVerse,
+    ScriptureReference, UserLikeLog, UserReadLog,
+)
+from .review_views import ReviewWorkflowMixin
+from .services import calendar as calendar_service
+from .services import daily, review
 from .serializers import (
     DevotionalListSerializer,
     DevotionalDetailSerializer,
     DevotionalCreateUpdateSerializer,
+    DiscussionQuestionSerializer,
+    MemoryVerseSerializer,
+    ScriptureReferenceSerializer,
     ManualSeriesListSerializer,
     ManualSeriesDetailSerializer,
     ManualListSerializer,
     ManualDetailSerializer,
     ManualCreateUpdateSerializer,
+    ManualTeacherDetailSerializer,
     ArticleListSerializer,
     ArticleDetailSerializer,
 )
 
 
-class DevotionalViewSet(viewsets.ModelViewSet):
+def can_manage_content(user):
+    """Whoever may edit devotionals may also see them before they are published."""
+    return has_any_permission(user, Perm.CONTENT_MANAGE)
+
+
+def get_age_group_filter(user):
+    """
+    Returns a Q filter for age-group-targeted content.
+    Empty target_age_groups means show to all.
+    Admins and coordinators always see everything.
+    Teachers see content for their assigned age groups.
+    """
+    from django.db.models import Q
+    if not user or not user.is_authenticated:
+        return Q(target_age_groups=[]) | Q(target_age_groups__isnull=True)
+    # Leaders who can view all content (admins/coordinators via content.view).
+    if has_any_permission(user, Perm.CONTENT_VIEW):
+        return Q()  # no filter — see all
+    if hasattr(user, 'teacher_profile'):
+        try:
+            age_groups = user.teacher_profile.assigned_age_groups or []
+        except Exception:
+            age_groups = []
+        q = Q(target_age_groups=[])
+        for ag in age_groups:
+            q |= Q(target_age_groups__contains=ag)
+        return q
+    # Regular users — filter by their age group
+    try:
+        age_group = user.teen_profile.age_group
+    except Exception:
+        return Q(target_age_groups=[])
+    return Q(target_age_groups=[]) | Q(target_age_groups__contains=age_group)
+
+
+class DevotionalViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
     """ViewSet for devotionals."""
     
     queryset = Devotional.objects.all()
-    permission_classes = [ContentPermission]
+    permission_classes = [HasPermissionOrReadOnly(Perm.CONTENT_MANAGE)]
     lookup_field = 'pk'
     filterset_fields = ['status', 'date']
     search_fields = ['title', 'content', 'anchor_scripture']
@@ -47,9 +98,13 @@ class DevotionalViewSet(viewsets.ModelViewSet):
         queryset = self.queryset
         
         # Non-admins only see published content
-        if not self.request.user.is_authenticated or self.request.user.role != 'admin':
-            queryset = queryset.filter(status='published')
-        
+        if not can_manage_content(self.request.user):
+            queryset = queryset.filter(status=Devotional.Status.PUBLISHED)
+
+        # Age group filtering for non-admin/non-coordinator users
+        if not has_any_permission(self.request.user, Perm.CONTENT_VIEW):
+            queryset = queryset.filter(get_age_group_filter(self.request.user))
+
         # Date range filtering
         date_from = self.request.query_params.get('date_from')
         date_to = self.request.query_params.get('date_to')
@@ -69,20 +124,98 @@ class DevotionalViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def today(self, request):
-        """Get today's devotional."""
-        today = date.today()
-        devotional = self.get_queryset().filter(date=today).first()
-        
+        """
+        Get today's devotional.
+
+        "Today" is a calendar day in the app timezone (Africa/Lagos), not a UTC
+        day — otherwise the devotional would roll over at 1am Lagos time
+        (docs/07-feature-specifications.md §8). The queryset (not the service) is
+        used here so admins keep seeing drafts and age-group filtering still
+        applies.
+        """
+        devotional = self.get_queryset().filter(date=app_today()).first()
+
         if not devotional:
             return Response(
                 {'detail': 'No devotional found for today.'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
+
         devotional.increment_view_count()
         serializer = DevotionalDetailSerializer(devotional)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='today/memory-verse')
+    def todays_memory_verse(self, request):
+        """
+        Today's memory verse — the same object the Verse of the Day resolves to.
+
+        Delegates to the one service so this endpoint can never disagree with
+        `/verse-of-the-day/`.
+        """
+        verse = daily.todays_memory_verse()
+        if not verse:
+            return Response(
+                {'detail': 'No memory verse for today.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        return Response(MemoryVerseSerializer(verse).data)
     
+    @action(detail=False, methods=['get'],
+            permission_classes=[HasPermission(Perm.CONTENT_VIEW)])
+    def calendar(self, request):
+        """
+        The devotional calendar with gap detection
+        (`docs/07-feature-specifications.md` §5).
+
+        `GET /content/devotionals/calendar/?start=2026-07-01&end=2026-07-31`
+
+        Returns one entry per day *including the empty ones* — the empty ones are
+        the entire point of the view. `gaps` lists the uncovered dates and
+        `buffer_days` reports the consecutive covered run from today, which is the
+        number `docs/02-roadmap.md` asks the editorial team to hold at 60 before
+        launch.
+
+        Leader-only: this is a console surface, not a teen one.
+        """
+        today = app_today()
+        try:
+            start = date.fromisoformat(request.query_params['start']) \
+                if 'start' in request.query_params else today
+            end = date.fromisoformat(request.query_params['end']) \
+                if 'end' in request.query_params else today + timedelta(days=30)
+        except ValueError:
+            return Response(
+                {'detail': 'start and end must be ISO dates (YYYY-MM-DD).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if end < start:
+            return Response(
+                {'detail': 'end must not precede start.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        entries = calendar_service.calendar(start, end)
+        return Response({
+            'start': start,
+            'end': end,
+            'days': [
+                {
+                    'date': entry['date'],
+                    'status': entry['status'],
+                    'is_covered': entry['is_covered'],
+                    'devotional': (
+                        DevotionalListSerializer(entry['devotional']).data
+                        if entry['devotional'] else None
+                    ),
+                }
+                for entry in entries
+            ],
+            'gaps': [e['date'] for e in entries if not e['is_covered']],
+            'imminent_gaps': calendar_service.imminent_gaps(today=today),
+            'buffer_days': calendar_service.buffer_days(today=today),
+        })
+
     @action(detail=False, methods=['get'])
     def by_date(self, request):
         """Get devotional by specific date."""
@@ -112,29 +245,43 @@ class DevotionalViewSet(viewsets.ModelViewSet):
         """
         devotional = self.get_object()
 
-        # Deduplicate via UserReadLog — works for ALL users
-        log, created = UserReadLog.objects.get_or_create(
-            user=request.user,
-            devotional=devotional,
-        )
-
         streak_days = 0
         total_read = 0
 
-        if created:
-            devotional.increment_read_count()
+        # The dedup log, the read counter and the Progress action must commit
+        # together: UserReadLog is what makes this idempotent, so if record_action
+        # failed after the log committed, the retry would find created=False and
+        # the action would be lost forever. One transaction keeps them consistent.
+        from django.db import transaction
+        with transaction.atomic():
+            log, created = UserReadLog.objects.get_or_create(
+                user=request.user,
+                devotional=devotional,
+            )
 
-            # Update streak only for users that have a full TeenProfile
-            try:
-                profile = request.user.teen_profile
-                profile.update_streak(date.today())
-                streak_days = profile.streak_days
-                total_read = profile.devotionals_read_count
-            except Exception:
-                # No TeenProfile — streak not tracked, that's fine
-                pass
+            if created:
+                devotional.increment_read_count()
 
-        else:
+                # Progress spiritual-action stream — the authoritative streak source.
+                from progress import services as progress_services
+                from progress.models import ActionType
+                progress_services.record_action(
+                    request.user, ActionType.DEVOTIONAL_COMPLETED,
+                    source_reference=f'content.devotional:{devotional.id}',
+                )
+
+                # Legacy TeenProfile streak — dual-written until the frontend
+                # reads from /api/progress/ (expand-contract).
+                try:
+                    profile = request.user.teen_profile
+                    profile.update_streak(app_today())
+                    streak_days = profile.streak_days
+                    total_read = profile.devotionals_read_count
+                except Exception:
+                    # No TeenProfile — legacy streak not tracked, that's fine
+                    pass
+
+        if not created:
             # Already read — return current streak if profile exists
             try:
                 profile = request.user.teen_profile
@@ -209,7 +356,7 @@ class DevotionalViewSet(viewsets.ModelViewSet):
         )
         return Response({'success': True})
 
-    @action(detail=False, methods=['post'], permission_classes=[IsAdmin])
+    @action(detail=False, methods=['post'], permission_classes=[HasPermission(Perm.CONTENT_MANAGE)])
     def fetch_from_web(self, request):
         """
         Trigger scraping of devotionals from the web.
@@ -258,11 +405,11 @@ class DevotionalViewSet(viewsets.ModelViewSet):
         })
 
 
-class ManualSeriesViewSet(viewsets.ModelViewSet):
+class ManualSeriesViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
     """ViewSet for manual series."""
     
     queryset = ManualSeries.objects.all()
-    permission_classes = [ContentPermission]
+    permission_classes = [HasPermissionOrReadOnly(Perm.CONTENT_MANAGE)]
     lookup_field = 'pk'
     filterset_fields = ['status']
     search_fields = ['title', 'description']
@@ -276,17 +423,17 @@ class ManualSeriesViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = self.queryset
         
-        if not self.request.user.is_authenticated or self.request.user.role != 'admin':
+        if not self.request.user.is_authenticated or not has_any_permission(self.request.user, Perm.CONTENT_MANAGE):
             queryset = queryset.filter(status='published')
         
         return queryset
 
 
-class ManualViewSet(viewsets.ModelViewSet):
+class ManualViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
     """ViewSet for manuals."""
     
     queryset = Manual.objects.select_related('series').all()
-    permission_classes = [ContentPermission]
+    permission_classes = [HasPermissionOrReadOnly(Perm.CONTENT_MANAGE)]
     lookup_field = 'pk'
     filterset_fields = ['status', 'series', 'target_age_group']
     search_fields = ['title', 'theme', 'memory_verse']
@@ -298,16 +445,44 @@ class ManualViewSet(viewsets.ModelViewSet):
             return ManualCreateUpdateSerializer
         elif self.action == 'list':
             return ManualListSerializer
+        # Teachers get teacher edition serializer on detail view
+        if self.action == 'retrieve' and has_any_permission(self.request.user, Perm.CONTENT_VIEW):
+            return ManualTeacherDetailSerializer
         return ManualDetailSerializer
-    
+
     def get_queryset(self):
         queryset = self.queryset
-        
-        if not self.request.user.is_authenticated or self.request.user.role != 'admin':
+
+        if not self.request.user.is_authenticated or not has_any_permission(self.request.user, Perm.CONTENT_MANAGE):
             queryset = queryset.filter(status='published')
-        
+
+        # Age group filtering — Manual uses target_age_group (singular CharField),
+        # not the JSONField target_age_groups used by Devotional/Article.
+        if not has_any_permission(self.request.user, Perm.CONTENT_VIEW):
+            from django.db.models import Q as _Q
+            if hasattr(self.request.user, 'teacher_profile'):
+                try:
+                    age_groups = self.request.user.teacher_profile.assigned_age_groups or []
+                except Exception:
+                    age_groups = []
+                q = _Q(target_age_group='all')
+                for ag in age_groups:
+                    q |= _Q(target_age_group=ag)
+                queryset = queryset.filter(q)
+            else:
+                try:
+                    age_group = self.request.user.teen_profile.age_group
+                except Exception:
+                    age_group = None
+                if age_group:
+                    queryset = queryset.filter(
+                        _Q(target_age_group='all') | _Q(target_age_group=age_group)
+                    )
+                else:
+                    queryset = queryset.filter(target_age_group='all')
+
         return queryset
-    
+
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
         instance.increment_view_count()
@@ -355,7 +530,7 @@ class ManualViewSet(viewsets.ModelViewSet):
             'pdf_url': manual.pdf_url or (manual.pdf_file.url if manual.pdf_file else None),
         })
 
-    @action(detail=False, methods=['post'], permission_classes=[IsAdmin])
+    @action(detail=False, methods=['post'], permission_classes=[HasPermission(Perm.CONTENT_MANAGE)])
     def auto_import(self, request):
         """
         Create a manual stub and auto-fetch a topic-relevant cover image.
@@ -416,11 +591,11 @@ class ManualViewSet(viewsets.ModelViewSet):
         return Response(ManualListSerializer(manual).data, status=status.HTTP_201_CREATED)
 
 
-class ArticleViewSet(viewsets.ModelViewSet):
+class ArticleViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
     """ViewSet for articles."""
     
     queryset = Article.objects.all()
-    permission_classes = [ContentPermission]
+    permission_classes = [HasPermissionOrReadOnly(Perm.CONTENT_MANAGE)]
     lookup_field = 'pk'
     filterset_fields = ['status', 'category', 'is_featured']
     search_fields = ['title', 'content', 'excerpt']
@@ -435,7 +610,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = self.queryset
         
-        if not self.request.user.is_authenticated or self.request.user.role != 'admin':
+        if not self.request.user.is_authenticated or not has_any_permission(self.request.user, Perm.CONTENT_MANAGE):
             queryset = queryset.filter(status='published')
         
         return queryset
@@ -452,3 +627,78 @@ class ArticleViewSet(viewsets.ModelViewSet):
         articles = self.get_queryset().filter(is_featured=True)[:10]
         serializer = ArticleListSerializer(articles, many=True)
         return Response(serializer.data)
+
+
+# =====================
+# SCRIPTURE / VERSE OF THE DAY
+# =====================
+
+class VerseOfTheDayView(APIView):
+    """
+    The Verse of the Day — public, and never randomly generated.
+
+    It resolves, through `content.services.daily`, to the primary memory verse of
+    today's devotional. This view holds no verse-selection logic of its own; that
+    is the entire point ("One Day. One Verse. One Message.",
+    `docs/08-bible-experience.md` §7).
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        verse = daily.verse_of_the_day()
+        if not verse:
+            return Response(
+                {'detail': 'No verse of the day is available.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(MemoryVerseSerializer(verse).data)
+
+
+class DevotionalChildViewSetMixin:
+    """
+    Read access to a devotional's parts follows the devotional itself.
+
+    These models hang off `Devotional` but are reachable by their own URLs, so
+    they need the published-only gate applied at their own queryset. Without it
+    `?devotional=<draft-id>` would serve unreleased content to anyone, even
+    though `/devotionals/<draft-id>/` correctly 404s.
+    """
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if not can_manage_content(self.request.user):
+            queryset = queryset.filter(devotional__status=Devotional.Status.PUBLISHED)
+        return queryset
+
+
+class MemoryVerseViewSet(DevotionalChildViewSetMixin, viewsets.ModelViewSet):
+    """Admin-managed devotional memory verses. Public read of published ones."""
+
+    queryset = MemoryVerse.objects.select_related(
+        'devotional', 'translation', 'start_verse__chapter__book__translation', 'end_verse'
+    )
+    serializer_class = MemoryVerseSerializer
+    permission_classes = [HasPermissionOrReadOnly(Perm.CONTENT_MANAGE)]
+    filterset_fields = ['devotional', 'is_primary', 'translation']
+    ordering = ['-devotional__date']
+
+
+class ScriptureReferenceViewSet(DevotionalChildViewSetMixin, viewsets.ModelViewSet):
+    """Admin-managed Scripture references on devotionals. Public read of published ones."""
+
+    queryset = ScriptureReference.objects.select_related('devotional')
+    serializer_class = ScriptureReferenceSerializer
+    permission_classes = [HasPermissionOrReadOnly(Perm.CONTENT_MANAGE)]
+    filterset_fields = ['devotional', 'kind', 'book_osis']
+    ordering = ['order']
+
+
+class DiscussionQuestionViewSet(DevotionalChildViewSetMixin, viewsets.ModelViewSet):
+    """Admin-managed discussion questions on devotionals. Public read of published ones."""
+
+    queryset = DiscussionQuestion.objects.select_related('devotional')
+    serializer_class = DiscussionQuestionSerializer
+    permission_classes = [HasPermissionOrReadOnly(Perm.CONTENT_MANAGE)]
+    filterset_fields = ['devotional']
+    ordering = ['order']

@@ -27,6 +27,44 @@ app.conf.beat_schedule = {
         'schedule': crontab(hour=0, minute=10),  # Run at 00:10 daily
         'options': {'queue': 'default'},
     },
+
+    # The habit reminder ladder (docs/12-gamification.md). A periodic sweep, not
+    # four scheduled per-user jobs: each rung is evaluated against completion state
+    # at the moment it would fire, so completing the devotional cancels every
+    # remaining rung by construction — there is nothing queued to revoke and no
+    # race to lose. See notifications/ladder.py.
+    #
+    # This interval MUST match notifications.ladder.TICK_MINUTES: a beat slower
+    # than the window silently drops rungs that fell into the gap.
+    'habit-reminder-ladder': {
+        'task': 'notifications.tasks.dispatch_habit_ladder',
+        'schedule': crontab(minute='*/5'),
+        'options': {'queue': 'default'},
+    },
+
+    # Step-down accounting. 22:00 Lagos — after the default quiet-hours start
+    # (21:30), so no further rung can fire and the day's outcome is final.
+    'close-out-reminder-day': {
+        'task': 'notifications.tasks.close_out_reminder_day',
+        'schedule': crontab(hour=22, minute=0),
+        'options': {'queue': 'default'},
+    },
+
+    # Day-before reminders for confirmed attendees. Daily; the task's window
+    # matches the interval and every reminder is deduped per registration.
+    'event-reminders': {
+        'task': 'events.tasks.send_event_reminders',
+        'schedule': crontab(hour=9, minute=0),
+        'options': {'queue': 'default'},
+    },
+
+    # "no-devotional-scheduled-within-48h pages the admin" (docs/07 §5). Morning,
+    # so the console team gets it at the start of a working day with time to fix it.
+    'alert-devotional-gaps': {
+        'task': 'content.tasks.alert_devotional_gaps',
+        'schedule': crontab(hour=8, minute=0),
+        'options': {'queue': 'default'},
+    },
 }
 
 app.conf.timezone = 'Africa/Lagos'

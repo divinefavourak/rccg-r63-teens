@@ -24,6 +24,7 @@ import toast from 'react-hot-toast';
 interface Registration {
     id: string;
     registration_id: string;
+    event_title?: string;
     attendee_name: string;
     attendee_email: string;
     attendee_phone: string;
@@ -31,10 +32,12 @@ interface Registration {
     attendee_parish: string;
     attendee_age: number;
     attendee_gender: string;
+    attendee_category?: string;
     status: string;
     payment_status: string;
     created_at: string;
     checked_in_at: string | null;
+    approved_at?: string | null;
 }
 
 const REG_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -42,7 +45,8 @@ const REG_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
     confirmed:  { label: 'Confirmed', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
     cancelled:  { label: 'Cancelled', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
     waitlisted: { label: 'Waitlisted',color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
-    checked_in: { label: 'Attended',  color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
+    checked_in: { label: 'Checked In',color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
+    attended:   { label: 'Attended',  color: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400' },
     no_show:    { label: 'No Show',   color: 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400' },
 };
 
@@ -84,8 +88,12 @@ const AdminEvents = () => {
         description: '',
         venue: '',
         city: '',
+        state: '',
         start_datetime: '',
         end_datetime: '',
+        registration_status: 'open' as string,
+        registration_opens: '',
+        registration_closes: '',
         price: 0,
         is_free: false,
         max_attendees: 100,
@@ -182,13 +190,16 @@ const AdminEvents = () => {
             data.append('description', formData.description || formData.short_description);
             data.append('venue', formData.venue);
             data.append('city', formData.city);
+            if (formData.state) data.append('state', formData.state);
             data.append('start_datetime', new Date(formData.start_datetime).toISOString());
             data.append('end_datetime', new Date(formData.end_datetime).toISOString());
+            data.append('registration_status', formData.registration_status);
+            if (formData.registration_opens) data.append('registration_opens', new Date(formData.registration_opens).toISOString());
+            if (formData.registration_closes) data.append('registration_closes', new Date(formData.registration_closes).toISOString());
             data.append('max_attendees', String(formData.max_attendees));
             data.append('price', String(formData.price));
             data.append('is_free', formData.price === 0 ? 'true' : 'false');
             data.append('status', 'published');
-            data.append('registration_status', 'open');
             if (formData.image) data.append('cover_image', formData.image);
 
             await api.post('/events/events/', data, {
@@ -226,13 +237,17 @@ const AdminEvents = () => {
         setEditingEvent(event);
         setFormData({
             title: event.title,
-            event_type: (event as any).event_type || 'other',
-            short_description: (event as any).short_description || '',
-            description: (event as any).description || '',
+            event_type: event.event_type || 'other',
+            short_description: event.short_description || '',
+            description: event.description || '',
             venue: event.venue || '',
-            city: (event as any).city || '',
+            city: event.city || '',
+            state: event.state || '',
             start_datetime: event.start_datetime ? event.start_datetime.slice(0, 16) : '',
-            end_datetime: (event as any).end_datetime ? (event as any).end_datetime.slice(0, 16) : '',
+            end_datetime: event.end_datetime ? event.end_datetime.slice(0, 16) : '',
+            registration_status: event.registration_status || 'open',
+            registration_opens: event.registration_opens ? event.registration_opens.slice(0, 16) : '',
+            registration_closes: event.registration_closes ? event.registration_closes.slice(0, 16) : '',
             price: event.price || 0,
             is_free: !event.price || event.price === 0,
             max_attendees: event.max_attendees || 100,
@@ -253,8 +268,12 @@ const AdminEvents = () => {
             data.append('description', formData.description || formData.short_description);
             data.append('venue', formData.venue);
             data.append('city', formData.city);
+            if (formData.state) data.append('state', formData.state);
             data.append('start_datetime', new Date(formData.start_datetime).toISOString());
             data.append('end_datetime', new Date(formData.end_datetime).toISOString());
+            data.append('registration_status', formData.registration_status);
+            if (formData.registration_opens) data.append('registration_opens', new Date(formData.registration_opens).toISOString());
+            if (formData.registration_closes) data.append('registration_closes', new Date(formData.registration_closes).toISOString());
             data.append('max_attendees', String(formData.max_attendees));
             data.append('price', String(formData.price));
             data.append('is_free', formData.price === 0 ? 'true' : 'false');
@@ -297,8 +316,9 @@ const AdminEvents = () => {
         setEditingEvent(null);
         setFormData({
             title: '', event_type: 'other', short_description: '',
-            description: '', venue: '', city: '',
+            description: '', venue: '', city: '', state: '',
             start_datetime: '', end_datetime: '',
+            registration_status: 'open', registration_opens: '', registration_closes: '',
             price: 0, is_free: false, max_attendees: 100, image: null,
         });
     };
@@ -821,11 +841,55 @@ const AdminEvents = () => {
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">City</label>
-                                        <input 
-                                            type="text" 
+                                        <input
+                                            type="text"
                                             name="city"
-                                            className="form-input" 
+                                            className="form-input"
                                             value={formData.city}
+                                            onChange={handleInputChange}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">State</label>
+                                        <input
+                                            type="text"
+                                            name="state"
+                                            className="form-input"
+                                            value={formData.state}
+                                            onChange={handleInputChange}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Registration Status</label>
+                                        <select
+                                            name="registration_status"
+                                            className="form-input"
+                                            value={formData.registration_status}
+                                            onChange={handleInputChange}
+                                        >
+                                            <option value="not_open">Not Yet Open</option>
+                                            <option value="open">Open</option>
+                                            <option value="closed">Closed</option>
+                                            <option value="full">Full</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Registration Opens</label>
+                                        <input
+                                            type="datetime-local"
+                                            name="registration_opens"
+                                            className="form-input"
+                                            value={formData.registration_opens}
+                                            onChange={handleInputChange}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Registration Closes</label>
+                                        <input
+                                            type="datetime-local"
+                                            name="registration_closes"
+                                            className="form-input"
+                                            value={formData.registration_closes}
                                             onChange={handleInputChange}
                                         />
                                     </div>

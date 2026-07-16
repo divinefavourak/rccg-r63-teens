@@ -6,7 +6,8 @@ import { type Event } from '../types';
 import toast from 'react-hot-toast';
 import {
     Calendar, MapPin, Clock, Ticket, ChevronLeft,
-    Users, X, User, Phone, Mail, Hash
+    Users, X, User, Phone, Mail, Hash, AlertTriangle,
+    Info, Link, BookOpen, Globe
 } from 'lucide-react';
 import { useAuthContext } from '../context/AuthContext';
 
@@ -34,6 +35,15 @@ interface RegForm {
     guardian_email: string;
     guardian_relationship: string;
     guardian_consent: boolean;
+    // Emergency contact
+    emergency_contact_name: string;
+    emergency_contact_phone: string;
+    emergency_contact_relationship: string;
+    // Medical
+    medical_conditions: string;
+    allergies: string;
+    dietary_restrictions: string;
+    special_needs: string;
 }
 
 const defaultForm: RegForm = {
@@ -49,6 +59,13 @@ const defaultForm: RegForm = {
     guardian_email: '',
     guardian_relationship: '',
     guardian_consent: false,
+    emergency_contact_name: '',
+    emergency_contact_phone: '',
+    emergency_contact_relationship: '',
+    medical_conditions: '',
+    allergies: '',
+    dietary_restrictions: '',
+    special_needs: '',
 };
 
 const EventDetail = () => {
@@ -232,7 +249,7 @@ const EventDetail = () => {
                                 {event.event_type && (
                                     <div>
                                         <p className="text-gray-500 mb-1">Type</p>
-                                        <p className="font-semibold text-gray-900 dark:text-white capitalize">{event.event_type}</p>
+                                        <p className="font-semibold text-gray-900 dark:text-white capitalize">{event.event_type.replace(/_/g, ' ')}</p>
                                     </div>
                                 )}
                                 {event.end_datetime && (
@@ -255,8 +272,122 @@ const EventDetail = () => {
                                         </p>
                                     </div>
                                 )}
+                                {event.city && (
+                                    <div>
+                                        <p className="text-gray-500 mb-1">City</p>
+                                        <p className="font-semibold text-gray-900 dark:text-white">{event.city}{event.state ? `, ${event.state}` : ''}</p>
+                                    </div>
+                                )}
+                                {(event.is_virtual || event.is_hybrid) && (
+                                    <div>
+                                        <p className="text-gray-500 mb-1">Format</p>
+                                        <p className="font-semibold text-gray-900 dark:text-white">
+                                            {event.is_hybrid ? 'Hybrid (In-person + Virtual)' : 'Virtual'}
+                                        </p>
+                                    </div>
+                                )}
                             </div>
+
+                            {/* Virtual link */}
+                            {event.virtual_link && (
+                                <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <Globe size={14} className="text-blue-600 dark:text-blue-400" />
+                                        <span className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                                            {event.virtual_platform || 'Virtual Link'}
+                                        </span>
+                                    </div>
+                                    <a href={event.virtual_link} target="_blank" rel="noopener noreferrer"
+                                        className="text-sm text-blue-600 dark:text-blue-400 hover:underline break-all flex items-center gap-1">
+                                        <Link size={12} /> {event.virtual_link}
+                                    </a>
+                                </div>
+                            )}
                         </div>
+
+                        {/* What to Bring */}
+                        {event.what_to_bring && event.what_to_bring.length > 0 && (
+                            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-6 border border-gray-100 dark:border-gray-700">
+                                <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                                    <BookOpen size={18} className="text-primary-500" /> What to Bring
+                                </h2>
+                                <ul className="space-y-1">
+                                    {event.what_to_bring.map((item, i) => (
+                                        <li key={i} className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                                            <span className="text-primary-500 mt-0.5">•</span> {item}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
+                        {/* Schedule */}
+                        {event.schedule && event.schedule.length > 0 && (
+                            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-6 border border-gray-100 dark:border-gray-700">
+                                <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                                    <Clock size={18} className="text-primary-500" /> Schedule
+                                </h2>
+                                <div className="space-y-2">
+                                    {event.schedule.map((raw, i) => {
+                                        const item = raw as { time?: string; title?: string; description?: string };
+                                        return (
+                                            <div key={i} className="flex gap-3 text-sm">
+                                                {item.time && (
+                                                    <span className="text-primary-500 font-semibold whitespace-nowrap w-16 shrink-0">{item.time}</span>
+                                                )}
+                                                <div>
+                                                    {item.title && <p className="font-medium text-gray-900 dark:text-white">{item.title}</p>}
+                                                    {item.description && <p className="text-gray-500">{item.description}</p>}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* FAQs */}
+                        {event.faqs && event.faqs.length > 0 && (
+                            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-6 border border-gray-100 dark:border-gray-700">
+                                <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                                    <Info size={18} className="text-primary-500" /> Frequently Asked Questions
+                                </h2>
+                                <div className="space-y-4">
+                                    {event.faqs.map((raw, i) => {
+                                        const faq = raw as { question?: string; answer?: string };
+                                        return (
+                                            <div key={i}>
+                                                {faq.question && <p className="font-semibold text-gray-900 dark:text-white text-sm">{faq.question}</p>}
+                                                {faq.answer && <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{faq.answer}</p>}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Organizer */}
+                        {event.organizer_name && (
+                            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-6 border border-gray-100 dark:border-gray-700">
+                                <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-3">Organizer</h2>
+                                <p className="font-semibold text-gray-900 dark:text-white">{event.organizer_name}</p>
+                                <div className="mt-2 space-y-1 text-sm text-gray-500 dark:text-gray-400">
+                                    {event.organizer_email && (
+                                        <p className="flex items-center gap-2">
+                                            <Mail size={14} />
+                                            <a href={`mailto:${event.organizer_email}`} className="hover:text-primary-500 transition-colors">
+                                                {event.organizer_email}
+                                            </a>
+                                        </p>
+                                    )}
+                                    {event.organizer_phone && (
+                                        <p className="flex items-center gap-2">
+                                            <Phone size={14} /> {event.organizer_phone}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Sidebar */}
@@ -429,6 +560,64 @@ const EventDetail = () => {
                                                 <option value="aunt">Aunt</option>
                                                 <option value="other">Other</option>
                                             </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <hr className="border-gray-100 dark:border-gray-700" />
+
+                                {/* Emergency Contact */}
+                                <div>
+                                    <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                                        <AlertTriangle size={16} className="text-orange-500" /> Emergency Contact
+                                    </h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contact Name</label>
+                                            <input name="emergency_contact_name" value={form.emergency_contact_name} onChange={handleInput}
+                                                className="form-input" placeholder="Full name of emergency contact" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contact Phone</label>
+                                            <input name="emergency_contact_phone" value={form.emergency_contact_phone} onChange={handleInput}
+                                                className="form-input" placeholder="080xxxxxxxx" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Relationship</label>
+                                            <input name="emergency_contact_relationship" value={form.emergency_contact_relationship} onChange={handleInput}
+                                                className="form-input" placeholder="e.g. Parent, Sibling" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <hr className="border-gray-100 dark:border-gray-700" />
+
+                                {/* Medical Info */}
+                                <div>
+                                    <h4 className="font-semibold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
+                                        <Info size={16} className="text-blue-500" /> Health Information
+                                        <span className="text-xs font-normal text-gray-400">(optional — for event organisers only)</span>
+                                    </h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Medical Conditions</label>
+                                            <input name="medical_conditions" value={form.medical_conditions} onChange={handleInput}
+                                                className="form-input" placeholder="e.g. Asthma, Diabetes" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Allergies</label>
+                                            <input name="allergies" value={form.allergies} onChange={handleInput}
+                                                className="form-input" placeholder="e.g. Peanuts, Penicillin" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Dietary Restrictions</label>
+                                            <input name="dietary_restrictions" value={form.dietary_restrictions} onChange={handleInput}
+                                                className="form-input" placeholder="e.g. Vegetarian, Halal" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Special Needs</label>
+                                            <input name="special_needs" value={form.special_needs} onChange={handleInput}
+                                                className="form-input" placeholder="e.g. Wheelchair access" />
                                         </div>
                                     </div>
                                 </div>

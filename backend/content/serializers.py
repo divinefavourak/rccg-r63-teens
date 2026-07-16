@@ -2,7 +2,86 @@
 Serializers for the content app (devotionals, manuals, articles).
 """
 from rest_framework import serializers
-from .models import Devotional, ManualSeries, Manual, Article
+from .models import (
+    Article, Devotional, DiscussionQuestion, Manual, ManualSeries, MemoryVerse,
+    ScriptureReference,
+)
+
+
+# =====================
+# SCRIPTURE SERIALIZERS
+# =====================
+
+class MemoryVerseSerializer(serializers.ModelSerializer):
+    """
+    The Verse of the Day payload.
+
+    `text` resolves the override-or-Scripture rule in one place, and
+    `attribution` carries the copyright line licensed translations require
+    (`docs/08-bible-experience.md` §11).
+    """
+
+    text = serializers.CharField(read_only=True)
+    devotional_date = serializers.DateField(source='devotional.date', read_only=True)
+    # Method fields, not `source='translation.code'`: a memory verse may have no
+    # translation linked yet (Scripture is not imported), and a dotted source
+    # through a null FK makes DRF drop the key entirely rather than emit null.
+    translation_code = serializers.SerializerMethodField()
+    attribution = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MemoryVerse
+        fields = [
+            'id', 'devotional', 'devotional_date', 'is_primary', 'reference_display',
+            'text', 'text_override', 'translation', 'translation_code', 'attribution',
+            'start_verse', 'end_verse', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_translation_code(self, obj):
+        return obj.translation.code if obj.translation_id else None
+
+    def get_attribution(self, obj):
+        return obj.translation.attribution if obj.translation_id else None
+
+    def validate(self, attrs):
+        """
+        Reject a second primary verse with a 400.
+
+        The database already forbids it (partial unique index), but without this
+        the client would see a 500 IntegrityError instead of a clear message.
+        """
+        is_primary = attrs.get(
+            'is_primary', self.instance.is_primary if self.instance else True
+        )
+        devotional = attrs.get(
+            'devotional', self.instance.devotional if self.instance else None
+        )
+        if is_primary and devotional is not None:
+            clashing = MemoryVerse.objects.filter(devotional=devotional, is_primary=True)
+            if self.instance is not None:
+                clashing = clashing.exclude(pk=self.instance.pk)
+            if clashing.exists():
+                raise serializers.ValidationError(
+                    'This devotional already has a primary memory verse — '
+                    'it is the Verse of the Day, and there can be only one.'
+                )
+        return attrs
+
+
+class ScriptureReferenceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ScriptureReference
+        fields = [
+            'id', 'devotional', 'kind', 'reference_display', 'book_osis',
+            'chapter_number', 'start_verse_number', 'end_verse_number', 'order',
+        ]
+
+
+class DiscussionQuestionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DiscussionQuestion
+        fields = ['id', 'devotional', 'text', 'order']
 
 
 # =====================
@@ -35,9 +114,21 @@ class DevotionalListSerializer(serializers.ModelSerializer):
 
 class DevotionalDetailSerializer(serializers.ModelSerializer):
     """Full serializer for viewing a devotional."""
-    
+
     has_audio = serializers.BooleanField(read_only=True)
-    
+
+    # The structured, Bible-linked layer. `memory_verse` is the primary one —
+    # the Verse of the Day. The legacy `memory_verse_passage`/`_content` strings
+    # below remain for the existing frontend contract.
+    memory_verse = serializers.SerializerMethodField()
+    scripture_references = ScriptureReferenceSerializer(many=True, read_only=True)
+    discussion_questions = DiscussionQuestionSerializer(many=True, read_only=True)
+
+    def get_memory_verse(self, obj):
+        from .services.daily import primary_memory_verse
+        verse = primary_memory_verse(obj)
+        return MemoryVerseSerializer(verse).data if verse else None
+
     class Meta:
         model = Devotional
         fields = [
@@ -45,14 +136,19 @@ class DevotionalDetailSerializer(serializers.ModelSerializer):
             'date',
             'title',
             'slug',
-            
+
+            # Structured Scripture layer
+            'memory_verse',
+            'scripture_references',
+            'discussion_questions',
+
             # Scripture
             'memory_verse_passage',
             'memory_verse_content',
             'bible_text_passage',
             'bible_text_content',
             'bible_in_one_year',
-            
+
             # Legacy
             'anchor_scripture',
             'scripture_text',
@@ -320,7 +416,7 @@ class ArticleListSerializer(serializers.ModelSerializer):
 
 class ArticleDetailSerializer(serializers.ModelSerializer):
     """Full serializer for viewing an article."""
-    
+
     class Meta:
         model = Article
         fields = [
@@ -345,4 +441,19 @@ class ArticleDetailSerializer(serializers.ModelSerializer):
             'published_at',
             'created_at',
             'updated_at',
+        ]
+
+
+class ManualTeacherDetailSerializer(ManualDetailSerializer):
+    """
+    Extended manual serializer for teachers, coordinators, and admins.
+    Includes teacher edition fields: notes, resources, discussion guide.
+    """
+
+    class Meta(ManualDetailSerializer.Meta):
+        fields = ManualDetailSerializer.Meta.fields + [
+            'has_teacher_edition',
+            'teacher_notes',
+            'teacher_resources',
+            'discussion_guide',
         ]

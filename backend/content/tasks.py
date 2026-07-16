@@ -227,3 +227,57 @@ def backfill_devotionals(days: int = 30):
         'skipped': skipped,
         'failed': failed,
     }
+
+
+@shared_task(name='content.tasks.alert_devotional_gaps', ignore_result=True)
+def alert_devotional_gaps():
+    """
+    Page the people who can fix a hole in the devotional pipeline.
+
+    docs/07-feature-specifications.md §5: "no-devotional-scheduled-within-48h pages
+    the admin". docs/02-roadmap.md is blunter about why — "software without content
+    is an empty shell". A gap is a day on which every teen who opens the app finds
+    nothing and a streak they cannot continue, so it must be visible *before* it
+    arrives.
+
+    Routed through the central notification service like everything else (§10). The
+    alert is a SYSTEM notification, so it respects quiet hours: a pipeline gap two
+    days out does not need to wake anyone at 03:00, and it will still be there at
+    07:00.
+    """
+    from common.dates import app_today
+    from identity.authorization import users_with_permission
+    from identity.permissions_registry import Perm
+    from notifications.models import NotificationType
+    from notifications.services import send
+
+    from .services import calendar as calendar_service
+
+    gaps = calendar_service.imminent_gaps()
+    if not gaps:
+        return 0
+
+    listed = ', '.join(day.isoformat() for day in gaps)
+    body = (
+        f'No devotional is scheduled for {listed}. '
+        f'Teens opening the app on those days will find nothing.'
+    )
+
+    sent = 0
+    for user in users_with_permission(Perm.CONTENT_MANAGE):
+        notification = send(
+            user,
+            NotificationType.SYSTEM,
+            'Devotional pipeline gap',
+            body,
+            deep_link='/console/content/calendar',
+            data={'gaps': [day.isoformat() for day in gaps]},
+            # One alert per gap-set per day: re-running the check must not spam the
+            # console team, but a *new* gap appearing tomorrow must still alert.
+            dedupe_key=f'content:gap_alert:{app_today().isoformat()}:{listed}',
+        )
+        if notification:
+            sent += 1
+
+    logger.warning('Devotional pipeline gap on %s — alerted %s user(s).', listed, sent)
+    return sent

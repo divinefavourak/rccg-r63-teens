@@ -1,6 +1,7 @@
 """
 Common base models and mixins for the RCCG R63 Teens platform.
 """
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
@@ -24,11 +25,60 @@ class UUIDMixin(models.Model):
         abstract = True
 
 
+class AppendOnlyError(Exception):
+    """Raised when code tries to modify an append-only record."""
+
+
+class _AppendOnlyQuerySet(models.QuerySet):
+    def update(self, *args, **kwargs):
+        raise AppendOnlyError(f'{self.model.__name__} is append-only; rows cannot be updated.')
+
+    def bulk_update(self, *args, **kwargs):
+        raise AppendOnlyError(f'{self.model.__name__} is append-only; rows cannot be updated.')
+
+    def bulk_create(self, objs, *args, update_conflicts=False, **kwargs):
+        # Plain inserts are the point of an append-only log; only the upsert form
+        # (`update_conflicts=True`) would rewrite existing rows behind `save()`.
+        if update_conflicts:
+            raise AppendOnlyError(
+                f'{self.model.__name__} is append-only; upserts are not allowed.'
+            )
+        return super().bulk_create(objs, *args, update_conflicts=update_conflicts, **kwargs)
+
+
+class AppendOnlyModel(models.Model):
+    """
+    A model whose rows may be inserted and (for account erasure) deleted, but
+    never edited — enforcing at the persistence boundary the immutability that an
+    event log only *claims* in its docstring. `save()` refuses to rewrite an
+    existing row, and the manager refuses `update()`/`bulk_update()`; `delete()`
+    is intentionally left open so an account cascade can erase a user's history.
+    """
+
+    objects = _AppendOnlyQuerySet.as_manager()
+
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise AppendOnlyError(
+                f'{type(self).__name__} is append-only; existing rows cannot be modified.'
+            )
+        super().save(*args, **kwargs)
+
+
 class PublishableMixin(models.Model):
     """Adds publishing status and scheduling for content models."""
-    
+
     class Status(models.TextChoices):
+        # The documented pipeline (`docs/07-feature-specifications.md` §5):
+        # draft -> in-review -> approved -> scheduled -> published -> archived.
+        # IN_REVIEW and APPROVED are the two states the review gate needs; models
+        # that do not run a review (events, media) simply never enter them.
         DRAFT = 'draft', 'Draft'
+        IN_REVIEW = 'in_review', 'In review'
+        APPROVED = 'approved', 'Approved'
         SCHEDULED = 'scheduled', 'Scheduled'
         PUBLISHED = 'published', 'Published'
         ARCHIVED = 'archived', 'Archived'
@@ -69,6 +119,44 @@ class PublishableMixin(models.Model):
     @property
     def is_draft(self):
         return self.status == self.Status.DRAFT
+
+
+class ReviewableMixin(models.Model):
+    """
+    Authorship and review provenance for content that passes a two-person gate.
+
+    `docs/07-feature-specifications.md` §5 requires a "two-person rule for
+    region-wide+ publishing". Enforcing it needs two facts the publishing status
+    alone cannot carry: who put the item up for review, and who approved it. The
+    rule is then simply that they are not the same person.
+
+    Applied only to the models that actually run a review (the `content` app).
+    Events and media publish without one, and giving them dormant reviewer columns
+    would imply a workflow that does not exist.
+
+    The transitions live in `content.services.review`, never on the model: a state
+    machine spread across `save()` overrides is a state machine nobody can read.
+    """
+
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='%(class)s_submitted',
+        help_text='Who submitted this for review.',
+    )
+    submitted_at = models.DateTimeField(null=True, blank=True)
+
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='%(class)s_approved',
+        help_text='Who approved this. Never the same person as submitted_by.',
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+
+    # Why it was sent back, shown to the author. Cleared on re-submission.
+    review_notes = models.TextField(blank=True)
+
+    class Meta:
+        abstract = True
 
 
 class SlugMixin(models.Model):

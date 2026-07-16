@@ -10,7 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
-import os, dj_database_url
+import os, sys, dj_database_url
 from datetime import timedelta
 from dotenv import load_dotenv
 from pathlib import Path
@@ -30,6 +30,33 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',') if os.getenv('ALLOWED_HOSTS') else ['*']
 
+# Email-verification enforcement at login. Off by default (non-breaking); turn on
+# once the verification email flow and frontend are ready. Foundation: is_verified
+# field on User + /verify-email/ endpoint.
+ENFORCE_EMAIL_VERIFICATION = os.getenv('ENFORCE_EMAIL_VERIFICATION', 'False').lower() == 'true'
+
+# OTP (one-time codes). Provider-agnostic foundation; console backend by default.
+# Point OTP_PROVIDER at a real SMS backend (Termii/Africa's Talking) to go live.
+OTP_CODE_LENGTH = int(os.getenv('OTP_CODE_LENGTH', '6'))
+OTP_TTL_SECONDS = int(os.getenv('OTP_TTL_SECONDS', '600'))
+OTP_MAX_ATTEMPTS = int(os.getenv('OTP_MAX_ATTEMPTS', '5'))
+OTP_PROVIDER = os.getenv('OTP_PROVIDER', 'users.otp_providers.ConsoleOTPProvider')
+
+# Additive HttpOnly-cookie JWT auth (Bearer still accepted; header takes precedence).
+# SameSite=Lax (default) neutralises cross-site CSRF for the cookie path. Enabling
+# cross-site cookie auth (SameSite=None) requires a CSRF double-submit flow — deferred.
+AUTH_COOKIE_ACCESS = os.getenv('AUTH_COOKIE_ACCESS', 'access_token')
+AUTH_COOKIE_REFRESH = os.getenv('AUTH_COOKIE_REFRESH', 'refresh_token')
+AUTH_COOKIE_SECURE = os.getenv('AUTH_COOKIE_SECURE', str(not DEBUG)).lower() == 'true'
+AUTH_COOKIE_SAMESITE = os.getenv('AUTH_COOKIE_SAMESITE', 'Lax')
+AUTH_COOKIE_DOMAIN = os.getenv('AUTH_COOKIE_DOMAIN') or None
+# SameSite=None cookies are rejected by browsers unless Secure, and cross-site
+# use also needs a CSRF double-submit flow (not yet implemented). Fail safe.
+if AUTH_COOKIE_SAMESITE == 'None' and not AUTH_COOKIE_SECURE:
+    import warnings
+    warnings.warn('AUTH_COOKIE_SAMESITE=None requires Secure cookies; forcing AUTH_COOKIE_SECURE=True.')
+    AUTH_COOKIE_SECURE = True
+
 
 # Application definition
 
@@ -40,22 +67,33 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
+    # Registers the Postgres-only field and index types Scripture search needs
+    # (SearchVectorField, GinIndex — see bible/search.py). The project is already
+    # Postgres-only: some migrations use Postgres-specific SQL, and the test suite
+    # runs against a local Postgres (see the DATABASES note below).
+    'django.contrib.postgres',
+
     # Third party apps
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',  # refresh-token revocation on logout/rotation
     'corsheaders',
     'drf_yasg',
     'drf_spectacular',
     'django_filters',
     'storages',
-    
+    'treebeard',
+
     # Local apps - Core
     'common',
+    'hierarchy',
+    'identity',
     'users',
     'profiles',
-    
+    'progress',  # Spiritual-action stream, streaks, Grace Days; foundational (depends on nothing)
+
     # Local apps - Content
+    'bible',    # Scripture foundation; `content` depends on it, never the reverse
     'content',
     'media',  # Media & Podcasts app (uses label 'media_content' in apps.py)
     
@@ -63,6 +101,15 @@ INSTALLED_APPS = [
     'events',
     'tickets',  # Legacy - will be deprecated after migration
     'payments',
+
+    # The one channel to a teen's phone. Every feature sends through
+    # notifications.services.send; nothing sends around it (docs/07 §10).
+    'notifications',
+
+    # Composition layer. Owns no models; imports downward from content/bible/
+    # progress/profiles and is imported by none of them. Listed last so that
+    # dependency direction is visible here too.
+    'today',
 ]
 
 MIDDLEWARE = [
@@ -77,15 +124,21 @@ MIDDLEWARE = [
 ]
 
 # Cache
+# IGNORE_EXCEPTIONS makes cache operations fail *open* (return None) instead of
+# raising when Redis is unreachable. This matters now that DRF throttling is
+# backed by this cache: a Redis blip must not turn every request into a 500 —
+# it should degrade to "unthrottled" and keep serving. Ignored errors are logged.
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
         'LOCATION': os.getenv('REDIS_URL', default='redis://localhost:6379/0'),
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'IGNORE_EXCEPTIONS': True,
         }
     }
 }
+DJANGO_REDIS_LOG_IGNORED_EXCEPTIONS = True
 
 
 ROOT_URLCONF = 'backend.urls'
@@ -127,6 +180,39 @@ else:
         }
     }
 
+# Run the test suite against a *local* Postgres.
+#
+# The dev DATABASE_URL points at a remote Neon instance ~184ms away. Django
+# issues one round trip per SQL statement, so a suite that takes seconds locally
+# takes tens of minutes there, and building the test database replays the whole
+# migration history over that link. Pointing tests at localhost removes the
+# latency multiplier entirely.
+#
+# Guarded on the `test` subcommand, not merely on the env var: a TEST_DATABASE_URL
+# left in the environment must never redirect `runserver`, and above all never
+# `migrate`, away from the real database. SQLite is not an option here — some
+# migrations use Postgres-only SQL (e.g. profiles/0004 reads information_schema).
+#
+# Note `parse()`, not `config(default=...)`: config() reads the DATABASE_URL env
+# var first and only falls back to `default` when it is unset, so it would
+# silently ignore TEST_DATABASE_URL whenever DATABASE_URL is present.
+def _running_tests():
+    """
+    True only for a test run — `manage.py test` or pytest.
+
+    pytest cannot be detected from argv: `pytest` puts the test paths in
+    sys.argv[1], and `python -m pytest` leaves `__main__.py` in sys.argv[0].
+    But pytest-django imports this settings module from inside a live pytest
+    process, so the `pytest` module is always in sys.modules by then — and no
+    other management command imports it.
+    """
+    return sys.argv[1:2] == ['test'] or 'pytest' in sys.modules
+
+
+TEST_DATABASE_URL = os.getenv('TEST_DATABASE_URL')
+if TEST_DATABASE_URL and _running_tests():
+    DATABASES['default'] = dj_database_url.parse(TEST_DATABASE_URL)
+
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -146,6 +232,17 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+# Password hashing — bcrypt primary (per docs/15-technical-architecture.md: argon2/bcrypt).
+# The first hasher is used for new/changed passwords; the rest remain available for
+# *verifying* legacy hashes, so existing PBKDF2 passwords still work and are transparently
+# upgraded to bcrypt on the user's next successful login. No forced resets.
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    'django.contrib.auth.hashers.BCryptPasswordHasher',
+]
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
@@ -157,6 +254,11 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 
 USE_TZ = True
+
+# The timezone that defines a calendar day for daily content (today's devotional,
+# Verse of the Day, reading-history day buckets). Storage stays UTC; only the
+# day boundary is Nigerian. See docs/07-feature-specifications.md §8.
+SCRIPTURE_TIMEZONE = os.getenv('SCRIPTURE_TIMEZONE', 'Africa/Lagos')
 
 
 # Static files (CSS, JavaScript, Images)
@@ -236,7 +338,8 @@ class UUIDEncoder(json.JSONEncoder):
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        # Superset of JWTAuthentication: header first, HttpOnly cookie fallback.
+        'users.authentication.CookieJWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
@@ -255,6 +358,21 @@ REST_FRAMEWORK = {
     'UPLOADED_FILES_USE_URL': True,
     'TEST_REQUEST_DEFAULT_FORMAT': 'json',
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # Rate limiting (docs/15-technical-architecture.md: "Rate limiting per user/IP;
+    # stricter on auth and OTP endpoints"). Global anon/user rates are generous so
+    # normal browsing is unaffected; the 'auth' scope is reserved for login/OTP views
+    # (attach `throttle_scope = 'auth'` on those views in a later phase).
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '60/min',
+        'user': '1000/min',
+        'auth': '10/min',
+        'otp': '5/min',
+    },
 }
 
 
@@ -276,26 +394,36 @@ SIMPLE_JWT = {
     'USER_ID_CLAIM': 'user_id',
 }
 
-# CORS Settings
-CORS_ALLOW_ALL_ORIGINS = True
+# CORS Settings — open in dev, restricted to known origins in production
+_cors_env = os.getenv('CORS_ALLOWED_ORIGINS', '').strip()
+if _cors_env and not DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = False
+    import json as _json
+    try:
+        CORS_ALLOWED_ORIGINS = _json.loads(_cors_env)
+    except (_json.JSONDecodeError, ValueError):
+        CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_env.split(',') if o.strip()]
+else:
+    CORS_ALLOW_ALL_ORIGINS = True
 
 # Email Configuration - Brevo
 MAILING = True
 
 if MAILING:
     import sys
-    # On Linux (Railway/production) the OS SSL store works fine with the standard backend.
-    # On Windows, Python's SSL bundle sometimes can't verify Brevo's cert, so we use
-    # a custom backend that disables cert verification as a workaround.
+    # On Windows, Python's SSL bundle sometimes can't verify Brevo's cert via STARTTLS,
+    # so we use a custom backend that disables cert verification as a workaround.
+    # On Linux/Render, the standard backend works fine.
     if sys.platform == 'win32':
         EMAIL_BACKEND = 'backend.email_backend.BrevoEmailBackend'
     else:
         EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 
     EMAIL_HOST = 'smtp-relay.brevo.com'
-    EMAIL_PORT = 465
-    EMAIL_USE_SSL = True
-    EMAIL_USE_TLS = False
+    # Port 587 + STARTTLS — Render (and most hosts) block port 465 outbound.
+    EMAIL_PORT = 587
+    EMAIL_USE_SSL = False
+    EMAIL_USE_TLS = True
     EMAIL_HOST_USER = os.environ.get('BREVO_SMTP_USER', '')
     EMAIL_HOST_PASSWORD = os.environ.get('BREVO_SMTP_KEY', '')
     EMAIL_TIMEOUT = 30
@@ -319,6 +447,22 @@ if not os.environ.get('BREVO_SMTP_KEY') and MAILING:
     warnings.warn('BREVO_SMTP_KEY not set. Email functionality will not work.')
 
 FRONTEND_URL = os.getenv("FRONTEND_URL")
+
+# The product name rendered in shared verse cards ("...via Faith Tribe" —
+# docs/08-bible-experience.md §3). A setting, not a literal, so the brand is not
+# scattered through the codebase.
+APP_NAME = os.getenv("APP_NAME", "Faith Tribe")
+
+# Notifications. The default backend logs instead of delivering: real WebPush
+# needs a VAPID key pair, which is an ops task. Until the keys exist the product
+# behaves correctly in every respect except the interruption itself — inbox rows
+# are written, preferences honoured, dedupe enforced. See notifications/push.py.
+NOTIFICATIONS_PUSH_BACKEND = os.getenv(
+    "NOTIFICATIONS_PUSH_BACKEND", "notifications.push.LoggingPushBackend",
+)
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY")
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY")
+VAPID_ADMIN_EMAIL = os.getenv("VAPID_ADMIN_EMAIL", "")
 
 # PayStack payment gateway
 PAYSTACK_SECRET_KEY=os.getenv("PAYSTACK_SECRET_KEY")

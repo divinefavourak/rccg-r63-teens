@@ -36,10 +36,11 @@ class Event(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
         FULL = 'full', 'Full'
     
     class TargetAgeGroup(models.TextChoices):
-        ALL = 'all', 'All Ages'
-        PRE_TEEN = 'pre_teen', 'Pre-Teens (8-12)'
-        TEEN = 'teen', 'Teens (13-17)'
-        YOUNG_ADULT = 'young_adult', 'Young Adults (18-19)'
+        ALL       = 'all',       'All Ages'
+        CHILDREN  = 'children',  'Children (6-8)'
+        PRE_TEEN  = 'pre_teen',  'Pre-Teens (9-12)'
+        TEEN      = 'teen',      'Teens (13-19)'
+        SUPERTEEN = 'superteen', 'Superteens (19+)'
     
     # Event Details
     title = models.CharField(max_length=255)
@@ -93,7 +94,31 @@ class Event(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     group_discount_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     
     # Eligibility
-    target_provinces = models.JSONField(default=list, blank=True)  # Empty = all provinces
+    #
+    # `scope_node` is the event's place in the church tree: the node that owns it,
+    # and whose subtree can see it — "every content item, event, and announcement
+    # declares a visibility scope; users see items scoped at or above their
+    # position" (docs/07-feature-specifications.md §3).
+    #
+    # It replaces `target_provinces`, a JSON array of hard-coded Lagos province
+    # strings. That array made onboarding a second region a code change, which
+    # docs/15-technical-architecture.md forbids outright ("no code path may
+    # reference any node by ID or name"), and it is why event querysets could never
+    # be scoped to a manager's subtree (backend audit, C2).
+    #
+    # NULL means unscoped — visible to everyone. That is the faithful reading of
+    # the old empty-list default, and it fails *open* on the visibility of an
+    # already-published event rather than silently hiding it. Writes remain gated
+    # on capability regardless.
+    scope_node = models.ForeignKey(
+        'hierarchy.HierarchyNode',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='events',
+        help_text="The node that owns this event; its subtree can see it. "
+                  "Blank means visible everywhere.",
+    )
+
     target_age_groups = models.JSONField(default=list, blank=True)
     min_age = models.PositiveIntegerField(null=True, blank=True)
     max_age = models.PositiveIntegerField(null=True, blank=True)
@@ -199,6 +224,7 @@ class EventRegistration(UUIDMixin, TimestampMixin):
         CANCELLED = 'cancelled', 'Cancelled'
         WAITLISTED = 'waitlisted', 'Waitlisted'
         CHECKED_IN = 'checked_in', 'Checked In'
+        ATTENDED = 'attended', 'Attended'
         NO_SHOW = 'no_show', 'No Show'
     
     class PaymentStatus(models.TextChoices):

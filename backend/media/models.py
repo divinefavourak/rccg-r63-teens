@@ -89,7 +89,12 @@ class MediaSeries(UUIDMixin, TimestampMixin, PublishableMixin):
     # Ordering
     order = models.PositiveIntegerField(default=0)
     is_featured = models.BooleanField(default=False, db_index=True)
-    
+    target_age_groups = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Leave empty to show to all age groups"
+    )
+
     class Meta:
         ordering = ['-created_at']
         verbose_name = 'Media Series'
@@ -211,6 +216,11 @@ class MediaEpisode(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     is_featured = models.BooleanField(default=False, db_index=True)
     is_premium = models.BooleanField(default=False)  # For future paywall
     is_explicit = models.BooleanField(default=False)  # Content warning
+    target_age_groups = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Leave empty to show to all age groups"
+    )
     order = models.PositiveIntegerField(default=0)
     
     class Meta:

@@ -32,13 +32,11 @@ class EventAdmin(admin.ModelAdmin):
         'start_datetime',
     ]
     search_fields = ['title', 'description', 'venue']
-    prepopulated_fields = {'slug': ('title',)}
     ordering = ['-start_datetime']
     date_hierarchy = 'start_datetime'
     
     readonly_fields = [
-        'id', 'slug', 'registration_count', 'waitlist_count',
-        'checked_in_count', 'view_count', 'created_at', 'updated_at'
+        'id', 'slug', 'view_count', 'created_at', 'updated_at'
     ]
     
     fieldsets = (
@@ -73,7 +71,7 @@ class EventAdmin(admin.ModelAdmin):
         }),
         ('Eligibility', {
             'fields': (
-                'target_provinces', 'target_age_groups', 'min_age', 'max_age',
+                'scope_node', 'target_age_groups', 'min_age', 'max_age',
                 'requires_guardian_consent'
             ),
             'classes': ('collapse',)

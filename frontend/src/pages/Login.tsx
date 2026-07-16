@@ -88,7 +88,7 @@ const Login = () => {
 
                         {/* Footer */}
                         <div className="glow-group">
-                            <a href="#">Forgot Password</a>
+                            <Link to="/forgot-password" className="glow-accent" style={{opacity: 0.8}}>Forgot Password</Link>
                             <Link to="/register" className="glow-accent">Sign up</Link>
                         </div>
 

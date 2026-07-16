@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
     Search, MoreVertical, UserCircle,
     Edit2, Trash2, Mail, X, Loader, Shield
@@ -17,10 +17,32 @@ const PROVINCES = [
     { value: 'regional_hq',        label: 'Regional Headquarter' },
 ];
 
+const AGE_GROUP_LABELS: Record<string, string> = {
+    toddler: 'Toddler',
+    children: 'Children (6-8)',
+    pre_teen: 'Pre-Teen (9-12)',
+    teen: 'Teen (13-19)',
+    superteen: 'Superteen (19+)',
+};
+
+function computeAgeGroupLabel(dob: string): string | null {
+    if (!dob) return null;
+    const birth = new Date(dob);
+    const today = new Date();
+    let age = today.getFullYear() - birth.getFullYear();
+    if (today.getMonth() - birth.getMonth() < 0 ||
+        (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) age--;
+    if (age < 6)  return 'Toddler (under 6)';
+    if (age <= 8)  return 'Children (6–8)';
+    if (age <= 12) return 'Pre-Teen (9–12)';
+    if (age <= 19) return 'Teen (13–19)';
+    return 'Superteen (19+)';
+}
+
 const EMPTY_FORM = {
     first_name: '', last_name: '', email: '',
-    gender: '', role: 'teen', province: '',
-    phone: '', is_active: true,
+    gender: '', role: '', province: '',
+    phone: '', is_active: true, date_of_birth: '',
 };
 
 const AdminUsers = () => {
@@ -76,14 +98,17 @@ const AdminUsers = () => {
             first_name: user.first_name || '',
             last_name: user.last_name || '',
             email: user.email || '',
-            gender: (user as any).gender || '',
+            gender: user.gender || '',
             role: user.role || 'teen',
-            province: (user as any).province || '',
-            phone: (user as any).phone || '',
-            is_active: (user as any).is_active !== false,
+            province: user.province || '',
+            phone: user.phone || '',
+            is_active: user.is_active !== false,
+            date_of_birth: user.date_of_birth || '',
         });
         setOpenMenuId(null);
     };
+
+    const editAgeGroupPreview = useMemo(() => computeAgeGroupLabel(editForm.date_of_birth), [editForm.date_of_birth]);
 
     const handleEditSave = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -137,7 +162,7 @@ const AdminUsers = () => {
         teens: users.filter(u => u.role === 'teen' || u.role === 'individual' || !u.role).length,
         coordinators: users.filter(u => u.role === 'coordinator').length,
         admins: users.filter(u => u.role === 'admin').length,
-        active: users.filter(u => (u as any).is_active !== false).length,
+        active: users.filter(u => u.is_active !== false).length,
     };
 
     const stats = [
@@ -152,6 +177,7 @@ const AdminUsers = () => {
         switch (role) {
             case 'admin': return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400';
             case 'coordinator': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
+            case 'teacher': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400';
             default: return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
         }
     };
@@ -205,7 +231,9 @@ const AdminUsers = () => {
                     <option>All Roles</option>
                     <option>Admin</option>
                     <option>Coordinator</option>
+                    <option>Teacher</option>
                     <option>Teen</option>
+                    <option>Individual</option>
                 </select>
             </div>
 
@@ -217,16 +245,18 @@ const AdminUsers = () => {
                             <tr className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-800">
                                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">User</th>
                                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Role</th>
+                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider hidden md:table-cell">Phone</th>
+                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Age Group</th>
                                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
-                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Joined</th>
+                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Joined</th>
                                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                             {loading ? (
-                                <tr><td colSpan={5} className="p-8 text-center text-gray-500">Loading users...</td></tr>
+                                <tr><td colSpan={7} className="p-8 text-center text-gray-500">Loading users...</td></tr>
                             ) : filteredUsers.length === 0 ? (
-                                <tr><td colSpan={5} className="p-8 text-center text-gray-500">No users found.</td></tr>
+                                <tr><td colSpan={7} className="p-8 text-center text-gray-500">No users found.</td></tr>
                             ) : filteredUsers.map((item) => (
                                 <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/20 transition-colors">
                                     <td className="p-4">
@@ -247,14 +277,20 @@ const AdminUsers = () => {
                                             {item.role || 'teen'}
                                         </span>
                                     </td>
+                                    <td className="p-4 text-sm text-gray-500 dark:text-gray-400 hidden md:table-cell">
+                                        {item.phone || '—'}
+                                    </td>
+                                    <td className="p-4 text-sm text-gray-600 dark:text-gray-400">
+                                        {item.age_group ? (AGE_GROUP_LABELS[item.age_group] || item.age_group) : '—'}
+                                    </td>
                                     <td className="p-4">
-                                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${(item as any).is_active !== false ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
-                                            {(item as any).is_active !== false ? 'Active' : 'Inactive'}
+                                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${item.is_active !== false ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+                                            {item.is_active !== false ? 'Active' : 'Inactive'}
                                         </span>
                                     </td>
-                                    <td className="p-4 text-sm text-gray-500 dark:text-gray-400">
-                                        {(item as any).date_joined
-                                            ? new Date((item as any).date_joined).toLocaleDateString()
+                                    <td className="p-4 text-sm text-gray-500 dark:text-gray-400 hidden lg:table-cell">
+                                        {item.date_joined
+                                            ? new Date(item.date_joined).toLocaleDateString()
                                             : '—'}
                                     </td>
                                     <td className="p-4 text-right relative">
@@ -340,6 +376,22 @@ const AdminUsers = () => {
                                     onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} />
                             </div>
 
+                            <div>
+                                <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Date of Birth</label>
+                                <input
+                                    type="date"
+                                    className={inputCls}
+                                    value={editForm.date_of_birth}
+                                    max={new Date().toISOString().split('T')[0]}
+                                    onChange={e => setEditForm(f => ({ ...f, date_of_birth: e.target.value }))}
+                                />
+                                {editAgeGroupPreview && (
+                                    <p className="mt-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                                        ✦ {editAgeGroupPreview}
+                                    </p>
+                                )}
+                            </div>
+
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Gender</label>
@@ -354,9 +406,14 @@ const AdminUsers = () => {
                                     <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Role</label>
                                     <select className={inputCls} value={editForm.role}
                                         onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))}>
-                                        <option value="teen">Teen</option>
+                                        <option value="">Select Role</option>
+                                        <option value="admin">Administrator</option>
                                         <option value="coordinator">Coordinator</option>
-                                        <option value="admin">Admin</option>
+                                        <option value="teacher">Teacher</option>
+                                        <option value="teen">Teen</option>
+                                        <option value="preteen">Pre-teen</option>
+                                        <option value="superteen">Superteen</option>
+                                        <option value="child">Child</option>
                                         <option value="individual">Individual</option>
                                     </select>
                                 </div>

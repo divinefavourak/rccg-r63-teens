@@ -16,9 +16,9 @@ class TicketModelTests(TestCase):
             first_name='Coord',
             last_name='Inator',
             role=User.Role.COORDINATOR,
-            province=User.Province.PROVINCE_1
+            province=User.Province.LAGOS_PROVINCE_9
         )
-    
+
     def test_create_ticket(self):
         """Test creating a ticket"""
         ticket = Ticket.objects.create(
@@ -28,7 +28,7 @@ class TicketModelTests(TestCase):
             gender=Ticket.Gender.MALE,
             phone='+1234567890',
             email='john@example.com',
-            province='Province 1',
+            province='lagos_province_9',
             zone='Zone A',
             area='Area 1',
             parish='Parish XYZ',
@@ -57,7 +57,7 @@ class TicketModelTests(TestCase):
             gender=Ticket.Gender.FEMALE,
             phone='+1234567890',
             email='jane@example.com',
-            province='Province 1',
+            province='lagos_province_9',
             zone='Zone A',
             area='Area 1',
             parish='Parish XYZ',
@@ -105,9 +105,9 @@ class TicketAPITests(APITestCase):
             first_name='Coord',
             last_name='Inator',
             role=User.Role.COORDINATOR,
-            province=User.Province.PROVINCE_1  # This is 'province_1'
+            province=User.Province.LAGOS_PROVINCE_9
         )
-        
+
         # Create test ticket - Use the same province format
         self.ticket = Ticket.objects.create(
             full_name='Test Teen',
@@ -116,7 +116,7 @@ class TicketAPITests(APITestCase):
             gender=Ticket.Gender.MALE,
             phone='+1234567890',
             email='test@example.com',
-            province='province_1',  # Match the coordinator's province
+            province='lagos_province_9',  # Match the coordinator's province
             zone='Zone A',
             area='Area 1',
             parish='Parish XYZ',
@@ -145,7 +145,7 @@ class TicketAPITests(APITestCase):
             'gender': 'female',
             'phone': '+1234567890',
             'email': 'new@example.com',
-            'province': 'province_1',  # Use same format as User.Province
+            'province': 'lagos_province_9',  # Use same format as User.Province
             'zone': 'Zone B',
             'area': 'Area 2',
             'parish': 'Parish ABC',

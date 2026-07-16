@@ -9,7 +9,8 @@ class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     role_display = serializers.CharField(source='get_role_display', read_only=True)
     province_display = serializers.CharField(source='get_province_display', read_only=True)
-    
+    age_group = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = [
@@ -17,11 +18,18 @@ class UserSerializer(serializers.ModelSerializer):
             'phone', 'gender', 'role', 'role_display', 'province', 'province_display',
             'zone', 'area', 'parish', 'is_active', 'date_joined', 'last_login',
             'profile_picture', 'bio', 'email_notifications', 'sms_notifications',
+            'age_group',
         ]
         read_only_fields = ['id', 'date_joined', 'last_login']
-    
+
     def get_full_name(self, obj):
         return obj.full_name
+
+    def get_age_group(self, obj):
+        try:
+            return obj.teen_profile.age_group
+        except Exception:
+            return ''
 
 
 class UserCreateSerializer(serializers.ModelSerializer):
@@ -37,13 +45,15 @@ class UserCreateSerializer(serializers.ModelSerializer):
         required=True,
         style={'input_type': 'password'}
     )
-    
+    # date_of_birth lives on TeenProfile, not User — handled separately in RegisterView
+    date_of_birth = serializers.DateField(required=False, write_only=True)
+
     class Meta:
         model = User
         fields = [
             'username', 'email', 'password', 'password_confirm',
             'first_name', 'last_name', 'phone', 'gender', 'role', 'province',
-            'zone', 'area', 'parish'
+            'zone', 'area', 'parish', 'date_of_birth'
         ]
         extra_kwargs = {
             'email': {'required': True},
@@ -63,9 +73,10 @@ class UserCreateSerializer(serializers.ModelSerializer):
         if data['password'] != data['password_confirm']:
             raise serializers.ValidationError({"password_confirm": "Passwords don't match."})
 
-        # Teens must provide gender (used for avatar generation)
-        if data.get('role') == User.Role.TEEN and not data.get('gender'):
-            raise serializers.ValidationError({"gender": "Gender is required for teen accounts."})
+        # Gender required for non-admin, non-coordinator roles
+        staff_roles = [User.Role.ADMIN, User.Role.COORDINATOR]
+        if data.get('role') not in staff_roles and not data.get('gender'):
+            raise serializers.ValidationError({"gender": "Gender is required."})
         
         # Role-specific validation
         if data.get('role') == User.Role.COORDINATOR and not data.get('province'):
@@ -80,14 +91,16 @@ class UserCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data.pop('password_confirm')
         password = validated_data.pop('password')
+        # date_of_birth is not a User model field — pop it so User() doesn't break
+        validated_data.pop('date_of_birth', None)
         user = User(**validated_data)
         user.set_password(password)
-        
+
         # Set is_staff and is_superuser based on role
         if user.role == User.Role.ADMIN:
             user.is_staff = True
             user.is_superuser = True
-        
+
         user.save()
         return user
 
@@ -144,6 +157,9 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 class AdminUserUpdateSerializer(serializers.ModelSerializer):
     """Serializer for admins updating any user — allows role/province/is_active changes."""
 
+    # date_of_birth lives on TeenProfile; exposed here so admins can correct age groups
+    date_of_birth = serializers.DateField(required=False, write_only=True, allow_null=True)
+
     class Meta:
         model = User
         fields = [
@@ -151,9 +167,11 @@ class AdminUserUpdateSerializer(serializers.ModelSerializer):
             'role', 'province', 'is_active',
             'zone', 'area', 'parish', 'bio',
             'email_notifications', 'sms_notifications',
+            'date_of_birth',
         ]
 
     def update(self, instance, validated_data):
+        date_of_birth = validated_data.pop('date_of_birth', None)
         new_role = validated_data.get('role', instance.role)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
@@ -161,6 +179,23 @@ class AdminUserUpdateSerializer(serializers.ModelSerializer):
         instance.is_staff = (new_role == User.Role.ADMIN)
         instance.is_superuser = (new_role == User.Role.ADMIN)
         instance.save()
+        # Update TeenProfile DOB and recalculate age_group if provided
+        if date_of_birth is not None:
+            from profiles.models import TeenProfile
+            profile, _ = TeenProfile.objects.get_or_create(
+                user=instance,
+                defaults={
+                    'gender': instance.gender or '',
+                    'province': instance.province or '',
+                    'parish': instance.parish or '',
+                    'guardian_name': '',
+                    'guardian_phone': '',
+                    'guardian_email': '',
+                    'guardian_relationship': '',
+                }
+            )
+            profile.date_of_birth = date_of_birth
+            profile.save()  # triggers _calculate_age_group()
         return instance
 
 

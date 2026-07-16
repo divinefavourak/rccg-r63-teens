@@ -1,0 +1,38 @@
+# Local Postgres for the test suite.
+#
+# The dev database is a remote Neon instance (~184ms per round trip). Django
+# issues one round trip per SQL statement, so the suite is latency-bound: it
+# takes ~26 minutes remotely and well under a minute against localhost.
+#
+#   docker compose -f docker-compose.test.yml up -d
+#   TEST_DATABASE_URL=postgres://faithtribe:faithtribe@localhost:5433/faithtribe \
+#     ./venv/Scripts/python.exe manage.py test
+#
+# Port 5433 (not 5432) so this never collides with a Postgres you already run.
+# Data lives in a tmpfs: the test database is disposable by definition, and
+# keeping it in RAM removes disk fsync from the hot path too.
+
+services:
+  test-db:
+    image: postgres:16-alpine
+    container_name: faithtribe-test-db
+    environment:
+      POSTGRES_USER: faithtribe
+      POSTGRES_PASSWORD: faithtribe
+      POSTGRES_DB: faithtribe
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    command: >
+      postgres
+      -c fsync=off
+      -c synchronous_commit=off
+      -c full_page_writes=off
+      -c shared_buffers=256MB
+      -c max_connections=200
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U faithtribe -d faithtribe"]
+      interval: 2s
+      timeout: 3s
+      retries: 15

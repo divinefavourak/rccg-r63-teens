@@ -7,7 +7,8 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
-from common.permissions import IsOwnerOrAdmin, IsTeen, IsCoordinatorOrAdmin
+from identity.authorization import HasPermission, IsSelfOrHasPermission, has_any_permission
+from identity.permissions_registry import Perm
 from .models import TeenProfile, DevotionalProgress, ManualProgress, Favorite
 from .serializers import (
     TeenProfileSerializer,
@@ -35,26 +36,19 @@ class TeenProfileViewSet(viewsets.ModelViewSet):
         return TeenProfileSerializer
     
     def get_permissions(self):
-        if self.action == 'create':
-            return [permissions.IsAuthenticated(), IsTeen()]
-        elif self.action in ['list']:
-            return [permissions.IsAuthenticated(), IsCoordinatorOrAdmin()]
+        if self.action == 'list':
+            return [permissions.IsAuthenticated(), HasPermission(Perm.PROFILES_VIEW)()]
         elif self.action in ['retrieve', 'update', 'partial_update', 'destroy']:
-            return [permissions.IsAuthenticated(), IsOwnerOrAdmin()]
+            return [permissions.IsAuthenticated(), IsSelfOrHasPermission(Perm.PROFILES_MANAGE)()]
         return [permissions.IsAuthenticated()]
     
     def get_queryset(self):
         user = self.request.user
         
-        # Admins see all
-        if user.role == 'admin':
+        # Profile viewers see all; everyone else sees only their own.
+        # (Node-scoped profile visibility via Membership is a documented follow-up.)
+        if has_any_permission(user, Perm.PROFILES_VIEW):
             return self.queryset
-        
-        # Coordinators see their province
-        if user.role == 'coordinator':
-            return self.queryset.filter(province=user.province)
-        
-        # Teens see only their own
         return self.queryset.filter(user=user)
     
     @action(detail=False, methods=['get', 'patch'])
@@ -122,11 +116,27 @@ class DevotionalProgressViewSet(viewsets.ModelViewSet):
         )
     
     def perform_create(self, serializer):
+        from django.db import transaction
+        from common.dates import app_today
+
         profile = self.request.user.teen_profile
-        devotional_progress = serializer.save(profile=profile)
-        
-        # Update profile streak
-        profile.update_streak(timezone.now().date())
+
+        # The DevotionalProgress row and its Progress action commit together, so a
+        # record_action failure can't leave an orphaned progress row (which on
+        # retry would either duplicate or hit the unique constraint).
+        with transaction.atomic():
+            devotional_progress = serializer.save(profile=profile)
+
+            # Progress spiritual-action stream — the authoritative streak source.
+            from progress import services as progress_services
+            from progress.models import ActionType
+            progress_services.record_action(
+                self.request.user, ActionType.DEVOTIONAL_COMPLETED,
+                source_reference=f'content.devotional:{devotional_progress.devotional_id}',
+            )
+
+            # Legacy TeenProfile streak — dual-written pending frontend migration.
+            profile.update_streak(app_today())
 
 
 class ManualProgressViewSet(viewsets.ModelViewSet):

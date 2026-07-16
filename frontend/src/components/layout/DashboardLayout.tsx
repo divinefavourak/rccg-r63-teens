@@ -181,8 +181,20 @@ const DashboardLayout = () => {
     const [showNotifications, setShowNotifications] = useState(false);
     const [showAvatarMenu, setShowAvatarMenu] = useState(false);
     const { theme, toggleTheme } = useTheme();
-    const { user } = useAuthContext();
+    const { user, ageGroup } = useAuthContext();
     const { unreadCount } = useNotifications();
+
+    const layoutBg = ageGroup === 'children'
+        ? 'bg-purple-50 dark:bg-purple-950'
+        : ageGroup === 'toddler'
+        ? 'bg-emerald-50 dark:bg-emerald-950'
+        : 'bg-gray-50 dark:bg-gray-900';
+
+    const headerBg = ageGroup === 'children'
+        ? 'bg-white border-b border-purple-200'
+        : ageGroup === 'toddler'
+        ? 'bg-white border-b border-emerald-200'
+        : 'bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700';
 
     const displayName = user?.first_name
         ? `${user.first_name} ${user.last_name || ''}`.trim()
@@ -202,7 +214,7 @@ const DashboardLayout = () => {
 
     return (
         <div
-            className="flex h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white transition-colors duration-300 overflow-hidden"
+            className={`flex h-screen ${layoutBg} text-gray-900 dark:text-white transition-colors duration-300 overflow-hidden`}
             onClick={(e) => {
                 const target = e.target as HTMLElement;
                 if (!target.closest('[data-panel]')) {
@@ -214,7 +226,7 @@ const DashboardLayout = () => {
             <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-                <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 h-16 flex items-center justify-between px-4 lg:px-8 z-20 shadow-sm">
+                <header className={`${headerBg} h-16 flex items-center justify-between px-4 lg:px-8 z-20 shadow-sm`}>
                     <div className="flex items-center gap-3">
                         <button
                             onClick={() => setIsSidebarOpen(true)}
@@ -222,7 +234,12 @@ const DashboardLayout = () => {
                         >
                             <Menu size={20} />
                         </button>
-                        <h2 className="text-lg font-bold text-gray-800 dark:text-white lg:hidden">Faith Tribe</h2>
+                        <h2 className="text-lg font-bold lg:hidden" style={
+                            ageGroup === 'children' ? { color: '#7C3AED' } :
+                            ageGroup === 'toddler'  ? { color: '#059669' } : {}
+                        }>
+                            {ageGroup === 'children' || ageGroup === 'toddler' ? 'Faith Tribe Kids' : 'Faith Tribe'}
+                        </h2>
                     </div>
 
                     <div className="flex items-center gap-2 sm:gap-3">
