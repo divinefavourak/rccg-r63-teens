@@ -115,23 +115,58 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    # WhiteNoise serves collectstatic output with hashed, long-cacheable names
+    # and pre-compressed variants. build.sh has always run collectstatic, but
+    # nothing served the result — there is no nginx and no Dockerfile — so the
+    # admin and the drf-spectacular UI were served by Django's fallback handler,
+    # uncompressed and unhashed. Must sit directly after SecurityMiddleware.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+    # Compresses responses over 200 bytes when the client advertises gzip. API
+    # payloads are JSON, which typically drops 70-80%. Placed high so it wraps
+    # everything below it.
+    'django.middleware.gzip.GZipMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
+    # Adds ETag/Last-Modified handling and turns a matching conditional request
+    # into a 304 with an empty body. Cheap, and it pairs with the client-side
+    # cache added in the frontend.
+    'django.middleware.http.ConditionalGetMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+REDIS_URL = os.getenv('REDIS_URL', default='redis://localhost:6379/0')
+
+
+def _redis_url(db):
+    """REDIS_URL with its logical database index replaced by `db`.
+
+    Lets the cache and the Celery broker share one connection string from the
+    environment while still occupying separate keyspaces. Falls back to
+    appending the index when the URL carries no path, which is how most managed
+    Redis providers hand out credentials.
+    """
+    from urllib.parse import urlsplit, urlunsplit
+
+    parts = urlsplit(REDIS_URL)
+    return urlunsplit(parts._replace(path=f'/{db}'))
+
+
 # Cache
 # IGNORE_EXCEPTIONS makes cache operations fail *open* (return None) instead of
 # raising when Redis is unreachable. This matters now that DRF throttling is
 # backed by this cache: a Redis blip must not turn every request into a 500 —
 # it should degrade to "unthrottled" and keep serving. Ignored errors are logged.
+#
+# It matters more now that application code caches permission lookups and daily
+# content: every cache read is written to fail open and fall through to the
+# database, so Redis going away costs latency, never correctness.
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': os.getenv('REDIS_URL', default='redis://localhost:6379/0'),
+        'LOCATION': REDIS_URL,
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
             'IGNORE_EXCEPTIONS': True,
@@ -139,6 +174,10 @@ CACHES = {
     }
 }
 DJANGO_REDIS_LOG_IGNORED_EXCEPTIONS = True
+
+# Namespace for cache keys so a version bump can invalidate everything at once
+# during a deploy that changes a cached payload's shape.
+CACHE_VERSION = int(os.getenv('CACHE_VERSION', '1'))
 
 
 ROOT_URLCONF = 'backend.urls'
@@ -167,9 +206,24 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 
 DATABASE_URL=os.getenv("DATABASE_URL")
 if(DATABASE_URL):
+    # Persistent connections.
+    #
+    # dj-database-url defaults conn_max_age to 0, which closes the socket after
+    # every request — so each request paid a fresh TCP connect plus a TLS
+    # handshake before running a single query. Against the ~184ms-away database
+    # described below, that was the largest single latency item in the stack and
+    # it applied to every endpoint uniformly.
+    #
+    # 600s is comfortably under the idle timeout of managed Postgres providers.
+    # conn_health_checks makes Django validate a reused connection before
+    # handing it to a view, so a connection the server dropped in between
+    # requests is transparently reopened rather than raising InterfaceError.
+    # It requires Django >= 4.1; this project is on 5.2.
     DATABASES = {
         'default': dj_database_url.config(
-            default=DATABASE_URL
+            default=DATABASE_URL,
+            conn_max_age=int(os.getenv('DB_CONN_MAX_AGE', '600')),
+            conn_health_checks=True,
         )
     }
 else:
@@ -267,6 +321,22 @@ SCRIPTURE_TIMEZONE = os.getenv('SCRIPTURE_TIMEZONE', 'Africa/Lagos')
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+# WhiteNoise storage backend, referenced by both STORAGES blocks below so the R2
+# and non-R2 paths cannot drift apart.
+#
+# CompressedManifestStaticFilesStorage does two things at collectstatic time:
+# writes .gz/.br siblings next to each file (so compression is not recomputed
+# per request), and rewrites filenames to include a content hash. The hash is
+# what makes the immutable cache header below safe — a changed file gets a new
+# URL, so nothing stale can be pinned.
+_WHITENOISE_STATIC = {
+    'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+}
+
+# Serve hashed static files with a one-year immutable cache. Only applies to
+# files WhiteNoise knows are content-addressed.
+WHITENOISE_MAX_AGE = 31536000
+
 # ============================================================
 # CLOUDFLARE R2 MEDIA STORAGE
 # ============================================================
@@ -301,18 +371,35 @@ if R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY and R2_ACCOUNT_ID:
         'default': {
             'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage',
         },
-        'staticfiles': {
-            'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
-        },
+        'staticfiles': _WHITENOISE_STATIC,
     }
 else:
     # Fall back to local storage when R2 credentials are not set
     MEDIA_URL = '/media/'
     MEDIA_ROOT = BASE_DIR / 'media'
+    STORAGES = {
+        'default': {
+            'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        },
+        'staticfiles': _WHITENOISE_STATIC,
+    }
 
-# File upload settings — raised for video files
-FILE_UPLOAD_MAX_MEMORY_SIZE = 500 * 1024 * 1024  # 500MB
-DATA_UPLOAD_MAX_MEMORY_SIZE = 500 * 1024 * 1024   # 500MB
+# File upload settings.
+#
+# These were both 500MB. FILE_UPLOAD_MAX_MEMORY_SIZE is the threshold above
+# which an uploaded file spills to a temp file instead of being held in RAM, so
+# 500MB meant a single upload could pin half a gigabyte of process memory.
+# DATA_UPLOAD_MAX_MEMORY_SIZE is worse: it caps the size of *any* request body
+# read into memory, so it applied to every POST on the site, not just uploads.
+#
+# 5MB covers every JSON payload and form post the API accepts. Large media goes
+# straight to R2, and anything over the file threshold streams through a temp
+# file rather than RAM — which is the behaviour that was being bypassed.
+FILE_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv('FILE_UPLOAD_MAX_MEMORY_SIZE', 5 * 1024 * 1024))
+DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv('DATA_UPLOAD_MAX_MEMORY_SIZE', 10 * 1024 * 1024))
+# Bulk registration CSVs can carry a few thousand rows; the default of 1000
+# fields would reject them.
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000
 FILE_UPLOAD_PERMISSIONS = 0o644
 
 # Allowed file types for payment receipts
@@ -351,10 +438,17 @@ REST_FRAMEWORK = {
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
     ],
+    # BrowsableAPIRenderer is a development tool and is now gated on DEBUG.
+    #
+    # In production it was a real cost, not just dead weight: it is content
+    # negotiated, so any request sending `Accept: text/html` — a browser, a link
+    # preview bot, an uptime checker — got the full HTML form instead of JSON.
+    # Building that form for a ModelSerializer with relational fields makes DRF
+    # enumerate each related queryset to populate <select> options, so a single
+    # such request could scan several tables that the JSON path never touches.
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
-        'rest_framework.renderers.BrowsableAPIRenderer',
-    ],
+    ] + (['rest_framework.renderers.BrowsableAPIRenderer'] if DEBUG else []),
     'UPLOADED_FILES_USE_URL': True,
     'TEST_REQUEST_DEFAULT_FORMAT': 'json',
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
@@ -505,8 +599,17 @@ SPECTACULAR_SETTINGS = {
 # CELERY SETTINGS
 # ==============================================================================
 
-CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+# Celery gets its own Redis logical database.
+#
+# Broker and cache both pointed at db 0, so queued task messages and cache
+# entries shared one keyspace. Now that application code actually writes to the
+# cache, a `cache.clear()` — or django-redis evicting under memory pressure —
+# would have silently dropped pending tasks. CELERY_REDIS_DB defaults to 1;
+# override it if the host only provisions a single database.
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL') or _redis_url(
+    os.getenv('CELERY_REDIS_DB', '1')
+)
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND') or CELERY_BROKER_URL
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'

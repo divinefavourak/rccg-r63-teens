@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuthContext } from '../context/AuthContext';
 import {
@@ -20,7 +20,9 @@ import {
     X
 } from 'lucide-react';
 import api from '../api/axios';
-import logo from '../assets/logo.jpg';
+import { BRAND } from '../constants/brand';
+
+const logo = BRAND.rccg;
 
 interface NotifItem {
     id: string;
@@ -112,12 +114,12 @@ const AdminLayout = () => {
 
     // Sidebar navigation items
     const navItems = [
-        { name: 'Dashboard', path: '/admin/dashboard', icon: <LayoutDashboard size={20} /> },
-        { name: 'Devotionals', path: '/admin/devotionals', icon: <BookOpen size={20} /> },
-        { name: 'Manuals', path: '/admin/manuals', icon: <FileText size={20} /> },
-        { name: 'Media', path: '/admin/media', icon: <PlayCircle size={20} /> },
-        { name: 'Events', path: '/admin/events', icon: <Calendar size={20} /> },
-        { name: 'Users', path: '/admin/users', icon: <Users size={20} /> },
+        { name: 'Dashboard', path: '/legacy-admin/dashboard', icon: <LayoutDashboard size={20} /> },
+        { name: 'Devotionals', path: '/legacy-admin/devotionals', icon: <BookOpen size={20} /> },
+        { name: 'Manuals', path: '/legacy-admin/manuals', icon: <FileText size={20} /> },
+        { name: 'Media', path: '/legacy-admin/media', icon: <PlayCircle size={20} /> },
+        { name: 'Events', path: '/legacy-admin/events', icon: <Calendar size={20} /> },
+        { name: 'Users', path: '/legacy-admin/users', icon: <Users size={20} /> },
     ];
 
     const isActive = (path: string) => location.pathname === path;
@@ -168,7 +170,7 @@ const AdminLayout = () => {
                     {/* Bottom Settings */}
                     <div className="p-3 border-t border-gray-200 dark:border-gray-700">
                         <Link
-                            to="/admin/settings"
+                            to="/legacy-admin/settings"
                             className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50`}
                         >
                             <Settings size={20} />
@@ -204,7 +206,7 @@ const AdminLayout = () => {
                     </div>
 
                     <div className="flex items-center gap-6">
-                        {/* ── Notification Bell ── */}
+                        {/* â”€â”€ Notification Bell â”€â”€ */}
                         <div className="relative" ref={notifRef}>
                             <button
                                 onClick={handleBellClick}
@@ -245,7 +247,7 @@ const AdminLayout = () => {
                                         ) : notifs.map(n => (
                                             <Link
                                                 key={n.id}
-                                                to={n.type === 'pending_reg' ? '/admin/events' : '/admin/dashboard'}
+                                                to={n.type === 'pending_reg' ? '/legacy-admin/events' : '/legacy-admin/dashboard'}
                                                 onClick={() => setNotifOpen(false)}
                                                 className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border-b border-gray-50 dark:border-gray-700/50 last:border-0"
                                             >
@@ -264,11 +266,11 @@ const AdminLayout = () => {
                                     {/* Footer */}
                                     <div className="px-4 py-2.5 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
                                         <Link
-                                            to="/admin/events"
+                                            to="/legacy-admin/events"
                                             onClick={() => setNotifOpen(false)}
                                             className="text-xs font-semibold text-primary-600 hover:text-primary-700"
                                         >
-                                            View all registrations →
+                                            View all registrations â†’
                                         </Link>
                                     </div>
                                 </div>

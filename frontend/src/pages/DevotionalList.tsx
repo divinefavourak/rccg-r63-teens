@@ -4,6 +4,7 @@ import DevotionalCard from '../components/DevotionalCard';
 import { type Devotional } from '../types';
 import api from '../api/axios';
 import { FaCalendarAlt, FaSearch } from 'react-icons/fa';
+import Seo from '../components/Seo';
 
 const DevotionalList = () => {
     const [devotionals, setDevotionals] = useState<Devotional[]>([]);
@@ -40,6 +41,7 @@ const DevotionalList = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+            <Seo title="Devotionals" description="Daily devotionals for teenagers — one day, one verse, one message. Read today's and browse the archive." path="/devotionals" />
             <Navbar />
             <div className="container mx-auto px-4 py-24">
 

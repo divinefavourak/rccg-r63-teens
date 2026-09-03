@@ -154,6 +154,71 @@ def scripture_cards(devotional):
     ]
 
 
+def age_group_for(user):
+    """Public alias — the Today cache key is partitioned by age group, because
+    `todays_challenge` targets challenges at age groups."""
+    return _age_group_for(user)
+
+
+def shared_payload(user, on=None):
+    """
+    The part of Today that is identical for everyone in the same age group on the
+    same day: the devotional, the Verse of the Day, the Scripture cards and the
+    challenge.
+
+    Separated from `assemble` so the view can serialize this once per
+    (day, age group) and serve it from cache, instead of rebuilding it for every
+    request. `greeting` is not here — it depends on the hour, not the day.
+    """
+    on = on or app_today()
+    devotional = daily.todays_devotional()
+    return {
+        'date': on,
+        'devotional': devotional,
+        'has_devotional': devotional is not None,
+        'memory_verse': daily.primary_memory_verse(devotional),
+        'scripture_references': scripture_cards(devotional),
+        'challenge': todays_challenge(user=user, on=on),
+    }
+
+
+def personal_payload(user, challenge_id=None, devotional_id=None, on=None):
+    """
+    The part of Today that belongs to one teen. Never cached.
+
+    Takes IDs rather than model instances on purpose: both completion checks only
+    ever need the primary key (`UserReadLog.filter(devotional=...)` and the
+    `challenge:{id}` source reference), so the caller can serve them straight out
+    of the cached shared payload instead of re-querying for objects it already
+    described.
+    """
+    on = on or app_today()
+    if not (user and user.is_authenticated):
+        # Guests get the same shape with empty values rather than absent keys, so
+        # the client renders one layout and never branches on key presence.
+        return {
+            'devotional_completed': False,
+            'challenge_completed': False,
+            'streak': None,
+            'grace_balance': 0,
+            'continue_reading': None,
+        }
+    return {
+        'devotional_completed': bool(devotional_id) and UserReadLog.objects.filter(
+            user=user, devotional_id=devotional_id,
+        ).exists(),
+        'challenge_completed': bool(challenge_id) and SpiritualAction.objects.filter(
+            user=user,
+            action_type=ActionType.CHALLENGE_COMPLETED,
+            source_reference=f'{CHALLENGE_SOURCE_PREFIX}:{challenge_id}',
+            occurred_on=on,
+        ).exists(),
+        'streak': progress_services.streak_for(user),
+        'grace_balance': progress_services.grace_balance(user),
+        'continue_reading': bible_services.get_continue_reading(user),
+    }
+
+
 def assemble(user, now=None):
     """
     Everything the Today screen renders, in one dict.
@@ -162,40 +227,26 @@ def assemble(user, now=None):
     error: `devotional` is None and `has_devotional` is False, and the client
     renders the empty state from `docs/06-user-flows.md` flow 5. Today must still
     render — the streak, the challenge and continue-reading are all still true.
+
+    Composed from `shared_payload` and `personal_payload` rather than repeating
+    their logic, so the uncached path here and the cached path in TodayView can
+    never disagree about what Today contains.
     """
     from django.utils import timezone as dj_timezone
 
     now = now or dj_timezone.localtime()
     on = app_today()
 
-    devotional = daily.todays_devotional()
-    memory_verse = daily.primary_memory_verse(devotional)
-    challenge = todays_challenge(user=user, on=on)
+    shared = shared_payload(user, on=on)
+    challenge, devotional = shared['challenge'], shared['devotional']
 
-    payload = {
-        'date': on,
+    return {
+        **shared,
         'greeting': greeting_for(now.hour),
-        'devotional': devotional,
-        'has_devotional': devotional is not None,
-        'memory_verse': memory_verse,
-        'scripture_references': scripture_cards(devotional),
-        'challenge': challenge,
-        # Personal sections. None/False for guests rather than absent, so the
-        # client renders one shape and does not branch on key presence.
-        'devotional_completed': False,
-        'challenge_completed': False,
-        'streak': None,
-        'grace_balance': 0,
-        'continue_reading': None,
+        **personal_payload(
+            user,
+            challenge_id=challenge.id if challenge else None,
+            devotional_id=devotional.id if devotional else None,
+            on=on,
+        ),
     }
-
-    if user and user.is_authenticated:
-        payload.update({
-            'devotional_completed': devotional_completed(user, devotional),
-            'challenge_completed': challenge_completed(user, challenge, on=on),
-            'streak': progress_services.streak_for(user),
-            'grace_balance': progress_services.grace_balance(user),
-            'continue_reading': bible_services.get_continue_reading(user),
-        })
-
-    return payload

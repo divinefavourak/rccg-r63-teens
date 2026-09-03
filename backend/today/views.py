@@ -4,13 +4,33 @@ The Today API — one call, one screen.
 `GET  /api/v1/today/`                  the whole daily experience
 `POST /api/v1/today/challenge/complete/` complete today's challenge inline
 """
+from django.conf import settings
+from django.core.cache import cache
+from django.utils import timezone as dj_timezone
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from common.dates import app_timezone, app_today, day_bounds
+
 from . import services
-from .serializers import TodaySerializer
+from .serializers import TodayPersonalSerializer, TodaySharedSerializer
+
+
+def _seconds_until_midnight():
+    """TTL that expires exactly when the content it holds stops being today's.
+
+    A fixed TTL would either serve yesterday's devotional past midnight or expire
+    pointlessly early. day_bounds is the app-timezone helper, so the rollover is a
+    Lagos midnight, not a UTC one — the same distinction common/dates.py exists
+    to enforce.
+    """
+    _, end = day_bounds(app_today())
+    remaining = (end - dj_timezone.now()).total_seconds()
+    # Floor at a minute so a request landing a hair before midnight cannot write
+    # a zero or negative TTL.
+    return max(60, int(remaining))
 
 
 class TodayView(APIView):
@@ -31,8 +51,40 @@ class TodayView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, *args, **kwargs):
-        payload = services.assemble(request.user)
-        return Response(TodaySerializer(payload).data)
+        user = request.user
+        on = app_today()
+        now = dj_timezone.now().astimezone(app_timezone())
+
+        # The shared half — devotional, Verse of the Day, Scripture cards,
+        # challenge — is one editorial decision per day, per age group. It was
+        # being rebuilt from scratch on every request to the busiest endpoint in
+        # the product. Cached under (day, age group), which is a handful of
+        # entries serving every teen in the region.
+        #
+        # Cache reads fail open: CACHES sets IGNORE_EXCEPTIONS, so an unreachable
+        # Redis returns None here and the payload is simply rebuilt.
+        age_group = services.age_group_for(user) or 'all'
+        key = f'today:v{settings.CACHE_VERSION}:{on.isoformat()}:{age_group}'
+
+        shared = cache.get(key)
+        if shared is None:
+            shared = TodaySharedSerializer(services.shared_payload(user, on=on)).data
+            cache.set(key, shared, _seconds_until_midnight())
+
+        # The completion checks need only the two primary keys, and the cached
+        # payload already carries them — so a cache hit rebuilds nothing.
+        personal = services.personal_payload(
+            user,
+            challenge_id=(shared.get('challenge') or {}).get('id'),
+            devotional_id=(shared.get('devotional') or {}).get('id'),
+            on=on,
+        )
+
+        return Response({
+            **shared,
+            'greeting': services.greeting_for(now.hour),
+            **TodayPersonalSerializer(personal).data,
+        })
 
 
 class CompleteChallengeView(APIView):

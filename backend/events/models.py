@@ -69,7 +69,14 @@ class Event(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     virtual_platform = models.CharField(max_length=100, blank=True)  # Zoom, Google Meet, etc.
     
     # Visuals
-    cover_image = models.ImageField(upload_to='events/')
+    #
+    # Optional. This was a plain ImageField with neither blank nor null, which
+    # made it *required* — so creating an event without a photo failed with
+    # DRF's "No file was submitted." and the Console, whose editor offers no
+    # upload field, could not create an event at all. An event is a real thing
+    # whether or not someone has a banner for it yet; the image is decoration.
+    # (Devotional.cover_image already gets this right.)
+    cover_image = models.ImageField(upload_to='events/', blank=True, null=True)
     gallery_images = models.JSONField(default=list, blank=True)  # List of image URLs
     promotional_video_url = models.URLField(blank=True)
     
@@ -404,11 +411,15 @@ class EventRegistration(UUIDMixin, TimestampMixin):
         verbose_name_plural = 'Event Registrations'
         unique_together = [['event', 'attendee_email']]  # One registration per email per event
         indexes = [
-            models.Index(fields=['registration_id']),
+            # registration_id is already unique=True + db_index=True on the field,
+            # so the entry that stood here was a third index on one column.
             models.Index(fields=['event', 'status']),
             models.Index(fields=['attendee_province']),
             models.Index(fields=['payment_status']),
             models.Index(fields=['attendee_email']),
+            # Matches the default ordering above; this is the widest table in the
+            # project, so an unindexed sort over it is the most expensive one.
+            models.Index(fields=['-created_at'], name='evreg_created_desc_idx'),
         ]
     
     def __str__(self):

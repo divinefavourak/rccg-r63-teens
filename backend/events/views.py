@@ -5,7 +5,10 @@ from rest_framework import viewsets, generics, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
+from decimal import Decimal
+
 from django.db.models import Count, Sum, Q
+from django.db.models.functions import Coalesce
 
 from identity.authorization import HasPermission, HasPermissionOrReadOnly, has_any_permission
 from identity.permissions_registry import Perm
@@ -178,15 +181,17 @@ class EventViewSet(viewsets.ModelViewSet):
                 Q(registration_id__icontains=search)
             )
         
-        # Get stats
-        stats = {
-            'total': registrations.count(),
-            'confirmed': registrations.filter(status='confirmed').count(),
-            'pending': registrations.filter(status='pending').count(),
-            'cancelled': registrations.filter(status='cancelled').count(),
-            'checked_in': registrations.filter(status='checked_in').count(),
-        }
-        
+        # Five COUNTs collapsed into one conditional aggregate. This runs
+        # alongside the paginator's own COUNT and the page query, so it was six
+        # round trips on a screen that shows one table.
+        stats = registrations.aggregate(
+            total=Count('id'),
+            confirmed=Count('id', filter=Q(status='confirmed')),
+            pending=Count('id', filter=Q(status='pending')),
+            cancelled=Count('id', filter=Q(status='cancelled')),
+            checked_in=Count('id', filter=Q(status='checked_in')),
+        )
+
         page = self.paginate_queryset(registrations)
         if page is not None:
             serializer = EventRegistrationListSerializer(page, many=True)
@@ -208,22 +213,28 @@ class EventViewSet(viewsets.ModelViewSet):
     def dashboard(self, request, pk=None):
         """Get dashboard stats for an event."""
         event = self.get_object()
-        registrations = event.registrations.all()
-        
-        stats = {
-            'total_registrations': registrations.count(),
-            'confirmed_count': registrations.filter(status='confirmed').count(),
-            'pending_count': registrations.filter(status='pending').count(),
-            'cancelled_count': registrations.filter(status='cancelled').count(),
-            'waitlisted_count': registrations.filter(status='waitlisted').count(),
-            'checked_in_count': registrations.filter(status='checked_in').count(),
-            'paid_count': registrations.filter(payment_status='paid').count(),
-            'unpaid_count': registrations.filter(payment_status='pending').count(),
-            'total_revenue': registrations.filter(
-                payment_status='paid'
-            ).aggregate(total=Sum('amount_paid'))['total'] or 0,
-        }
-        
+
+        # One pass over the registrations instead of nine.
+        #
+        # Each of these was a separate .count() or .aggregate() on the same
+        # queryset — nine round trips to compute nine numbers from one table.
+        # Conditional aggregation gets them all in a single GROUP-BY-less scan,
+        # which matters most on exactly the connection this product runs over.
+        stats = event.registrations.aggregate(
+            total_registrations=Count('id'),
+            confirmed_count=Count('id', filter=Q(status='confirmed')),
+            pending_count=Count('id', filter=Q(status='pending')),
+            cancelled_count=Count('id', filter=Q(status='cancelled')),
+            waitlisted_count=Count('id', filter=Q(status='waitlisted')),
+            checked_in_count=Count('id', filter=Q(status='checked_in')),
+            paid_count=Count('id', filter=Q(payment_status='paid')),
+            unpaid_count=Count('id', filter=Q(payment_status='pending')),
+            total_revenue=Coalesce(
+                Sum('amount_paid', filter=Q(payment_status='paid')),
+                Decimal('0'),
+            ),
+        )
+
         serializer = EventDashboardStatsSerializer(stats)
         return Response(serializer.data)
 

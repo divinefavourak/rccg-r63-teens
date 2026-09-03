@@ -1,143 +1,166 @@
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import ResponsiveImage from './ResponsiveImage';
+import type { ImageName } from '../generated/images';
 
-import img1 from '../assets/img1.JPG';
-import img2 from '../assets/img2.JPG';
-import img3 from '../assets/img3.JPG';
-import img4 from '../assets/img4.JPG';
-import img5 from '../assets/img5.JPG';
+const SLIDES: { name: ImageName; alt: string }[] = [
+  { name: 'img1', alt: 'Teens worshipping together at camp' },
+  { name: 'img2', alt: 'Group photo of the Faith Tribe teens' },
+  { name: 'img3', alt: 'Teens at an outdoor camp activity' },
+  { name: 'img4', alt: 'Praise and worship session' },
+  { name: 'img5', alt: 'Teens gathered at Glory Arena' },
+];
 
-const images = [img1, img2, img3, img4, img5];
+const AUTOPLAY_MS = 5000;
 
+/**
+ * Depth carousel over the camp photos.
+ *
+ * The previous version mounted all five slides at once from
+ * `import img1 from '../assets/img1.JPG'` — five 5184x3456 camera originals,
+ * 37.5MB over the wire and ~358MB of decoded bitmap, which is enough to have
+ * the browser kill the tab on a 2GB Android.
+ *
+ * Two changes fix it: images come from the responsive pipeline (11-17KB each on
+ * a phone), and only the three visible slides are mounted, so the offscreen
+ * neighbours are never decoded at all.
+ */
 const HeroCarousel = () => {
-    const [activeIndex, setActiveIndex] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const prefersReducedMotion = useRef(false);
 
-    const nextSlide = () => {
-        setActiveIndex((prev) => (prev + 1) % images.length);
-    };
+  useEffect(() => {
+    prefersReducedMotion.current =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }, []);
 
-    const prevSlide = () => {
-        setActiveIndex((prev) => (prev - 1 + images.length) % images.length);
-    };
+  const go = useCallback((delta: number) => {
+    setActiveIndex((prev) => (prev + delta + SLIDES.length) % SLIDES.length);
+  }, []);
 
-    // Auto-play
-    useEffect(() => {
-        const timer = setInterval(nextSlide, 5000);
-        return () => clearInterval(timer);
-    }, []);
+  useEffect(() => {
+    if (paused || prefersReducedMotion.current) return;
+    const timer = setInterval(() => go(1), AUTOPLAY_MS);
+    return () => clearInterval(timer);
+  }, [paused, go]);
 
-    const getImageIndex = (offset: number) => {
-        // Handling circular index
-        return (activeIndex + offset + images.length) % images.length;
-    };
+  // Pause while the tab is hidden. An interval firing behind a backgrounded tab
+  // burns battery on a phone for animation nobody can see.
+  useEffect(() => {
+    const onVisibility = () => setPaused(document.hidden);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
 
-    return (
-        <div className="relative w-full h-[400px] md:h-[500px] flex items-center justify-center perspective-1000 overflow-hidden">
+  return (
+    <div
+      className="relative flex h-[400px] w-full items-center justify-center overflow-hidden md:h-[500px]"
+      style={{ perspective: '1000px' }}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      role="region"
+      aria-roledescription="carousel"
+      aria-label="Camp photos"
+    >
+      <div className="relative flex h-full w-full items-center justify-center">
+        {/*
+          Only -1, 0, +1 are mounted. The old version rendered [-2..+2], so the
+          two far slides were downloaded and decoded to sit at opacity 0.4
+          behind the others.
+        */}
+        {[-1, 0, 1].map((offset) => {
+          const index = (activeIndex + offset + SLIDES.length) % SLIDES.length;
+          const slide = SLIDES[index];
+          const isCenter = offset === 0;
 
-            {/* Cards Container */}
-            <div className="relative w-full h-full flex items-center justify-center">
-                {[-2, -1, 0, 1, 2].map((offset) => {
-                    const index = getImageIndex(offset);
-                    const image = images[index];
+          const transform = isCenter
+            ? 'translateX(0) scale(1.1) rotateY(0deg)'
+            : `translateX(${offset * 220}px) scale(0.85) rotateY(${offset * -15}deg)`;
 
-                    // Determine visual state based on offset
-                    let zIndex = 0;
-                    let scale = 0.6;
-                    let opacity = 0;
-                    let x = 0;
-                    let rotateY = 0;
-
-                    if (offset === 0) { // CENTER
-                        zIndex = 20;
-                        scale = 1.1;
-                        opacity = 1;
-                        x = 0;
-                        rotateY = 0;
-                    } else if (Math.abs(offset) === 1) { // ADJACENT
-                        zIndex = 10;
-                        scale = 0.85;
-                        opacity = 0.7;
-                        x = offset * 220; // Spread distance
-                        rotateY = offset * -15; // Rotate inwards
-                    } else if (Math.abs(offset) === 2) { // FAR
-                        zIndex = 5;
-                        scale = 0.7;
-                        opacity = 0.4;
-                        x = offset * 320; // Spread distance
-                        rotateY = offset * -25;
-                    }
-
-                    // Adjust X for mobile check?
-                    // For now hardcoded logic fits desktop well.
-
-                    return (
-                        <motion.div
-                            key={`slide-${index}`} // Re-render if index changes position? No, optimize via layout?
-                            // Ideally keys should track the Image itself, not the slot. 
-                            // But for circular buffer, easiest is to just compute props.
-                            className="absolute rounded-2xl shadow-2xl overflow-hidden border-4 border-white dark:border-gray-800 bg-gray-900"
-                            initial={false}
-                            animate={{
-                                x,
-                                scale,
-                                opacity,
-                                zIndex,
-                                rotateY,
-                            }}
-                            transition={{
-                                duration: 0.8,
-                                ease: [0.16, 1, 0.3, 1], // Custom spring-like bezier
-                            }}
-                            style={{
-                                width: '300px', // Base width
-                                height: '400px', // Base height
-                                transformStyle: 'preserve-3d',
-                            }}
-                            onClick={() => {
-                                if (offset !== 0) {
-                                    setActiveIndex(index);
-                                }
-                            }}
-                        >
-                            <img
-                                src={image}
-                                alt={`Slide ${index + 1}`}
-                                className="w-full h-full object-cover pointer-events-none"
-                            />
-                            {/* Optional overlay for side images to darken them further */}
-                            <div className={`absolute inset-0 bg-black transition-opacity duration-500 ${offset === 0 ? 'opacity-0' : 'opacity-40'}`} />
-                        </motion.div>
-                    );
-                })}
-            </div>
-
-            {/* Navigation Buttons */}
-            <button
-                onClick={prevSlide}
-                className="absolute left-4 md:left-10 z-30 p-3 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md text-white border border-white/20 transition-all hover:scale-110"
+          return (
+            <div
+              key={slide.name}
+              className="absolute overflow-hidden rounded-2xl border-4 border-white bg-gray-900 shadow-2xl dark:border-gray-800"
+              style={{
+                width: '300px',
+                height: '400px',
+                // Plain CSS transitions on transform/opacity only. These are
+                // compositor-driven, so they do not trigger layout or paint —
+                // the reason this drops framer-motion here rather than keeping
+                // an animation library on the landing page's critical path.
+                transform,
+                opacity: isCenter ? 1 : 0.7,
+                zIndex: isCenter ? 20 : 10,
+                transformStyle: 'preserve-3d',
+                transition: prefersReducedMotion.current
+                  ? 'none'
+                  : 'transform 0.8s cubic-bezier(0.16,1,0.3,1), opacity 0.8s cubic-bezier(0.16,1,0.3,1)',
+                cursor: isCenter ? 'default' : 'pointer',
+              }}
+              onClick={() => !isCenter && go(offset)}
+              aria-hidden={!isCenter}
             >
-                <ChevronLeft size={24} />
-            </button>
-            <button
-                onClick={nextSlide}
-                className="absolute right-4 md:right-10 z-30 p-3 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md text-white border border-white/20 transition-all hover:scale-110"
-            >
-                <ChevronRight size={24} />
-            </button>
+              <ResponsiveImage
+                name={slide.name}
+                alt={slide.alt}
+                // Only the first slide of the first render is the LCP candidate.
+                priority={isCenter && index === 0}
+                /*
+                  600px, not the slot's 300px width.
 
-            {/* Indicators */}
-            <div className="absolute bottom-4 z-30 flex gap-2">
-                {images.map((_, i) => (
-                    <div
-                        key={i}
-                        className={`w-2 h-2 rounded-full transition-all duration-300 ${i === activeIndex ? 'w-6 bg-primary-500' : 'bg-gray-500/50'}`}
-                    />
-                ))}
+                  The slot is 300x400 — portrait — while the photos are 3:2
+                  landscape, so `object-cover` scales to cover the *height*:
+                  400 * 3/2 = 600 CSS px of image content, with the sides cropped.
+                  Declaring 300px made the browser choose the 480-wide file and
+                  then upscale it 1.25x to fill the box, which is what made the
+                  carousel look soft regardless of encoder quality.
+
+                  The side slides render at scale(0.85) under a 40% black
+                  overlay at 0.7 opacity, so they ask for less: detail there is
+                  not perceptible and the bytes are better spent on the slide
+                  someone is actually looking at.
+                */
+                sizes={isCenter ? '600px' : '420px'}
+                className="h-full w-full object-cover"
+              />
+              {!isCenter && <div className="absolute inset-0 bg-black opacity-40" />}
             </div>
+          );
+        })}
+      </div>
 
-        </div>
-    );
+      <button
+        onClick={() => go(-1)}
+        aria-label="Previous photo"
+        className="absolute left-4 z-30 rounded-full border border-white/20 bg-black/30 p-3 text-white transition-colors hover:bg-black/50 md:left-10"
+      >
+        <ChevronLeft size={24} />
+      </button>
+      <button
+        onClick={() => go(1)}
+        aria-label="Next photo"
+        className="absolute right-4 z-30 rounded-full border border-white/20 bg-black/30 p-3 text-white transition-colors hover:bg-black/50 md:right-10"
+      >
+        <ChevronRight size={24} />
+      </button>
+
+      <div className="absolute bottom-4 z-30 flex gap-2">
+        {SLIDES.map((slide, i) => (
+          <button
+            key={slide.name}
+            onClick={() => setActiveIndex(i)}
+            aria-label={`Go to photo ${i + 1}`}
+            aria-current={i === activeIndex}
+            className={`h-2 rounded-full transition-all duration-300 ${
+              i === activeIndex ? 'w-6 bg-primary-500' : 'w-2 bg-gray-500/50'
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
 };
 
 export default HeroCarousel;

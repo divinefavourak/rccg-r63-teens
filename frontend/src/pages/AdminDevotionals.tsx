@@ -8,6 +8,8 @@ import {
 import api from '../api/axios';
 import type { Devotional } from '../types';
 import toast from 'react-hot-toast';
+import { todayISO } from '../utils/dates';
+import { formatAPIDate } from '../utils/dates';
 
 const AdminDevotionals = () => {
     const [devotionals, setDevotionals] = useState<Devotional[]>([]);
@@ -295,7 +297,7 @@ const AdminDevotionals = () => {
                                 return (
                                     <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/20 transition-colors">
                                         <td className="p-4 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                            {new Date(item.date).toLocaleDateString()}
+                                            {formatAPIDate(item.date, { year: 'numeric', month: 'short', day: 'numeric' })}
                                         </td>
                                         <td className="p-4 text-sm font-medium text-gray-900 dark:text-white">{item.title}</td>
                                         <td className="p-4 text-sm text-gray-500 dark:text-gray-400">
@@ -566,7 +568,7 @@ const AdminDevotionals = () => {
                             <div>
                                 <h3 className="text-xl font-bold text-gray-900 dark:text-white">{viewDevotional.title}</h3>
                                 <div className="flex items-center gap-3 mt-1">
-                                    <p className="text-sm text-gray-500">{new Date(viewDevotional.date).toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                                    <p className="text-sm text-gray-500">{formatAPIDate(viewDevotional.date, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }, 'en-GB')}</p>
                                     {viewDevotional.author && <span className="text-xs text-gray-400">· {viewDevotional.author}</span>}
                                 </div>
                             </div>
@@ -684,7 +686,7 @@ const AdminDevotionals = () => {
                                     type="date"
                                     value={importDate}
                                     onChange={e => setImportDate(e.target.value)}
-                                    max={new Date().toISOString().split('T')[0]}
+                                    max={todayISO()}
                                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none text-sm"
                                 />
                             </div>

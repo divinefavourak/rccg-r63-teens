@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { userService, UserData } from "../services/userService";
+import { userService, type UserData } from "../services/userService";
 import { CHURCH_INFO_FIELDS } from "../constants/formFields"; // Re-use province list
 import Navbar from "../components/Navbar";
 import toast from "react-hot-toast";

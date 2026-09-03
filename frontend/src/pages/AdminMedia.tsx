@@ -13,6 +13,7 @@ import {
 import api from '../api/axios';
 import type { MediaEpisode } from '../types';
 import toast from 'react-hot-toast';
+import { todayISO } from '../utils/dates';
 
 const AdminMedia = () => {
     const [media, setMedia] = useState<MediaEpisode[]>([]);
@@ -30,7 +31,7 @@ const AdminMedia = () => {
         media_type: 'audio',
         file: null as File | null,
         thumbnail: null as File | null,
-        published_at: new Date().toISOString().split('T')[0]
+        published_at: todayISO()
     });
 
     useEffect(() => {
@@ -105,7 +106,7 @@ const AdminMedia = () => {
                 media_type: 'audio',
                 file: null,
                 thumbnail: null,
-                published_at: new Date().toISOString().split('T')[0]
+                published_at: todayISO()
             });
             
             fetchMedia();
@@ -125,7 +126,7 @@ const AdminMedia = () => {
             media_type: item.media_type,
             file: null,
             thumbnail: null,
-            published_at: item.published_at ? item.published_at.split('T')[0] : new Date().toISOString().split('T')[0],
+            published_at: item.published_at ? item.published_at.split('T')[0] : todayISO(),
         });
         setIsModalOpen(true);
     };
@@ -160,7 +161,7 @@ const AdminMedia = () => {
     const closeModal = () => {
         setIsModalOpen(false);
         setEditingMedia(null);
-        setFormData({ title: '', description: '', media_type: 'audio', file: null, thumbnail: null, published_at: new Date().toISOString().split('T')[0] });
+        setFormData({ title: '', description: '', media_type: 'audio', file: null, thumbnail: null, published_at: todayISO() });
     };
 
     const handleDelete = async (id: string) => {

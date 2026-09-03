@@ -6,13 +6,14 @@ logic. Authority is derived from *current* RoleAssignments (active + within thei
 date window) whose Role carries the permission, evaluated within the assignment
 node's subtree (materialized-path scoping, reused from hierarchy).
 """
+from django.conf import settings
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework.permissions import BasePermission
 
-from hierarchy.services import is_ancestor_or_self
 from .models import Membership, MembershipTransfer, RoleAssignment, RolePermission
 from .permissions_registry import Perm
 
@@ -22,7 +23,13 @@ from .permissions_registry import Perm
 # ---------------------------------------------------------------------------
 
 def active_role_assignments(user):
-    """Current (active + in-window) role assignments for a user."""
+    """Current (active + in-window) role assignments for a user.
+
+    Returns a queryset of live model instances. Callers that only need to *test*
+    authority should go through the cached snapshot below instead — this hits the
+    database every time by design, because its remaining callers (the ``/me/``
+    serializer, hierarchy scoping) want the real objects.
+    """
     today = timezone.localdate()
     return (
         RoleAssignment.objects
@@ -42,6 +49,162 @@ def _role_permission_map(assignments):
                    .select_related('permission')):
             mapping[rp.role_id].add(rp.permission.code)
     return mapping
+
+
+# ---------------------------------------------------------------------------
+# Cached authority snapshot
+# ---------------------------------------------------------------------------
+#
+# Every authorization helper below used to run the same two queries —
+# active_role_assignments + _role_permission_map — with no memoisation of any
+# kind. A single list request could pay that repeatedly: EventViewSet.get_queryset
+# alone reached ~11 authorization queries before the page query ran, because the
+# coarse gate, the scoping call and the age-group filter each re-derived the same
+# facts.
+#
+# A snapshot is the minimum needed to answer every question in this module:
+# per assignment, the role, the node's materialized path and depth, and the
+# permission codes that role carries. treebeard's is_descendant_of is a pure
+# path-prefix comparison (mp_tree.py: `self.path.startswith(node.path) and
+# self.depth > node.depth`), so node containment is answerable from the path and
+# depth alone, without loading node rows.
+#
+# Two layers:
+#   * on the user instance — request-scoped for free, since Django reuses one
+#     request.user object for the whole request and it is discarded with it;
+#   * in Redis — shared across requests and processes.
+#
+# Correctness notes:
+#   * The date is part of the cache key. Assignments are filtered by a start/end
+#     window against today, so a snapshot must not outlive the calendar day that
+#     produced it.
+#   * A global version counter is part of the key, bumped by signals whenever a
+#     RoleAssignment, Role or RolePermission changes. Granting or revoking a role
+#     therefore takes effect on the next request, not after a TTL. It is global
+#     rather than per-user because editing a Role's permissions changes authority
+#     for every holder of that role, and role edits are rare admin actions.
+#   * Every cache read fails open to the database: CACHES is configured with
+#     IGNORE_EXCEPTIONS, so Redis being unreachable costs latency, never
+#     correctness.
+
+_AUTHZ_VERSION_KEY = 'authz:version'
+_AUTHZ_TTL = 15 * 60
+
+
+class _Authority:
+    """Immutable view of what a user may do, derived once per request/day."""
+
+    __slots__ = ('entries', 'day')
+
+    def __init__(self, entries, day):
+        # entries: list of (role_id, node_id, node_path, node_depth, frozenset(codes))
+        self.entries = entries
+        self.day = day
+
+    def has_any(self, code):
+        return any(code in codes for _, _, _, _, codes in self.entries)
+
+    def has_at(self, code, node):
+        """Does the user hold ``code`` at an ancestor-or-self of ``node``?"""
+        for _, node_id, path, depth, codes in self.entries:
+            if code not in codes:
+                continue
+            if node_id == node.pk:
+                return True
+            # Inlined is_descendant_of: the assignment node is an ancestor of the
+            # target when the target's path extends it and lies deeper.
+            if node.path.startswith(path) and node.depth > depth:
+                return True
+        return False
+
+    def codes_at(self, node):
+        codes = set()
+        for _, node_id, path, depth, entry_codes in self.entries:
+            if node_id == node.pk or (node.path.startswith(path) and node.depth > depth):
+                codes |= entry_codes
+        return codes
+
+    def all_codes(self):
+        codes = set()
+        for _, _, _, _, entry_codes in self.entries:
+            codes |= entry_codes
+        return codes
+
+    def paths_for(self, code):
+        """Materialized paths of every node where the user holds ``code``."""
+        return [path for _, _, path, _, codes in self.entries if code in codes]
+
+
+def _authz_version():
+    """Monotonic counter; any change to roles or assignments bumps it."""
+    version = cache.get(_AUTHZ_VERSION_KEY)
+    if version is None:
+        # Either a cold cache or Redis is unavailable. Either way 0 is a safe
+        # starting point: if Redis was flushed, the cached snapshots went with it.
+        cache.set(_AUTHZ_VERSION_KEY, 0, None)
+        return 0
+    return version
+
+
+def authz_version():
+    """Public read of the authority-cache version.
+
+    Other caches whose contents are scoped by permissions (the Console stats
+    endpoint) fold this into their own keys, so a role change re-scopes them at
+    the same moment it re-scopes authorization itself.
+    """
+    return _authz_version()
+
+
+def bump_authz_version():
+    """Invalidate every cached authority snapshot. Called from signals."""
+    try:
+        cache.incr(_AUTHZ_VERSION_KEY)
+    except ValueError:
+        # incr raises when the key is absent (it was never set, or it expired).
+        # Setting it to 1 achieves the same invalidation, since existing keys were
+        # written against version 0.
+        cache.set(_AUTHZ_VERSION_KEY, 1, None)
+
+
+def _build_authority(user, today):
+    assignments = list(active_role_assignments(user))
+    perms = _role_permission_map(assignments)
+    return [
+        (
+            a.role_id,
+            a.node_id,
+            a.node.path,
+            a.node.depth,
+            frozenset(perms.get(a.role_id, ())),
+        )
+        for a in assignments
+    ]
+
+
+def authority(user):
+    """The user's cached authority snapshot. Superusers are not represented here —
+    callers short-circuit on ``is_superuser`` before reaching this."""
+    today = timezone.localdate()
+
+    memo = getattr(user, '_authority_snapshot', None)
+    if memo is not None and memo.day == today:
+        return memo
+
+    key = f'authz:v{_authz_version()}:u{user.pk}:{today.isoformat()}:{settings.CACHE_VERSION}'
+    entries = cache.get(key)
+    if entries is None:
+        entries = _build_authority(user, today)
+        cache.set(key, entries, _AUTHZ_TTL)
+
+    snapshot = _Authority(entries, today)
+    try:
+        user._authority_snapshot = snapshot
+    except AttributeError:
+        # Some auth backends hand back objects with __slots__; the Redis layer
+        # still applies, so this is a lost optimisation rather than an error.
+        pass
+    return snapshot
 
 
 def users_with_permission(permission_code):
@@ -86,12 +249,9 @@ def permission_codes_at(user, node):
     assignments). Superusers implicitly hold everything (returns None sentinel)."""
     if getattr(user, 'is_superuser', False):
         return None  # sentinel: all permissions
-    assignments = [a for a in active_role_assignments(user) if is_ancestor_or_self(a.node, node)]
-    perms = _role_permission_map(assignments)
-    codes = set()
-    for a in assignments:
-        codes |= perms.get(a.role_id, set())
-    return codes
+    if not user or not user.is_authenticated:
+        return set()
+    return authority(user).codes_at(node)
 
 
 def has_permission(user, permission_code, node):
@@ -100,12 +260,7 @@ def has_permission(user, permission_code, node):
         return False
     if user.is_superuser:
         return True
-    assignments = list(active_role_assignments(user))
-    perms = _role_permission_map(assignments)
-    return any(
-        permission_code in perms.get(a.role_id, ()) and is_ancestor_or_self(a.node, node)
-        for a in assignments
-    )
+    return authority(user).has_at(permission_code, node)
 
 
 def has_any_permission(user, permission_code):
@@ -114,9 +269,7 @@ def has_any_permission(user, permission_code):
         return False
     if user.is_superuser:
         return True
-    assignments = list(active_role_assignments(user))
-    perms = _role_permission_map(assignments)
-    return any(permission_code in perms.get(a.role_id, ()) for a in assignments)
+    return authority(user).has_any(permission_code)
 
 
 def effective_permissions(user):
@@ -127,12 +280,7 @@ def effective_permissions(user):
         return sorted(ALL_PERMISSION_CODES)
     if not user or not user.is_authenticated:
         return []
-    assignments = list(active_role_assignments(user))
-    perms = _role_permission_map(assignments)
-    codes = set()
-    for a in assignments:
-        codes |= perms.get(a.role_id, set())
-    return sorted(codes)
+    return sorted(authority(user).all_codes())
 
 
 def scope_queryset(queryset, user, permission_code, node_field='node'):
@@ -142,9 +290,7 @@ def scope_queryset(queryset, user, permission_code, node_field='node'):
         return queryset
     if not user or not user.is_authenticated:
         return queryset.none()
-    assignments = list(active_role_assignments(user))
-    perms = _role_permission_map(assignments)
-    prefixes = [a.node.path for a in assignments if permission_code in perms.get(a.role_id, ())]
+    prefixes = authority(user).paths_for(permission_code)
     if not prefixes:
         return queryset.none()
     query = Q()

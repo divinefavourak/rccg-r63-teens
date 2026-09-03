@@ -1,7 +1,7 @@
 // src/store/ticketStore.ts
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { TicketFormData } from '../schemas/ticketSchema';
+import type { TicketFormData } from '../schemas/ticketSchema';
 
 interface TicketState {
   formData: Partial<TicketFormData>;

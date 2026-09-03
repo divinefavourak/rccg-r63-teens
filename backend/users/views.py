@@ -10,9 +10,10 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.utils import timezone
 from django.contrib.auth import authenticate
-from django.db.models import Q
+from django.db.models import Count, Q
 
 from .authentication import clear_auth_cookies, set_auth_cookies
+from .pagination import UserPagination
 from .email_service import UserEmailService
 from .models import User, LoginHistory, AuditLog
 from .serializers import (
@@ -167,8 +168,15 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated, HasPermission(Perm.USERS_MANAGE)]
-    pagination_class = None  # Return all users — admin endpoint; dataset is bounded
-    
+    # Paginated, but generously, and with an opt-out for callers that genuinely
+    # need everything. The previous `pagination_class = None` was justified by a
+    # comment saying the dataset was bounded — nothing enforced that, and the
+    # serializer's per-row teen_profile lookup meant the endpoint ran one query
+    # per user across the whole table. Falling back to the global PAGE_SIZE of 20
+    # instead would have silently truncated the admin user list, so this keeps
+    # the page large enough that nothing in the app has to change behaviour.
+    pagination_class = UserPagination
+
     def get_serializer_class(self):
         if self.action == 'create':
             return UserCreateSerializer
@@ -188,16 +196,41 @@ class UserViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         user = self.request.user
-        
+
         if not user.is_authenticated:
             return User.objects.none()
+
+        # UserSerializer.get_age_group reads obj.teen_profile, so without this
+        # select_related every row costs an extra query. Combined with the
+        # `pagination_class = None` that used to sit on this viewset — justified
+        # by a comment claiming the dataset was bounded, which nothing enforced —
+        # listing users ran one query per user across the entire table.
+        base = User.objects.select_related('teen_profile')
 
         # User managers see all users; everyone else sees only themselves.
         # (Node-scoped user visibility via Membership is a documented follow-up.)
         if has_any_permission(user, Perm.USERS_MANAGE):
-            return User.objects.all()
+            return base
 
-        return User.objects.filter(id=user.id)
+        return base.filter(id=user.id)
+
+    @action(detail=False, methods=['get'])
+    def role_counts(self, request):
+        """{role: count} plus the total, aggregated in the database.
+
+        The admin dashboard used to download every user record and tally roles
+        in a forEach, purely to render four numbers. That is one full serialized
+        user table per dashboard load — over a slow link the single most
+        expensive thing the page did. This is one GROUP BY.
+        """
+        rows = (
+            self.filter_queryset(self.get_queryset())
+            .values('role')
+            .annotate(count=Count('id'))
+            .order_by()
+        )
+        counts = {row['role']: row['count'] for row in rows}
+        return Response({'counts': counts, 'total': sum(counts.values())})
     
     def perform_create(self, serializer):
         user = serializer.save()
@@ -340,12 +373,15 @@ class LoginHistoryView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated, HasPermission(Perm.USERS_MANAGE)]
     
     def get_queryset(self):
+        # LoginHistorySerializer reads a dotted `user_username` source, so each
+        # row cost a query without this join.
+        queryset = LoginHistory.objects.select_related('user')
+
         user_id = self.kwargs.get('user_id')
-        
         if user_id:
-            return LoginHistory.objects.filter(user_id=user_id)
-        
-        return LoginHistory.objects.all()
+            return queryset.filter(user_id=user_id)
+
+        return queryset
 
 
 class ForgotPasswordView(APIView):
@@ -605,7 +641,8 @@ class AuditLogView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated, HasPermission(Perm.USERS_MANAGE)]
     
     def get_queryset(self):
-        queryset = AuditLog.objects.all()
+        # AuditLogSerializer.get_user_display dereferences obj.user.
+        queryset = AuditLog.objects.select_related('user')
         
         # Filter by entity type
         entity_type = self.request.query_params.get('entity_type')

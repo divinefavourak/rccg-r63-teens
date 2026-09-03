@@ -7,6 +7,7 @@ import {
 import api from '../api/axios';
 import type { Manual } from '../types';
 import toast from 'react-hot-toast';
+import { toISODate } from '../utils/dates';
 
 const AGE_GROUP_LABELS: Record<string, string> = {
     all: 'All Ages',
@@ -50,7 +51,7 @@ function weekEnd(startStr: string): string {
     if (!startStr) return '';
     const d = new Date(startStr);
     d.setDate(d.getDate() + 6);
-    return d.toISOString().split('T')[0];
+    return toISODate(d);
 }
 
 /** Split newline-separated text into a clean string array */

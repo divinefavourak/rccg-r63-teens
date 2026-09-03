@@ -10,6 +10,7 @@ import {
     Info, Link, BookOpen, Globe
 } from 'lucide-react';
 import { useAuthContext } from '../context/AuthContext';
+import Seo from '../components/Seo';
 
 // Correct province values matching the Django backend Province choices
 const PROVINCES = [
@@ -171,6 +172,68 @@ const EventDetail = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+            {/*
+                Event structured data, built from this event.
+
+                index.html used to carry a hardcoded schema.org/Event for a camp
+                with startDate 2025-12-22 — on every route of the site, long after
+                the camp had ended. Generating it here means it describes the event
+                the reader is actually looking at, and disappears on pages that
+                have no event.
+            */}
+            <Seo
+                title={event.title}
+                description={
+                    event.short_description ||
+                    (event.description || '').slice(0, 160) ||
+                    `${event.title} — an RCCG Region 63 Teens event.`
+                }
+                path={`/events/${event.id}`}
+                image={event.cover_image || undefined}
+                type="article"
+                jsonLd={{
+                    '@context': 'https://schema.org',
+                    '@type': 'Event',
+                    name: event.title,
+                    startDate: event.start_datetime,
+                    endDate: event.end_datetime || undefined,
+                    eventStatus: 'https://schema.org/EventScheduled',
+                    eventAttendanceMode: event.is_virtual
+                        ? 'https://schema.org/OnlineEventAttendanceMode'
+                        : event.is_hybrid
+                            ? 'https://schema.org/MixedEventAttendanceMode'
+                            : 'https://schema.org/OfflineEventAttendanceMode',
+                    location: event.venue
+                        ? {
+                            '@type': 'Place',
+                            name: event.venue,
+                            address: {
+                                '@type': 'PostalAddress',
+                                addressLocality: event.city || undefined,
+                                addressRegion: event.state || undefined,
+                                addressCountry: 'NG',
+                            },
+                        }
+                        : undefined,
+                    image: event.cover_image ? [event.cover_image] : undefined,
+                    description: event.short_description || event.description || undefined,
+                    offers: {
+                        '@type': 'Offer',
+                        url: `https://thefaithtribe.live/events/${event.id}`,
+                        price: event.is_free ? '0' : String(event.price ?? '0'),
+                        priceCurrency: 'NGN',
+                        availability:
+                            event.spots_remaining === 0
+                                ? 'https://schema.org/SoldOut'
+                                : 'https://schema.org/InStock',
+                    },
+                    organizer: {
+                        '@type': 'Organization',
+                        name: event.organizer_name || 'RCCG Region 63 Junior Church',
+                        url: 'https://thefaithtribe.live',
+                    },
+                }}
+            />
             <Navbar />
 
             {/* Hero */}

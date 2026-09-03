@@ -77,7 +77,11 @@ class MembershipViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
         return HierarchyNode.objects.filter(pk=node_id).first() if node_id else None
 
     def get_queryset(self):
-        qs = Membership.objects.select_related('organization_node', 'user').order_by('-joined_at')
+        # user__profile: UserRefSerializer reads profile.display_name, which is a
+        # query per row without this.
+        qs = (Membership.objects
+              .select_related('organization_node', 'user', 'user__profile')
+              .order_by('-joined_at'))
         return authz.scope_queryset(qs, self.request.user, Perm.MEMBERSHIPS_VIEW,
                                     node_field='organization_node')
 
@@ -107,7 +111,11 @@ class RoleAssignmentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
         return HierarchyNode.objects.filter(pk=node_id).first() if node_id else None
 
     def get_queryset(self):
-        qs = RoleAssignment.objects.select_related('role', 'node', 'user').order_by('-created_at')
+        qs = (RoleAssignment.objects
+              .select_related('role', 'node', 'user', 'user__profile',
+                              'appointed_by', 'appointed_by__profile')
+              .prefetch_related('role__permissions')
+              .order_by('-created_at'))
         return authz.scope_queryset(qs, self.request.user, Perm.ROLES_VIEW, node_field='node')
 
     def create(self, request, *args, **kwargs):

@@ -1,11 +1,12 @@
-import { motion, AnimatePresence } from "framer-motion";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "../hooks/useTheme";
 import { Sun, Moon, Menu, X, ChevronRight, LogOut, LayoutDashboard, User, Bell, BookOpen, Calendar, FileText } from "lucide-react";
 import { cn } from "../lib/utils";
-import rccgLogo from "../assets/logo.jpg";
-import faithLogo from "../assets/faith_logo.jpg";
+import { BRAND } from "../constants/brand";
+
+const rccgLogo = BRAND.rccg;
+const faithLogo = BRAND.faith;
 import { useAuthContext } from "../context/AuthContext";
 import api from "../api/axios";
 
@@ -112,11 +113,9 @@ const Navbar = () => {
   ];
 
   return (
-    <motion.nav
-      initial={{ y: -100 }}
-      animate={{ y: 0 }}
+    <nav
       className={cn(
-        "fixed top-0 w-full z-50 transition-all duration-300 border-b",
+        "nav-slide-down fixed top-0 w-full z-50 transition-all duration-300 border-b",
         scrolled
           ? "bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-gray-200 dark:border-gray-800 shadow-sm py-3"
           : "bg-transparent border-transparent py-5"
@@ -280,15 +279,22 @@ const Navbar = () => {
         </div>
       </div>
 
-      {/* Mobile Menu Dropdown */}
-      <AnimatePresence>
-        {isMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="md:hidden border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-xl overflow-hidden"
-          >
+      {/*
+        Mobile menu. Always mounted, expanded via the .collapsible grid-rows
+        transition rather than AnimatePresence — the previous version needed
+        framer-motion purely to animate height:"auto", and it was the only
+        AnimatePresence on the critical path.
+      */}
+      <div
+        className={cn(
+          "collapsible md:hidden border-t bg-white dark:bg-gray-900 shadow-xl",
+          isMenuOpen
+            ? "is-open border-gray-100 dark:border-gray-800"
+            : "border-transparent pointer-events-none"
+        )}
+        aria-hidden={!isMenuOpen}
+      >
+        <div>
             <div className="p-4 space-y-2">
               {navItems.map((item) => (
                 <Link
@@ -342,10 +348,9 @@ const Navbar = () => {
                 )}
               </div>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.nav>
+        </div>
+      </div>
+    </nav>
   );
 };
 

@@ -17,8 +17,12 @@ import {
   FaFileImage,
   FaCalendar,
 } from "react-icons/fa";
-import rccgLogo from "../assets/logo.jpg";
-import faithLogo from "../assets/faith_logo.jpg";
+import { BRAND } from "../constants/brand";
+
+// PNG rather than WebP here: html2canvas rasterises this card for the PDF/image
+// export and decodes PNG most reliably across the browsers this audience uses.
+const rccgLogo = BRAND.rccgPng;
+const faithLogo = BRAND.faithPng;
 
 // ── Normalised shape used by the card ─────────────────────────────────────────
 interface DisplayReg {

@@ -1,0 +1,34 @@
+# thefaithtribe.live
+#
+# The teen-facing content is meant to be found: a devotional or an event should
+# be shareable and searchable. Everything behind an account, and every surface
+# that only makes sense mid-flow, is not.
+
+User-agent: *
+Allow: /
+
+# Authenticated surfaces. These render the SPA shell and then redirect, so a
+# crawler that fetched them would index an empty frame under a real URL.
+Disallow: /admin
+Disallow: /console
+Disallow: /legacy-admin
+Disallow: /coordinator
+Disallow: /dashboard
+
+# Mid-flow and per-person pages. A ticket preview or a payment callback is
+# meaningless without the state that led to it.
+Disallow: /payment
+Disallow: /ticket-preview
+Disallow: /ticket-not-found
+Disallow: /upload-payment
+
+# Auth pages carry no content and would compete with the real pages for the
+# site's own brand terms.
+Disallow: /login
+Disallow: /register
+Disallow: /admin-login
+Disallow: /coordinator-login
+Disallow: /forgot-password
+Disallow: /reset-password
+
+Sitemap: https://thefaithtribe.live/sitemap.xml

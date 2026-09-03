@@ -147,11 +147,16 @@ class User(AbstractBaseUser, PermissionsMixin):
         verbose_name = 'User'
         verbose_name_plural = 'Users'
         indexes = [
-            models.Index(fields=['username']),
-            models.Index(fields=['email']),
+            # username and email are already unique=True, which creates a unique
+            # index on each — the two entries that used to sit here duplicated
+            # them exactly, costing a second B-tree write per insert for no read
+            # benefit.
             models.Index(fields=['role']),
             models.Index(fields=['province']),
             models.Index(fields=['is_active']),
+            # Matches the default ordering below. Without it every listing of
+            # this table is a full sort.
+            models.Index(fields=['-date_joined'], name='user_date_joined_desc_idx'),
         ]
         ordering = ['-date_joined']
     
@@ -208,6 +213,13 @@ class LoginHistory(models.Model):
     class Meta:
         verbose_name_plural = 'Login Histories'
         ordering = ['-login_time']
+        indexes = [
+            # This model carried no indexes whatsoever. Both access patterns are
+            # covered here: the admin view lists the whole table newest-first,
+            # and the per-user view filters by user then sorts.
+            models.Index(fields=['-login_time'], name='loginhist_time_desc_idx'),
+            models.Index(fields=['user', '-login_time'], name='loginhist_user_time_idx'),
+        ]
     
     def __str__(self):
         return f"{self.user.username} - {self.login_time}"
@@ -245,6 +257,9 @@ class AuditLog(models.Model):
         indexes = [
             models.Index(fields=['user', 'timestamp']),
             models.Index(fields=['entity_type', 'entity_id']),
+            # AuditLogView lists the whole table ordered by -timestamp with no
+            # user filter, which the composite above cannot serve.
+            models.Index(fields=['-timestamp'], name='auditlog_time_desc_idx'),
         ]
     
     def __str__(self):

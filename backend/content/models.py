@@ -486,7 +486,10 @@ class Article(UUIDMixin, TimestampMixin, PublishableMixin, ReviewableMixin,
     author_image = models.ImageField(upload_to='article_authors/', null=True, blank=True)
     
     # Media
-    cover_image = models.ImageField(upload_to='articles/')
+    # Optional — see the note on Event.cover_image. A required ImageField makes
+    # the whole record uncreatable without a photo, which is not what an
+    # article is.
+    cover_image = models.ImageField(upload_to='articles/', blank=True, null=True)
     featured_image_caption = models.CharField(max_length=255, blank=True)
     
     # Analytics

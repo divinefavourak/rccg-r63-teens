@@ -2,11 +2,17 @@ import { Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import { BookOpen, PlayCircle, Calendar, Users, ArrowRight, CheckCircle, Star } from "lucide-react";
 import HeroCarousel from "../components/HeroCarousel";
+import Seo from "../components/Seo";
 
 
 const LandingPage = () => {
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors font-sans text-gray-900 dark:text-white">
+      <Seo
+        title="Faith Tribe"
+        description="Daily devotionals, Bible study manuals, worship media and camp events for teenagers across RCCG Region 63."
+        path="/"
+      />
       <Navbar />
 
       {/* Hero Section - Split Layout */}

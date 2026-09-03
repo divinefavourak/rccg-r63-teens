@@ -1,99 +1,114 @@
+/**
+ * Request a password reset link.
+ *
+ * The success state is shown **whether or not the email exists**, matching the
+ * backend, which deliberately never confirms whether an address is registered.
+ * Saying "no account with that email" would turn this form into a way to test
+ * whether a given person is in the congregation.
+ *
+ * That is why the failure branch also sets `sent`: an error here would leak the
+ * same thing by omission.
+ */
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader, Mail, ArrowLeft, CheckCircle } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { ArrowLeft, CheckCircle } from 'lucide-react';
 import api from '../api/axios';
-import faithTribeLogo from '../assets/faith_tribe_logo.jpg';
-import rccgLogo from '../assets/logo.jpg';
-import './GlowAuth.css';
+import AuthShell, {
+  authButton,
+  authInput,
+  authLabel,
+} from '../components/AuthShell';
+import Loader from '../components/Loader';
+import Seo from '../components/Seo';
 
 const ForgotPassword = () => {
-    const [email, setEmail] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [sent, setSent] = useState(false);
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!email.trim()) return;
-        setLoading(true);
-        try {
-            await api.post('/auth/forgot-password/', { email: email.trim().toLowerCase() });
-            setSent(true);
-        } catch {
-            // Always show success — backend never reveals whether email exists
-            setSent(true);
-        } finally {
-            setLoading(false);
-        }
-    };
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setLoading(true);
+    try {
+      await api.post('/auth/forgot-password/', {
+        email: email.trim().toLowerCase(),
+      });
+    } catch {
+      // Intentionally swallowed — see the module docstring. The user sees the
+      // same outcome either way.
+    } finally {
+      setSent(true);
+      setLoading(false);
+    }
+  };
 
+  if (sent) {
     return (
-        <div className="glow-page">
-            <div className="glow-box">
-                <div className="glow-login">
-                    <div className="glow-login-bx">
-
-                        {/* Logos + Title */}
-                        <div className="glow-header-row">
-                            <img src={rccgLogo} alt="RCCG" className="glow-logo-sm" />
-                            <img src={faithTribeLogo} alt="Faith Tribe" className="glow-logo-sm" />
-                            <h2 className="glow-title">
-                                <i className="glow-icon">✦</i>
-                                Reset
-                                <i className="glow-icon">♥</i>
-                            </h2>
-                        </div>
-
-                        {sent ? (
-                            /* Success state */
-                            <div style={{ textAlign: 'center', padding: '8px 0 4px' }}>
-                                <CheckCircle size={40} style={{ color: '#FFD700', margin: '0 auto 12px' }} />
-                                <p style={{ color: '#fff', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: 16 }}>
-                                    If that email is registered, a reset link has been sent.<br />
-                                    Check your inbox (and spam folder).
-                                </p>
-                                <Link to="/login" className="glow-submit" style={{ display: 'inline-block', textDecoration: 'none' }}>
-                                    Back to Login
-                                </Link>
-                            </div>
-                        ) : (
-                            /* Email entry form */
-                            <>
-                                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.82rem', textAlign: 'center', marginBottom: 8 }}>
-                                    Enter your registered email and we'll send a reset link.
-                                </p>
-                                <form onSubmit={handleSubmit} style={{ width: '100%', display: 'contents' }}>
-                                    <div className="glow-input-wrap">
-                                        <input
-                                            type="email"
-                                            className="glow-input"
-                                            placeholder="Email address"
-                                            value={email}
-                                            onChange={(e) => setEmail(e.target.value)}
-                                            required
-                                            autoComplete="email"
-                                        />
-                                        <Mail size={16} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.3)', pointerEvents: 'none' }} />
-                                    </div>
-
-                                    <button type="submit" className="glow-submit" disabled={loading}>
-                                        {loading ? <Loader size={16} className="animate-spin" /> : 'Send Reset Link'}
-                                    </button>
-                                </form>
-
-                                <div className="glow-group">
-                                    <Link to="/login" className="glow-accent" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                        <ArrowLeft size={14} /> Back to Login
-                                    </Link>
-                                </div>
-                            </>
-                        )}
-
-                    </div>
-                </div>
-            </div>
+      <AuthShell
+        title="Check your inbox"
+        subtitle="If that address is registered, a reset link is on its way."
+      >
+        <div className="text-center">
+          <CheckCircle
+            size={36}
+            className="mx-auto mb-3 text-console-success"
+            aria-hidden="true"
+          />
+          <p className="text-[13px] leading-relaxed text-console-body">
+            The link expires shortly, so use it soon. If nothing arrives in a few
+            minutes, check your spam folder — and make sure you used the address
+            you registered with.
+          </p>
+          <Link to="/login" className={authButton}>
+            Back to sign in
+          </Link>
         </div>
+      </AuthShell>
     );
+  }
+
+  return (
+    <>
+      <Seo title="Reset your password" description="Request a password reset link." noindex />
+    <AuthShell
+      title="Forgot your password?"
+      subtitle="We'll email you a link to set a new one."
+      footer={
+        <Link
+          to="/login"
+          className="inline-flex items-center gap-1.5 font-medium text-console-action hover:underline"
+        >
+          <ArrowLeft size={14} /> Back to sign in
+        </Link>
+      }
+    >
+      <form onSubmit={handleSubmit}>
+        <label htmlFor="email" className={authLabel}>
+          Email address
+        </label>
+        <input
+          id="email"
+          type="email"
+          autoComplete="email"
+          autoFocus
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          className={authInput}
+        />
+
+        <button type="submit" disabled={loading} className={authButton}>
+          {loading ? (
+            <Loader variant="inline" size={16} label="Sending…" />
+          ) : (
+            'Send reset link'
+          )}
+        </button>
+      </form>
+    </AuthShell>
+    </>
+  );
 };
 
 export default ForgotPassword;

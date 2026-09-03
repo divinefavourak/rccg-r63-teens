@@ -3,7 +3,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import action
 from django.utils import timezone
+from decimal import Decimal
+
 from django.db.models import Count, Sum, Q
+from django.db.models.functions import Coalesce
 from django.conf import settings
 
 from .models import Payment, PaymentPlan, TransactionLog
@@ -194,19 +197,32 @@ class PaymentDashboardView(APIView):
     permission_classes = [permissions.IsAuthenticated, HasPermission(Perm.PAYMENTS_MANAGE)]
     
     def get(self, request):
-        # Calculate statistics
-        total_payments = Payment.objects.count()
-        successful_payments = Payment.objects.filter(status=Payment.Status.SUCCESS).count()
-        pending_payments = Payment.objects.filter(status=Payment.Status.PENDING).count()
-        failed_payments = Payment.objects.filter(status=Payment.Status.FAILED).count()
-        
-        # Revenue calculations
-        total_revenue = Payment.objects.filter(status=Payment.Status.SUCCESS).aggregate(
-            total=Sum('amount')
-        )['total'] or 0
-        
+        # Four counts and the revenue sum in one scan, rather than five separate
+        # unscoped passes over the whole payments table.
+        overview = Payment.objects.aggregate(
+            total_payments=Count('id'),
+            successful_payments=Count('id', filter=Q(status=Payment.Status.SUCCESS)),
+            pending_payments=Count('id', filter=Q(status=Payment.Status.PENDING)),
+            failed_payments=Count('id', filter=Q(status=Payment.Status.FAILED)),
+            total_revenue=Coalesce(
+                Sum('amount', filter=Q(status=Payment.Status.SUCCESS)),
+                Decimal('0'),
+            ),
+        )
+        total_payments = overview['total_payments']
+        successful_payments = overview['successful_payments']
+        total_revenue = overview['total_revenue']
+
         # Recent payments
-        recent_payments = Payment.objects.filter(status=Payment.Status.SUCCESS).order_by('-completed_at')[:10]
+        # PaymentSerializer nests TicketSerializer, which in turn resolves
+        # registered_by/approved_by display names — so this needs the two-level
+        # join, not just select_related('ticket').
+        recent_payments = (
+            Payment.objects
+            .filter(status=Payment.Status.SUCCESS)
+            .select_related('ticket', 'ticket__registered_by', 'ticket__approved_by')
+            .order_by('-completed_at')[:10]
+        )
         
         # Payment method breakdown
         payment_methods = Payment.objects.filter(status=Payment.Status.SUCCESS).values(
@@ -220,8 +236,8 @@ class PaymentDashboardView(APIView):
             'overview': {
                 'total_payments': total_payments,
                 'successful_payments': successful_payments,
-                'pending_payments': pending_payments,
-                'failed_payments': failed_payments,
+                'pending_payments': overview['pending_payments'],
+                'failed_payments': overview['failed_payments'],
                 'success_rate': (successful_payments / total_payments * 100) if total_payments > 0 else 0,
             },
             'revenue': {

@@ -195,8 +195,22 @@ class DevotionalScraper:
         # Find all leaf-level text elements.
         # Do NOT include 'div' — container divs return all nested text concatenated,
         # causing section boundaries to bleed into one another.
-        all_elements = soup.find_all(['p', 'strong', 'b', 'h1', 'h2', 'h3', 'h4'])
-        
+        #
+        # Outermost only. A label is usually marked up as
+        # `<p><strong>MESSAGE</strong></p>`, which find_all returns twice — once
+        # as the p and once as the nested strong. The p opened the section and
+        # the strong was then captured as *content*, so every section's body
+        # began with its own label ("MESSAGE THIS IS THE MAIN…"). Keeping only
+        # the outermost element also handles the common
+        # `<p><strong>MEMORISE:</strong> For God so loved…</p>` shape correctly,
+        # because the p carries both the label and the text after it.
+        SECTION_TAGS = ['p', 'strong', 'b', 'h1', 'h2', 'h3', 'h4']
+        all_elements = [
+            el for el in soup.find_all(SECTION_TAGS)
+            if not any(parent.name in SECTION_TAGS for parent in el.parents)
+        ]
+
+
         content_parts = []
         capturing = False
         
@@ -363,10 +377,41 @@ class DevotionalScraper:
         _find_section_content joins them with spaces, losing structure.
         We therefore walk elements directly from the HYMN heading.
         """
-        all_elements = soup.find_all(['p', 'strong', 'b', 'h1', 'h2', 'h3', 'h4'])
+        HYMN_TAGS = ['p', 'strong', 'b', 'h1', 'h2', 'h3', 'h4']
+        # Outermost elements only. `<p><strong>HYMN 3: Amazing Grace</strong></p>`
+        # yields both the p and the strong, so without this the heading — and
+        # every emphasised line in a stanza — is appended twice.
+        all_elements = [
+            el for el in soup.find_all(HYMN_TAGS)
+            if not any(parent.name in HYMN_TAGS for parent in el.parents)
+        ]
         lines = []
         capturing = False
-        stop_labels = ['BIBLE IN ONE YEAR', 'AUTHOR', 'PRAYER', 'DAILY DEVOTIONAL']
+
+        # Every other section label, not just the ones that happen to follow the
+        # hymn on a typical page.
+        #
+        # This list previously held only BIBLE IN ONE YEAR / AUTHOR / PRAYER /
+        # DAILY DEVOTIONAL. MESSAGE was absent, so once capture started there was
+        # nothing to stop it running straight through the body of the devotional
+        # — which is how the main message ended up stored as the hymn.
+        stop_labels = [
+            'MESSAGE', 'KEY POINT', 'MEMORISE', 'MEMORIZE',
+            'BIBLE READING', 'BIBLE IN ONE YEAR',
+            'PRAYER POINT', 'PRAYER', 'ACTION POINT', 'CONFESSION',
+            'AUTHOR', 'DAILY DEVOTIONAL',
+        ]
+
+        # A real HYMN heading is a label: "HYMN", "HYMN 3", "HYMN 3: Amazing
+        # Grace" — the title, when present, is introduced by a colon, like every
+        # other section label on the page.
+        #
+        # Matching anything that merely *starts with* "HYMN" also matched
+        # related-post links such as "Hymn 12 - Blessed Assurance", and since the
+        # walk covers the whole document a single stray match above the real
+        # section opened capture early. Requiring the colon separates the heading
+        # from a link that happens to name a hymn.
+        HYMN_LABEL = re.compile(r'^\s*HYMN\s*\d*\s*(?::\s*(.{0,80}))?\s*$', re.IGNORECASE)
 
         for elem in all_elements:
             text = elem.get_text().strip()
@@ -376,15 +421,21 @@ class DevotionalScraper:
                 continue
 
             if not capturing:
-                if re.search(r'^\s*HYMN\b', text, re.IGNORECASE):
+                # A heading is never a link. Skipping anchors keeps navigation
+                # and related-post lists out of the hymn.
+                if elem.find_parent('a') is not None:
+                    continue
+                match = HYMN_LABEL.match(text)
+                if match:
                     capturing = True
-                    # Strip the "HYMN N:" prefix from the title line
-                    title = re.sub(r'^\s*HYMN\s*\d*:?\s*', '', text, flags=re.IGNORECASE).strip()
+                    title = (match.group(1) or '').strip()
                     if title:
                         lines.append(title)
                 continue
 
-            if any(stop.upper() in text.upper() for stop in stop_labels):
+            # Word-boundary match, so a hymn line containing "prayerful" does not
+            # terminate the stanza on "PRAYER".
+            if any(re.search(rf'\b{re.escape(stop)}\b', text, re.IGNORECASE) for stop in stop_labels):
                 break
 
             lines.append(text)

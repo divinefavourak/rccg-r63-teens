@@ -10,6 +10,7 @@ import NumberFlow from '@number-flow/react';
 import ConfettiExplosion from 'react-confetti-explosion';
 import api from '../../api/axios';
 import { useAuthContext } from '../../context/AuthContext';
+import { todayISO } from '../../utils/dates';
 
 interface StreakData {
     streak_days: number;
@@ -23,7 +24,7 @@ const useStreak = () => {
     const [todayRead, setTodayRead] = useState(false);
 
     useEffect(() => {
-        const today = new Date().toISOString().split('T')[0];
+        const today = todayISO();
         Promise.all([
             api.get('/content/devotionals/my_reads/'),
             api.get(`/content/devotionals/?date=${today}`),

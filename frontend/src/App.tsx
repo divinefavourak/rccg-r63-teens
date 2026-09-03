@@ -3,10 +3,18 @@ import { Suspense, lazy } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { Analytics } from "@vercel/analytics/react";
 import ScrollToTop from './components/ScrollToTop';
+import Loader from './components/Loader';
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicLayout from './components/layout/PublicLayout';
-import DashboardLayout from './components/layout/DashboardLayout';
-import AdminLayout from './components/AdminLayout';
+
+// DashboardLayout and AdminLayout were static imports, which pulled both shells
+// — and framer-motion, the Sidebar and its icon set with them — into the entry
+// chunk that every visitor downloads. Someone reading the landing page has no
+// use for the admin shell, so both are now split out behind the Suspense
+// boundary below. PublicLayout stays static: it renders the Navbar and Footer
+// on the first paint of '/', so splitting it would only add a round trip.
+const DashboardLayout = lazy(() => import('./components/layout/DashboardLayout'));
+const AdminLayout = lazy(() => import('./components/AdminLayout'));
 
 // Lazy Load Pages — Public (layout pages, rendered under PublicLayout)
 const LandingPage = lazy(() => import('./pages/LandingPage'));
@@ -47,7 +55,12 @@ const Podcasts = lazy(() => import('./pages/content/Podcasts'));
 const DashboardEvents = lazy(() => import('./pages/dashboard/Events'));
 const Settings = lazy(() => import('./pages/dashboard/Settings'));
 
-// Admin Panel Pages
+// The Console — the new admin panel. One lazy chunk: shell, permission context
+// and every screen, so none of it reaches the bundle a teen downloads.
+const ConsoleRoutes = lazy(() => import('./pages/console/ConsoleRoutes'));
+
+// Admin Panel Pages (legacy). Still routed at /admin and still the working
+// panel; the Console replaces it once its screens are ported.
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const AdminDevotionals = lazy(() => import('./pages/AdminDevotionals'));
 const AdminManuals = lazy(() => import('./pages/AdminManuals'));
@@ -56,17 +69,9 @@ const AdminEvents = lazy(() => import('./pages/AdminEvents'));
 const AdminUsers = lazy(() => import('./pages/AdminUsers'));
 const AdminSettings = lazy(() => import('./pages/AdminSettings'));
 
-const Loading = () => (
-  <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 transition-colors duration-300">
-    <div className="flex flex-col items-center gap-4">
-      <div className="relative w-16 h-16">
-        <div className="absolute inset-0 border-4 border-amber-200 rounded-full"></div>
-        <div className="absolute inset-0 border-t-4 border-amber-500 rounded-full animate-spin"></div>
-      </div>
-      <p className="text-amber-500 font-bold tracking-widest text-xs animate-pulse">LOADING...</p>
-    </div>
-  </div>
-);
+// One loader for every route transition. See components/Loader.tsx for why the
+// three previous spinners were collapsed into it.
+const Loading = () => <Loader />;
 
 function App() {
   return (
@@ -84,7 +89,7 @@ function App() {
 
       <Suspense fallback={<Loading />}>
         <Routes>
-          {/* Public Routes with layout (Navbar + Footer from PublicLayout, plus Snowfall decorations) */}
+          {/* Public Routes with layout (Navbar + Footer from PublicLayout) */}
           <Route element={<PublicLayout />}>
             <Route path="/" element={<LandingPage />} />
             <Route path="/get-ticket" element={<TicketForm />} />
@@ -113,9 +118,41 @@ function App() {
             <Route path="settings" element={<Settings />} />
           </Route>
 
-          {/* Admin Panel Routes (AdminLayout with full sidebar) */}
+          {/*
+            The Console. Gated on being signed in only — what you can see inside
+            is decided by the 21 permissions from /identity/me/, not by a role
+            string. Someone holding no role gets a stated "you have no role yet"
+            screen from ConsoleLayout rather than a redirect, because being
+            authenticated with no authority is a real state, not an error.
+          */}
           <Route
-            path="/admin"
+            path="/admin/*"
+            element={
+              <ProtectedRoute loginPath="/admin-login">
+                <ConsoleRoutes />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* /console kept as an alias so any existing bookmark still lands. */}
+          <Route
+            path="/console/*"
+            element={
+              <ProtectedRoute loginPath="/admin-login">
+                <ConsoleRoutes />
+              </ProtectedRoute>
+            }
+          />
+
+          {/*
+            The previous admin panel, moved aside rather than deleted. Its pages
+            are still the only working implementations of Devotionals, Manuals,
+            Media, Events and Users against the live API, so they stay reachable
+            until the Console screens that replace them are ported and verified.
+            Delete this block — and pages/Admin*.tsx — once that is done.
+          */}
+          <Route
+            path="/legacy-admin"
             element={
               <ProtectedRoute allowedRoles={['admin']}>
                 <AdminLayout />

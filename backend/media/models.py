@@ -64,7 +64,8 @@ class MediaSeries(UUIDMixin, TimestampMixin, PublishableMixin):
     short_description = models.CharField(max_length=500, blank=True)
     
     # Branding
-    cover_image = models.ImageField(upload_to='media_series/')
+    # Optional — see the note on Event.cover_image.
+    cover_image = models.ImageField(upload_to='media_series/', blank=True, null=True)
     banner_image = models.ImageField(upload_to='media_series_banners/', null=True, blank=True)
     
     # Host/Author

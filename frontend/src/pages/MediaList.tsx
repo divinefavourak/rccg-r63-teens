@@ -3,6 +3,7 @@ import Navbar from '../components/Navbar';
 import api from '../api/axios';
 import { type MediaEpisode } from '../types';
 import { FaMusic, FaClock } from 'react-icons/fa';
+import Seo from '../components/Seo';
 
 const MEDIA_BASE = import.meta.env.VITE_MEDIA_URL || 'http://localhost:8000';
 
@@ -44,6 +45,7 @@ const MediaList = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+            <Seo title="Media" description="Worship music, podcasts and video from the Faith Tribe community." path="/media" />
             <Navbar />
             <div className="container mx-auto px-4 py-24">
 

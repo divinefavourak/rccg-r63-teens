@@ -1,0 +1,143 @@
+/**
+ * Console design tokens.
+ *
+ * The admin Console ("the Console" in docs/) is visually distinct from the
+ * teen-facing app: denser spacing, a warm stone canvas rather than white, and a
+ * data palette kept deliberately clear of the emerald used for actions.
+ *
+ * Every custom property here is prefixed `--console-` or `--level-`, so these
+ * live safely at `:root` alongside the teen app's `--primary` / `--accent`
+ * without collision. They are declared globally rather than under a `.console`
+ * wrapper class so that Console components rendered in a portal — modals,
+ * dropdowns, the scope switcher — still resolve their tokens.
+ *
+ * Dark mode piggybacks on the existing `darkMode: 'class'` strategy
+ * (tailwind.config.cjs), i.e. `.dark` on <html>. That is the same convention the
+ * Figma export used, so the two agree.
+ */
+
+:root {
+  /* Canvas */
+  --console-canvas: #efede9; /* page background */
+  --console-surface: #fdfcfb; /* cards, panels */
+  --console-surface-raised: #ffffff; /* modals, dropdowns */
+  --console-surface-tinted: #f5f3ef; /* zebra rows, hover states */
+  --console-border: rgba(120, 113, 108, 0.18);
+  --console-border-strong: rgba(120, 113, 108, 0.35);
+
+  /* Text */
+  --console-text-primary: #1c1917; /* headings, strong labels */
+  --console-text-body: #44403c;
+  --console-text-muted: #78716c; /* secondary labels */
+  --console-text-subtle: #a8a29e; /* placeholders, timestamps */
+  --console-text-disabled: #d6d3d1;
+
+  /* Interactive — action (emerald). Deliberately emerald-600, one step darker
+     than the teen app's primary-500, to hold contrast on the stone canvas. */
+  --console-action: #059669;
+  --console-action-hover: #047857;
+  --console-action-light: #ecfdf5;
+  --console-action-muted: rgba(5, 150, 105, 0.12);
+
+  /* Data palette — kept distinct from the action emerald so a chart series is
+     never mistaken for an interactive element. */
+  --console-data-1: #4b7bec;
+  --console-data-2: #a78bfa;
+  --console-data-3: #fb923c;
+  --console-data-4: #34d399;
+
+  /* Semantic */
+  --console-info: #0ea5e9;
+  --console-info-bg: #f0f9ff;
+  --console-caution: #d97706;
+  --console-caution-bg: #fffbeb;
+  --console-danger: #dc2626;
+  --console-danger-bg: #fef2f2;
+  --console-success: #16a34a;
+  --console-success-bg: #f0fdf4;
+
+  /* Teacher Edition block — always dark, in both page modes. Teacher-only
+     answers are printed on a dark panel so they read as "not for the class". */
+  --console-teacher-bg: #292524;
+  --console-teacher-text: #e7e5e4;
+  --console-teacher-label: #78716c;
+
+  /* Sensitive-data block (medical, guardian contact) — same treatment, so
+     "handle with care" is a consistent visual signal. */
+  --console-sensitive-bg: #1c1917;
+  --console-sensitive-text: #f5f5f4;
+  --console-sensitive-border: #292524;
+
+  /* Hierarchy level palette — one badge/dot pair per node_type, matching
+     hierarchy.NodeType. Used by the tree, scope switcher and node chips. */
+  --level-national-badge: #e0f2fe;
+  --level-national-dot: #38bdf8;
+  --level-region-badge: #f3e8ff;
+  --level-region-dot: #c084fc;
+  --level-province-badge: #fef3c7;
+  --level-province-dot: #fbbf24;
+  --level-zone-badge: #d1fae5;
+  --level-zone-dot: #34d399;
+  --level-area-badge: #ffedd5;
+  --level-area-dot: #fb923c;
+  --level-parish-badge: #e0e7ff;
+  --level-parish-dot: #818cf8;
+  --level-dept-badge: #fce7f3;
+  --level-dept-dot: #f472b6;
+
+  /* Spacing — the Console is denser than the teen app. */
+  --console-space-xs: 4px;
+  --console-space-sm: 8px;
+  --console-space-md: 12px;
+  --console-space-lg: 20px;
+  --console-space-xl: 32px;
+
+  /* Radii */
+  --console-radius-sm: 6px;
+  --console-radius-md: 10px;
+  --console-radius-lg: 14px;
+  --console-radius-xl: 18px;
+}
+
+.dark {
+  --console-canvas: #1c1917;
+  --console-surface: #252220;
+  --console-surface-raised: #2e2b28;
+  --console-surface-tinted: #2a2724;
+  --console-border: rgba(255, 255, 255, 0.08);
+  --console-border-strong: rgba(255, 255, 255, 0.15);
+
+  --console-text-primary: #fafaf9;
+  --console-text-body: #d6d3d1;
+  --console-text-muted: #a8a29e;
+  --console-text-subtle: #78716c;
+  --console-text-disabled: #44403c;
+
+  --console-action-light: rgba(5, 150, 105, 0.12);
+
+  --console-info-bg: rgba(14, 165, 233, 0.12);
+  --console-caution-bg: rgba(217, 119, 6, 0.12);
+  --console-danger-bg: rgba(220, 38, 38, 0.12);
+  --console-success-bg: rgba(22, 163, 74, 0.12);
+}
+
+/* The Console's own scrollbars — thinner than the teen app's 8px, because the
+   Console has many more scroll containers (tables, trees, drawers) per screen. */
+.console-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 113, 108, 0.25) transparent;
+}
+.console-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.console-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.console-scroll::-webkit-scrollbar-thumb {
+  background: rgba(120, 113, 108, 0.25);
+  border-radius: 999px;
+}
+.dark .console-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+}

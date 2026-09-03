@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { useForm, SubmitHandler } from "react-hook-form";
+import { useForm, type SubmitHandler } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { FaUserShield, FaUserPlus, FaLock, FaEnvelope, FaPhone, FaArrowLeft } from "react-icons/fa";
 import toast from "react-hot-toast";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-import { userService, UserData } from "../services/userService";
+import { userService, type UserData } from "../services/userService";
 
 const AdminRegister = () => {
   const navigate = useNavigate();
