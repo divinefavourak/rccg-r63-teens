@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Faith Tribe semantic tokens — see docs/10-design-system.md.
+ *
+ * Colours are space-separated RGB channels rather than hex so Tailwind can
+ * substitute the alpha in `rgb(var(--green) / <alpha-value>)`. That is what
+ * makes `bg-green/10` work, and it lets the design's `--green-soft` /
+ * `--amber-soft` tokens collapse into opacity modifiers instead of existing as
+ * separate variables.
+ *
+ * `src/theme/tokens.ts` mirrors these values for the imperative cases (SVG
+ * fills, gradient stops, the native status bar) that cannot read a class name.
+ * The two files must be changed together.
+ */
+@layer base {
+  :root {
+    /* Surfaces */
+    --surf-base: 249 246 241;
+    --surf-raised: 253 250 245;
+    --surf-sunken: 242 234 224;
+    --surf-overlay: 28 25 22;
+
+    /* Text */
+    --text-1: 28 25 22;
+    --text-2: 75 69 64;
+    --text-3: 133 125 120;
+    --text-inv: 253 250 245;
+
+    /* Brand — the living green (09-design-principles.md) */
+    --green: 58 125 82;
+    --green-hover: 74 148 100;
+    --green-pressed: 45 99 64;
+    --green-tonal: 232 243 236;
+
+    /* Celebrate — warm amber, used sparingly */
+    --amber: 200 122 21;
+    --amber-bright: 232 149 26;
+    --amber-tonal: 253 240 220;
+
+    /* Borders */
+    --border: 234 227 218;
+    --border-strong: 201 190 181;
+
+    /* Navigation */
+    --nav-bg: 253 250 245;
+    --nav-border: 234 227 218;
+
+    /* System feedback only — never decorative */
+    --error: 192 57 43;
+    --caution: 217 119 6;
+    --info: 29 111 164;
+    --success: 46 125 82;
+  }
+
+  .dark:root {
+    --surf-base: 28 25 22;
+    --surf-raised: 37 33 25;
+    --surf-sunken: 20 18 16;
+    --surf-overlay: 0 0 0;
+
+    --text-1: 245 241 235;
+    --text-2: 184 175 167;
+    --text-3: 122 115 110;
+    --text-inv: 28 25 22;
+
+    --green: 78 148 100;
+    --green-hover: 94 170 116;
+    --green-pressed: 58 125 82;
+    --green-tonal: 26 46 34;
+
+    --amber: 245 166 35;
+    --amber-bright: 245 166 35;
+    --amber-tonal: 44 30 6;
+
+    --border: 46 40 34;
+    --border-strong: 72 64 58;
+
+    --nav-bg: 37 33 25;
+    --nav-border: 46 40 34;
+  }
+}

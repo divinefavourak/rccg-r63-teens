@@ -90,7 +90,8 @@ FAITH TRIBE
 │   ├── 4.4  Prayer Wall ✧ (V2, moderated)
 │   ├── 4.5  My Group ✧ (V2: class/small group space)
 │   ├── 4.6  Serve ✧ (V2: volunteer opportunities board)
-│   └── 4.7  My Church (parish identity, service times, leaders)
+│   ├── 4.7  My Church (parish identity, service times, leaders)
+│   └── 4.8  Community Notes ✧ (V2, moderated: short testimonies; public likes + reposts)
 │
 ├── 5. ME
 │   ├── 5.1  Profile (identity, parish, role tag)

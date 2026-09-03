@@ -13,7 +13,7 @@ Faith Tribe serves minors. That single fact governs this entire document. Commun
 - Open public feeds, discover-strangers features, or friend-suggestion algorithms.
 - **Private messaging between any adult and a teen.** Absolute and non-negotiable, regardless of role, feature pressure, or "trusted leader" arguments. Adults interact with teens only in group spaces visible to other assigned leaders (two-adult visibility principle).
 - **Open-ended, unmonitored teen-to-teen chat.** Teen friends may exchange *encouragement notes* — a deliberately constrained channel (see Friends below): template-anchored, length-limited, automatically safety-screened, fully retained, auditable by designated safeguarding leads, reportable and blockable on every message. What we will not build is free-form real-time private chat that no accountable adult could ever review. This is a deliberate revision of an earlier group-spaces-only rule, made to serve real discipleship friendships — and it stands only inside these constraints, which the ratified safeguarding policy must explicitly cover before Friends ships.
-- Follower/friend counts, likes, or any popularity metrics.
+- Follower graphs, friend-suggestion algorithms, or stranger-discovery. (Public likes and reposts exist **only** on Community Notes — a deliberate leadership decision, see below — and nowhere else; friend lists and profiles still carry no counts.)
 - Location sharing between users.
 - Disappearing messages (everything is retained and auditable).
 
@@ -59,6 +59,18 @@ The flagship community feature: teens sharing burdens and praying for one anothe
 - **Interaction:** a single "🙏 I prayed" response and optional short encouragements (also pre-moderated in V2; post-moderation may be earned later). No open-ended comment threads at launch.
 - **Crisis pathway:** the composer and moderation tooling include a clearly defined escalation path — content indicating harm to self or others, abuse, or crisis routes immediately to the designated safeguarding leads for the scope (trained coordinators), with response-time commitments and a documented offline protocol (contact teen, parents/guardian, appropriate authorities per policy). Software surfaces; humans respond. Writing this protocol with regional leadership is a launch precondition.
 - Answered prayers can be marked ("God answered 🙌") — testimonies feed faith.
+
+## Community Notes ✧ V2
+
+Short testimonies and encouragements a teen posts to their tribe — "God showed up for me today." **This is a deliberate exception to the no-popularity stance:** Community Notes carry public **likes and reposts**, with visible counts, and may be sorted by most-liked. It was a leadership product decision (July 2026), made because a reaction-free space felt lifeless — here, visible affirmation is the point. The exception is scoped to Community Notes only; friend lists, profiles, and streaks still show no counts.
+
+Because these are minors posting to each other, the full safeguarding gate still applies (this is why Notes are V2, not V1):
+
+- **Scoped to real church structure, not a global feed:** a note posts to the teen's parish/area tribe, and reposts stay within the teen's own hierarchy scope. No stranger discovery and no algorithmic "for you" ranking beyond likes/recency sorting.
+- **Pre-moderated and screened:** notes pass the same automated safety screen and human review as prayer requests before going live; flagged notes hold for review (`## Moderation system`).
+- **Reportable and blockable:** every note carries a one-tap Report; blocking a user hides their notes.
+- **Public counts, private reactor list:** the like/repost *number* is public (the sanctioned exception), but the list of *who* reacted is visible only to leaders/safeguarding — a teen sees the count, not a name-and-shame roster. [Design to confirm this split.]
+- **Crisis pathway applies:** a note indicating harm to self or others routes to the designated safeguarding leads exactly as a prayer request does.
 
 ## Small Groups (My Group) ✧ V2
 
@@ -125,5 +137,5 @@ The hierarchy system (`07-feature-specifications.md` #3) is what makes safe comm
 4. Is the crisis escalation path wired and staffed?
 5. Is every relationship mutual and consent-based, with silent, cost-free exit?
 6. Does it collect the minimum data, with teen-comprehensible disclosure?
-7. Does it create any comparison, popularity, or validation surface? If yes, redesign.
+7. Does it create any comparison, popularity, or validation surface? If yes, redesign — **except Community Notes**, where public likes/reposts are a sanctioned, moderated exception (see Community Notes). Nowhere else.
 8. Would a parent, shown exactly how it works, feel their teen is safer here than on WhatsApp? If not, redesign.
