@@ -8,8 +8,7 @@ import {
 import api from '../api/axios';
 import type { Devotional } from '../types';
 import toast from 'react-hot-toast';
-import { todayISO } from '../utils/dates';
-import { formatAPIDate } from '../utils/dates';
+import { formatAPIDate, todayISO } from '../utils/dates';
 
 const AdminDevotionals = () => {
     const [devotionals, setDevotionals] = useState<Devotional[]>([]);
@@ -54,6 +53,23 @@ const AdminDevotionals = () => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
+
+    /*
+      One object URL per selected file, revoked when it changes or the modal
+      closes. Creating it inline in the JSX would mint a new blob URL on every
+      render — i.e. on every keystroke in any other field — and release none.
+    */
+    const [coverPreview, setCoverPreview] = useState<string | null>(null);
+    useEffect(() => {
+        const file = formData.cover_image;
+        if (!file) {
+            setCoverPreview(null);
+            return;
+        }
+        const url = URL.createObjectURL(file);
+        setCoverPreview(url);
+        return () => URL.revokeObjectURL(url);
+    }, [formData.cover_image]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -534,6 +550,48 @@ const AdminDevotionals = () => {
                                         value={formData.hymn}
                                         onChange={handleInputChange}
                                     />
+                                </div>
+
+                                {/*
+                                    Cover image. Everything behind this already
+                                    existed — cover_image in formData,
+                                    handleFileChange, and the FormData submit —
+                                    but no input was ever rendered, so the
+                                    handler was dead code and no devotional
+                                    could be given an image from here.
+                                */}
+                                <div>
+                                    <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        <Upload size={14} />
+                                        Cover image <span className="text-gray-400 font-normal">(optional)</span>
+                                    </label>
+                                    <div className="flex items-center gap-3">
+                                        {coverPreview && (
+                                            <img
+                                                src={coverPreview}
+                                                alt=""
+                                                className="h-14 w-20 shrink-0 rounded-lg border border-gray-200 dark:border-gray-700 object-cover"
+                                            />
+                                        )}
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleFileChange}
+                                            className="file-input"
+                                        />
+                                        {formData.cover_image && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setFormData(prev => ({ ...prev, cover_image: null }))}
+                                                className="shrink-0 text-sm text-gray-500 hover:text-red-600"
+                                            >
+                                                Clear
+                                            </button>
+                                        )}
+                                    </div>
+                                    <p className="mt-1 text-xs text-gray-400">
+                                        Shown on the card and the share preview.
+                                    </p>
                                 </div>
 
                                 <div>

@@ -112,6 +112,13 @@ export const DevotionalEditor = ({
   });
 
   const [showOptional, setShowOptional] = useState(false);
+  /*
+    Optional cover image. Kept out of `form` because it is a File, not a string —
+    the payload below only switches to multipart when one is actually attached.
+  */
+  const [coverImage, setCoverImage] = useState<File | null>(null);
+  /** URL of the image already on the record, so an edit shows what is there. */
+  const [existingCover, setExistingCover] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -141,6 +148,9 @@ export const DevotionalEditor = ({
           }
           return next;
         });
+        if (typeof data.cover_image === 'string' && data.cover_image) {
+          setExistingCover(data.cover_image);
+        }
         // Reveal the optional block when it already holds something, so nothing
         // that exists is hidden behind a collapsed section.
         if (
@@ -159,6 +169,22 @@ export const DevotionalEditor = ({
       cancelled = true;
     };
   }, [needsFetch, devotional]);
+
+  /*
+    One object URL per selected file, revoked when it changes or the modal
+    closes. Calling URL.createObjectURL() inline in the JSX would mint a new
+    blob URL on every render and never release any of them.
+  */
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!coverImage) {
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(coverImage);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [coverImage]);
 
   const set = (key: keyof typeof form) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
@@ -194,8 +220,24 @@ export const DevotionalEditor = ({
         payload[k] = v;
       }
 
-      if (editing) await api.patch(`/content/devotionals/${devotional!.id}/`, payload);
-      else await api.post('/content/devotionals/', payload);
+      // JSON for the common case; multipart only when there is a file. DRF's
+      // ImageField rejects the empty string a multipart form would otherwise
+      // send for "no image".
+      let body: unknown = payload;
+      let config: { headers?: Record<string, string> } = {};
+      if (coverImage) {
+        const fd = new FormData();
+        for (const [k, v] of Object.entries(payload)) {
+          if (v === null || v === undefined) continue;
+          fd.append(k, String(v));
+        }
+        fd.append('cover_image', coverImage);
+        body = fd;
+        config = { headers: { 'Content-Type': 'multipart/form-data' } };
+      }
+
+      if (editing) await api.patch(`/content/devotionals/${devotional!.id}/`, body, config);
+      else await api.post('/content/devotionals/', body, config);
 
       onSaved();
     } catch (err: unknown) {
@@ -338,6 +380,48 @@ export const DevotionalEditor = ({
             maxLength={500}
             placeholder="God's love is not earned."
           />
+        </Field>
+
+        {/*
+          Cover image sits with the required fields rather than under "more
+          options": it is the picture that shows on the Today card and on a
+          WhatsApp share, so it is worth seeing, not worth hunting for.
+          Still optional — docs/09-design-principles.md keeps the daily
+          spiritual surfaces typographic, so most devotionals will not have one.
+        */}
+        <Field
+          label="Cover image"
+          error={errors.cover_image}
+          hint={
+            coverImage
+              ? `${coverImage.name} — replaces the current image on save.`
+              : 'Optional. Used on the card and the share preview.'
+          }
+        >
+          <div className="mt-1 flex items-center gap-3">
+            {(previewUrl || existingCover) && (
+              <img
+                src={previewUrl ?? existingCover!}
+                alt=""
+                className="h-12 w-16 shrink-0 rounded-console-sm border border-console-border object-cover"
+              />
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setCoverImage(e.target.files?.[0] ?? null)}
+              className="block w-full text-[12px] text-console-body file:mr-3 file:rounded-console-sm file:border-0 file:bg-console-action-light file:px-3 file:py-1.5 file:text-[12px] file:font-medium file:text-console-action"
+            />
+            {coverImage && (
+              <button
+                type="button"
+                onClick={() => setCoverImage(null)}
+                className="shrink-0 text-[12px] text-console-muted hover:text-console-danger"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </Field>
 
         <button
