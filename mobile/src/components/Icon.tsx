@@ -1,5 +1,9 @@
 import { memo } from 'react';
-import { Ionicons } from '@expo/vector-icons';
+// Imported from the family's own entry point, NOT from the `@expo/vector-icons`
+// barrel. The barrel's index references every family it ships, so Metro follows
+// all of them and bundles 18 icon fonts — about 3.5MB, of which this app uses
+// one. Importing the family directly ships Ionicons alone (390KB).
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 /**
  * The generic icon set.

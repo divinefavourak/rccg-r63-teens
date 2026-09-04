@@ -12,10 +12,13 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { Icon } from '../../src/components/Icon';
-import { Grabber } from '../../src/components/ui';
+import { PassagePicker } from '../../src/components/PassagePicker';
+import { ErrorState, ListSkeleton } from '../../src/components/states';
 import { useChrome } from '../../src/state/chrome';
-import { BOOKS, PASSAGE, TRANSLATIONS, type Verse } from '../../src/data/content';
-import { DURATION, READER_TOKENS, type ReaderTheme, type ReaderTokens } from '../../src/theme/tokens';
+import { useNavClearance } from '../../src/components/useNavClearance';
+import { useBooks, useScripture, useTranslations } from '../../src/api/queries';
+import type { BibleVerse } from '../../src/api/types';
+import { DURATION, NAV, READER_TOKENS, type ReaderTheme, type ReaderTokens } from '../../src/theme/tokens';
 
 /** User-scalable 14–28px, reader default 18 (09-design-principles.md). */
 const FONT_MIN = 14;
@@ -31,20 +34,46 @@ const FONT_STEP = 2;
  *
  * The reader carries its own light/sepia/dark theme, independent of the app's,
  * so it does not read from `useTheme()`.
+ *
+ * Passages are resolved by address (`/bible/lookup/?book=John&chapter=3`)
+ * rather than by primary key, because the reader knows "John 3" — not a chapter
+ * UUID — and so does every link that opens it.
  */
 export default function BibleScreen() {
   const insets = useSafeAreaInsets();
   const { navHidden } = useChrome();
+  const navClearance = useNavClearance(24);
   const reduceMotion = useReducedMotion();
 
   const [theme, setTheme] = useState<ReaderTheme>('light');
-  const [translation, setTranslation] = useState('NLT');
+  // An OSIS code, NOT a display name. `/bible/lookup/` resolves `book` against
+  // `osis_code`, so 'Genesis' finds nothing and 'Gen' does — the one book where
+  // the two happen to be identical is John, which is why a hardcoded 'John'
+  // masked this for every other book.
+  const [book, setBook] = useState('John');
+  const [chapter, setChapter] = useState(3);
+  // Undefined means "the server's default translation".
+  const [translation, setTranslation] = useState<string | undefined>(undefined);
   const [fontSize, setFontSize] = useState(18);
   const [useSerif, setUseSerif] = useState(true);
   const [bookmarked, setBookmarked] = useState(false);
   const [showBooks, setShowBooks] = useState(false);
   const [showTranslations, setShowTranslations] = useState(false);
-  const [highlighted, setHighlighted] = useState<ReadonlySet<number>>(() => new Set([16]));
+  const [highlighted, setHighlighted] = useState<ReadonlySet<number>>(() => new Set());
+
+  const passage = useScripture(book, chapter, translation);
+  const translations = useTranslations();
+  const books = useBooks();
+
+  const verses = passage.data?.verses ?? [];
+  const bookName = passage.data?.book_name ?? book;
+  const translationCode = passage.data?.translation?.code ?? translation ?? '—';
+
+  // Chapter navigation needs an upper bound or next/prev walks off the end of
+  // the book and lands on a valid-but-empty address, which reads to a teen as
+  // "the Bible is broken" rather than "there is no John 22".
+  const chapterCount =
+    (books.data ?? []).find((b) => b.osis_code === book)?.chapter_count ?? null;
 
   const tok = READER_TOKENS[theme];
 
@@ -100,18 +129,29 @@ export default function BibleScreen() {
     });
   }, []);
 
+  const goToChapter = useCallback(
+    (next: number) => {
+      if (next < 1) return;
+      if (chapterCount !== null && next > chapterCount) return;
+      setChapter(next);
+      setHighlighted(new Set());
+    },
+    [chapterCount],
+  );
+
   const renderVerse = useCallback(
-    ({ item }: { item: Verse }) => (
+    ({ item }: { item: BibleVerse }) => (
       <VerseRow
         verse={item}
-        highlighted={highlighted.has(item.n)}
+        reference={`${bookName} ${chapter}`}
+        highlighted={highlighted.has(item.number)}
         fontSize={fontSize}
         useSerif={useSerif}
         tok={tok}
         onPress={toggleHighlight}
       />
     ),
-    [highlighted, fontSize, useSerif, tok, toggleHighlight],
+    [bookName, chapter, highlighted, fontSize, useSerif, tok, toggleHighlight],
   );
 
   const header = useMemo(
@@ -121,7 +161,7 @@ export default function BibleScreen() {
           className="mb-1 font-ui-sb text-[12px] uppercase tracking-[1px]"
           style={{ color: tok.text3 }}
         >
-          {PASSAGE.book}
+          {bookName}
         </Text>
         <Text
           style={{
@@ -131,11 +171,11 @@ export default function BibleScreen() {
             fontFamily: useSerif ? 'Lora_600SemiBold' : 'Jakarta_700Bold',
           }}
         >
-          {PASSAGE.chapter}
+          {chapter}
         </Text>
       </View>
     ),
-    [tok, useSerif],
+    [tok, useSerif, bookName, chapter],
   );
 
   const footer = useMemo(
@@ -144,14 +184,26 @@ export default function BibleScreen() {
         className="mt-12 flex-row items-center justify-between pt-6"
         style={{ borderTopWidth: 1, borderTopColor: tok.border }}
       >
-        <ChapterButton label={`${PASSAGE.book} ${PASSAGE.chapter - 1}`} direction="prev" tok={tok} />
+        <ChapterButton
+          label={`${bookName} ${chapter - 1}`}
+          direction="prev"
+          tok={tok}
+          disabled={chapter <= 1}
+          onPress={() => goToChapter(chapter - 1)}
+        />
         <Text className="font-ui text-[12px]" style={{ color: tok.text3 }}>
-          {PASSAGE.verses.length} verses
+          {verses.length} {verses.length === 1 ? 'verse' : 'verses'}
         </Text>
-        <ChapterButton label={`${PASSAGE.book} ${PASSAGE.chapter + 1}`} direction="next" tok={tok} />
+        <ChapterButton
+          label={`${bookName} ${chapter + 1}`}
+          direction="next"
+          tok={tok}
+          disabled={chapterCount !== null && chapter >= chapterCount}
+          onPress={() => goToChapter(chapter + 1)}
+        />
       </View>
     ),
-    [tok],
+    [tok, bookName, chapter, verses.length, goToChapter, chapterCount],
   );
 
   return (
@@ -169,12 +221,12 @@ export default function BibleScreen() {
         <Pressable
           onPress={() => setShowBooks(true)}
           accessibilityRole="button"
-          accessibilityLabel={`Choose a book. Currently ${PASSAGE.book} ${PASSAGE.chapter}`}
+          accessibilityLabel={`Choose a book. Currently ${bookName} ${chapter}`}
           className="h-10 flex-1 flex-row items-center justify-center gap-1.5 rounded-sm"
           style={{ backgroundColor: tok.bg, borderWidth: 1, borderColor: tok.border }}
         >
           <Text className="font-ui-sb text-[15px]" style={{ color: tok.text1 }}>
-            {PASSAGE.book} {PASSAGE.chapter}
+            {bookName} {chapter}
           </Text>
           <Icon name="chevronDown" size={16} color={tok.text2} />
         </Pressable>
@@ -182,12 +234,12 @@ export default function BibleScreen() {
         <Pressable
           onPress={() => setShowTranslations((s) => !s)}
           accessibilityRole="button"
-          accessibilityLabel={`Translation: ${translation}`}
+          accessibilityLabel={`Translation: ${translationCode}`}
           className="h-10 flex-row items-center gap-1 rounded-sm px-3.5"
           style={{ backgroundColor: tok.bg, borderWidth: 1, borderColor: tok.border }}
         >
           <Text className="font-ui-sb text-[13px]" style={{ color: tok.text2 }}>
-            {translation}
+            {translationCode}
           </Text>
           <Icon name="chevronDown" size={14} color={tok.text3} />
         </Pressable>
@@ -223,60 +275,97 @@ export default function BibleScreen() {
             elevation: 12,
           }}
         >
-          {TRANSLATIONS.map((t) => (
+          {(translations.data ?? []).map((t) => (
             <Pressable
-              key={t}
+              key={t.id}
               onPress={() => {
-                setTranslation(t);
+                setTranslation(t.code);
                 setShowTranslations(false);
               }}
               accessibilityRole="button"
-              accessibilityState={{ selected: t === translation }}
+              accessibilityState={{ selected: t.code === translationCode }}
               className="px-5 py-3"
-              style={{ backgroundColor: t === translation ? tok.highlight : 'transparent' }}
+              style={{
+                backgroundColor: t.code === translationCode ? tok.highlight : 'transparent',
+              }}
             >
               <Text
-                className={t === translation ? 'font-ui-sb text-[15px]' : 'font-ui text-[15px]'}
-                style={{ color: t === translation ? tok.accent : tok.text1 }}
+                className={
+                  t.code === translationCode ? 'font-ui-sb text-[15px]' : 'font-ui text-[15px]'
+                }
+                style={{ color: t.code === translationCode ? tok.accent : tok.text1 }}
               >
-                {t}
+                {t.code}
               </Text>
             </Pressable>
           ))}
+          {translations.isPending && (
+            <Text className="px-5 py-3 font-ui text-[13px]" style={{ color: tok.text3 }}>
+              Loading…
+            </Text>
+          )}
         </View>
       )}
 
       {/* ── The text ──────────────────────────────────────────────────── */}
-      {/* Virtualised: this chapter is 21 verses but Psalm 119 is 176, and the
-          reader has to stay smooth on cheap Android hardware.
-          `Animated.FlatList` rather than a plain one so `onScroll` binds to a
-          worklet — the chrome then retracts without waking the JS thread.
-          Verse heights vary with the font-size control, so no fixed-size
-          list: measurement has to stay dynamic. */}
-      <Animated.FlatList
-        data={PASSAGE.verses}
-        keyExtractor={keyOfVerse}
-        renderItem={renderVerse}
-        ListHeaderComponent={header}
-        ListFooterComponent={footer}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 120 }}
-        initialNumToRender={12}
-        maxToRenderPerBatch={8}
-        windowSize={7}
-        removeClippedSubviews
-        // Rows are memoised, so they need telling when something outside
-        // `data` changes their appearance.
-        extraData={`${fontSize}-${useSerif}-${theme}-${highlighted.size}`}
-      />
+      {passage.isPending ? (
+        <View className="pt-8">
+          <ListSkeleton rows={6} height={64} />
+        </View>
+      ) : passage.isError ? (
+        <View className="flex-1 justify-center">
+          <ErrorState error={passage.error} onRetry={passage.refetch} />
+        </View>
+      ) : verses.length === 0 ? (
+        // An unimported passage is a valid address with no text yet — not an
+        // error, and never a 404 from the API.
+        <View className="flex-1 items-center justify-center px-8">
+          <Text className="mb-2 text-center font-ui-b text-[17px]" style={{ color: tok.text1 }}>
+            Nothing to show for {bookName} {chapter}
+          </Text>
+          <Text className="text-center font-ui text-[13px] leading-5" style={{ color: tok.text3 }}>
+            Try another chapter, or pick a different translation.
+          </Text>
+        </View>
+      ) : (
+        /* Virtualised: this chapter is short but Psalm 119 is 176 verses, and
+           the reader has to stay smooth on cheap Android hardware.
+           `Animated.FlatList` rather than a plain one so `onScroll` binds to a
+           worklet — the chrome then retracts without waking the JS thread.
+           Verse heights vary with the font-size control, so no fixed-size list:
+           measurement has to stay dynamic. */
+        <Animated.FlatList
+          data={verses}
+          keyExtractor={keyOfVerse}
+          renderItem={renderVerse}
+          ListHeaderComponent={header}
+          ListFooterComponent={footer}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingHorizontal: 24,
+            paddingTop: 24,
+            paddingBottom: navClearance,
+          }}
+          initialNumToRender={12}
+          maxToRenderPerBatch={8}
+          windowSize={7}
+          removeClippedSubviews
+          // Rows are memoised, so they need telling when something outside
+          // `data` changes their appearance.
+          extraData={`${fontSize}-${useSerif}-${theme}-${highlighted.size}`}
+        />
+      )}
 
       {/* ── Floating reader toolbar ───────────────────────────────────── */}
       <Animated.View
         pointerEvents="box-none"
         className="absolute self-center"
-        style={[{ bottom: 24 }, toolbarStyle]}
+        // Sits just above the floating nav bar, matching the design's 80px
+        // offset. The nav no longer occupies layout space, so this has to clear
+        // it explicitly or the two controls overlap.
+        style={[{ bottom: NAV.barHeight + insets.bottom + 12 }, toolbarStyle]}
       >
         <View
           className="flex-row items-center overflow-hidden rounded-lg"
@@ -367,17 +456,26 @@ export default function BibleScreen() {
         </View>
       </Animated.View>
 
-      <BookPicker
+      <PassagePicker
         visible={showBooks}
         tok={tok}
-        current={PASSAGE.book}
+        currentOsis={book}
+        currentChapter={chapter}
+        books={books.data ?? []}
+        loading={books.isPending}
+        onPick={(nextOsis, nextChapter) => {
+          setBook(nextOsis);
+          setChapter(nextChapter);
+          setHighlighted(new Set());
+          setShowBooks(false);
+        }}
         onClose={() => setShowBooks(false)}
       />
     </View>
   );
 }
 
-const keyOfVerse = (v: Verse) => String(v.n);
+const keyOfVerse = (v: BibleVerse) => v.id;
 
 // ─── A verse ───────────────────────────────────────────────────────────────
 
@@ -388,13 +486,15 @@ const keyOfVerse = (v: Verse) => String(v.n);
  */
 const VerseRow = memo(function VerseRow({
   verse,
+  reference,
   highlighted,
   fontSize,
   useSerif,
   tok,
   onPress,
 }: {
-  verse: Verse;
+  verse: BibleVerse;
+  reference: string;
   highlighted: boolean;
   fontSize: number;
   useSerif: boolean;
@@ -403,11 +503,11 @@ const VerseRow = memo(function VerseRow({
 }) {
   return (
     <Pressable
-      onPress={() => onPress(verse.n)}
+      onPress={() => onPress(verse.number)}
       accessibilityRole="button"
       // Screen readers should announce the reference, then the text
       // (09-design-principles.md: "verse structure exposed meaningfully").
-      accessibilityLabel={`${PASSAGE.book} ${PASSAGE.chapter} verse ${verse.n}. ${verse.text}`}
+      accessibilityLabel={`${reference} verse ${verse.number}. ${verse.text}`}
       accessibilityState={{ selected: highlighted }}
       className="-mx-2 rounded-sm px-2 py-1"
       style={{ backgroundColor: highlighted ? tok.highlight : 'transparent' }}
@@ -428,7 +528,7 @@ const VerseRow = memo(function VerseRow({
             fontFamily: 'Jakarta_600SemiBold',
           }}
         >
-          {verse.n}{'  '}
+          {verse.number}{'  '}
         </Text>
         {verse.text}
       </Text>
@@ -442,17 +542,24 @@ function ChapterButton({
   label,
   direction,
   tok,
+  disabled,
+  onPress,
 }: {
   label: string;
   direction: 'prev' | 'next';
   tok: ReaderTokens;
+  disabled?: boolean;
+  onPress?: () => void;
 }) {
   return (
     <Pressable
+      onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={`Go to ${label}`}
+      accessibilityState={{ disabled }}
       className="flex-row items-center gap-2 rounded-md px-4 py-3"
-      style={{ borderWidth: 1, borderColor: tok.border }}
+      style={{ borderWidth: 1, borderColor: tok.border, opacity: disabled ? 0.35 : 1 }}
     >
       {direction === 'prev' && <Icon name="chevronLeft" size={18} color={tok.text2} />}
       <Text className="font-ui-sb text-[14px]" style={{ color: tok.text2 }}>
@@ -463,77 +570,3 @@ function ChapterButton({
   );
 }
 
-// ─── Book picker ───────────────────────────────────────────────────────────
-
-/**
- * A bottom sheet, not a dropdown: 10-design-system.md makes sheets the mobile
- * picker and the teen surface's workhorse.
- */
-function BookPicker({
-  visible,
-  tok,
-  current,
-  onClose,
-}: {
-  visible: boolean;
-  tok: ReaderTokens;
-  current: string;
-  onClose: () => void;
-}) {
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-      statusBarTranslucent
-    >
-      <Pressable
-        onPress={onClose}
-        accessibilityLabel="Close book picker"
-        style={{ flex: 1, backgroundColor: 'rgba(28,25,22,0.48)', justifyContent: 'flex-end' }}
-      >
-        <Animated.View
-          entering={SlideInDown.duration(300)}
-          // Stop taps inside the sheet from reaching the dismiss scrim.
-          onStartShouldSetResponder={() => true}
-          style={{
-            maxHeight: '80%',
-            backgroundColor: tok.raised,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            paddingBottom: 32,
-          }}
-        >
-          <Grabber />
-          <Text className="px-5 pb-3 font-ui-b text-[17px]" style={{ color: tok.text1 }}>
-            Choose a book
-          </Text>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {BOOKS.map((book) => (
-              <Pressable
-                key={book}
-                onPress={onClose}
-                accessibilityRole="button"
-                accessibilityState={{ selected: book === current }}
-                className="px-5 py-3.5"
-                style={{
-                  backgroundColor: book === current ? tok.highlight : 'transparent',
-                  borderBottomWidth: 1,
-                  borderBottomColor: tok.border,
-                }}
-              >
-                <Text
-                  className={book === current ? 'font-ui-sb text-[15px]' : 'font-ui text-[15px]'}
-                  style={{ color: book === current ? tok.accent : tok.text1 }}
-                >
-                  {book}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </Animated.View>
-      </Pressable>
-    </Modal>
-  );
-}

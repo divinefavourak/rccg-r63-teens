@@ -152,6 +152,13 @@ export function Button({
   const labelColor =
     variant === 'primary' ? 'text-white' : variant === 'secondary' ? 'text-ink-2' : 'text-green';
 
+  // The spinner is drawn from borders, not text, so it cannot inherit the
+  // label's colour class — a white one on a transparent secondary button would
+  // simply be invisible.
+  const tokens = useTokens();
+  const spinnerColor =
+    variant === 'primary' ? '#fff' : variant === 'secondary' ? tokens.text2 : tokens.green;
+
   return (
     <Press
       onPress={loading || disabled ? undefined : onPress}
@@ -164,7 +171,7 @@ export function Button({
     >
       {/* The spinner always leads and replaces the icon, so the label never
           shifts sideways when a button enters its loading state. */}
-      {loading ? <Spinner /> : iconPosition === 'leading' ? icon : null}
+      {loading ? <Spinner color={spinnerColor} /> : iconPosition === 'leading' ? icon : null}
       <Text className={`font-ui-b text-[15px] ${labelColor}`}>{loading ? 'Please wait…' : label}</Text>
       {!loading && iconPosition === 'trailing' ? icon : null}
     </Press>

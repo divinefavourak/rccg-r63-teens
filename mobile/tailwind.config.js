@@ -9,6 +9,18 @@ const themed = (name) => `rgb(var(--${name}) / <alpha-value>)`;
 
 module.exports = {
   content: ['./app/**/*.{js,jsx,ts,tsx}', './src/**/*.{js,jsx,ts,tsx}'],
+
+  /*
+   * Class strategy, not the `media` default.
+   *
+   * Left unset, NativeWind emits `--css-interop-darkMode: media` and takes dark
+   * styling from the OS `prefers-color-scheme` alone — the `.dark:root` block in
+   * global.css never matches, so the in-app toggle re-themes nothing that is
+   * styled with a class. It still moved anything reading `useTokens()` (plain JS
+   * that switches on the scheme), which is why the bottom nav went dark on its
+   * own while every screen stayed light.
+   */
+  darkMode: 'class',
   presets: [require('nativewind/preset')],
   theme: {
     extend: {

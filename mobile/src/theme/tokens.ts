@@ -214,3 +214,18 @@ export const DURATION = {
   slow: 250,
   celebrate: 400,
 } as const;
+
+/**
+ * Bottom-nav geometry, in the design's own units (Figma canvas 393 x 98).
+ *
+ * Lives here rather than in `BottomNav.tsx` because every scrollable screen
+ * needs it too: the nav is absolutely positioned so its transparent parts show
+ * real content, which means it no longer reserves layout space and each screen
+ * must pad its own scroll content clear of it.
+ */
+export const NAV = {
+  height: 98,
+  barHeight: 68,
+  bubbleSize: 50,
+  bubbleTop: 5,
+} as const;

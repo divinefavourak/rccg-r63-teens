@@ -51,6 +51,38 @@ The substitute is a two-part set:
 `src/components/Icon.tsx` holds the name map, so changing icon families later
 is a change to one table rather than to every screen.
 
+## Bundle size
+
+Two barrel imports were quietly costing several megabytes. Both matter here:
+`15-technical-architecture.md` sets performance budgets against Nigerian data
+plans and low-end Android hardware.
+
+| Import | Cost | Fix |
+|---|---|---|
+| `import { Ionicons } from '@expo/vector-icons'` | 18 icon fonts, **~3.5MB** | `import Ionicons from '@expo/vector-icons/Ionicons'` — 390KB |
+| `import { X } from '@expo-google-fonts/lora'` | all 8 Lora + 14 Jakarta weights | import each weight's own subpath, e.g. `@expo-google-fonts/lora/400Regular` |
+
+The rule in both cases: **Metro bundles every asset a module graph can reach.**
+A package index that re-exports its whole catalogue drags all of it in, because
+`require()`-ing a `.ttf` is a side effect no tree-shaker will drop. Import the
+leaf, not the barrel.
+
+Result: the Android export went from **12MB to 6.3MB**, 18 icon fonts down to
+one.
+
+One asset remains that nothing here uses: `MaterialSymbols_400Regular.ttf`
+(964KB), pulled in by `expo-router` → `expo-symbols` for rendering Android tab
+icons from SF Symbol names. `metro.config.js` carries a commented-out resolver
+stub that removes it, along with why it is off by default.
+
+Verify with:
+
+```bash
+npx expo export --platform android --output-dir /tmp/export-check --clear
+```
+
+and check what lands in the asset list.
+
 ## Layout
 
 ```
@@ -63,22 +95,88 @@ app/                      routes (expo-router)
   devotional.tsx          full devotional (modal)
   notifications.tsx       inbox (bottom sheet over Today)
   event/[id].tsx          event detail
+  sign-in.tsx             auth (modal, dismissible)
+  +not-found.tsx          dead deep links
 src/
+  api/config.ts           base URL resolution, cache staleness
+  api/tokens.ts           JWTs in the Keychain / Keystore
+  api/client.ts           fetch + single-flight refresh
+  api/types.ts            response shapes, from the Django serialisers
+  api/queries.ts          React Query hooks, one per screen concern
+  api/queryClient.ts      cache defaults + RN focus/online bridges
   theme/tokens.ts         imperative mirror of global.css + elevation, motion
   theme/ThemeProvider.tsx light/dark, persisted
-  state/session.tsx       guest flag, saved items, challenge state
+  state/auth.tsx          who is signed in
   state/chrome.tsx        nav visibility, shared with the reader's scroll
-  components/             Icon, BrandMarks, Photo, BottomNav, ui primitives
-  data/content.ts         all fixture content
+  components/             Icon, BrandMarks, Flame, Photo, BottomNav, states, ui
 global.css                semantic colour tokens (light + dark)
 tailwind.config.js        tokens -> Tailwind scales
 ```
 
+## Running the backend
+
+The app talks to the Django API in `../backend`. **Start it bound to all
+interfaces**, not the `runserver` default:
+
+```bash
+cd ../backend && venv/Scripts/python.exe manage.py runserver 0.0.0.0:8000
+```
+
+`manage.py runserver` binds `127.0.0.1` unless told otherwise, which means only
+the host machine can reach it — a phone on the LAN or an Android emulator
+(which reaches the host at `10.0.2.2`) gets a refused connection and every
+screen shows its offline state. `ALLOWED_HOSTS` already defaults to `['*']`, so
+nothing else needs changing. On Windows, allow `python.exe` on the private
+network when the firewall prompts.
+
+`src/api/config.ts` resolves the base URL in this order:
+
+1. `EXPO_PUBLIC_API_URL` — set this for staging/production (see `.env.example`).
+2. The machine currently serving the JS bundle, on port 8000. Expo already knows
+   the developer machine's LAN address because it is serving the bundle from it,
+   so a physical device works with no configuration.
+3. Loopback (`10.0.2.2` on Android) for the simulator.
+
+In development, a failed request names the URL it tried rather than saying
+"you're offline" — an unreachable dev server and a dropped connection look
+identical otherwise.
+
 ## Data
 
-Everything renders from `src/data/content.ts`, typed to match the Django
-serialisers in `../backend` rather than the Figma mock. Wiring the real API
-means replacing that module's exports with queries; no screen changes shape.
+Every screen reads from the live API through React Query (`src/api/queries.ts`).
+Response types in `src/api/types.ts` are transcribed by hand from the Django
+serialisers, because `manage.py spectacular` reports 278 errors on this schema —
+the hand-rolled `APIView`s (Today, Progress, Bible lookup) declare no
+`serializer_class`, so generated types would be `unknown` exactly where the app
+needs them most.
+
+| Screen | Endpoint |
+|---|---|
+| Today | `GET /today/` — the whole screen in one call, public |
+| Challenge | `POST /today/challenge/complete/` |
+| Devotional | `GET /content/devotionals/{id}/` |
+| Library | `GET /content/devotionals/?search=` |
+| Bible | `GET /bible/lookup/?book=&chapter=`, `/bible/books/`, `/bible/translations/` |
+| Tribe | `GET /events/events/`, `POST /events/events/{id}/register/` |
+| Notifications | `GET /notifications/inbox/`, `POST .../mark_read/` |
+| Me | `GET /profiles/me/`, `/progress/summary/`, `/events/registrations/mine/` |
+| Saved | `GET/POST /profiles/favorites/`, `DELETE .../remove/` |
+| Auth | `POST /auth/login/`, `/auth/refresh/`, `/auth/logout/`, `GET /auth/me/` |
+
+Notes on the wiring:
+
+- **Today is public.** A guest gets the devotional, verse and challenge with the
+  personal half null — which is what lets the screen render before anyone has an
+  account (05-navigation.md: the guest view is a preview of the real product).
+- **A pipeline gap is a 200, not a 404.** `has_devotional: false` still carries
+  a true streak and challenge, so the screen keeps working and shows the empty
+  state from 06-user-flows.md flow 5. If Today looks bare, check whether a
+  devotional exists for *today's* date — the API is behaving correctly.
+- **Tokens live in `expo-secure-store`** (iOS Keychain / Android Keystore), not
+  AsyncStorage: these are bearer credentials for a minor's account.
+- **One refresh, shared.** Several requests 401 together on a cold start; a
+  single in-flight promise refreshes once and the rest await it, rather than N
+  refreshes racing to rotate the same token.
 
 ## Design rules this implements
 
@@ -93,7 +191,18 @@ Not restated in code, but load-bearing:
 
 ## Not yet built
 
-- Auth (the guest flag in `state/session.tsx` is where it plugs in)
-- Real Bible text and search — currently one fixture chapter
+- Marking a devotional read — the Progress domain records it, but the app only
+  posts challenge completions so far
+- Bible search, highlights, notes and continue-reading (endpoints exist under
+  `/bible/`; the reader currently only reads passages)
+- Library's video, podcast and course shelves — `/media/` and the article and
+  manual endpoints under `/content/`
 - Audio/video playback and the docked mini-player
-- Offline sync and the ticket QR's real payload
+- A real scannable QR on the ticket sheet; the registration code is shown but
+  the symbol is a placeholder glyph
+- Offline sync, and push registration via `/notifications/push/`
+- **Tribe's community half.** `04-information-architecture.md` defines Tribe as
+  "events + community"; the design export and this build cover events only.
+  Friends, prayer and groups join this tab later — the nav never grows past
+  five. Me → My tickets is a shortcut; the canonical home is Tribe → Events.
+- Lint config — `npx expo lint` scaffolds it

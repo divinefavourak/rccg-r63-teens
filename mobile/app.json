@@ -10,9 +10,11 @@
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
+      "imageWidth": 180,
       "resizeMode": "contain",
       "backgroundColor": "#F9F6F1",
       "dark": {
+        "image": "./assets/splash-icon.png",
         "backgroundColor": "#1C1916"
       }
     },
@@ -42,16 +44,19 @@
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
-          "imageWidth": 160,
+          "imageWidth": 180,
           "resizeMode": "contain",
           "backgroundColor": "#F9F6F1",
           "dark": {
+            "image": "./assets/splash-icon.png",
             "backgroundColor": "#1C1916"
           }
         }
       ],
       "expo-font",
-      "expo-image"
+      "expo-image",
+      "expo-secure-store",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

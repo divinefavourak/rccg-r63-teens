@@ -4,6 +4,7 @@ import Animated, {
   useAnimatedProps,
   useAnimatedStyle,
   useDerivedValue,
+  useSharedValue,
   withTiming,
   Easing,
   useReducedMotion,
@@ -18,16 +19,16 @@ import { Icon, type IconName } from './Icon';
 import { BibleMark } from './BrandMarks';
 import { useTokens } from '../theme/ThemeProvider';
 import { useChrome } from '../state/chrome';
-import { DURATION } from '../theme/tokens';
+import { DURATION, NAV } from '../theme/tokens';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 /** Geometry of the nav, in the design's own units (Figma canvas 393 x 98). */
-const NAV_HEIGHT = 98;
-const BAR_HEIGHT = 68;
+const NAV_HEIGHT = NAV.height;
+const BAR_HEIGHT = NAV.barHeight;
 const BAR_TOP = NAV_HEIGHT - BAR_HEIGHT; // 30
-const BUBBLE_SIZE = 50;
-const BUBBLE_TOP = 5;
+const BUBBLE_SIZE = NAV.bubbleSize;
+const BUBBLE_TOP = NAV.bubbleTop;
 
 /** Notch shape. Half-width clears the bubble's 25px radius with ~5px of air. */
 const NOTCH_HALF = 36;
@@ -183,9 +184,18 @@ export default function BottomNav({ state, navigation }: BottomTabBarProps) {
 
   // A single derived value drives both the bubble and the notch, so they can
   // never drift apart mid-animation.
+  //
+  // The first pass lands before `onLayout` has reported a width, so it has to
+  // settle on the real position without animating — otherwise the notch visibly
+  // slides in from the left edge every time the nav mounts.
+  const placed = useSharedValue(false);
   const centre = useDerivedValue(() => {
+    if (tabWidth === 0) return 0;
     const target = tabWidth * (state.index + 0.5);
-    if (reduceMotion || tabWidth === 0) return target;
+    if (reduceMotion || !placed.value) {
+      placed.value = true;
+      return target;
+    }
     return withTiming(target, { duration: DURATION.slow, easing: Easing.out(Easing.cubic) });
   }, [state.index, tabWidth, reduceMotion]);
 
@@ -216,8 +226,19 @@ export default function BottomNav({ state, navigation }: BottomTabBarProps) {
   return (
     <Animated.View
       onLayout={onLayout}
+      // Absolutely positioned, so the transparent region around the notch shows
+      // the screen underneath instead of the navigator's own background.
+      // `BottomTabView` lays the tab bar out as a flex sibling of the screens,
+      // so left in flow this strip rendered the navigation theme's colour and
+      // read as a band that did not match the app. Taking it out of the flow
+      // means screens must pad their scroll content — see `useNavClearance`.
+      pointerEvents="box-none"
       style={[
         {
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
           height: NAV_HEIGHT + insets.bottom,
           backgroundColor: 'transparent',
         },
