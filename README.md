@@ -1,4 +1,4 @@
-# RCCG R63 Teens
+# RCCG R63 Teens soon to be faith tribe 
 
 A comprehensive youth ministry web platform for the **Redeemed Christian Church of God, Region 63**. It powers event registration, daily devotionals, media content, and administrative management for teens, coordinators, and admins.
 
