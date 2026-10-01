@@ -9,6 +9,9 @@ import { Press } from './Press';
 import { useTokens } from '../theme/ThemeProvider';
 import type { PopColour } from '../theme/tokens';
 
+/** Space between the status bar and the back button / progress bar. */
+const TOP_GAP = 16;
+
 /**
  * The frame every "one question per screen" step shares: a bar at the top, the
  * question with its 3D badge, the answer, and one pinned action.
@@ -47,7 +50,10 @@ export function QuestionScreen({
     <KeyboardAvoidingView
       className="flex-1 bg-surf-base"
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={{ paddingTop: insets.top }}
+      // Figma draws the bar under a 44px status bar. A real inset is often
+      // smaller (24–30px on Android), which left the bar hugging the top edge,
+      // so it gets its own space on top of whatever the device reports.
+      style={{ paddingTop: insets.top + TOP_GAP }}
     >
       {step && total ? (
         <StepperBar step={step} total={total} onBack={onBack} />
