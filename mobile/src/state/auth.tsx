@@ -19,8 +19,15 @@ interface AuthValue {
   isGuest: boolean;
   /** False until the stored session has been read, so nothing flashes. */
   ready: boolean;
-  signIn: (username: string, password: string) => Promise<void>;
-  signUp: (input: SignUpInput) => Promise<void>;
+  /** `identifier` is an email address, a phone number or a username. */
+  signIn: (identifier: string, password: string) => Promise<void>;
+  /** Sends one code to both the email address and the phone number. */
+  startSignUp: (email: string, phone: string) => Promise<void>;
+  /** Checks the code and creates the account, signed in. */
+  completeSignUp: (details: SignUpDetails, code: string) => Promise<void>;
+  /** Sends a sign-in code to an existing account's email or phone. */
+  requestLoginCode: (identifier: string) => Promise<void>;
+  signInWithCode: (identifier: string, code: string) => Promise<void>;
   signOut: () => Promise<void>;
   /** Set while a sign-in request is in flight. */
   pending: boolean;
@@ -29,21 +36,43 @@ interface AuthValue {
   clearError: () => void;
 }
 
-/** What `POST /auth/register/` accepts. Six fields are required. */
-export interface SignUpInput {
-  username: string;
+/** What `POST /auth/signup/complete/` accepts, besides the code. */
+export interface SignUpDetails {
   email: string;
-  password: string;
-  password_confirm: string;
+  /** In `+234…` form — see `toE164`. */
+  phone: string;
   first_name: string;
   last_name: string;
-  phone?: string;
   gender?: string;
   date_of_birth?: string;
-  province?: string;
-  zone?: string;
-  area?: string;
-  parish?: string;
+  /** The deepest church node the teen picked, usually a parish. */
+  church_node?: string;
+}
+
+/**
+ * A Nigerian mobile number in the one form the server stores: `+234…`.
+ *
+ * Accepts what people actually type — `0803 555 0142`, `803 555 0142`,
+ * `+234 803 555 0142`. Anything already starting with `+` is left alone, so a
+ * teen abroad can still sign in. Returns '' when it is not a phone number.
+ */
+export function toE164(input: string): string {
+  const raw = input.replace(/[\s\-().]/g, '');
+  if (raw.startsWith('+')) return /^\+\d{9,15}$/.test(raw) ? raw : '';
+  if (/^234\d{10}$/.test(raw)) return `+${raw}`;
+  if (/^0\d{10}$/.test(raw)) return `+234${raw.slice(1)}`;
+  if (/^[789]\d{9}$/.test(raw)) return `+234${raw}`;
+  return '';
+}
+
+/** Where a sign-in code goes: the address as typed, or the phone in `+234…` form. */
+export function codeDestination(input: string): { destination: string; channel: 'email' | 'sms' } | null {
+  const value = input.trim();
+  if (value.includes('@')) {
+    return /^\S+@\S+\.\S+$/.test(value) ? { destination: value.toLowerCase(), channel: 'email' } : null;
+  }
+  const phone = toE164(value);
+  return phone ? { destination: phone, channel: 'sms' } : null;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -125,36 +154,85 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   /**
-   * Create an account, then sign straight in.
+   * Run one auth request with the shared pending / error handling.
    *
-   * `/auth/register/` returns the created user but no tokens, so a teen who
-   * just typed their password would otherwise be dropped back at the sign-in
-   * form to type it again. The credentials are already in hand here.
+   * `establish` is true for the calls that return tokens: the session is saved
+   * and the query cache cleared, because guest and member see different
+   * payloads from the same endpoints.
    */
-  const signUp = useCallback(
-    async (input: SignUpInput) => {
+  const run = useCallback(
+    async (call: () => Promise<LoginResponse | unknown>, fallback: string, establish: boolean) => {
       setPending(true);
       setError(null);
       try {
-        await api.post('/auth/register/', input, { anonymous: true });
-        const data = await api.post<LoginResponse>(
-          '/auth/login/',
-          { username: input.username, password: input.password },
-          { anonymous: true },
-        );
-        await saveTokens(data.access, data.refresh);
-        setUser(data.user);
-        qc.clear();
+        const data = await call();
+        if (establish) {
+          const session = data as LoginResponse;
+          await saveTokens(session.access, session.refresh);
+          setUser(session.user);
+          qc.clear();
+        }
       } catch (err) {
-        const message =
-          err instanceof ApiError ? err.message : 'Could not create your account. Please try again.';
-        setError(message);
+        setError(err instanceof ApiError ? err.message : fallback);
         throw err;
       } finally {
         setPending(false);
       }
     },
     [qc],
+  );
+
+  const startSignUp = useCallback(
+    (email: string, phone: string) =>
+      run(
+        () => api.post('/auth/signup/start/', { email, phone }, { anonymous: true }),
+        'Could not send your code. Please try again.',
+        false,
+      ),
+    [run],
+  );
+
+  const completeSignUp = useCallback(
+    (details: SignUpDetails, code: string) =>
+      run(
+        () =>
+          api.post<LoginResponse>('/auth/signup/complete/', { ...details, code }, { anonymous: true }),
+        'Could not create your account. Please try again.',
+        true,
+      ),
+    [run],
+  );
+
+  const requestLoginCode = useCallback(
+    (identifier: string) =>
+      run(
+        () => {
+          const target = codeDestination(identifier);
+          if (!target) throw new ApiError(400, 'Enter your email address or phone number first.');
+          return api.post('/auth/otp/request/', { ...target, purpose: 'login' }, { anonymous: true });
+        },
+        'Could not send your code. Please try again.',
+        false,
+      ),
+    [run],
+  );
+
+  const signInWithCode = useCallback(
+    (identifier: string, code: string) =>
+      run(
+        () => {
+          const target = codeDestination(identifier);
+          if (!target) throw new ApiError(400, 'That code is wrong or has expired.');
+          return api.post<LoginResponse>(
+            '/auth/otp/verify/',
+            { destination: target.destination, purpose: 'login', code },
+            { anonymous: true },
+          );
+        },
+        'Could not sign in. Please try again.',
+        true,
+      ),
+    [run],
   );
 
   const signOut = useCallback(async () => {
@@ -178,13 +256,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isGuest: user === null,
       ready,
       signIn,
-      signUp,
+      startSignUp,
+      completeSignUp,
+      requestLoginCode,
+      signInWithCode,
       signOut,
       pending,
       error,
       clearError,
     }),
-    [user, ready, signIn, signUp, signOut, pending, error, clearError],
+    [user, ready, signIn, startSignUp, completeSignUp, requestLoginCode, signInWithCode,
+     signOut, pending, error, clearError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

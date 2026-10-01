@@ -56,7 +56,7 @@ export default function DevotionalScreen() {
   const onBookmark = useCallback(() => {
     if (!devotionalId) return;
     if (isGuest) {
-      router.push('/sign-in');
+      router.push('/log-in');
       return;
     }
     saved.toggle(devotionalId);
@@ -293,7 +293,7 @@ export default function DevotionalScreen() {
                 {isGuest ? (
                   <Button
                     label="Sign in to track your streak"
-                    onPress={() => router.push('/sign-in')}
+                    onPress={() => router.push('/log-in')}
                     height={52}
                   />
                 ) : (

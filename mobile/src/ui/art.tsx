@@ -28,6 +28,9 @@ const OBJECTS = {
 } as const;
 
 const DRAWINGS = {
+  dancing: { source: require('../../assets/art/dancing.svg'), ratio: 207 / 174.9 },
+  jumping: { source: require('../../assets/art/jumping.svg'), ratio: 841 / 682 },
+  reading: { source: require('../../assets/art/reading.svg'), ratio: 178.7 / 207 },
   'reading-side': { source: require('../../assets/art/reading-side.svg'), ratio: 142.5 / 88.2 },
 } as const;
 
