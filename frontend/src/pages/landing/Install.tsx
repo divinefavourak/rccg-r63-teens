@@ -10,7 +10,7 @@ const STEPS = [
     title: 'Open this page on your phone',
     mobile: 'Chrome on Android or Safari on iPhone.',
     desktop: 'Chrome on Android or Safari on iPhone.',
-    object: OBJECTS.rocket,
+    object: OBJECTS.mobile,
   },
   {
     title: 'Tap “Add to Home screen”',
@@ -22,7 +22,7 @@ const STEPS = [
     title: 'Open it tomorrow morning',
     mobile: 'Your first reading will be waiting.',
     desktop: 'Your first reading will be waiting.',
-    object: OBJECTS.bell,
+    object: OBJECTS.clock,
   },
 ];
 

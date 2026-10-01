@@ -2,6 +2,7 @@ import Seo from "../components/Seo";
 import MotionRoot, { ScrollProgress } from "../components/site/MotionRoot";
 import SiteFooter from "../components/site/SiteFooter";
 import SiteNav from "../components/site/SiteNav";
+import { useHashScroll } from "../components/site/useHashScroll";
 import Community from "./landing/Community";
 import Features from "./landing/Features";
 import Hero from "./landing/Hero";
@@ -22,28 +23,33 @@ import Showcase from "./landing/Showcase";
  * Layout and copy follow Figma. The motion is not in the file. It was asked for
  * separately, and its vocabulary lives in components/site/motion.ts.
  */
-const LandingPage = () => (
-  <MotionRoot>
-    <div className="min-h-screen bg-surface-base font-sans text-content-primary antialiased">
-      <Seo
-        title="Faith Tribe"
-        description="A few minutes with God, every day. One short reading, one verse to keep, and the whole Bible, made for teens across RCCG Region 63."
-        path="/"
-      />
-      <ScrollProgress />
-      <SiteNav />
-      <main>
-        <Hero />
-        <Marquee />
-        <Features />
-        <Showcase />
-        <Community />
-        <Install />
-        <Leaders />
-      </main>
-      <SiteFooter />
-    </div>
-  </MotionRoot>
-);
+const LandingPage = () => {
+  // The nav links to sections as "/#install" so they work from every page.
+  useHashScroll();
+
+  return (
+    <MotionRoot>
+      <div className="min-h-screen bg-surface-base font-sans text-content-primary antialiased">
+        <Seo
+          title="Faith Tribe"
+          description="A few minutes with God, every day. One short reading, one verse to keep, and the whole Bible, made for teens across RCCG Region 63."
+          path="/"
+        />
+        <ScrollProgress />
+        <SiteNav />
+        <main>
+          <Hero />
+          <Marquee />
+          <Features />
+          <Showcase />
+          <Community />
+          <Install />
+          <Leaders />
+        </main>
+        <SiteFooter />
+      </div>
+    </MotionRoot>
+  );
+};
 
 export default LandingPage;
