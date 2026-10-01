@@ -88,12 +88,25 @@ def _phone_variants(phone):
     return variants
 
 
+def find_by_phone(value, active_only=True):
+    """The account holding this phone number, in whatever form it was stored."""
+    phone = normalize_phone(value)
+    candidates = _phone_variants(phone) if phone else {(value or '').strip()}
+    candidates.discard('')
+    if not candidates:
+        return None
+    users = User.objects.filter(phone__in=candidates)
+    if active_only:
+        users = users.filter(is_active=True)
+    return users.first()
+
+
 def find_account(email, phone):
     """The existing active account for this email, else for this phone."""
     user = User.objects.filter(email__iexact=email, is_active=True).first()
     if user:
         return user, email, OTPCode.Channel.EMAIL
-    user = User.objects.filter(phone__in=_phone_variants(phone), is_active=True).first()
+    user = find_by_phone(phone)
     if user:
         return user, phone, OTPCode.Channel.SMS
     return None, None, None

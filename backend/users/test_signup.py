@@ -169,3 +169,41 @@ class SignupTests(APITestCase):
                              church_node='00000000-0000-0000-0000-000000000000')
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(User.objects.filter(email=EMAIL).exists())
+
+
+@override_settings(OTP_PROVIDER='users.test_signup.CapturingProvider', CACHES=_LOCMEM)
+class SignInIdentifierTests(APITestCase):
+    """The app's sign-in field takes an email or a phone as well as a username."""
+
+    def setUp(self):
+        cache.clear()
+        _SENT.clear()
+        self.user = User.objects.create_user(
+            username='tolu', email=EMAIL, password='correct-horse-9',
+            first_name='Tolu', last_name='Ade', phone='08031234567',
+        )
+
+    def _login(self, identifier):
+        return self.client.post('/api/v1/auth/login/',
+                                {'username': identifier, 'password': 'correct-horse-9'},
+                                format='json')
+
+    def test_password_login_by_username_email_or_phone(self):
+        for identifier in ('tolu', EMAIL, 'TOLU@example.com', '08031234567', PHONE):
+            self.assertEqual(self._login(identifier).status_code, status.HTTP_200_OK, identifier)
+
+    def test_unknown_identifier_still_fails_the_same_way(self):
+        res = self._login('nobody@example.com')
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_code_login_finds_a_phone_stored_in_local_format(self):
+        res = self.client.post('/api/v1/auth/otp/request/',
+                               {'destination': PHONE, 'channel': 'sms', 'purpose': 'login'},
+                               format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(_SENT), 1)
+        res = self.client.post('/api/v1/auth/otp/verify/',
+                               {'destination': PHONE, 'purpose': 'login', 'code': _SENT[0]['code']},
+                               format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn('access', res.data)
