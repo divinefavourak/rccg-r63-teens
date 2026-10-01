@@ -3,7 +3,7 @@ import { Pressable, Text } from 'react-native';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 
 import { codeDestination, useAuth } from '../../src/state/auth';
-import { signUpStep, toDetails, useSignUp } from '../../src/state/signup';
+import { toDetails, useSignUp } from '../../src/state/signup';
 import { FormError, QuestionScreen } from '../../src/ui/AuthShell';
 import { Button } from '../../src/ui/Button';
 import { OtpCells } from '../../src/ui/inputs';
@@ -92,7 +92,7 @@ export default function VerifyScreen() {
 
   // Reached without the answers that say where the code went (a reload, a
   // stray link): there is nothing to verify, so start again.
-  if (!isLogin && (!details.email || !details.phone)) return <Redirect href={signUpStep(1)} />;
+  if (!isLogin && (!details.email || !details.phone)) return <Redirect href="/sign-up" />;
 
   const target = isLogin ? codeDestination(to) : null;
   const helper = isLogin

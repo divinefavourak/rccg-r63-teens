@@ -7,7 +7,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../src/components/Icon';
 import { FaithTribeLogo } from '../../src/components/Logo';
 import { codeDestination, useAuth } from '../../src/state/auth';
-import { signUpStep } from '../../src/state/signup';
 import { markWelcomed } from '../../src/state/welcome';
 import { FormError } from '../../src/ui/AuthShell';
 import { Button } from '../../src/ui/Button';
@@ -199,7 +198,7 @@ export default function LogInScreen() {
         <View className="flex-row items-center gap-1">
           <Text className="font-ui text-[14px] leading-5 text-ink-2">New here?</Text>
           <Pressable
-            onPress={() => router.replace(signUpStep(1))}
+            onPress={() => router.replace('/sign-up')}
             accessibilityRole="link"
             hitSlop={10}
           >

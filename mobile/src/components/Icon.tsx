@@ -61,6 +61,7 @@ const OUTLINE = {
   library: 'library-outline',
   phone: 'phone-portrait-outline',
   mail: 'mail-outline',
+  cloudOffline: 'cloud-offline-outline',
 } as const;
 
 // Only the icons that genuinely need a filled state are listed. Anything absent

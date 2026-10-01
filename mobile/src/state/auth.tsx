@@ -50,19 +50,29 @@ export interface SignUpDetails {
 }
 
 /**
- * A Nigerian mobile number in the one form the server stores: `+234…`.
+ * A phone number in the one form the server stores: `+<country><number>`.
  *
- * Accepts what people actually type — `0803 555 0142`, `803 555 0142`,
- * `+234 803 555 0142`. Anything already starting with `+` is left alone, so a
- * teen abroad can still sign in. Returns '' when it is not a phone number.
+ * `dial` is the country chosen in the phone field. For Nigeria it accepts what
+ * people actually type — `0803 555 0142`, `803 555 0142`, `234 803 555 0142`.
+ * For anywhere else the national number has its leading zero dropped and the
+ * country code put in front. Anything already starting with `+` is taken as
+ * written, whatever country is selected. Returns '' when it is not a number.
  */
-export function toE164(input: string): string {
+export function toE164(input: string, dial = '+234'): string {
   const raw = input.replace(/[\s\-().]/g, '');
   if (raw.startsWith('+')) return /^\+\d{9,15}$/.test(raw) ? raw : '';
-  if (/^234\d{10}$/.test(raw)) return `+${raw}`;
-  if (/^0\d{10}$/.test(raw)) return `+234${raw.slice(1)}`;
-  if (/^[789]\d{9}$/.test(raw)) return `+234${raw}`;
-  return '';
+
+  if (dial === '+234') {
+    if (/^234\d{10}$/.test(raw)) return `+${raw}`;
+    if (/^0\d{10}$/.test(raw)) return `+234${raw.slice(1)}`;
+    if (/^[789]\d{9}$/.test(raw)) return `+234${raw}`;
+    return '';
+  }
+
+  const national = raw.replace(/^0+/, '');
+  if (!/^\d{6,12}$/.test(national)) return '';
+  const full = `${dial}${national}`;
+  return /^\+\d{9,15}$/.test(full) ? full : '';
 }
 
 /** Where a sign-in code goes: the address as typed, or the phone in `+234…` form. */

@@ -1,34 +1,34 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
-import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { BackHandler, Text, TextInput, View } from 'react-native';
+import { useRouter } from 'expo-router';
 
-import { useChurchNodes } from '../../../src/api/queries';
-import type { ChurchLevel } from '../../../src/api/types';
-import { ageGroupFor } from '../../../src/data/choices';
-import { Icon } from '../../../src/components/Icon';
-import { toE164, useAuth } from '../../../src/state/auth';
+import { useChurchNodes } from '../../src/api/queries';
+import type { ChurchLevel } from '../../src/api/types';
+import { ageGroupFor } from '../../src/data/choices';
+import { Icon } from '../../src/components/Icon';
+import { toE164, useAuth } from '../../src/state/auth';
 import {
   ageFrom,
   birthDate,
   CHURCH_STEPS,
-  signUpStep,
   toDetails,
   useSignUp,
   type SignUpForm,
-} from '../../../src/state/signup';
-import { FormError, QuestionScreen } from '../../../src/ui/AuthShell';
-import type { ObjectName } from '../../../src/ui/art';
-import { Button } from '../../../src/ui/Button';
+} from '../../src/state/signup';
+import { FormError, QuestionScreen } from '../../src/ui/AuthShell';
+import type { ObjectName } from '../../src/ui/art';
+import { Button } from '../../src/ui/Button';
 import {
   Crumbs,
   INPUT_RESET,
   OptionRow,
   SearchField,
   TextField,
-} from '../../../src/ui/inputs';
-import { Spinner } from '../../../src/ui/Press';
-import { useTokens } from '../../../src/theme/ThemeProvider';
-import { POP, type PopColour } from '../../../src/theme/tokens';
+} from '../../src/ui/inputs';
+import { PhoneField } from '../../src/ui/PhoneField';
+import { Spinner } from '../../src/ui/Press';
+import { useTokens } from '../../src/theme/ThemeProvider';
+import { POP, type PopColour } from '../../src/theme/tokens';
 
 const TOTAL = 8;
 
@@ -74,24 +74,22 @@ const GENDER_OPTIONS = [
 const EMAIL = /^\S+@\S+\.\S+$/;
 
 /**
- * Sign-up, one question per screen.
+ * Sign-up, one question at a time.
  *
- * One route renders all eight steps from the table above: they share a frame,
- * a progress bar and a single "Continue", and differ only in the answer. The
- * answers live in `SignUpProvider`, so Back never loses anything.
+ * One screen, not eight. The back button, the progress bar and the action stay
+ * exactly where they are; only the question in the middle changes, easing in
+ * from the side the teen is moving towards. It reads as one form that keeps
+ * asking, rather than a stack of pages.
  *
- * The code is requested once, when the last step is submitted — not at the
+ * The code is requested once, when the last question is answered — not at the
  * contact step — so it cannot expire while the teen is still choosing a parish.
  */
-export default function SignUpStep() {
+export default function SignUpScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ step: string }>();
-  const step = Number(params.step);
-  const { form, set, chooseChurch } = useSignUp();
+  const { form, step, direction, goTo, set, chooseChurch } = useSignUp();
   const { startSignUp, pending, error, clearError } = useAuth();
 
-  const valid = Number.isInteger(step) && step >= 1 && step <= TOTAL;
-  const churchLevel: ChurchLevel | null = valid && step >= 5 ? CHURCH_STEPS[step - 5] : null;
+  const churchLevel: ChurchLevel | null = step >= 5 ? CHURCH_STEPS[step - 5] : null;
 
   // A stale error from the previous attempt should not follow the teen around.
   useEffect(() => clearError, [clearError]);
@@ -105,7 +103,7 @@ export default function SignUpStep() {
       case 1:
         return form.firstName.trim().length > 0 && form.lastName.trim().length > 0;
       case 3:
-        return EMAIL.test(form.email.trim()) && toE164(form.phone) !== '';
+        return EMAIL.test(form.email.trim()) && toE164(form.phone, form.country.dial) !== '';
       case 4:
         return ageGroup !== null && ageGroup.eligible;
       default:
@@ -126,9 +124,10 @@ export default function SignUpStep() {
   }, [form, startSignUp, router]);
 
   const next = useCallback(() => {
-    if (step < TOTAL) router.push(signUpStep(step + 1));
+    if (error) clearError();
+    if (step < TOTAL) goTo(step + 1);
     else submit();
-  }, [step, router, submit]);
+  }, [error, clearError, step, goTo, submit]);
 
   /** "I am not sure": keep what was chosen above this level and finish. */
   const unsure = useCallback(() => {
@@ -137,15 +136,22 @@ export default function SignUpStep() {
   }, [churchLevel, chooseChurch, submit]);
 
   const back = useCallback(() => {
-    if (router.canGoBack()) router.back();
+    if (error) clearError();
+    if (step > 1) goTo(step - 1);
+    else if (router.canGoBack()) router.back();
     else router.replace('/welcome');
-  }, [router]);
+  }, [error, clearError, step, goTo, router]);
 
-  if (!valid) return <Redirect href={signUpStep(1)} />;
-
-  // Arriving mid-flow (a deep link, a reload) with nothing filled in would let
-  // someone submit a blank name; send them to the start instead.
-  if (step > 1 && form.firstName.trim() === '') return <Redirect href={signUpStep(1)} />;
+  // Android's system back should step through the questions like the on-screen
+  // arrow does, not drop the whole form on the first press.
+  useEffect(() => {
+    if (step === 1) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      goTo(step - 1);
+      return true;
+    });
+    return () => sub.remove();
+  }, [step, goTo]);
 
   const copy = STEPS[step - 1];
 
@@ -153,6 +159,7 @@ export default function SignUpStep() {
     <QuestionScreen
       step={step}
       total={TOTAL}
+      direction={direction}
       onBack={back}
       eyebrow={`Step ${step} of ${TOTAL}`}
       title={copy.title}
@@ -217,7 +224,12 @@ export default function SignUpStep() {
             autoComplete="email"
             autoFocus
           />
-          <PhoneField value={form.phone} onChange={(v) => set('phone', v)} />
+          <PhoneField
+            country={form.country}
+            onCountry={(c) => set('country', c)}
+            value={form.phone}
+            onChange={(v) => set('phone', v)}
+          />
         </>
       )}
 
@@ -258,43 +270,6 @@ export default function SignUpStep() {
         <ChurchPicker level={churchLevel} form={form} onUnsure={unsure} busy={pending} />
       )}
     </QuestionScreen>
-  );
-}
-
-// ─── Contact ───────────────────────────────────────────────────────────────
-
-function PhoneField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const tokens = useTokens();
-  const [focused, setFocused] = useState(false);
-  return (
-    <View className="w-full gap-2">
-      <Text className="font-ui-sb text-[14px] leading-5 text-ink-2">Phone number</Text>
-      <View className="flex-row gap-2">
-        <View className="h-[60px] items-center justify-center rounded-xl bg-surf-sunken px-4">
-          <Text className="font-ui-sb text-[16px] leading-6 text-ink-1">🇳🇬 +234</Text>
-        </View>
-        <View
-          className={`h-[60px] flex-1 flex-row items-center rounded-xl border-2 bg-surf-sunken px-5 ${
-            focused ? 'border-ink' : 'border-transparent'
-          }`}
-        >
-          <TextInput
-            value={value}
-            onChangeText={onChange}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            placeholder="803 555 0142"
-            placeholderTextColor={tokens.text3}
-            accessibilityLabel="Phone number"
-            keyboardType="phone-pad"
-            autoComplete="tel"
-            maxLength={16}
-            className="min-w-0 flex-1 font-ui-b text-[20px] tracking-[-0.2px] text-ink-1"
-            style={INPUT_RESET}
-          />
-        </View>
-      </View>
-    </View>
   );
 }
 

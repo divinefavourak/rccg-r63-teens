@@ -12,7 +12,6 @@ import { GuestMark, LeafGlyph } from '../../src/components/BrandMarks';
 import { Button, Card, Grabber, Pill, ProgressBar, Toggle } from '../../src/components/ui';
 import { ErrorState, Skeleton } from '../../src/components/states';
 import { useTheme, useTokens } from '../../src/theme/ThemeProvider';
-import { signUpStep } from '../../src/state/signup';
 import { useAuth } from '../../src/state/auth';
 import { useNavClearance } from '../../src/components/useNavClearance';
 import { useCan, useMyRegistrations, useProfile, useProgress, useSaved } from '../../src/api/queries';
@@ -525,7 +524,7 @@ function GuestMe() {
       </Text>
 
       <View className="w-full max-w-[320px] gap-3">
-        <Button label="Create a free account" onPress={() => router.push(signUpStep(1))} height={52} />
+        <Button label="Create a free account" onPress={() => router.push('/sign-up')} height={52} />
         <Button
           label="I already have an account"
           variant="secondary"

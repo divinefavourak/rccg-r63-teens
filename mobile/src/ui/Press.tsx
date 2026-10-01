@@ -5,6 +5,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
+  withSpring,
   withTiming,
   Easing,
   useReducedMotion,
@@ -30,6 +31,12 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 // on `Press` rendered unstyled there. Web is a development preview only, so it
 // gets the plain pressable and goes without the scale.
 const IS_WEB = Platform.OS === 'web';
+
+// Quick down, and damped enough coming back that it settles without a
+// bounce. Springs rather than timings only so an interrupted press reverses
+// smoothly.
+const PRESS_IN = { damping: 22, stiffness: 420 } as const;
+const PRESS_OUT = { damping: 22, stiffness: 320 } as const;
 
 export function Press({
   children,
@@ -61,12 +68,12 @@ export function Press({
   const reduceMotion = useReducedMotion();
 
   const onPressIn = useCallback(() => {
-    if (!reduceMotion) scale.value = withTiming(scaleTo, { duration: 100 });
+    if (!reduceMotion) scale.value = withSpring(scaleTo, PRESS_IN);
     onPressInProp?.();
   }, [scale, scaleTo, reduceMotion, onPressInProp]);
 
   const onPressOut = useCallback(() => {
-    if (!reduceMotion) scale.value = withTiming(1, { duration: 100 });
+    if (!reduceMotion) scale.value = withSpring(1, PRESS_OUT);
     onPressOutProp?.();
   }, [scale, reduceMotion, onPressOutProp]);
 

@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useMemo, useState } from 'react
 
 import { toE164, type SignUpDetails } from './auth';
 import type { ChurchLevel, ChurchNode } from '../api/types';
+import { DEFAULT_COUNTRY, type Country } from '../data/countries';
 
 /**
  * The sign-up answers, held across the one-question-per-screen steps.
@@ -15,6 +16,8 @@ export interface SignUpForm {
   lastName: string;
   gender: string;
   email: string;
+  /** The country the phone number belongs to. */
+  country: Country;
   /** As typed, without the country code. */
   phone: string;
   day: string;
@@ -29,6 +32,7 @@ const EMPTY: SignUpForm = {
   lastName: '',
   gender: '',
   email: '',
+  country: DEFAULT_COUNTRY,
   phone: '',
   day: '',
   month: '',
@@ -36,21 +40,19 @@ const EMPTY: SignUpForm = {
   church: {},
 };
 
-/**
- * The route for one sign-up step.
- *
- * In the object form on purpose: with typed routes on, a dynamic segment is
- * only accepted as `pathname` + `params`, never as an interpolated string.
- */
-export function signUpStep(step: number) {
-  return { pathname: '/sign-up/[step]' as const, params: { step: String(step) } };
-}
-
 /** The levels the flow asks for, in order. Area exists but is never shown. */
 export const CHURCH_STEPS: ChurchLevel[] = ['region', 'province', 'zone', 'parish'];
 
 interface SignUpValue {
   form: SignUpForm;
+  /**
+   * Which question is showing, 1-based. Held here with the answers so that
+   * coming back from the code screen lands on the last question, not the first.
+   */
+  step: number;
+  /** +1 when the last move was forward, -1 when it was back: the slide direction. */
+  direction: 1 | -1;
+  goTo: (step: number) => void;
   set: <K extends keyof SignUpForm>(key: K, value: SignUpForm[K]) => void;
   /** Choose a node at `level`, forgetting anything picked beneath it. */
   chooseChurch: (level: ChurchLevel, node: ChurchNode | null) => void;
@@ -61,6 +63,14 @@ const SignUpContext = createContext<SignUpValue | null>(null);
 
 export function SignUpProvider({ children }: { children: React.ReactNode }) {
   const [form, setForm] = useState<SignUpForm>(EMPTY);
+  const [position, setPosition] = useState<{ step: number; direction: 1 | -1 }>({
+    step: 1,
+    direction: 1,
+  });
+
+  const goTo = useCallback((next: number) => {
+    setPosition((prev) => ({ step: next, direction: next >= prev.step ? 1 : -1 }));
+  }, []);
 
   const set = useCallback(<K extends keyof SignUpForm>(key: K, value: SignUpForm[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -79,9 +89,15 @@ export function SignUpProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const reset = useCallback(() => setForm(EMPTY), []);
+  const reset = useCallback(() => {
+    setForm(EMPTY);
+    setPosition({ step: 1, direction: 1 });
+  }, []);
 
-  const value = useMemo(() => ({ form, set, chooseChurch, reset }), [form, set, chooseChurch, reset]);
+  const value = useMemo(
+    () => ({ form, ...position, goTo, set, chooseChurch, reset }),
+    [form, position, goTo, set, chooseChurch, reset],
+  );
   return <SignUpContext.Provider value={value}>{children}</SignUpContext.Provider>;
 }
 
@@ -133,7 +149,7 @@ export function deepestChurch(form: SignUpForm): ChurchNode | undefined {
 export function toDetails(form: SignUpForm): SignUpDetails {
   return {
     email: form.email.trim().toLowerCase(),
-    phone: toE164(form.phone),
+    phone: toE164(form.phone, form.country.dial),
     first_name: form.firstName.trim(),
     last_name: form.lastName.trim(),
     gender: form.gender || undefined,
