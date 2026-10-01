@@ -1,4 +1,4 @@
-import { API_URL } from './config';
+import { API_SETUP_HINT, API_URL } from './config';
 import { clearTokens, getAccessTokenSync, getRefreshToken, saveTokens } from './tokens';
 
 /**
@@ -135,9 +135,10 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     if (__DEV__) {
       throw new ApiError(
         0,
-        `Could not reach ${options.baseUrl ?? API_URL}${path}. ` +
-          'If this is a local server, start it with `runserver 0.0.0.0:8000` ' +
-          'so the device can reach it.',
+        API_SETUP_HINT ??
+          `Could not reach ${options.baseUrl ?? API_URL}${path}. ` +
+            'If this is a local server, start it with `runserver 0.0.0.0:8000` ' +
+            'so the device can reach it.',
       );
     }
     throw new ApiError(0, 'Network unavailable');
