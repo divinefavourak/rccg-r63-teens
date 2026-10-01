@@ -50,14 +50,20 @@ def _normalize(destination):
     return (destination or '').strip().lower()
 
 
-def request_otp(destination, channel, purpose, user=None):
-    """Generate, store (hashed), and dispatch a code. Returns the OTPCode."""
+def request_otp(destination, channel, purpose, user=None, code=None):
+    """Generate, store (hashed), and dispatch a code. Returns the OTPCode.
+
+    ``code`` lets a caller issue the *same* code to more than one destination
+    (sign-up sends one code to both the email and the phone, and either copy
+    completes it). Each destination still gets its own row, expiry and attempt
+    counter. Leave it unset everywhere else.
+    """
     destination = _normalize(destination)
     OTPCode.objects.filter(
         destination=destination, purpose=purpose, consumed_at__isnull=True,
     ).update(consumed_at=timezone.now())
 
-    code = generate_code()
+    code = code or generate_code()
     otp = OTPCode.objects.create(
         user=user, destination=destination, channel=channel, purpose=purpose,
         code_hash=hash_code(code),
@@ -90,3 +96,14 @@ def verify_otp(destination, purpose, code):
     # Atomic increment so concurrent wrong attempts don't lose counts (brute-force cap).
     OTPCode.objects.filter(pk=otp.pk).update(attempts=F('attempts') + 1)
     return None
+
+
+def consume_outstanding(destination, purpose):
+    """Invalidate any live code for (destination, purpose) without verifying it.
+
+    Used when a sibling destination's copy of a shared code has just been
+    accepted, so the other copy cannot be replayed.
+    """
+    OTPCode.objects.filter(
+        destination=_normalize(destination), purpose=purpose, consumed_at__isnull=True,
+    ).update(consumed_at=timezone.now())

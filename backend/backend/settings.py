@@ -41,6 +41,15 @@ OTP_CODE_LENGTH = int(os.getenv('OTP_CODE_LENGTH', '6'))
 OTP_TTL_SECONDS = int(os.getenv('OTP_TTL_SECONDS', '600'))
 OTP_MAX_ATTEMPTS = int(os.getenv('OTP_MAX_ATTEMPTS', '5'))
 OTP_PROVIDER = os.getenv('OTP_PROVIDER', 'users.otp_providers.ConsoleOTPProvider')
+# With OTP_PROVIDER=users.otp_providers.EmailAndSmsOTPProvider, email codes go
+# out through the normal mailer. SMS stays off until this names a callable
+# `(phone, message) -> None`; sign-up still completes on the email copy.
+OTP_SMS_BACKEND = os.getenv('OTP_SMS_BACKEND', '')
+# How many sign-up codes one email address or phone number may be sent inside
+# SIGNUP_CODE_WINDOW_SECONDS. This, not the per-IP throttle, is what stops the
+# endpoint being used to flood somebody else's inbox or phone.
+SIGNUP_CODES_PER_DESTINATION = int(os.getenv('SIGNUP_CODES_PER_DESTINATION', '3'))
+SIGNUP_CODE_WINDOW_SECONDS = int(os.getenv('SIGNUP_CODE_WINDOW_SECONDS', '600'))
 
 # Additive HttpOnly-cookie JWT auth (Bearer still accepted; header takes precedence).
 # SameSite=Lax (default) neutralises cross-site CSRF for the cookie path. Enabling
@@ -466,6 +475,10 @@ REST_FRAMEWORK = {
         'user': '1000/min',
         'auth': '10/min',
         'otp': '5/min',
+        # Per IP. Looser than 'otp' because a camp or a parish hall puts dozens
+        # of teens behind one address; the per-destination cap does the real work.
+        'signup': os.getenv('SIGNUP_THROTTLE_RATE', '20/min'),
+        'public_hierarchy': '120/min',
     },
 }
 

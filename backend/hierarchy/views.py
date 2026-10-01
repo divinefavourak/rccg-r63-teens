@@ -14,7 +14,7 @@ than a role name.
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -22,7 +22,7 @@ from identity.authorization import has_permission
 from identity.permissions_registry import Perm
 
 from . import services
-from .models import HierarchyNode, child_type_of
+from .models import HierarchyNode, NodeType, child_type_of
 from .scoping import selectable_node_ids, visible_nodes
 from .serializers import HierarchyNodeSerializer
 
@@ -33,6 +33,60 @@ def _context(request, nodes=None):
         'path_to_id': {n.path: n.id for n in (nodes or [])},
         'request': request,
     }
+
+
+class PublicChildrenView(APIView):
+    """
+    `GET /api/v1/hierarchy/public/children/` — the church picker for sign-up.
+
+    The one hierarchy route that needs no account, because it is what a teen
+    uses to say where they worship *before* they have one. It is deliberately
+    narrow: names and levels of active nodes only — no codes, paths, member
+    counts or anything else about the organisation.
+
+    - no `parent`            → every region.
+    - `parent=<id>`          → that node's direct children.
+    - `parent=<id>&type=parish` → its descendants of that level, which is how
+      the app goes from a zone straight to its parishes without an Area step.
+    - `q=`                   → narrows by name, for long parish lists.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_scope = 'public_hierarchy'
+
+    MAX_RESULTS = 200
+    # Departments are internal structure, not somewhere a teen "attends".
+    PUBLIC_TYPES = {NodeType.REGION, NodeType.PROVINCE, NodeType.ZONE,
+                    NodeType.AREA, NodeType.PARISH}
+
+    def get(self, request):
+        parent_id = request.query_params.get('parent')
+        wanted = request.query_params.get('type')
+        search = (request.query_params.get('q') or '').strip()
+
+        if wanted and wanted not in self.PUBLIC_TYPES:
+            return Response({'type': ['Unknown level.']}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not parent_id:
+            nodes = HierarchyNode.objects.filter(node_type=wanted or NodeType.REGION)
+        else:
+            try:
+                parent = HierarchyNode.objects.filter(pk=parent_id, is_active=True).first()
+            except (ValidationError, ValueError):
+                parent = None
+            if parent is None:
+                return Response({'parent': ['No such node.']}, status=status.HTTP_404_NOT_FOUND)
+            nodes = (parent.get_descendants().filter(node_type=wanted) if wanted
+                     else parent.get_children())
+
+        nodes = nodes.filter(is_active=True, node_type__in=self.PUBLIC_TYPES)
+        if search:
+            nodes = nodes.filter(name__icontains=search)
+        nodes = nodes.order_by('name')[:self.MAX_RESULTS]
+
+        return Response({'results': [
+            {'id': str(n.id), 'name': n.name, 'node_type': n.node_type} for n in nodes
+        ]})
 
 
 class NodeListView(APIView):
