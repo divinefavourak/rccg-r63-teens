@@ -27,6 +27,9 @@ const STATIC_ROUTES = [
   { path: '/manuals', priority: '0.7', changefreq: 'weekly' },
   { path: '/media', priority: '0.7', changefreq: 'weekly' },
   { path: '/get-ticket', priority: '0.6', changefreq: 'monthly' },
+  { path: '/help', priority: '0.5', changefreq: 'monthly' },
+  { path: '/privacy', priority: '0.3', changefreq: 'yearly' },
+  { path: '/terms', priority: '0.3', changefreq: 'yearly' },
 ];
 
 /** Escape the five XML entities. Titles are not in the sitemap, but URLs can

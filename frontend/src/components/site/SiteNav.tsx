@@ -55,16 +55,16 @@ const SiteNav = () => {
         </Link>
 
         <nav aria-label="Main" className="hidden flex-1 items-center justify-end gap-8 lg:flex">
-          <a href="#how-it-works" className={LINK}>
-            How it works
-          </a>
-          <a href="#leaders" className={LINK}>
-            For leaders
-          </a>
+          <Link to="/#how-it-works" className={LINK}>
+              How it works
+            </Link>
+          <Link to="/#leaders" className={LINK}>
+              For leaders
+            </Link>
           <Link to={account.to} className={LINK}>
             {account.label}
           </Link>
-          <SiteButton to="#install">Get the app</SiteButton>
+          <SiteButton to="/#install">Get the app</SiteButton>
         </nav>
 
         <button
@@ -94,16 +94,16 @@ const SiteNav = () => {
             aria-label="Main"
             className="mx-auto flex max-w-[640px] flex-col gap-1 rounded-[28px] bg-surface-raised p-3 shadow-elevation-3"
           >
-            <a href="#how-it-works" onClick={close} className={clsx(LINK, 'px-4 py-3')}>
+            <Link to="/#how-it-works" onClick={close} className={clsx(LINK, 'px-4 py-3')}>
               How it works
-            </a>
-            <a href="#leaders" onClick={close} className={clsx(LINK, 'px-4 py-3')}>
+            </Link>
+            <Link to="/#leaders" onClick={close} className={clsx(LINK, 'px-4 py-3')}>
               For leaders
-            </a>
+            </Link>
             <Link to={account.to} onClick={close} className={clsx(LINK, 'px-4 py-3')}>
               {account.label}
             </Link>
-            <SiteButton to="#install" onClick={close} className="mt-1 w-full">
+            <SiteButton to="/#install" onClick={close} className="mt-1 w-full">
               Get the app
             </SiteButton>
           </nav>

@@ -47,6 +47,11 @@ const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
+// Website text pages. Same shell as the landing page, so outside PublicLayout.
+const Privacy = lazy(() => import('./pages/info/Privacy'));
+const Terms = lazy(() => import('./pages/info/Terms'));
+const Help = lazy(() => import('./pages/info/Help'));
+
 // Teen Dashboard Pages
 const Overview = lazy(() => import('./pages/dashboard/Overview'));
 const Devotionals = lazy(() => import('./pages/content/Devotionals'));
@@ -92,6 +97,9 @@ function App() {
           {/* The website's front page. Brings its own nav and footer, so it sits
               outside PublicLayout. */}
           <Route path="/" element={<LandingPage />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/help" element={<Help />} />
 
           {/* Public Routes with layout (Navbar + Footer from PublicLayout) */}
           <Route element={<PublicLayout />}>

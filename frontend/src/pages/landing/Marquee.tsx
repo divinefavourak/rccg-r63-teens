@@ -2,9 +2,9 @@ import { OBJECTS } from '../../assets/site';
 import { Object3D } from '../../components/site/Glyph';
 
 const WORDS = [
-  { word: 'READ', object: OBJECTS.star },
-  { word: 'PRAY', object: OBJECTS.fire },
-  { word: 'GROW TOGETHER', object: OBJECTS.crown },
+  { word: 'READ', object: OBJECTS.bookmark },
+  { word: 'PRAY', object: OBJECTS.candle },
+  { word: 'GROW TOGETHER', object: OBJECTS.heart },
 ];
 
 // One pass of the three words is 724px at desktop size. Four passes make a
