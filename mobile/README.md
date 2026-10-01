@@ -60,7 +60,7 @@ plans and low-end Android hardware.
 | Import | Cost | Fix |
 |---|---|---|
 | `import { Ionicons } from '@expo/vector-icons'` | 18 icon fonts, **~3.5MB** | `import Ionicons from '@expo/vector-icons/Ionicons'` — 390KB |
-| `import { X } from '@expo-google-fonts/lora'` | all 8 Lora + 14 Jakarta weights | import each weight's own subpath, e.g. `@expo-google-fonts/lora/400Regular` |
+| `import { X } from '@expo-google-fonts/lora'` | all 8 Lora + 18 Inter faces | import each weight's own subpath, e.g. `@expo-google-fonts/lora/400Regular` |
 
 The rule in both cases: **Metro bundles every asset a module graph can reach.**
 A package index that re-exports its whole catalogue drags all of it in, because
@@ -108,10 +108,22 @@ src/
   theme/ThemeProvider.tsx light/dark, persisted
   state/auth.tsx          who is signed in
   state/chrome.tsx        nav visibility, shared with the reader's scroll
-  components/             Icon, BrandMarks, Flame, Photo, BottomNav, states, ui
+  ui/                     the Figma kit: Button, inputs, cards, art, Press
+  components/             older pieces, being replaced screen by screen
 global.css                semantic colour tokens (light + dark)
 tailwind.config.js        tokens -> Tailwind scales
 ```
+
+## Design source
+
+The look comes from the Figma file *Faith Tribe — Design System & App*. Tokens
+in `global.css` and `src/theme/tokens.ts` mirror its Color variables (Light and
+Dark); `src/ui/` mirrors its Components page. Fonts are Inter for UI and Lora
+for the reader.
+
+`/dev/kit` shows every kit component on one screen, in development builds only.
+`npx expo start --web` serves the app in a browser for quick visual checks; the
+web target is a preview, not a shipped product.
 
 ## Running the backend
 

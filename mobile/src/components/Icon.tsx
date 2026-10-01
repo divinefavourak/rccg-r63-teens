@@ -58,6 +58,9 @@ const OUTLINE = {
   school: 'school-outline',
   text: 'text-outline',
   coffee: 'cafe-outline',
+  library: 'library-outline',
+  phone: 'phone-portrait-outline',
+  mail: 'mail-outline',
 } as const;
 
 // Only the icons that genuinely need a filled state are listed. Anything absent
@@ -72,6 +75,7 @@ const FILLED: Partial<Record<IconName, string>> = {
   sun: 'sunny',
   ticket: 'ticket',
   check: 'checkmark',
+  library: 'library',
 };
 
 export type IconName = keyof typeof OUTLINE;
