@@ -3,6 +3,7 @@ import Navbar from '../components/Navbar';
 import api from '../api/axios';
 import { type Manual } from '../types';
 import { FaBook, FaDownload, FaEye } from 'react-icons/fa';
+import Seo from '../components/Seo';
 
 const AGE_LABELS: Record<string, string> = {
     all: 'All Ages',
@@ -33,6 +34,7 @@ const ManualList = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+            <Seo title="Study Manuals" description="Weekly Bible study manuals for RCCG Region 63 Teens, organised by series and week." path="/manuals" />
             <Navbar />
             <div className="container mx-auto px-4 py-24">
 

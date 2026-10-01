@@ -117,3 +117,15 @@ prod-copy.sql
 backend/*.json
 !backend/**/migrations/*.json
 !backend/package*.json
+
+# Camera originals for the image pipeline. Derivatives in frontend/public/img/
+# are committed; these 5184x3456 sources (~47MB) are not. Regenerate with
+# `npm run images` from frontend/.
+frontend/assets-source/
+
+# Bundle analyzer output
+frontend/dist/stats.html
+
+# Untracked build/scratch artifacts that were one `git add .` from being committed
+docs/designer.zip
+backend/debug.log

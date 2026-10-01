@@ -9,7 +9,8 @@
  * Persists read state to localStorage so it survives page refresh.
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useMemo, useCallback, type ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import api from '../api/axios';
 import { BookOpen, Calendar, User, type LucideIcon } from 'lucide-react';
 
@@ -67,10 +68,7 @@ const timeAgo = (dateStr: string): string => {
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export const NotificationsProvider = ({ children }: { children: ReactNode }) => {
-    const [notifications, setNotifications] = useState<AppNotification[]>([]);
-    const [loading, setLoading] = useState(true);
-
-    const buildNotifications = useCallback(async () => {
+    const buildNotifications = useCallback(async (): Promise<AppNotification[]> => {
         const readIds = getReadIds();
         const items: AppNotification[] = [];
 
@@ -140,34 +138,62 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
 
         // Sort: newest first
         items.sort((a, b) => b.rawTime - a.rawTime);
-        setNotifications(items);
-        setLoading(false);
+        return items;
     }, []);
 
-    useEffect(() => {
-        buildNotifications();
-    }, [buildNotifications]);
+    /*
+      Two API calls used to fire on every single page load — including the
+      anonymous landing page, where nothing renders a notification — and the
+      results were thrown away and refetched on every navigation, because the
+      provider is mounted above the router and remounts with it.
 
-    const markRead = (id: string) => {
-        setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+      Through the query cache they are fetched once and reused for five minutes.
+      The list is also the same for everyone (recent devotionals and upcoming
+      events, both public), so the key carries no user identity.
+    */
+    const { data, isPending } = useQuery({
+        queryKey: ['notifications-feed'],
+        queryFn: buildNotifications,
+        staleTime: 5 * 60 * 1000,
+    });
+
+    // Read state lives in localStorage, not in the fetched data, so it is held
+    // separately and merged on render rather than by mutating the cache.
+    const [readVersion, setReadVersion] = useState(0);
+
+    const notifications = useMemo(() => {
+        const ids = getReadIds();
+        // readVersion is the dependency that re-runs this after a mark-read;
+        // getReadIds reads localStorage, which React cannot observe on its own.
+        void readVersion;
+        return (data ?? []).map(n => ({ ...n, read: ids.has(n.id) }));
+    }, [data, readVersion]);
+
+    const markRead = useCallback((id: string) => {
         const ids = getReadIds();
         ids.add(id);
         saveReadIds(ids);
-    };
+        setReadVersion(v => v + 1);
+    }, []);
 
-    const markAllRead = () => {
+    const markAllRead = useCallback(() => {
         const ids = getReadIds();
-        setNotifications(prev => {
-            prev.forEach(n => ids.add(n.id));
-            saveReadIds(ids);
-            return prev.map(n => ({ ...n, read: true }));
-        });
-    };
+        (data ?? []).forEach(n => ids.add(n.id));
+        saveReadIds(ids);
+        setReadVersion(v => v + 1);
+    }, [data]);
 
     const unreadCount = notifications.filter(n => !n.read).length;
 
+    // Memoised: this object was rebuilt on every render, so every consumer of
+    // the context re-rendered whenever anything above it did.
+    const value = useMemo(
+        () => ({ notifications, unreadCount, markRead, markAllRead, loading: isPending }),
+        [notifications, unreadCount, markRead, markAllRead, isPending],
+    );
+
     return (
-        <NotificationsContext.Provider value={{ notifications, unreadCount, markRead, markAllRead, loading }}>
+        <NotificationsContext.Provider value={value}>
             {children}
         </NotificationsContext.Provider>
     );

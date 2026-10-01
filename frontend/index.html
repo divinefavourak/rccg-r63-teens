@@ -3,48 +3,69 @@
 
 <head>
   <meta charset="UTF-8" />
-  <link rel="icon" type="image/png" href="/src/assets/faith_tribe_logo.jpg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#8B0000" />
-  <meta name="description"
-    content="Official RCCG Region 63 Teens website for faith-building events, worship gatherings, and youth activities in Redemption City." />
-  <title>RCCG Region 63 Teens </title>
+  <meta name="theme-color" content="#10b981" />
 
+  <!--
+    Favicons come from public/ via scripts/optimize-images.mjs. The previous
+    declaration pointed at /src/assets/faith_tribe_logo.jpg — a 574KB photo,
+    mislabelled type="image/png", on a path that only resolves because Vite
+    rewrites it. Every page load downloaded it.
+  -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+  <!--
+    Self-hosted Inter. This replaces an @import of fonts.googleapis.com inside
+    index.css, which serialised four round trips before first paint: fetch the
+    CSS bundle, parse it, discover the @import, connect to googleapis, then
+    connect again to gstatic for the font files. It also pulled all nine
+    weights; the app uses five. One variable file covers the whole 100-900 axis
+    in 47KB, against 118KB and five requests for the equivalent static weights.
+  -->
+  <link rel="preload" href="/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin />
+
+  <title>RCCG Region 63 Teens — Faith Tribe</title>
+  <meta name="description"
+    content="The Faith Tribe platform for RCCG Region 63 Teens. Daily devotionals, Bible study manuals, worship media and camp events for teenagers across the region." />
+  <link rel="canonical" href="https://thefaithtribe.live/" />
+
+  <!-- Open Graph. Absent before, so every WhatsApp forward rendered as a bare link. -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="RCCG Region 63 Teens" />
+  <meta property="og:title" content="RCCG Region 63 Teens — Faith Tribe" />
+  <meta property="og:description"
+    content="Daily devotionals, Bible study manuals, worship media and camp events for teenagers across RCCG Region 63." />
+  <meta property="og:url" content="https://thefaithtribe.live/" />
+  <meta property="og:image" content="https://thefaithtribe.live/og-image.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:locale" content="en_NG" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="RCCG Region 63 Teens — Faith Tribe" />
+  <meta name="twitter:description"
+    content="Daily devotionals, Bible study manuals, worship media and camp events for teenagers across RCCG Region 63." />
+  <meta name="twitter:image" content="https://thefaithtribe.live/og-image.jpg" />
+
+  <!--
+    Organization only. The Event JSON-LD that lived here was hardcoded to a camp
+    with startDate 2025-12-22 — it kept advertising an event that had been over
+    for twenty months, on every route on the site. Event structured data now
+    renders from real data in pages/EventDetail.tsx.
+  -->
   <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "Event",
-      "name": "The Priceless Gift - RCCG Region 63 Teens Camp",
-      "startDate": "2025-12-22T09:00",
-      "endDate": "2025-12-25T12:00",
-      "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
-      "eventStatus": "https://schema.org/EventScheduled",
-      "location": {
-        "@type": "Place",
-        "name": "Glory Arena, Redemption City",
-        "address": {
-          "@type": "PostalAddress",
-          "streetAddress": "KM 46 Lagos-Ibadan Expressway",
-          "addressLocality": "Mowe",
-          "addressRegion": "Ogun State",
-          "addressCountry": "NG"
-        }
-      },
-      "image": [
-        "https://images.unsplash.com/photo-1517090504586-fde19ea6066f"
-      ],
-      "description": "Join 500+ teens for worship, games, adventure park, talent night & more at Glory Arena, Redemption City!",
-      "offers": {
-        "@type": "Offer",
-        "url": "https://rccgregion63teens.org/get-ticket",
-        "price": "3000",
-        "priceCurrency": "NGN",
-        "availability": "https://schema.org/InStock",
-        "validFrom": "2024-12-01T00:00"
-      },
-      "organizer": {
+      "@type": "Organization",
+      "name": "RCCG Region 63 Junior Church",
+      "alternateName": "Faith Tribe",
+      "url": "https://thefaithtribe.live",
+      "logo": "https://thefaithtribe.live/img/faithTribeLogo-fallback.png",
+      "parentOrganization": {
         "@type": "Organization",
-        "name": "RCCG Region 63 Junior Church",
+        "name": "The Redeemed Christian Church of God",
         "url": "https://rccg.org"
       }
     }

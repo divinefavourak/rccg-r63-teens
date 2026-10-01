@@ -191,6 +191,12 @@ class DevotionalCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Devotional
         fields = [
+            # `title` was missing from this list. DRF silently ignores fields it
+            # does not declare and Model.save() does not run full_clean(), so a
+            # required CharField simply saved as '' — every devotional created or
+            # edited through the API got an empty title, including the ones the
+            # admin panel was faithfully submitting one for.
+            'title',
             'date',
             'slug',
             'memory_verse_passage',
@@ -198,11 +204,10 @@ class DevotionalCreateUpdateSerializer(serializers.ModelSerializer):
             'bible_text_passage',
             'bible_text_content',
             'bible_in_one_year',
-            
+
             # Legacy
             'anchor_scripture',
             'scripture_text',
-            'bible_in_one_year',
             'content',
             'key_point',
             'prayer',
@@ -216,7 +221,6 @@ class DevotionalCreateUpdateSerializer(serializers.ModelSerializer):
             'audio_duration_seconds',
             'tags',
             'status',
-            'published_at',
             'published_at',
             'scheduled_for',
         ]

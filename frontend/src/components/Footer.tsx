@@ -1,8 +1,9 @@
-import { motion } from "framer-motion";
 import { EVENT_DETAILS } from "../constants/eventDetails";
 import { Mail, Phone, User, ArrowUp } from "lucide-react";
-import rccgLogo from "../assets/logo.jpg";
-import faithLogo from "../assets/faith_logo.jpg";
+import { BRAND } from "../constants/brand";
+
+const rccgLogo = BRAND.rccg;
+const faithLogo = BRAND.faith;
 
 const Footer = () => {
   const scrollToTop = () => {
@@ -10,11 +11,8 @@ const Footer = () => {
   };
 
   return (
-    <motion.footer
-      initial={{ opacity: 0 }}
-      whileInView={{ opacity: 1 }}
-      transition={{ duration: 0.8 }}
-      className="bg-gray-100 dark:bg-gray-950 text-gray-600 dark:text-gray-400 py-16 border-t border-gray-200 dark:border-gray-800 relative overflow-hidden transition-colors duration-500"
+    <footer
+      className="footer-fade-in bg-gray-100 dark:bg-gray-950 text-gray-600 dark:text-gray-400 py-16 border-t border-gray-200 dark:border-gray-800 relative overflow-hidden transition-colors duration-500"
     >
       {/* Decorative gradient line */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-1 bg-gradient-to-r from-transparent via-primary-500 to-transparent opacity-50"></div>
@@ -86,7 +84,7 @@ const Footer = () => {
           </button>
         </div>
       </div>
-    </motion.footer>
+    </footer>
   );
 };
 

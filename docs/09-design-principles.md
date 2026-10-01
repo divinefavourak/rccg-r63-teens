@@ -104,4 +104,4 @@ Motion has three jobs: orient (where did that come from?), acknowledge (did that
 4. No dark-pattern prompts (guilt-copy on dismiss, disguised ads, forced sharing).
 5. No visual density borrowed from admin tools into teen surfaces.
 6. No trend-chasing redesigns that break the calm identity for novelty.
-7. No social-validation visuals: no follower counts, like counters, or popularity indicators on any friend surface ✧ (`13-community.md`).
+7. No social-validation visuals on friend/profile surfaces: no follower counts or popularity indicators. The one sanctioned exception is **Community Notes ✧**, which carry public likes and reposts by leadership decision (`13-community.md`); the exception does not extend to friends, profiles, or streaks.

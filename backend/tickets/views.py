@@ -1,10 +1,11 @@
-from django.http import HttpResponse
+from django.http import HttpResponse, StreamingHttpResponse
 from rest_framework import viewsets, generics, status, filters, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.db.models import Count, Q
+from django.db.models.functions import TruncHour
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.core.paginator import Paginator
@@ -36,7 +37,10 @@ class StandardResultsSetPagination(PageNumberPagination):
 
 class TicketViewSet(viewsets.ModelViewSet):
     """ViewSet for Ticket management"""
-    queryset = Ticket.objects.all()
+    # registered_by_name and approved_by_name resolve dotted sources on the
+    # serializer (registered_by.get_display_name), so without select_related
+    # each row cost two extra queries — 40 per 20-row page.
+    queryset = Ticket.objects.select_related('registered_by', 'approved_by')
     serializer_class = TicketSerializer
     permission_classes = [TicketPermission]
     pagination_class = StandardResultsSetPagination
@@ -395,44 +399,58 @@ class TicketViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def export(self, request):
-        """Export tickets as CSV"""
+        """Export tickets as CSV, streamed.
+
+        This used to build the entire file in memory before sending a byte, and
+        called `ticket.registered_by.get_display_name()` per row against an
+        unjoined queryset — one query per ticket across the whole filtered table.
+        The join now comes from the viewset's select_related; streaming with
+        .iterator() means peak memory is one chunk rather than the full export,
+        and the browser starts receiving immediately instead of waiting out the
+        whole query.
+        """
         queryset = self.filter_queryset(self.get_queryset())
-        
-        # Create CSV response
-        response = Response(content_type='text/csv')
-        response['Content-Disposition'] = 'attachment; filename="tickets.csv"'
-        
-        # Write CSV
-        writer = csv.writer(response)
-        
-        # Write header
+
         headers = [
             'Ticket ID', 'Full Name', 'Age', 'Category', 'Gender',
             'Phone', 'Email', 'Province', 'Zone', 'Area', 'Parish', 'Department',
             'Status', 'Registered At', 'Registered By'
         ]
-        writer.writerow(headers)
-        
-        # Write data
-        for ticket in queryset:
-            writer.writerow([
-                ticket.ticket_id,
-                ticket.full_name,
-                ticket.age,
-                ticket.get_category_display(),
-                ticket.get_gender_display(),
-                ticket.phone,
-                ticket.email,
-                ticket.province,
-                ticket.zone,
-                ticket.area,
-                ticket.parish,
-                ticket.department,
-                ticket.get_status_display(),
-                ticket.registered_at.strftime('%Y-%m-%d %H:%M'),
-                ticket.registered_by.get_display_name() if ticket.registered_by else ''
-            ])
-        
+
+        class _Echo:
+            """A file-like object that returns what it is handed, so csv.writer
+            can be used as a generator instead of writing into a buffer."""
+
+            def write(self, value):
+                return value
+
+        writer = csv.writer(_Echo())
+
+        def rows():
+            yield writer.writerow(headers)
+            # chunk_size bounds how many model instances exist at once; without
+            # .iterator() the queryset result cache holds every row.
+            for ticket in queryset.iterator(chunk_size=500):
+                yield writer.writerow([
+                    ticket.ticket_id,
+                    ticket.full_name,
+                    ticket.age,
+                    ticket.get_category_display(),
+                    ticket.get_gender_display(),
+                    ticket.phone,
+                    ticket.email,
+                    ticket.province,
+                    ticket.zone,
+                    ticket.area,
+                    ticket.parish,
+                    ticket.department,
+                    ticket.get_status_display(),
+                    ticket.registered_at.strftime('%Y-%m-%d %H:%M'),
+                    ticket.registered_by.get_display_name() if ticket.registered_by else ''
+                ])
+
+        response = StreamingHttpResponse(rows(), content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="tickets.csv"'
         return response
     
     def get_client_ip(self):
@@ -1088,20 +1106,22 @@ class DashboardView(APIView):
         if user.role == User.Role.COORDINATOR:
             queryset = queryset.filter(province=user.province)
         
-        # Calculate statistics
-        total_tickets = queryset.count()
-        pending_tickets = queryset.filter(status=Ticket.Status.PENDING).count()
-        approved_tickets = queryset.filter(status=Ticket.Status.APPROVED).count()
-        rejected_tickets = queryset.filter(status=Ticket.Status.REJECTED).count()
-        
-        # Category counts
-        pre_teens_count = queryset.filter(category=Ticket.Category.PRE_TEENS).count()
-        teens_count = queryset.filter(category=Ticket.Category.TEENS).count()
-        
-        # Gender counts
-        male_count = queryset.filter(gender=Ticket.Gender.MALE).count()
-        female_count = queryset.filter(gender=Ticket.Gender.FEMALE).count()
-        
+        # Every headline number in one pass.
+        #
+        # These were eight separate .count() calls against the same queryset —
+        # eight full index scans and eight round trips to produce eight integers
+        # from one table. Conditional aggregation reads it once.
+        totals = queryset.aggregate(
+            total_tickets=Count('id'),
+            pending_tickets=Count('id', filter=Q(status=Ticket.Status.PENDING)),
+            approved_tickets=Count('id', filter=Q(status=Ticket.Status.APPROVED)),
+            rejected_tickets=Count('id', filter=Q(status=Ticket.Status.REJECTED)),
+            pre_teens_count=Count('id', filter=Q(category=Ticket.Category.PRE_TEENS)),
+            teens_count=Count('id', filter=Q(category=Ticket.Category.TEENS)),
+            male_count=Count('id', filter=Q(gender=Ticket.Gender.MALE)),
+            female_count=Count('id', filter=Q(gender=Ticket.Gender.FEMALE)),
+        )
+
         # Province statistics (only for admins)
         province_stats = {}
         if user.role == User.Role.ADMIN:
@@ -1120,27 +1140,26 @@ class DashboardView(APIView):
                     'rejected': item['rejected']
                 }
         
-        # Recent tickets (last 10)
-        recent_tickets = queryset.order_by('-registered_at')[:10]
-        
-        # Recent activity (last 10 audit logs)
+        # Recent tickets (last 10). select_related because TicketSerializer
+        # resolves registered_by/approved_by display names per row.
+        recent_tickets = (
+            queryset.select_related('registered_by', 'approved_by')
+            .order_by('-registered_at')[:10]
+        )
+
+        # Recent activity (last 10 audit logs). Likewise: the serializer reads
+        # obj.user and obj.ticket for every row.
+        audit_logs = TicketAuditLog.objects.select_related('user', 'ticket')
         if user.role == User.Role.ADMIN:
-            recent_activity = TicketAuditLog.objects.all().order_by('-timestamp')[:10]
+            recent_activity = audit_logs.order_by('-timestamp')[:10]
         else:
-            recent_activity = TicketAuditLog.objects.filter(
+            recent_activity = audit_logs.filter(
                 Q(user=user) | Q(ticket__in=queryset)
             ).order_by('-timestamp')[:10]
-        
+
         # Serialize data
         data = {
-            'total_tickets': total_tickets,
-            'pending_tickets': pending_tickets,
-            'approved_tickets': approved_tickets,
-            'rejected_tickets': rejected_tickets,
-            'pre_teens_count': pre_teens_count,
-            'teens_count': teens_count,
-            'male_count': male_count,
-            'female_count': female_count,
+            **totals,
             'province_stats': province_stats,
             'recent_tickets': TicketSerializer(recent_tickets, many=True).data,
             'recent_activity': TicketAuditLogSerializer(recent_activity, many=True).data
@@ -1156,7 +1175,10 @@ class TicketAuditLogView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated, IsAdmin]
     
     def get_queryset(self):
-        queryset = TicketAuditLog.objects.all()
+        # TicketAuditLogSerializer.get_user_display and get_ticket_id_display
+        # dereference obj.user and obj.ticket, so this is 2 queries per row
+        # without the join.
+        queryset = TicketAuditLog.objects.select_related('user', 'ticket')
         
         # Filter by ticket ID
         ticket_id = self.request.query_params.get('ticket_id')
@@ -1186,7 +1208,8 @@ class TicketAuditLogView(generics.ListAPIView):
     
 class CheckInRecordViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for viewing check-in records"""
-    queryset = CheckInRecord.objects.all()
+    # CheckInRecordSerializer reads ticket.ticket_id and the check-in actor.
+    queryset = CheckInRecord.objects.select_related('ticket', 'checked_in_by')
     serializer_class = CheckInRecordSerializer
     permission_classes = [permissions.IsAuthenticated]
     
@@ -1240,23 +1263,36 @@ class CheckInDashboardView(APIView):
         # Get today's date
         today = timezone.now().date()
         
-        # Calculate statistics
-        total_check_ins = queryset.count()
-        today_check_ins = queryset.filter(checked_in_at__date=today).count()
-        
+        # Three separate scans (total, today, distinct tickets) collapsed into
+        # one. The distinct-ticket count in particular was a COUNT(DISTINCT)
+        # over the whole check-in table, computed inline in the response dict.
+        totals = queryset.aggregate(
+            total_check_ins=Count('id'),
+            today_check_ins=Count('id', filter=Q(checked_in_at__date=today)),
+            unique_tickets_checked_in=Count('ticket', distinct=True),
+        )
+        total_check_ins = totals['total_check_ins']
+        today_check_ins = totals['today_check_ins']
+
         # By method
         by_method = queryset.values('check_in_method').annotate(
             count=Count('id')
         ).order_by('-count')
-        
-        # By hour (for today)
-        today_by_hour = queryset.filter(
-            checked_in_at__date=today
-        ).extra({
-            'hour': "EXTRACT(HOUR FROM checked_in_at)"
-        }).values('hour').annotate(
-            count=Count('id')
-        ).order_by('hour')
+
+        # By hour (for today).
+        #
+        # This used .extra({'hour': "EXTRACT(HOUR FROM checked_in_at)"}), which
+        # is deprecated, injects raw SQL, and — being raw — ignores the
+        # connection timezone, so the buckets were UTC hours rather than the
+        # Lagos hours a check-in desk actually works in. TruncHour is timezone
+        # aware and uses the ORM's own SQL generation.
+        today_by_hour = (
+            queryset.filter(checked_in_at__date=today)
+            .annotate(hour=TruncHour('checked_in_at'))
+            .values('hour')
+            .annotate(count=Count('id'))
+            .order_by('hour')
+        )
         
         # Recent check-ins
         recent_check_ins = queryset.select_related('ticket', 'checked_in_by').order_by('-checked_in_at')[:20]
@@ -1265,7 +1301,7 @@ class CheckInDashboardView(APIView):
             'overview': {
                 'total_check_ins': total_check_ins,
                 'today_check_ins': today_check_ins,
-                'unique_tickets_checked_in': queryset.values('ticket').distinct().count(),
+                'unique_tickets_checked_in': totals['unique_tickets_checked_in'],
             },
             'by_method': list(by_method),
             'today_by_hour': list(today_by_hour),

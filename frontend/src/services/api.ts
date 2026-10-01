@@ -1,30 +1,27 @@
 import axios from 'axios';
+import { LEGACY_API_URL, attachAuth } from '../api/axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://rccg-r63-teens-backend.onrender.com/api';
-
+/**
+ * Client for the un-versioned `/api/` endpoints.
+ *
+ * This exists because `backend/urls.py` mounts `tickets.urls` at `api/` and
+ * never under `api/v1/` — so `/tickets/...`, and the legacy payment and user
+ * routes alongside them, resolve only without the version segment.
+ *
+ * What changed: it used to be a second, independently-written axios instance
+ * with its own request interceptor, its own hardcoded fallback host, and **no**
+ * 401 refresh handling at all — so a ticket call made with an expired access
+ * token simply failed while the same user's other calls silently recovered. It
+ * now shares one implementation of the auth behaviour with the versioned
+ * client, and differs from it in exactly one thing: the base URL.
+ */
 export const api = axios.create({
-  baseURL: API_URL,
+  baseURL: LEGACY_API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Add interceptor to inject token if available
-api.interceptors.request.use((config) => {
-  const userStr = localStorage.getItem('rccg_user');
-  if (userStr) {
-    try {
-      const user = JSON.parse(userStr);
-      // Check if user object has a token property (adjust based on your actual login response)
-      const token = user.token || user.access;
+attachAuth(api);
 
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-    } catch (e) {
-      console.error("Error parsing user from localStorage", e);
-      // Invalid JSON, ignore
-    }
-  }
-  return config;
-});
+export default api;

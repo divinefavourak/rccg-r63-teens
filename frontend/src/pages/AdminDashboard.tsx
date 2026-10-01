@@ -1,5 +1,5 @@
 import { useAuthContext } from '../context/AuthContext';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import api from '../api/axios';
 import {
     Users,
@@ -11,7 +11,9 @@ import {
     RefreshCw
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart } from 'recharts';
+// recharts (~330KB) is loaded only when this page renders its chart, not as
+// part of the route chunk. See components/admin/ActivityAreaChart.tsx.
+const ActivityAreaChart = lazy(() => import('../components/admin/ActivityAreaChart'));
 
 const AdminDashboard = () => {
     useAuthContext(); // Verify authentication
@@ -215,23 +217,17 @@ const AdminDashboard = () => {
                     </div>
 
                     <div className="h-[300px] w-full" style={{ minHeight: 300 }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={chartData}>
-                                <defs>
-                                    <linearGradient id="colorActive" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.2} />
-                                        <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 12 }} dy={10} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 12 }} />
-                                <Tooltip
-                                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                />
-                                <Area type="monotone" dataKey="active" stroke="#10B981" strokeWidth={3} fillOpacity={1} fill="url(#colorActive)" />
-                            </AreaChart>
-                        </ResponsiveContainer>
+                        {/* The fallback reserves the same 300px box, so swapping in
+                            the chart cannot shift the layout below it. */}
+                        <Suspense
+                            fallback={
+                                <div className="flex h-full w-full items-center justify-center text-sm text-gray-400">
+                                    Loading chart…
+                                </div>
+                            }
+                        >
+                            <ActivityAreaChart data={chartData} />
+                        </Suspense>
                     </div>
                 </div>
 

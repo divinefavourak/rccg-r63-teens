@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { type Devotional } from '../types';
 import { FaBookOpen, FaHeart, FaCalendarAlt } from 'react-icons/fa';
+import { formatAPIDate } from '../utils/dates';
 
 interface DevotionalCardProps {
     devotional: Devotional;
@@ -17,7 +18,7 @@ const DevotionalCard = ({ devotional }: DevotionalCardProps) => {
                 <div className="absolute bottom-4 left-4 text-white">
                     <div className="flex items-center gap-2 text-primary-100 text-sm mb-1">
                         <FaCalendarAlt />
-                        <span>{new Date(devotional.date).toLocaleDateString()}</span>
+                        <span>{formatAPIDate(devotional.date, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
                     </div>
                     <h3 className="text-xl font-bold leading-tight line-clamp-2">{devotional.title}</h3>
                 </div>

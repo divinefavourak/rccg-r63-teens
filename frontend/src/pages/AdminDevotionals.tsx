@@ -8,6 +8,7 @@ import {
 import api from '../api/axios';
 import type { Devotional } from '../types';
 import toast from 'react-hot-toast';
+import { formatAPIDate, todayISO } from '../utils/dates';
 
 const AdminDevotionals = () => {
     const [devotionals, setDevotionals] = useState<Devotional[]>([]);
@@ -52,6 +53,23 @@ const AdminDevotionals = () => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
+
+    /*
+      One object URL per selected file, revoked when it changes or the modal
+      closes. Creating it inline in the JSX would mint a new blob URL on every
+      render — i.e. on every keystroke in any other field — and release none.
+    */
+    const [coverPreview, setCoverPreview] = useState<string | null>(null);
+    useEffect(() => {
+        const file = formData.cover_image;
+        if (!file) {
+            setCoverPreview(null);
+            return;
+        }
+        const url = URL.createObjectURL(file);
+        setCoverPreview(url);
+        return () => URL.revokeObjectURL(url);
+    }, [formData.cover_image]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -295,7 +313,7 @@ const AdminDevotionals = () => {
                                 return (
                                     <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/20 transition-colors">
                                         <td className="p-4 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                            {new Date(item.date).toLocaleDateString()}
+                                            {formatAPIDate(item.date, { year: 'numeric', month: 'short', day: 'numeric' })}
                                         </td>
                                         <td className="p-4 text-sm font-medium text-gray-900 dark:text-white">{item.title}</td>
                                         <td className="p-4 text-sm text-gray-500 dark:text-gray-400">
@@ -534,6 +552,48 @@ const AdminDevotionals = () => {
                                     />
                                 </div>
 
+                                {/*
+                                    Cover image. Everything behind this already
+                                    existed — cover_image in formData,
+                                    handleFileChange, and the FormData submit —
+                                    but no input was ever rendered, so the
+                                    handler was dead code and no devotional
+                                    could be given an image from here.
+                                */}
+                                <div>
+                                    <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        <Upload size={14} />
+                                        Cover image <span className="text-gray-400 font-normal">(optional)</span>
+                                    </label>
+                                    <div className="flex items-center gap-3">
+                                        {coverPreview && (
+                                            <img
+                                                src={coverPreview}
+                                                alt=""
+                                                className="h-14 w-20 shrink-0 rounded-lg border border-gray-200 dark:border-gray-700 object-cover"
+                                            />
+                                        )}
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleFileChange}
+                                            className="file-input"
+                                        />
+                                        {formData.cover_image && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setFormData(prev => ({ ...prev, cover_image: null }))}
+                                                className="shrink-0 text-sm text-gray-500 hover:text-red-600"
+                                            >
+                                                Clear
+                                            </button>
+                                        )}
+                                    </div>
+                                    <p className="mt-1 text-xs text-gray-400">
+                                        Shown on the card and the share preview.
+                                    </p>
+                                </div>
+
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
                                     <select
@@ -566,7 +626,7 @@ const AdminDevotionals = () => {
                             <div>
                                 <h3 className="text-xl font-bold text-gray-900 dark:text-white">{viewDevotional.title}</h3>
                                 <div className="flex items-center gap-3 mt-1">
-                                    <p className="text-sm text-gray-500">{new Date(viewDevotional.date).toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                                    <p className="text-sm text-gray-500">{formatAPIDate(viewDevotional.date, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }, 'en-GB')}</p>
                                     {viewDevotional.author && <span className="text-xs text-gray-400">· {viewDevotional.author}</span>}
                                 </div>
                             </div>
@@ -684,7 +744,7 @@ const AdminDevotionals = () => {
                                     type="date"
                                     value={importDate}
                                     onChange={e => setImportDate(e.target.value)}
-                                    max={new Date().toISOString().split('T')[0]}
+                                    max={todayISO()}
                                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none text-sm"
                                 />
                             </div>

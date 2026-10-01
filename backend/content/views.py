@@ -6,7 +6,7 @@ from rest_framework import viewsets, generics, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Count, Q
 from datetime import date, timedelta
 
 from common.dates import app_today
@@ -95,8 +95,22 @@ class DevotionalViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
         return DevotionalDetailSerializer
     
     def get_queryset(self):
-        queryset = self.queryset
-        
+        # DevotionalDetailSerializer.get_memory_verse walks obj.memory_verses,
+        # and the detail payload also reads scripture_references and
+        # discussion_questions — three extra queries per devotional against a
+        # bare Devotional.objects.all(). The `calendar` action serialises up to
+        # 31 of them in one response, so it compounds there.
+        #
+        # content/services/daily.py already prefetches this chain correctly for
+        # the single-devotional path; this mirrors it for the viewset.
+        queryset = self.queryset.prefetch_related(
+            'memory_verses__translation',
+            'memory_verses__start_verse__chapter__book__translation',
+            'memory_verses__end_verse',
+            'scripture_references',
+            'discussion_questions',
+        )
+
         # Non-admins only see published content
         if not can_manage_content(self.request.user):
             queryset = queryset.filter(status=Devotional.Status.PUBLISHED)
@@ -387,9 +401,14 @@ class DevotionalViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
             except ValueError:
                 return Response({'error': 'Invalid date format. Use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
         else:
-            # Backfill: today and the previous (days-1) days, oldest first
+            # Backfill: today and the previous (days-1) days, oldest first.
+            #
+            # app_today(), not date.today(): the latter is a UTC day, so between
+            # midnight and 01:00 Lagos it names yesterday and the import lands a
+            # day out. Same distinction common/dates.py exists to enforce.
+            today = app_today()
             for i in range(days - 1, -1, -1):
-                target_date = date.today() - timedelta(days=i)
+                target_date = today - timedelta(days=i)
                 result = scrape_and_save_devotional(target_date, force=force)
                 if result:
                     results.append(result)
@@ -421,11 +440,16 @@ class ManualSeriesViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
         return ManualSeriesDetailSerializer
     
     def get_queryset(self):
-        queryset = self.queryset
-        
+        # ManualSeries{List,Detail}Serializer declare
+        # `manual_count = IntegerField(read_only=True)` with no annotation behind
+        # it, so DRF fell through to the ManualSeries.manual_count property and
+        # ran `self.manuals.count()` once per row. Same bug as
+        # media.MediaSeriesViewSet; same fix.
+        queryset = self.queryset.annotate(manual_count=Count('manuals', distinct=True))
+
         if not self.request.user.is_authenticated or not has_any_permission(self.request.user, Perm.CONTENT_MANAGE):
             queryset = queryset.filter(status='published')
-        
+
         return queryset
 
 

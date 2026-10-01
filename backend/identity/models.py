@@ -246,6 +246,10 @@ class MembershipTransfer(models.Model):
 
     class Meta:
         ordering = ['-transferred_at']
+        indexes = [
+            models.Index(fields=['-transferred_at'], name='mtransfer_time_desc_idx'),
+            models.Index(fields=['user', '-transferred_at'], name='mtransfer_user_time_idx'),
+        ]
 
     def __str__(self):
         return f'{self.user}: {self.from_node} -> {self.to_node}'

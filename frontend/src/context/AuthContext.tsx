@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import api from '../api/axios';
 import type { User, LoginCredentials, RegisterCredentials, AuthResponse, AgeGroup } from '../types';
 
@@ -45,7 +45,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     initializeAuth();
   }, []);
 
-  const login = async (credentials: LoginCredentials) => {
+  /*
+    The axios interceptor raises this when a token refresh fails, instead of
+    doing `window.location.href = '/login'` — that was a full page reload, so an
+    expired token cost the user a re-download of the entire bundle on a metered
+    connection. Clearing state here lets ProtectedRoute redirect in-place.
+  */
+  useEffect(() => {
+    const onExpired = () => setUser(null);
+    window.addEventListener('auth:session-expired', onExpired);
+    return () => window.removeEventListener('auth:session-expired', onExpired);
+  }, []);
+
+  const login = useCallback(async (credentials: LoginCredentials) => {
     try {
       const response = await api.post<AuthResponse>('/auth/login/', credentials);
       const { access, refresh, user: userData, needs_gender } = response.data;
@@ -59,9 +71,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.error("Login failed:", error);
       throw error;
     }
-  };
+  }, []);
 
-  const register = async (credentials: RegisterCredentials) => {
+  const register = useCallback(async (credentials: RegisterCredentials) => {
     try {
       await api.post('/auth/register/', credentials);
       // Auto-login after register? Or redirect to login? 
@@ -72,17 +84,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.error("Registration failed:", error);
       throw error;
     }
-  };
+  }, [login]);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem("rccg_user");
     setUser(null);
-    window.location.href = '/login';
-  };
+    // Same reasoning as the session-expired path: clearing state is enough for
+    // ProtectedRoute to redirect, and avoids a full-bundle reload.
+    window.dispatchEvent(new CustomEvent('auth:session-expired'));
+  }, []);
 
   const ageGroup: AgeGroup = (user?.age_group as AgeGroup) || '';
 
-  const updateProfile = async (data: Partial<User>) => {
+  const updateProfile = useCallback(async (data: Partial<User>) => {
     try {
       const response = await api.patch('/auth/me/', data);
 
@@ -95,10 +109,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.error("Profile update failed:", error);
       throw error;
     }
-  };
+  }, [user]);
+
+  /*
+    Previously a fresh object literal on every render, with four freshly-created
+    callbacks inside it — so every consumer of this context re-rendered whenever
+    anything above the provider did, which is every navigation.
+  */
+  const value = useMemo(
+    () => ({ user, isAuthenticated: !!user, isLoading, needsGender, ageGroup, login, register, logout, updateProfile }),
+    [user, isLoading, needsGender, ageGroup, login, register, logout, updateProfile],
+  );
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, needsGender, ageGroup, login, register, logout, updateProfile }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

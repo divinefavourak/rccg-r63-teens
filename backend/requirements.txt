@@ -94,3 +94,7 @@ Werkzeug==3.1.4
 beautifulsoup4==4.12.3
 lxml==5.3.0
 mutagen>=1.47
+whitenoise==6.8.2
+# Lets the parallel test runner pickle tracebacks. Without it, any failure
+# under --parallel reports only "TransactionManagementError" with no stack.
+tblib==3.0.0

@@ -3,7 +3,9 @@ import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, BookOpen, FileText, Headphones, Calendar, Settings, LogOut, X, Star, Award, Gift, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthContext } from '../../context/AuthContext';
-import rccgLogo from '../../assets/logo.jpg';
+import { BRAND } from '../../constants/brand';
+
+const rccgLogo = BRAND.rccg;
 
 interface SidebarProps {
     isOpen: boolean;

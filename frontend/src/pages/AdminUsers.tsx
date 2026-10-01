@@ -6,6 +6,7 @@ import {
 import api from '../api/axios';
 import type { User } from '../types';
 import toast from 'react-hot-toast';
+import { todayISO } from '../utils/dates';
 
 const PROVINCES = [
     { value: 'lagos_province_9',   label: 'Lagos Province 9' },
@@ -382,7 +383,7 @@ const AdminUsers = () => {
                                     type="date"
                                     className={inputCls}
                                     value={editForm.date_of_birth}
-                                    max={new Date().toISOString().split('T')[0]}
+                                    max={todayISO()}
                                     onChange={e => setEditForm(f => ({ ...f, date_of_birth: e.target.value }))}
                                 />
                                 {editAgeGroupPreview && (

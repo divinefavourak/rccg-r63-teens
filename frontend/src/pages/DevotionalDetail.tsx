@@ -7,10 +7,12 @@ import api from '../api/axios';
 import { type Devotional } from '../types';
 import toast from 'react-hot-toast';
 import { useAuthContext } from '../context/AuthContext';
-import { 
-    FaCalendarAlt, FaShare, FaHeart, FaChevronLeft, 
-    FaCheckCircle, FaBookOpen, FaMusic, FaUserEdit 
+import {
+    FaCalendarAlt, FaShare, FaHeart, FaChevronLeft,
+    FaCheckCircle, FaBookOpen, FaMusic, FaUserEdit
 } from 'react-icons/fa';
+import Seo from '../components/Seo';
+import { formatAPIDate } from '../utils/dates';
 
 const DevotionalDetail = () => {
     const { id } = useParams<{ id: string }>();
@@ -109,6 +111,35 @@ const DevotionalDetail = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors pb-20">
+            <Seo
+                title={devotional.title}
+                description={
+                    devotional.key_point ||
+                    (devotional.content || '').replace(/<[^>]*>/g, '').slice(0, 160) ||
+                    `A daily devotional for teenagers — ${devotional.title}.`
+                }
+                path={`/devotionals/${devotional.id}`}
+                image={devotional.cover_image || undefined}
+                type="article"
+                jsonLd={{
+                    '@context': 'https://schema.org',
+                    '@type': 'Article',
+                    headline: devotional.title,
+                    datePublished: devotional.date,
+                    description: devotional.key_point || undefined,
+                    image: devotional.cover_image ? [devotional.cover_image] : undefined,
+                    author: {
+                        '@type': devotional.author ? 'Person' : 'Organization',
+                        name: devotional.author || 'RCCG Region 63 Junior Church',
+                    },
+                    publisher: {
+                        '@type': 'Organization',
+                        name: 'RCCG Region 63 Junior Church',
+                        url: 'https://thefaithtribe.live',
+                    },
+                    isAccessibleForFree: true,
+                }}
+            />
             <Navbar />
 
             {/* Hero Header */}
@@ -130,7 +161,7 @@ const DevotionalDetail = () => {
                     <div className="flex flex-wrap justify-center gap-3 mb-6">
                         <span className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md px-4 py-1 rounded-full text-white text-sm font-medium">
                             <FaCalendarAlt />
-                            {new Date(devotional.date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                            {formatAPIDate(devotional.date, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                         </span>
                         {devotional.author && (
                             <span className="inline-flex items-center gap-2 bg-black/20 backdrop-blur-md px-4 py-1 rounded-full text-white text-sm font-medium">

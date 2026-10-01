@@ -1,0 +1,53 @@
+/*
+  Website tokens. Names and values mirror the "Color" variables in the Figma file
+  (Faith Tribe — Design System & App), Light mode. Like the Console tokens in
+  console.css they are plain custom properties that tailwind.config.cjs points
+  at, so a Dark or Sepia mode can be added later by redefining them under a
+  selector rather than by touching any component.
+
+  Every property is --color-* prefixed. The legacy app variables in index.css
+  (--primary, --text-primary, ...) carry no prefix, so the two sets cannot
+  collide.
+*/
+:root {
+  --color-ink: #1c1916;
+  --color-on-ink: #fdfaf5;
+
+  --color-pop-green: #10b981;
+  --color-pop-lime: #7be3b0;
+  --color-pop-amber: #ffc857;
+  --color-pop-violet: #b9a5ff;
+  --color-pop-pink: #ff7bac;
+  --color-pop-sky: #8ec5ff;
+  --color-pop-on: #1c1916;
+
+  --color-surface-base: #f9f6f1;
+  --color-surface-raised: #fdfaf5;
+  --color-surface-sunken: #f2eae0;
+
+  --color-text-primary: #1c1916;
+  --color-text-secondary: #4b4540;
+  --color-text-muted: #6f6862;
+  --color-text-brand: #047857;
+
+  --color-border-strong: #c9beb5;
+
+  /* The phone mock's frame. A raw value in Figma, not one of its variables. */
+  --color-bezel: #1c1a17;
+}
+
+/*
+  Self-hosted Lora, variable axis, latin subset. Only the Bible reader uses it.
+  Not preloaded: the one place it appears on the landing page is a phone mock
+  below the fold, so it should not compete with Inter for the first paint.
+*/
+@font-face {
+  font-family: "Lora";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/lora-var.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}

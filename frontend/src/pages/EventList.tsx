@@ -4,6 +4,7 @@ import api from '../api/axios';
 import { type Event } from '../types';
 import { Calendar, MapPin, Users, ArrowRight, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import Seo from '../components/Seo';
 
 const EventList = () => {
     const [events, setEvents] = useState<Event[]>([]);
@@ -44,6 +45,7 @@ const EventList = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+            <Seo title="Events" description="Camps, hangouts and gatherings for RCCG Region 63 teens. Browse upcoming events and register." path="/events" />
             <Navbar />
             <div className="container mx-auto px-4 py-24">
 

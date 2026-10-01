@@ -262,6 +262,9 @@ class TicketAuditLog(models.Model):
         indexes = [
             models.Index(fields=['ticket', 'timestamp']),
             models.Index(fields=['user', 'timestamp']),
+            # TicketAuditLogView lists this table unfiltered, newest first, which
+            # neither composite above can serve.
+            models.Index(fields=['-timestamp'], name='ticketaudit_time_desc_idx'),
         ]
     
     def __str__(self):

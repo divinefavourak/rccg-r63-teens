@@ -4,7 +4,8 @@ Views for the media app (podcasts, videos, playlists).
 from rest_framework import viewsets, generics, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.db.models import Count
+from django.db.models import Count, Sum
+from django.db.models.functions import Coalesce
 
 from identity.authorization import HasPermission, HasPermissionOrReadOnly, has_any_permission
 from identity.permissions_registry import Perm
@@ -58,7 +59,16 @@ class MediaSeriesViewSet(viewsets.ModelViewSet):
         return MediaSeriesDetailSerializer
     
     def get_queryset(self):
-        queryset = self.queryset
+        # MediaSeriesListSerializer/DetailSerializer declare
+        # `episode_count = IntegerField(read_only=True)`, which looks like it
+        # reads an annotation but silently falls through to the MediaSeries
+        # .episode_count *property* when none exists — and that property runs
+        # `self.episodes.filter(status='published').count()`, i.e. one COUNT per
+        # row. MediaCategoryViewSet above already annotates series_count the
+        # right way; this is the same pattern, applied.
+        queryset = self.queryset.annotate(
+            episode_count=Count('episodes', filter=models.Q(episodes__status='published'))
+        )
 
         if not self.request.user.is_authenticated or not has_any_permission(self.request.user, Perm.MEDIA_MANAGE):
             queryset = queryset.filter(status='published')
@@ -210,23 +220,48 @@ class PlaylistViewSet(viewsets.ModelViewSet):
     filterset_fields = ['is_public', 'is_featured', 'is_system']
     ordering = ['-created_at']
     
+    def _with_counts(self, queryset):
+        """Annotate what PlaylistSerializer would otherwise compute per row.
+
+        The serializer declares `episode_count` and `total_duration_seconds` as
+        plain IntegerFields, so without these annotations DRF falls back to the
+        model properties: one COUNT per playlist, and — worse —
+        `total_duration_seconds` loads *every episode object of every playlist*
+        into Python just to sum one integer column. `episodes_list` then
+        serializes each episode, so the whole thing compounds.
+
+        distinct=True on the Count is required because the Sum join multiplies
+        rows; without it the two aggregates corrupt each other.
+        """
+        return (
+            queryset
+            .annotate(
+                episode_count=Count('episodes', distinct=True),
+                total_duration_seconds=Coalesce(Sum('episodes__duration_seconds'), 0),
+            )
+            .prefetch_related('playlistepisode_set__episode__series')
+        )
+
     def get_queryset(self):
         user = self.request.user
-        
+
         # Return public playlists, system playlists, and user's own playlists
-        return self.queryset.filter(
+        return self._with_counts(self.queryset).filter(
             models.Q(is_public=True) |
             models.Q(is_system=True) |
             models.Q(created_by=user)
         )
-    
+
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
-    
+
     @action(detail=False, methods=['get'])
     def mine(self, request):
         """Get current user's playlists."""
-        playlists = Playlist.objects.filter(created_by=request.user)
+        playlists = self._with_counts(Playlist.objects.filter(created_by=request.user))
+        page = self.paginate_queryset(playlists)
+        if page is not None:
+            return self.get_paginated_response(PlaylistSerializer(page, many=True).data)
         serializer = PlaylistSerializer(playlists, many=True)
         return Response(serializer.data)
     

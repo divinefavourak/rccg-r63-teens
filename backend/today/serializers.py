@@ -93,8 +93,51 @@ class TodayStreakSerializer(serializers.Serializer):
     last_active_on = serializers.DateField(read_only=True, allow_null=True)
 
 
+class TodaySharedSerializer(serializers.Serializer):
+    """
+    The half of Today that is the same for everyone reading the same day.
+
+    Split out of `TodaySerializer` so it can be cached. Nothing here depends on
+    who is asking beyond their age group — the devotional, the Verse of the Day
+    and the Scripture cards are one editorial decision per calendar day, and the
+    challenge is one decision per day per age group. Rebuilding all of it per
+    request was the bulk of the ~12 queries on the product's busiest endpoint.
+
+    `greeting` is deliberately NOT here: it is derived from the hour, so caching
+    it for a day would wish everyone good morning at 9pm.
+    """
+
+    date = serializers.DateField(read_only=True)
+
+    has_devotional = serializers.BooleanField(read_only=True)
+    devotional = TodayDevotionalSerializer(read_only=True, allow_null=True)
+
+    # The Verse of the Day. Same serializer as /content/today/memory-verse/,
+    # because it is the same object — "One Day. One Verse. One Message."
+    memory_verse = MemoryVerseSerializer(read_only=True, allow_null=True)
+    scripture_references = TodayScriptureReferenceSerializer(many=True, read_only=True)
+
+    challenge = TodayChallengeSerializer(read_only=True, allow_null=True)
+
+
+class TodayPersonalSerializer(serializers.Serializer):
+    """The half of Today that belongs to one teen. Never cached."""
+
+    devotional_completed = serializers.BooleanField(read_only=True)
+    challenge_completed = serializers.BooleanField(read_only=True)
+    streak = TodayStreakSerializer(read_only=True, allow_null=True)
+    grace_balance = serializers.IntegerField(read_only=True)
+    continue_reading = ContinueReadingSerializer(read_only=True, allow_null=True)
+
+
 class TodaySerializer(serializers.Serializer):
-    """The whole Today screen in one payload."""
+    """The whole Today screen in one payload.
+
+    Kept as the single description of the response shape. The view assembles the
+    same keys from `TodaySharedSerializer` + `TodayPersonalSerializer` so the
+    shared half can come from cache; the union of those two plus `greeting` must
+    stay exactly equal to the fields below.
+    """
 
     date = serializers.DateField(read_only=True)
     greeting = serializers.CharField(read_only=True)
@@ -103,8 +146,6 @@ class TodaySerializer(serializers.Serializer):
     devotional = TodayDevotionalSerializer(read_only=True, allow_null=True)
     devotional_completed = serializers.BooleanField(read_only=True)
 
-    # The Verse of the Day. Same serializer as /content/today/memory-verse/,
-    # because it is the same object — "One Day. One Verse. One Message."
     memory_verse = MemoryVerseSerializer(read_only=True, allow_null=True)
     scripture_references = TodayScriptureReferenceSerializer(many=True, read_only=True)
 
