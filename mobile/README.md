@@ -94,7 +94,7 @@ app/                      routes (expo-router)
     library.tsx  bible.tsx  tribe.tsx  me.tsx
   (auth)/
     welcome.tsx           first-launch pages
-    sign-up/[step].tsx    eight questions, one per screen
+    sign-up.tsx           eight questions on one screen; only the question changes
     verify.tsx            the 6-digit code (sign-up and log in)
     all-set.tsx  log-in.tsx
   devotional.tsx          full devotional (modal)
@@ -128,6 +128,20 @@ for the reader.
 `/dev/kit` shows every kit component on one screen, in development builds only.
 `npx expo start --web` serves the app in a browser for quick visual checks; the
 web target is a preview, not a shipped product.
+
+## Running through a tunnel
+
+`npx expo start --tunnel` carries the JS bundle only. The app normally finds the
+API on the machine serving the bundle, and a tunnel hostname cannot reach port
+8000, so under a tunnel set the address yourself in `mobile/.env` and restart
+Expo:
+
+```
+EXPO_PUBLIC_API_URL=http://<your-computer-ip>:8000/api/v1
+```
+
+The phone must be on the same Wi-Fi, and Windows Firewall must allow Python on
+private networks.
 
 ## Running the backend
 

@@ -1,595 +1,478 @@
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 
-import { Icon } from '../../src/components/Icon';
-import { AvatarMark, LeafGlyph, LeafMark, LeafTick } from '../../src/components/BrandMarks';
-import { FaithTribeLogo } from '../../src/components/Logo';
-import { Flame } from '../../src/components/Flame';
-import { Button, Card, CheckBox, Eyebrow, IconButton, Press, SectionHeader } from '../../src/components/ui';
-import { DevotionalCardSkeleton, ErrorState, Skeleton } from '../../src/components/states';
-import { useTokens } from '../../src/theme/ThemeProvider';
-import { signUpStep } from '../../src/state/signup';
-import { useAuth } from '../../src/state/auth';
-import { useNavClearance } from '../../src/components/useNavClearance';
 import { useCompleteChallenge, useToday, useUnreadCount } from '../../src/api/queries';
-import type { TodayResponse } from '../../src/api/types';
+import type { StreakState, TodayResponse } from '../../src/api/types';
+import { Icon } from '../../src/components/Icon';
+import { useNavClearance } from '../../src/components/useNavClearance';
+import { useAuth } from '../../src/state/auth';
+import { Object3D } from '../../src/ui/art';
+import {
+  HeroCard,
+  PopCard,
+  PopEyebrow,
+  StreakCard,
+  WeekPill,
+  type WeekDayState,
+} from '../../src/ui/cards';
+import { Press } from '../../src/ui/Press';
+import {
+  EmptyState,
+  GuestBanner,
+  HEADER_GAP,
+  OfflineBar,
+  Skeleton,
+} from '../../src/ui/screen';
+import { useTokens } from '../../src/theme/ThemeProvider';
+import { POP } from '../../src/theme/tokens';
 
 /**
  * Today.
  *
  * "One Day. One Verse. One Message" is a visual principle, not just copy
- * (09-design-principles.md): the devotional card is the single hero and every
- * other block on this screen visibly supports it.
+ * (09-design-principles.md): the reading is the one hero, and everything under
+ * "Your day" visibly supports it.
  *
  * One request drives the whole screen. `GET /today/` is public and returns the
- * shared half (devotional, verse, challenge) with the personal half null for a
+ * shared half (reading, verse, challenge) with the personal half null for a
  * guest — exactly the split this screen renders.
  */
 export default function TodayScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const { isGuest } = useAuth();
-  const navClearance = useNavClearance(32);
+  const { isGuest, user } = useAuth();
+  const navClearance = useNavClearance(24);
 
   const today = useToday();
   const unread = useUnreadCount(!isGuest);
-
-  const openDevotional = useCallback(() => {
-    const id = today.data?.devotional?.id;
-    if (id) router.push({ pathname: '/devotional', params: { id } });
-  }, [router, today.data]);
-
-  const openNotifications = useCallback(() => router.push('/notifications'), [router]);
-  const goSignIn = useCallback(() => router.push('/log-in'), [router]);
-  const goRegister = useCallback(() => router.push(signUpStep(1)), [router]);
-
   const data = today.data;
 
+  const openReading = useCallback(() => {
+    const id = data?.devotional?.id;
+    if (id) router.push({ pathname: '/devotional', params: { id } });
+  }, [router, data]);
+
+  const signUp = useCallback(() => router.push('/sign-up'), [router]);
+
+  // A refetch that fails while there is still something to show is "offline",
+  // not "broken": keep the saved screen and say so. With nothing saved there
+  // is only the error to show.
+  const offline = today.isError && !!data;
+  const failed = today.isError && !data;
+
   return (
-    <ScrollView
-      className="flex-1 bg-surf-base"
-      contentContainerStyle={{ paddingBottom: navClearance }}
-      stickyHeaderIndices={[0]}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={today.isRefetching}
-          onRefresh={today.refetch}
-          // A teen who completed a devotional on another device expects a pull
-          // to reconcile it.
-          progressViewOffset={insets.top + 56}
-        />
-      }
-    >
-      <AppBar
-        isGuest={isGuest}
-        topInset={insets.top}
+    <View className="flex-1 bg-surf-base">
+      <Header
+        name={isGuest ? null : (user?.first_name ?? null)}
+        photo={user?.profile_picture ?? null}
+        date={data?.date}
+        streak={isGuest ? null : (data?.streak?.current_length ?? null)}
         hasUnread={(unread.data?.unread_count ?? 0) > 0}
-        onBellPress={openNotifications}
+        onBell={() => router.push('/notifications')}
       />
+      {offline && <OfflineBar />}
 
-      <Greeting
-        greeting={data?.greeting}
-        name={isGuest ? 'Friend' : undefined}
-        streak={data?.streak?.current_length ?? null}
-        loading={today.isPending}
-      />
-
-      <View className="px-5 pt-5">
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          flexGrow: 1,
+          gap: 20,
+          paddingHorizontal: 20,
+          paddingTop: 8,
+          paddingBottom: navClearance,
+        }}
+        refreshControl={
+          // A teen who finished the reading on another device expects a pull
+          // to reconcile it.
+          <RefreshControl refreshing={today.isRefetching} onRefresh={today.refetch} />
+        }
+      >
         {today.isPending ? (
-          <DevotionalCardSkeleton />
-        ) : today.isError ? (
-          <ErrorState error={today.error} onRetry={today.refetch} compact />
-        ) : data?.has_devotional && data.devotional ? (
-          <DevotionalCard data={data} onRead={openDevotional} />
-        ) : (
-          // A pipeline gap is a 200 with has_devotional false, not a 404 — the
-          // streak and challenge below are still true, so the screen keeps
-          // working (06-user-flows.md flow 5).
-          <NoDevotionalCard />
-        )}
-      </View>
-
-      {data?.memory_verse && (
-        <View className="px-5 pt-3.5">
-          <VerseOfTheDay verse={data.memory_verse} />
-        </View>
-      )}
-
-      <View className="flex-row gap-3 px-5 pt-3.5">
-        {isGuest ? (
-          <>
-            <LockedCard
-              emoji="🔒"
-              title="Start your streak"
-              body="Sign in to track your journey"
-              cta="Sign in"
-              onPress={goSignIn}
+          <Loading />
+        ) : failed ? (
+          <View className="flex-1 justify-center">
+            <EmptyState
+              drawing="sitting"
+              message="We couldn’t load today’s reading. Check your connection, then try again."
+              actionLabel="Try again"
+              onAction={() => today.refetch()}
             />
-            <LockedCard
-              emoji="✦"
-              title="Daily challenge"
-              body="Join to unlock today's challenge"
-              cta="Join free"
-              onPress={goSignIn}
-            />
-          </>
-        ) : (
+          </View>
+        ) : data ? (
           <>
-            <StreakCard streak={data?.streak ?? null} loading={today.isPending} />
-            <ChallengeCard data={data} loading={today.isPending} />
-          </>
-        )}
-      </View>
+            <Reading data={data} onOpen={openReading} />
 
-      {!isGuest && data?.streak && <WeekTracker streak={data.streak} />}
-      {isGuest && <GuestSignUpCard onPress={goRegister} />}
-    </ScrollView>
+            {isGuest ? (
+              <GuestBanner
+                title="Start your streak"
+                body="Sign up to keep your days and saved verses."
+                onSignUp={signUp}
+              />
+            ) : (
+              <WeekStrip streak={data.streak} />
+            )}
+
+            <Text
+              accessibilityRole="header"
+              className="font-ui-b text-[20px] leading-7 tracking-[-0.2px] text-ink-1"
+            >
+              Your day
+            </Text>
+
+            <DayGrid data={data} isGuest={isGuest} />
+
+            {!isGuest && data.streak && <Streak streak={data.streak} done={data.devotional_completed} />}
+          </>
+        ) : null}
+      </ScrollView>
+    </View>
   );
 }
 
-// ─── App bar ───────────────────────────────────────────────────────────────
+// ─── Header ────────────────────────────────────────────────────────────────
 
-const AppBar = memo(function AppBar({
-  isGuest,
-  topInset,
+const Header = memo(function Header({
+  name,
+  photo,
+  date,
+  streak,
   hasUnread,
-  onBellPress,
+  onBell,
 }: {
-  isGuest: boolean;
-  topInset: number;
+  /** Null for a guest. */
+  name: string | null;
+  photo: string | null;
+  date: string | undefined;
+  streak: number | null;
   hasUnread: boolean;
-  onBellPress: () => void;
+  onBell: () => void;
 }) {
+  const insets = useSafeAreaInsets();
   const tokens = useTokens();
 
   return (
     <View
-      className="flex-row items-center gap-3 border-b border-line bg-surf-base px-5 pb-4"
-      style={{ paddingTop: topInset + 12 }}
+      className="flex-row items-center gap-3 px-5 pb-2"
+      style={{ paddingTop: insets.top + HEADER_GAP }}
     >
-      <FaithTribeLogo size={36} />
-
-      <View className="flex-1">
-        <Text className="font-ui-b text-[14px] tracking-tight text-ink-1">Faith Tribe</Text>
-        <Text className="font-ui text-[11px] text-ink-3">RCCG Region 63 Teens</Text>
-      </View>
-
-      <View>
-        <IconButton name="bell" label="Notifications" onPress={onBellPress} />
-        {hasUnread && (
-          // A single calm dot, not a count. 05-navigation.md permits a badge on
-          // the bell alone, and 09-design-principles.md forbids pulsing it.
-          <View
-            pointerEvents="none"
-            accessibilityElementsHidden
-            className="absolute right-2 top-2 h-[7px] w-[7px] rounded-full bg-green"
-            style={{ borderWidth: 1.5, borderColor: tokens.surfBase }}
+      <View className="h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-pop-amber">
+        {photo ? (
+          <Image
+            source={photo}
+            contentFit="cover"
+            accessibilityLabel="Your photo"
+            style={{ width: 48, height: 48 }}
           />
+        ) : (
+          <Text className="font-ui-b text-[17px] leading-6 text-pop-on">
+            {name ? name.charAt(0).toUpperCase() : '👋'}
+          </Text>
         )}
       </View>
 
-      {!isGuest ? (
-        <View
-          className="h-10 w-10 overflow-hidden rounded-full border-2 border-green"
-          accessibilityLabel="Your profile"
+      <View className="flex-1">
+        <Text
+          numberOfLines={1}
+          className="font-ui-b text-[20px] leading-7 tracking-[-0.2px] text-ink-1"
         >
-          <AvatarMark size={36} />
-        </View>
-      ) : (
-        <View className="h-10 w-10 items-center justify-center rounded-full border border-line bg-surf-sunken">
-          <Icon name="person" size={20} color={tokens.text3} />
+          {name ? `Hello, ${name}` : 'Hello there'}
+        </Text>
+        <Text className="font-ui text-[14px] leading-5 text-ink-2">{shortDate(date)}</Text>
+      </View>
+
+      {streak !== null && (
+        <View
+          accessible
+          accessibilityLabel={`${streak}-day streak`}
+          className="h-10 flex-row items-center gap-1 rounded-full bg-ink pl-2 pr-3.5"
+        >
+          <Object3D name="fire" size={26} />
+          <Text className="font-ui-sb text-[14px] leading-5 text-on-ink">{streak}</Text>
         </View>
       )}
-    </View>
-  );
-});
 
-// ─── Greeting ──────────────────────────────────────────────────────────────
-
-function Greeting({
-  greeting,
-  name,
-  streak,
-  loading,
-}: {
-  greeting?: string;
-  name?: string;
-  streak: number | null;
-  loading: boolean;
-}) {
-  const { user } = useAuth();
-  // The server derives the greeting from the hour in the app's timezone, so a
-  // teen in Lagos is not wished good morning at 9pm by a UTC clock.
-  const salutation = greeting ?? 'Hello,';
-  const display = name ?? user?.first_name ?? user?.username ?? 'Friend';
-
-  return (
-    <View className="flex-row items-end justify-between gap-3 px-5 pt-6">
-      <View>
-        <Text className="mb-0.5 font-ui text-[15px] text-ink-3">{salutation}</Text>
-        <Text className="font-ui-xb text-[38px] leading-[40px] tracking-tight text-ink-1">
-          {display}
-        </Text>
-      </View>
-
-      {loading ? (
-        <Skeleton width={72} height={38} radius={999} />
-      ) : streak !== null && streak > 0 ? (
-        <View
-          className="flex-row items-center gap-1.5 rounded-full bg-amber-tonal px-3.5 py-2"
-          style={{ borderWidth: 1.5, borderColor: 'rgba(232,149,26,0.25)' }}
-          accessibilityLabel={`${streak} day streak`}
-        >
-          <Flame size={20} />
-          <Text className="font-ui-xb text-[18px] leading-[18px] text-amber-bright">{streak}</Text>
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-// ─── The hero card ─────────────────────────────────────────────────────────
-
-function DevotionalCard({ data, onRead }: { data: TodayResponse; onRead: () => void }) {
-  const devotional = data.devotional!;
-  const verse = data.memory_verse;
-
-  return (
-    <Animated.View entering={FadeInDown.duration(280)}>
-      <Card className="overflow-hidden rounded-xl">
-        <View className="px-5 pt-5">
-          <View className="mb-4 flex-row items-center justify-between">
-            <Eyebrow tone="green">Daily Devotional</Eyebrow>
-            <Text className="font-ui-md text-[12px] text-ink-3">{formatDate(devotional.date)}</Text>
-          </View>
-
-          <Text className="mb-2.5 font-ui-b text-[24px] leading-[30px] tracking-tight text-ink-1">
-            {devotional.title}
-          </Text>
-
-          <Text numberOfLines={2} className="mb-1.5 font-ui text-[14px] leading-[22px] text-ink-3">
-            {devotional.excerpt}
-          </Text>
-
-          {/* A promise about effort — the whole argument for the daily habit is
-              that it is small (01-vision.md). */}
-          <Text className="mb-[18px] font-ui-md text-[12px] text-ink-3">
-            {devotional.reading_time_minutes} min read
-            {devotional.author ? ` · ${devotional.author}` : ''}
-          </Text>
-
-          {verse && (
-            <View className="mb-[18px] rounded-md p-[18px]" style={{ backgroundColor: '#2D6340' }}>
-              <Text
-                className="mb-2.5 font-ui-b text-[10px] uppercase tracking-[1px]"
-                style={{ color: 'rgba(144,210,162,0.9)' }}
-              >
-                Memory Verse
-              </Text>
-              <Text className="mb-2.5 font-read-i text-[15px] leading-[25px] text-white">
-                {verse.text}
-              </Text>
-              <Text
-                className="font-ui-b text-[11px] tracking-wide"
-                style={{ color: 'rgba(144,210,162,0.85)' }}
-              >
-                — {verse.reference_display}
-                {verse.translation_code ? ` ${verse.translation_code}` : ''}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        <View className="flex-row items-center gap-2.5 px-5 pb-5">
-          <Button
-            label={data.devotional_completed ? 'Read again' : 'Read Full Devotional'}
-            onPress={onRead}
-            className="flex-1"
-            height={50}
-            icon={<Icon name="arrowRight" size={16} color="#fff" />}
-          />
-          {data.devotional_completed && (
-            <View className="h-[50px] w-[50px] items-center justify-center rounded-md bg-green/10">
-              <Icon name="check" size={22} color="#3A7D52" />
-            </View>
-          )}
-        </View>
-      </Card>
-    </Animated.View>
-  );
-}
-
-/** No devotional published for today — the rest of the screen still works. */
-function NoDevotionalCard() {
-  const tokens = useTokens();
-  return (
-    <Card className="items-center gap-2.5 rounded-xl p-6">
-      <LeafMark size={34} color={tokens.green} />
-      <Text className="text-center font-ui-b text-[17px] text-ink-1">
-        Today's devotional is on its way
-      </Text>
-      <Text className="text-center font-ui text-[13px] leading-5 text-ink-3">
-        Nothing has been published yet. Your streak is safe — check back a little later.
-      </Text>
-    </Card>
-  );
-}
-
-// ─── Verse of the day ──────────────────────────────────────────────────────
-
-function VerseOfTheDay({ verse }: { verse: NonNullable<TodayResponse['memory_verse']> }) {
-  const tokens = useTokens();
-  return (
-    <Card className="flex-row items-center gap-3 px-4 py-3.5">
-      <View className="h-[38px] w-[38px] items-center justify-center rounded bg-amber-tonal">
-        <Text className="text-[18px] text-amber">✦</Text>
-      </View>
-      <View className="min-w-0 flex-1">
-        <Eyebrow tone="amber">Verse of the day</Eyebrow>
-        <Text numberOfLines={1} className="mt-0.5 font-read-i text-[13px] leading-[20px] text-ink-2">
-          {verse.text}
-        </Text>
-        <Text className="mt-0.5 font-ui-sb text-[11px] text-ink-3">{verse.reference_display}</Text>
-      </View>
       <Press
-        accessibilityLabel="Share verse"
-        className="p-1"
-        // Sharing is the growth channel: WhatsApp forwarding is the region's
-        // real social network (03-user-personas.md).
+        onPress={onBell}
+        accessibilityLabel={hasUnread ? 'Notifications, unread' : 'Notifications'}
+        className="h-11 w-11 items-center justify-center rounded-full bg-surf-sunken"
       >
-        <Icon name="share" size={17} color={tokens.text3} />
+        <Icon name="bell" size={24} color={tokens.text1} />
+        {hasUnread && (
+          <View
+            className="absolute right-2.5 top-2.5 h-2.5 w-2.5 rounded-full border-2 border-surf-sunken"
+            style={{ backgroundColor: POP.pink }}
+          />
+        )}
       </Press>
-    </Card>
-  );
-}
-
-// ─── Streak & challenge ────────────────────────────────────────────────────
-
-function StreakCard({ streak, loading }: { streak: TodayResponse['streak']; loading: boolean }) {
-  if (loading) {
-    return (
-      <Card className="flex-1 gap-2 p-4">
-        <Skeleton width={30} height={30} radius={8} />
-        <Skeleton width={50} height={34} />
-        <Skeleton width="70%" height={12} />
-      </Card>
-    );
-  }
-
-  const current = streak?.current_length ?? 0;
-
-  return (
-    <Card className="flex-1 overflow-hidden p-4" style={{ backgroundColor: '#FDF5E4' }}>
-      <Flame size={32} />
-      <Text className="mb-0.5 mt-1.5 font-ui-xb text-[36px] leading-[36px] text-amber-bright">
-        {current}
-      </Text>
-      <Text className="font-ui-b text-[12px] text-ink-2">Day streak</Text>
-      {/* No deficit, no "days missed", no red — 12-gamification.md requires
-          warm, non-shaming streak copy. */}
-      <Text className="mt-0.5 font-ui text-[11px] text-ink-3">
-        {current === 0 ? 'Start today 🌱' : 'Keep it going 🌱'}
-      </Text>
-    </Card>
-  );
-}
-
-function ChallengeCard({ data, loading }: { data?: TodayResponse; loading: boolean }) {
-  const complete = useCompleteChallenge();
-
-  if (loading) {
-    return (
-      <Card className="flex-1 gap-3 p-4">
-        <Skeleton width="70%" height={10} />
-        <Skeleton height={20} />
-        <Skeleton height={20} />
-      </Card>
-    );
-  }
-
-  if (!data?.challenge) {
-    return (
-      <Card className="flex-1 justify-center gap-1.5 p-4">
-        <Text className="text-[20px]">✦</Text>
-        <Text className="font-ui-b text-[13px] text-ink-1">No challenge today</Text>
-        <Text className="font-ui text-[11px] leading-4 text-ink-3">Enjoy the quiet.</Text>
-      </Card>
-    );
-  }
-
-  const done = data.challenge_completed;
-
-  return (
-    <Card className="flex-1 p-4">
-      <Eyebrow>Today's challenge</Eyebrow>
-      <View className="mt-3.5 gap-3">
-        <ChallengeRow
-          label={data.challenge.title}
-          done={done}
-          // There is no "uncomplete" server-side and no penalty for skipping,
-          // so the control is one-way by design.
-          onToggle={done ? undefined : () => complete.mutate()}
-          pending={complete.isPending}
-        />
-      </View>
-      {done && (
-        // Celebration is "a smile rather than a slot machine"
-        // (09-design-principles.md) — one gentle fade, no confetti.
-        <Animated.View
-          entering={FadeIn.duration(240)}
-          className="mt-3 flex-row items-center gap-1.5 rounded-sm bg-green/10 px-2.5 py-2"
-        >
-          <Text className="text-[14px]">🎉</Text>
-          <Text className="font-ui-b text-[11px] text-green">All done!</Text>
-        </Animated.View>
-      )}
-    </Card>
-  );
-}
-
-const ChallengeRow = memo(function ChallengeRow({
-  label,
-  done,
-  onToggle,
-  pending,
-}: {
-  label: string;
-  done: boolean;
-  onToggle?: () => void;
-  pending: boolean;
-}) {
-  const tokens = useTokens();
-  const noop = useCallback(() => {}, []);
-
-  return (
-    <View className="flex-row items-center gap-2.5" style={{ opacity: pending ? 0.6 : 1 }}>
-      <CheckBox done={done} onToggle={onToggle ?? noop} label={label} />
-      <Text
-        numberOfLines={2}
-        className={`flex-1 font-ui-md text-[14px] ${done ? 'text-ink-3' : 'text-ink-2'}`}
-        style={done ? { textDecorationLine: 'line-through' } : undefined}
-      >
-        {label}
-      </Text>
-      {done && <LeafGlyph size={14} color={tokens.green} />}
     </View>
   );
 });
 
-// ─── This week ─────────────────────────────────────────────────────────────
+// ─── The reading ───────────────────────────────────────────────────────────
 
-const WEEK_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+function Reading({ data, onOpen }: { data: TodayResponse; onOpen: () => void }) {
+  // A pipeline gap is a 200 with `has_devotional: false`, not a 404 — the
+  // streak and challenge below are still true, so the screen keeps working and
+  // only this card changes (06-user-flows.md flow 5).
+  if (!data.has_devotional || !data.devotional) {
+    return (
+      <PopCard colour="green" className="w-full gap-2 rounded-3xl p-5">
+        <PopEyebrow>Today’s reading</PopEyebrow>
+        <Text className="font-ui-xb text-[28px] leading-9 tracking-[-0.56px] text-pop-on">
+          On its way
+        </Text>
+        <Text className="font-ui text-[14px] leading-5 text-pop-on">
+          Nothing has been published yet. Your streak is safe — check back a little later.
+        </Text>
+      </PopCard>
+    );
+  }
+
+  const minutes = data.devotional.reading_time_minutes;
+  return (
+    <HeroCard
+      eyebrow={minutes ? `Today’s reading · ${minutes} min` : 'Today’s reading'}
+      title={data.devotional.title}
+      detail={data.scripture_references[0]?.reference_display}
+      actionLabel={data.devotional_completed ? 'Read again' : 'Read now'}
+      onPress={onOpen}
+      drawing="reading-side"
+      object="notebook"
+    />
+  );
+}
+
+// ─── Week strip ────────────────────────────────────────────────────────────
+
+const DAY_MS = 86_400_000;
+
+function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
 
 /**
- * The current week, derived from the streak.
+ * Was `daysAgo` (0 = today) part of the current run?
  *
- * `last_active_on` plus `current_length` is enough to colour the week without a
- * second request: any day within `current_length` days back from the last
- * active day is part of the run.
+ * The API gives the run's length and its last active day, not a list of dates,
+ * so the run is the `current_length` days ending on `last_active_on`.
  */
-function WeekTracker({ streak }: { streak: NonNullable<TodayResponse['streak']> }) {
-  const tokens = useTokens();
+function inRun(streak: StreakState | null, daysAgo: number): boolean {
+  if (!streak?.last_active_on || streak.current_length <= 0) return false;
+  const last = startOfDay(new Date(`${streak.last_active_on}T00:00:00`));
+  const sinceLast = Math.round((startOfDay(new Date()).getTime() - last.getTime()) / DAY_MS);
+  return daysAgo >= sinceLast && daysAgo < sinceLast + streak.current_length;
+}
 
-  const now = new Date();
-  // JS weeks start Sunday; the design's tracker starts Monday.
-  const todayIndex = (now.getDay() + 6) % 7;
-  const lastActive = streak.last_active_on ? new Date(streak.last_active_on) : null;
-
-  const daysAgoActive = lastActive
-    ? Math.round((startOfDay(now).getTime() - startOfDay(lastActive).getTime()) / 86_400_000)
-    : null;
+/**
+ * Seven days with today fifth: four behind, two ahead — as drawn. A past day
+ * outside the run looks the same as a day still to come. There is no "missed"
+ * state, on purpose (12-gamification.md: never shame a gap).
+ */
+function WeekStrip({ streak }: { streak: StreakState | null }) {
+  const days = useMemo(() => {
+    const today = startOfDay(new Date());
+    return Array.from({ length: 7 }, (_, i) => {
+      const offset = i - 4;
+      const date = new Date(today.getTime() + offset * DAY_MS);
+      const state: WeekDayState =
+        offset === 0 ? 'today' : offset < 0 && inRun(streak, -offset) ? 'done' : 'next';
+      return {
+        key: date.toISOString(),
+        weekday: date.toLocaleDateString('en-GB', { weekday: 'short' }),
+        date: date.getDate(),
+        state,
+      };
+    });
+  }, [streak]);
 
   return (
-    <View className="px-5 pt-6">
-      <SectionHeader title="This week" actionLabel="View journey" className="mb-3.5" />
-      <View className="flex-row gap-1.5">
-        {WEEK_LABELS.map((day, i) => {
-          const daysAgo = todayIndex - i;
-          const withinRun =
-            daysAgoActive !== null &&
-            daysAgo >= daysAgoActive &&
-            daysAgo < daysAgoActive + streak.current_length;
-          const isToday = i === todayIndex;
-          const done = withinRun && daysAgo >= 0;
+    <View className="w-full flex-row justify-between">
+      {days.map((day) => (
+        <WeekPill key={day.key} weekday={day.weekday} date={day.date} state={day.state} />
+      ))}
+    </View>
+  );
+}
 
-          return (
-            <View key={i} className="flex-1 items-center gap-1.5">
-              <Text className={`font-ui-sb text-[11px] ${isToday ? 'text-green' : 'text-ink-3'}`}>
-                {day}
-              </Text>
-              <View
-                accessibilityLabel={
-                  done ? `${day}, completed` : isToday ? `${day}, today` : `${day}, not yet`
-                }
-                className="h-[34px] w-[34px] items-center justify-center rounded-sm"
-                style={{
-                  backgroundColor: done
-                    ? tokens.green
-                    : isToday
-                      ? tokens.greenSoft
-                      : tokens.surfSunken,
-                  borderWidth: 2,
-                  borderColor: isToday ? tokens.green : 'transparent',
-                }}
-              >
-                {done ? (
-                  <LeafTick />
-                ) : isToday ? (
-                  <View className="h-2 w-2 rounded-full bg-green" />
-                ) : null}
-              </View>
-            </View>
-          );
-        })}
+// ─── Your day ──────────────────────────────────────────────────────────────
+
+function DayGrid({ data, isGuest }: { data: TodayResponse; isGuest: boolean }) {
+  const router = useRouter();
+  const verse = data.memory_verse;
+  const next = data.continue_reading;
+
+  return (
+    <View className="w-full flex-row gap-3">
+      <PopCard colour="violet" className="h-[224px] flex-1 gap-2">
+        <PopEyebrow>Verse of the day</PopEyebrow>
+        {verse ? (
+          <>
+            <Text numberOfLines={5} className="font-ui-b text-[17px] leading-6 text-pop-on">
+              {verse.text}
+            </Text>
+            <View className="flex-1" />
+            <Text className="pr-16 font-ui-sb text-[12px] leading-4 text-pop-on">
+              {verse.reference_display}
+            </Text>
+          </>
+        ) : (
+          <Text className="font-ui-sb text-[16px] leading-6 text-pop-on">
+            Today’s verse will show here.
+          </Text>
+        )}
+        <View pointerEvents="none" style={{ position: 'absolute', right: 12, bottom: 2 }}>
+          <Object3D name="bell" size={72} />
+        </View>
+      </PopCard>
+
+      <View className="flex-1 gap-3">
+        <Challenge data={data} isGuest={isGuest} />
+
+        <PopCard
+          colour="pink"
+          onPress={() => router.push('/bible')}
+          accessibilityLabel={next ? `Continue reading ${next.reference}` : 'Open the Bible'}
+          className="h-[72px] flex-row items-center gap-2 py-3 pl-4 pr-3"
+        >
+          <View className="flex-1">
+            <PopEyebrow>{next ? 'Continue' : 'Bible'}</PopEyebrow>
+            <Text numberOfLines={1} className="font-ui-sb text-[16px] leading-6 text-pop-on">
+              {next ? next.reference : 'Read'}
+            </Text>
+          </View>
+          {/* Always dark with a light arrow: it sits on pink in both themes. */}
+          <View className="h-10 w-10 items-center justify-center rounded-full bg-pop-on">
+            <Icon name="chevronRight" size={20} color="#FDFAF5" />
+          </View>
+        </PopCard>
       </View>
     </View>
   );
 }
 
-function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
+/**
+ * The day's one challenge. Tapping it marks it done; there is no "undo" and no
+ * penalty for leaving it (12-gamification.md).
+ */
+function Challenge({ data, isGuest }: { data: TodayResponse; isGuest: boolean }) {
+  const router = useRouter();
+  const complete = useCompleteChallenge();
+  const challenge = data.challenge;
+  const done = data.challenge_completed || complete.isSuccess;
 
-/** "Tuesday, 2 Sep" from an ISO date, in the device locale. */
-function formatDate(iso: string): string {
-  const d = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' });
-}
+  const onPress = useCallback(() => {
+    if (isGuest) router.push('/sign-up');
+    else if (!done && !complete.isPending) complete.mutate();
+  }, [isGuest, router, done, complete]);
 
-// ─── Guest states ──────────────────────────────────────────────────────────
+  if (!challenge) {
+    return (
+      <PopCard colour="sky" className="h-[140px] gap-1.5">
+        <PopEyebrow>Challenge</PopEyebrow>
+        <Text className="font-ui-sb text-[16px] leading-6 text-pop-on">
+          None today. Enjoy the quiet.
+        </Text>
+      </PopCard>
+    );
+  }
 
-function LockedCard({
-  emoji,
-  title,
-  body,
-  cta,
-  onPress,
-}: {
-  emoji: string;
-  title: string;
-  body: string;
-  cta: string;
-  onPress: () => void;
-}) {
   return (
-    <Card className="flex-1 gap-2 p-4">
-      <Text className="text-[22px]">{emoji}</Text>
-      <Text className="font-ui-b text-[13px] text-ink-1">{title}</Text>
-      <Text className="font-ui text-[11px] leading-4 text-ink-3">{body}</Text>
-      <Press
-        onPress={onPress}
-        accessibilityLabel={cta}
-        className="h-9 items-center justify-center rounded-sm border-[1.5px] border-green"
-      >
-        <Text className="font-ui-sb text-[12px] text-green">{cta}</Text>
-      </Press>
-    </Card>
+    <PopCard
+      colour="sky"
+      onPress={onPress}
+      accessibilityLabel={
+        done
+          ? `Challenge done: ${challenge.title}`
+          : isGuest
+            ? `Challenge: ${challenge.title}. Sign up to take part.`
+            : `Challenge: ${challenge.title}. Tap when you have done it.`
+      }
+      className="h-[140px] gap-1.5"
+    >
+      <PopEyebrow>{done ? 'Challenge · done' : 'Challenge'}</PopEyebrow>
+      <Text numberOfLines={3} className="font-ui-sb text-[16px] leading-6 text-pop-on">
+        {challenge.title}
+      </Text>
+      {done ? (
+        <View
+          className="absolute bottom-3 right-3 h-9 w-9 items-center justify-center rounded-full bg-pop-on"
+        >
+          <Icon name="check" size={20} color={POP.sky} />
+        </View>
+      ) : (
+        <View pointerEvents="none" style={{ position: 'absolute', right: -6, bottom: -8 }}>
+          <Object3D name="chat-bubble" size={64} />
+        </View>
+      )}
+    </PopCard>
   );
 }
 
-function GuestSignUpCard({ onPress }: { onPress: () => void }) {
-  const tokens = useTokens();
+// ─── Streak ────────────────────────────────────────────────────────────────
+
+const WEEK_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+function Streak({ streak, done }: { streak: StreakState; done: boolean }) {
+  // JS weeks start on Sunday; this row starts on Monday.
+  const todayIndex = (new Date().getDay() + 6) % 7;
+  const week = WEEK_LETTERS.map((letter, i) => {
+    const daysAgo = todayIndex - i;
+    const state: WeekDayState =
+      daysAgo === 0 ? (done ? 'done' : 'today') : daysAgo > 0 && inRun(streak, daysAgo) ? 'done' : 'next';
+    return { letter, state };
+  });
+
+  const length = streak.current_length;
   return (
-    <View className="px-5 pt-6">
-      <Card className="items-center gap-3.5 rounded-xl p-6">
-        <View className="h-16 w-16 items-center justify-center rounded-lg bg-green/10">
-          <LeafMark size={32} color={tokens.green} />
-        </View>
-        <View>
-          <Text className="mb-1.5 text-center font-ui-b text-[18px] text-ink-1">
-            Start your faith journey
-          </Text>
-          <Text className="text-center font-ui text-[14px] leading-[22px] text-ink-3">
-            Join Faith Tribe to track streaks, unlock challenges, and grow with your tribe.
-          </Text>
-        </View>
-        <Button label="Create a free account" onPress={onPress} className="w-full" height={52} />
-      </Card>
-    </View>
+    <StreakCard
+      title={length > 0 ? `${length}-day streak` : 'Start your streak'}
+      message={
+        done
+          ? 'You showed up today. See you tomorrow.'
+          : length > 0
+            ? 'Today’s reading keeps it going.'
+            : 'Read today and this becomes day one.'
+      }
+      week={week}
+    />
   );
+}
+
+// ─── Loading ───────────────────────────────────────────────────────────────
+
+/** Blocks in the shape of what is coming, so nothing jumps when it lands. */
+function Loading() {
+  return (
+    <>
+      <Skeleton height={212} radius={28} />
+      <View className="flex-row justify-between">
+        {Array.from({ length: 7 }, (_, i) => (
+          <Skeleton key={i} width={40} height={76} radius={999} />
+        ))}
+      </View>
+      <Skeleton width={120} height={24} radius={8} />
+      <View className="flex-row gap-3">
+        <View className="flex-1">
+          <Skeleton height={224} />
+        </View>
+        <View className="flex-1 gap-3">
+          <Skeleton height={140} />
+          <Skeleton height={72} />
+        </View>
+      </View>
+    </>
+  );
+}
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+
+/** "Thu 1 October", from the server's date so it agrees with the reading. */
+function shortDate(iso: string | undefined): string {
+  const date = iso ? new Date(`${iso}T00:00:00`) : new Date();
+  if (Number.isNaN(date.getTime())) return '';
+  const weekday = date.toLocaleDateString('en-GB', { weekday: 'short' });
+  const month = date.toLocaleDateString('en-GB', { month: 'long' });
+  return `${weekday} ${date.getDate()} ${month}`;
 }
