@@ -89,9 +89,12 @@ function App() {
 
       <Suspense fallback={<Loading />}>
         <Routes>
+          {/* The website's front page. Brings its own nav and footer, so it sits
+              outside PublicLayout. */}
+          <Route path="/" element={<LandingPage />} />
+
           {/* Public Routes with layout (Navbar + Footer from PublicLayout) */}
           <Route element={<PublicLayout />}>
-            <Route path="/" element={<LandingPage />} />
             <Route path="/get-ticket" element={<TicketForm />} />
             <Route path="/ticket-preview" element={<TicketPreview />} />
             <Route path="/ticket-not-found" element={<CheckTicketStatus />} />

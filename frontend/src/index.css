@@ -1,6 +1,8 @@
 /* Admin Console tokens. All properties are --console-* / --level-* prefixed, so
    they cannot collide with the teen app's variables below. */
 @import "./styles/console.css";
+/* Website tokens (--color-*) and the Lora face for the Bible reader. */
+@import "./styles/site.css";
 
 @tailwind base;
 @tailwind components;
