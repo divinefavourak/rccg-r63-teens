@@ -95,10 +95,13 @@ export default function VerifyScreen() {
   if (!isLogin && (!details.email || !details.phone)) return <Redirect href="/sign-up" />;
 
   const target = isLogin ? codeDestination(to) : null;
+  // Log in cannot say "we sent it": the server answers the same whether or not
+  // the account exists, so nobody can test which emails are registered. Saying
+  // so plainly beats leaving someone waiting for a code that is not coming.
   const helper = isLogin
-    ? `We sent 6 digits to ${
+    ? `If there is an account for ${
         target?.channel === 'sms' ? prettyPhone(target.destination) : (target?.destination ?? to)
-      }.`
+      }, we have sent it 6 digits.`
     : `We sent the same 6 digits to ${details.email} and ${prettyPhone(details.phone)}. Use whichever arrives first.`;
 
   const seconds = String(wait % 60).padStart(2, '0');
@@ -138,6 +141,19 @@ export default function VerifyScreen() {
           className="items-center pt-1"
         >
           <Text className="font-ui-sb text-[14px] leading-5 text-green">Send the code again</Text>
+        </Pressable>
+      )}
+
+      {isLogin && (
+        <Pressable
+          onPress={() => router.replace('/sign-up')}
+          accessibilityRole="link"
+          hitSlop={12}
+          className="items-center pt-2"
+        >
+          <Text className="font-ui text-[14px] leading-5 text-ink-2">
+            New here? <Text className="font-ui-sb text-green">Create an account</Text>
+          </Text>
         </Pressable>
       )}
     </QuestionScreen>
