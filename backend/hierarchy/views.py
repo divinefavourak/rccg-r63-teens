@@ -22,7 +22,7 @@ from identity.authorization import has_permission
 from identity.permissions_registry import Perm
 
 from . import services
-from .models import HierarchyNode, NodeType, child_type_of
+from .models import UNASSIGNED_NAME, HierarchyNode, NodeType, child_type_of
 from .scoping import selectable_node_ids, visible_nodes
 from .serializers import HierarchyNodeSerializer
 
@@ -80,6 +80,9 @@ class PublicChildrenView(APIView):
                      else parent.get_children())
 
         nodes = nodes.filter(is_active=True, node_type__in=self.PUBLIC_TYPES)
+        # The holding bucket for members with no province on file is not
+        # something to offer a teen as where they worship.
+        nodes = nodes.exclude(name__iexact=UNASSIGNED_NAME)
         if search:
             nodes = nodes.filter(name__icontains=search)
         nodes = nodes.order_by('name')[:self.MAX_RESULTS]

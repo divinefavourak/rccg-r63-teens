@@ -24,6 +24,11 @@ class NodeType(models.TextChoices):
     DEPARTMENT = 'department', 'Department'
 
 
+# Name of the province-level holding bucket `derive_hierarchy` puts users in
+# when their profile names no province. It is a real node (so nobody is left
+# with a null membership) but it is not a place anyone belongs to by choice.
+UNASSIGNED_NAME = 'Unassigned'
+
 # Ordered top-down. A node's type must be exactly one level below its parent's.
 NODE_LEVEL_ORDER = [
     NodeType.NATIONAL,

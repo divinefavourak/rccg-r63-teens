@@ -51,9 +51,34 @@ parish   = services.add_child(area,     NodeType.PARISH,   'Parish A')
 `add_child` validates that the child type is legal under the parent (you cannot
 hang a Parish directly off a Region), so a malformed tree fails at build time.
 
-CSV bulk import of parishes is a documented V1 console feature
-(`docs/07-feature-specifications.md` §3); until that ships, the shell above or a
-one-off script is the path.
+### C. Add zones, areas and parishes from a list
+
+`derive_hierarchy` only goes as deep as users' profiles do. In production that
+was provinces: nobody had a zone or a parish on file. The app's sign-up asks a
+teen for their zone and parish, so those levels need loading from a list the
+region supplies.
+
+```bash
+python manage.py import_hierarchy parishes.csv --dry-run   # report, save nothing
+python manage.py import_hierarchy parishes.csv
+```
+
+```csv
+province,zone,area,parish
+Lagos Province 9,Holiness Zone,Agege Area,RCCG Holiness Assembly
+```
+
+Provinces must already exist; an unknown one is reported and skipped. Names
+match ignoring case and spacing, so the file can be re-run safely, but two
+spellings of one church become two parishes. Clean the list first. Do not build
+it from the free text on old event tickets: most of those rows say "Coordinator
+Upload", and the rest spell the same parish several ways.
+
+The "Unassigned" province is a holding bucket for members with no province on
+file. It is never offered in the sign-up picker and cannot be imported into.
+
+CSV import in the Console is a documented V1 feature
+(`docs/07-feature-specifications.md` §3); this command is the path until it ships.
 
 ---
 

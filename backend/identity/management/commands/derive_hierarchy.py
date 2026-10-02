@@ -15,7 +15,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from hierarchy import services
-from hierarchy.models import HierarchyNode, NodeType
+from hierarchy.models import UNASSIGNED_NAME, HierarchyNode, NodeType
 from identity.authorization import set_membership
 from identity.models import Role, RoleAssignment
 
@@ -67,7 +67,7 @@ class Command(BaseCommand):
             with transaction.atomic():
                 national = self._root(options['national_name'], stats)
                 region = self._child(national, NodeType.REGION, options['region_name'], stats)
-                unassigned = self._child(region, NodeType.PROVINCE, 'Unassigned', stats)
+                unassigned = self._child(region, NodeType.PROVINCE, UNASSIGNED_NAME, stats)
                 for user in User.objects.all().iterator():
                     self._process(user, region, unassigned, roles, stats)
                 if options['dry_run']:
