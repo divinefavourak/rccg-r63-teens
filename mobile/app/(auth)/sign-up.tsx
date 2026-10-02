@@ -91,6 +91,23 @@ export default function SignUpScreen() {
 
   const churchLevel: ChurchLevel | null = step >= 5 ? CHURCH_STEPS[step - 5] : null;
 
+  // The church list for this step. Fetched here rather than inside the picker
+  // because the action below depends on it: a level with nothing in it must
+  // not leave the teen facing a disabled button.
+  const [search, setSearch] = useState('');
+  useEffect(() => setSearch(''), [step]);
+  const levelIndex = churchLevel ? CHURCH_STEPS.indexOf(churchLevel) : -1;
+  const parentNode = levelIndex > 0 ? form.church[CHURCH_STEPS[levelIndex - 1]] : undefined;
+  const nodes = useChurchNodes(
+    parentNode?.id ?? null,
+    churchLevel ?? 'region',
+    search.trim(),
+    !!churchLevel && (levelIndex === 0 || !!parentNode),
+  );
+  // Nothing has been set up at this level yet (not "the search found nothing").
+  // The account is then attached to the deepest place that was chosen.
+  const levelEmpty = !!churchLevel && search.trim() === '' && nodes.data?.length === 0;
+
   // A stale error from the previous attempt should not follow the teen around.
   useEffect(() => clearError, [clearError]);
 
@@ -107,10 +124,11 @@ export default function SignUpScreen() {
       case 4:
         return ageGroup !== null && ageGroup.eligible;
       default:
-        // Gender can be skipped; the church steps have "I am not sure".
-        return churchLevel ? !!form.church[churchLevel] : true;
+        // Gender can be skipped; the church steps have "I am not sure", and a
+        // level with nothing to choose from lets the teen finish.
+        return churchLevel ? levelEmpty || !!form.church[churchLevel] : true;
     }
-  }, [step, form, ageGroup, churchLevel]);
+  }, [step, form, ageGroup, churchLevel, levelEmpty]);
 
   /** Send the code and move to the code screen. */
   const submit = useCallback(async () => {
@@ -125,9 +143,9 @@ export default function SignUpScreen() {
 
   const next = useCallback(() => {
     if (error) clearError();
-    if (step < TOTAL) goTo(step + 1);
+    if (step < TOTAL && !levelEmpty) goTo(step + 1);
     else submit();
-  }, [error, clearError, step, goTo, submit]);
+  }, [error, clearError, step, levelEmpty, goTo, submit]);
 
   /** "I am not sure": keep what was chosen above this level and finish. */
   const unsure = useCallback(() => {
@@ -170,7 +188,7 @@ export default function SignUpScreen() {
         <>
           <FormError>{error}</FormError>
           <Button
-            label={step === TOTAL ? 'Create my account' : 'Continue'}
+            label={step === TOTAL || levelEmpty ? 'Create my account' : 'Continue'}
             onPress={next}
             disabled={!canContinue}
             loading={pending}
@@ -267,7 +285,16 @@ export default function SignUpScreen() {
       )}
 
       {churchLevel && (
-        <ChurchPicker level={churchLevel} form={form} onUnsure={unsure} busy={pending} />
+        <ChurchPicker
+          level={churchLevel}
+          form={form}
+          nodes={nodes}
+          empty={levelEmpty}
+          search={search}
+          onSearch={setSearch}
+          onUnsure={unsure}
+          busy={pending}
+        />
       )}
     </QuestionScreen>
   );
@@ -376,33 +403,37 @@ const LEVEL_WORD: Record<ChurchLevel, string> = {
 function ChurchPicker({
   level,
   form,
+  nodes,
+  empty,
+  search,
+  onSearch,
   onUnsure,
   busy,
 }: {
   level: ChurchLevel;
   form: SignUpForm;
+  nodes: ReturnType<typeof useChurchNodes>;
+  /** This level has nothing in it at all, as opposed to a search with no hits. */
+  empty: boolean;
+  search: string;
+  onSearch: (value: string) => void;
   onUnsure: () => void;
   busy: boolean;
 }) {
   const { chooseChurch } = useSignUp();
-  const [search, setSearch] = useState('');
 
   const index = CHURCH_STEPS.indexOf(level);
-  const parent = index > 0 ? form.church[CHURCH_STEPS[index - 1]] : undefined;
   const chosen = form.church[level];
   const crumbs = CHURCH_STEPS.slice(0, index)
     .map((step) => form.church[step]?.name)
     .filter((name): name is string => !!name);
-
-  // Below the region level there is nothing to list without a parent.
-  const nodes = useChurchNodes(parent?.id ?? null, level, search.trim(), index === 0 || !!parent);
   const word = LEVEL_WORD[level];
 
   return (
     <>
       <Crumbs items={crumbs} />
-      {level === 'parish' && (
-        <SearchField label="Search parishes" value={search} onChange={setSearch} />
+      {level === 'parish' && !empty && (
+        <SearchField label="Search parishes" value={search} onChange={onSearch} />
       )}
 
       {nodes.isPending && (
@@ -423,11 +454,22 @@ function ChurchPicker({
         </View>
       )}
 
-      {nodes.data?.length === 0 && (
+      {empty && (
+        <View className="gap-1 rounded-xl bg-surf-sunken p-4">
+          <Text className="font-ui-sb text-[16px] leading-6 text-ink-1">
+            No {word} to choose yet
+          </Text>
+          <Text className="font-ui text-[14px] leading-5 text-ink-2">
+            {crumbs.length > 0
+              ? `Your leaders have not added any under ${crumbs[crumbs.length - 1]}. We will put you there for now, and you can pick your ${word} later.`
+              : `Your leaders have not added any. You can pick your ${word} later.`}
+          </Text>
+        </View>
+      )}
+
+      {!empty && nodes.data?.length === 0 && (
         <Text className="py-2 font-ui text-[14px] leading-5 text-ink-2">
-          {search.trim()
-            ? `No ${word} matches “${search.trim()}”.`
-            : `No ${word} is listed here yet.`}
+          No {word} matches “{search.trim()}”.
         </Text>
       )}
 
@@ -442,13 +484,15 @@ function ChurchPicker({
         ))}
       </View>
 
-      <Button
-        label={level === 'parish' ? 'I can’t find my parish' : `I am not sure of my ${word}`}
-        variant="tertiary"
-        onPress={onUnsure}
-        disabled={busy}
-        className="w-full"
-      />
+      {!empty && (
+        <Button
+          label={level === 'parish' ? 'I can’t find my parish' : `I am not sure of my ${word}`}
+          variant="tertiary"
+          onPress={onUnsure}
+          disabled={busy}
+          className="w-full"
+        />
+      )}
     </>
   );
 }
