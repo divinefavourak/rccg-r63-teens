@@ -3,13 +3,12 @@
 @tailwind utilities;
 
 /*
- * Faith Tribe semantic tokens — see docs/10-design-system.md.
+ * Faith Tribe semantic tokens — the Color variables in the Figma file
+ * "Faith Tribe — Design System & App", Light and Dark modes.
  *
  * Colours are space-separated RGB channels rather than hex so Tailwind can
  * substitute the alpha in `rgb(var(--green) / <alpha-value>)`. That is what
- * makes `bg-green/10` work, and it lets the design's `--green-soft` /
- * `--amber-soft` tokens collapse into opacity modifiers instead of existing as
- * separate variables.
+ * makes `bg-green/10` work.
  *
  * `src/theme/tokens.ts` mirrors these values for the imperative cases (SVG
  * fills, gradient stops, the native status bar) that cannot read a class name.
@@ -26,33 +25,53 @@
     /* Text */
     --text-1: 28 25 22;
     --text-2: 75 69 64;
-    --text-3: 133 125 120;
+    --text-3: 111 104 98;
     --text-inv: 253 250 245;
 
-    /* Brand — the living green (09-design-principles.md) */
-    --green: 58 125 82;
-    --green-hover: 74 148 100;
-    --green-pressed: 45 99 64;
-    --green-tonal: 232 243 236;
+    /*
+     * Ink — the near-black that fills primary buttons, the nav pill and the
+     * selected option. It swaps with `on-ink` in dark mode, so an "ink pill"
+     * is dark on light and cream on dark without a second set of classes.
+     */
+    --ink: 28 25 22;
+    --on-ink: 253 250 245;
+
+    /*
+     * Brand green, in the shade that passes contrast as text on a surface and
+     * under white text. The saturated brand green (#10B981) is `pop-green`:
+     * it only ever sits behind dark `pop-on` text.
+     */
+    --green: 4 120 87;
+    --green-hover: 6 95 70;
+    --green-pressed: 6 78 59;
+    --green-tonal: 209 250 229;
 
     /* Celebrate — warm amber, used sparingly */
-    --amber: 200 122 21;
-    --amber-bright: 232 149 26;
-    --amber-tonal: 253 240 220;
+    --amber: 180 83 9;
+    --amber-bright: 245 158 11;
+    --amber-tonal: 254 243 199;
+
+    /* Colour-block cards. Identical in both modes; text on them is `pop-on`. */
+    --pop-green: 16 185 129;
+    --pop-amber: 255 200 87;
+    --pop-violet: 185 165 255;
+    --pop-pink: 255 123 172;
+    --pop-sky: 142 197 255;
+    --pop-on: 28 25 22;
 
     /* Borders */
     --border: 234 227 218;
     --border-strong: 201 190 181;
 
     /* Navigation */
-    --nav-bg: 253 250 245;
-    --nav-border: 234 227 218;
+    --nav-bg: 28 25 22;
+    --nav-border: 28 25 22;
 
     /* System feedback only — never decorative */
     --error: 192 57 43;
-    --caution: 217 119 6;
+    --caution: 180 83 9;
     --info: 29 111 164;
-    --success: 46 125 82;
+    --success: 4 120 87;
   }
 
   .dark:root {
@@ -63,22 +82,30 @@
 
     --text-1: 245 241 235;
     --text-2: 184 175 167;
-    --text-3: 122 115 110;
+    --text-3: 154 146 139;
     --text-inv: 28 25 22;
 
-    --green: 78 148 100;
-    --green-hover: 94 170 116;
-    --green-pressed: 58 125 82;
-    --green-tonal: 26 46 34;
+    --ink: 253 250 245;
+    --on-ink: 28 25 22;
 
-    --amber: 245 166 35;
-    --amber-bright: 245 166 35;
+    --green: 52 211 153;
+    --green-hover: 110 231 183;
+    --green-pressed: 16 185 129;
+    --green-tonal: 6 46 34;
+
+    --amber: 251 191 36;
+    --amber-bright: 245 158 11;
     --amber-tonal: 44 30 6;
 
     --border: 46 40 34;
     --border-strong: 72 64 58;
 
-    --nav-bg: 37 33 25;
-    --nav-border: 46 40 34;
+    --nav-bg: 253 250 245;
+    --nav-border: 253 250 245;
+
+    --error: 248 113 113;
+    --caution: 251 191 36;
+    --info: 96 165 250;
+    --success: 52 211 153;
   }
 }

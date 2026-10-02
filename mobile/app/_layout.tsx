@@ -9,14 +9,14 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFonts } from 'expo-font';
 // Each weight is imported from its own subpath rather than from the package
-// barrel. The barrel re-exports all 14 Jakarta and 8 Lora weights, and Metro
-// bundles every `.ttf` it can reach — so a barrel import ships ~22 font files
+// barrel. The barrel re-exports all 18 Inter and 8 Lora faces, and Metro
+// bundles every `.ttf` it can reach — so a barrel import ships ~26 font files
 // for the 8 this app renders.
-import { PlusJakartaSans_400Regular } from '@expo-google-fonts/plus-jakarta-sans/400Regular';
-import { PlusJakartaSans_500Medium } from '@expo-google-fonts/plus-jakarta-sans/500Medium';
-import { PlusJakartaSans_600SemiBold } from '@expo-google-fonts/plus-jakarta-sans/600SemiBold';
-import { PlusJakartaSans_700Bold } from '@expo-google-fonts/plus-jakarta-sans/700Bold';
-import { PlusJakartaSans_800ExtraBold } from '@expo-google-fonts/plus-jakarta-sans/800ExtraBold';
+import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
+import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
+import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
+import { Inter_700Bold } from '@expo-google-fonts/inter/700Bold';
+import { Inter_800ExtraBold } from '@expo-google-fonts/inter/800ExtraBold';
 import { Lora_400Regular } from '@expo-google-fonts/lora/400Regular';
 import { Lora_400Regular_Italic } from '@expo-google-fonts/lora/400Regular_Italic';
 import { Lora_600SemiBold } from '@expo-google-fonts/lora/600SemiBold';
@@ -37,15 +37,14 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 });
 
 export default function RootLayout() {
-  // Aliased to short names so Tailwind's `font-ui-*` families stay readable.
-  // The two-face system is normative: geometric sans for UI, serene serif
-  // offered in the Reader (09-design-principles.md).
+  // The two-face system is normative: Inter for UI, Lora offered in the Reader
+  // (09-design-principles.md). Tailwind's `font-ui-*` families name these keys.
   const [fontsLoaded, fontError] = useFonts({
-    Jakarta_400Regular: PlusJakartaSans_400Regular,
-    Jakarta_500Medium: PlusJakartaSans_500Medium,
-    Jakarta_600SemiBold: PlusJakartaSans_600SemiBold,
-    Jakarta_700Bold: PlusJakartaSans_700Bold,
-    Jakarta_800ExtraBold: PlusJakartaSans_800ExtraBold,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    Inter_800ExtraBold,
     Lora_400Regular,
     Lora_400Regular_Italic,
     Lora_600SemiBold,
@@ -137,6 +136,7 @@ function AppShell({ fontsSettled }: { fontsSettled: boolean }) {
         <Stack.Screen name="settings/notifications" />
         <Stack.Screen name="settings/feedback" />
         <Stack.Screen name="console" />
+        <Stack.Screen name="dev/kit" />
         <Stack.Screen
           name="register"
           // Sign-up is a modal for the same reason sign-in is: dismissing it

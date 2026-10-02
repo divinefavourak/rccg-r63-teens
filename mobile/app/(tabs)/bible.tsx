@@ -168,7 +168,7 @@ export default function BibleScreen() {
             fontSize: 40,
             lineHeight: 44,
             color: tok.text1,
-            fontFamily: useSerif ? 'Lora_600SemiBold' : 'Jakarta_700Bold',
+            fontFamily: useSerif ? 'Lora_600SemiBold' : 'Inter_700Bold',
           }}
         >
           {chapter}
@@ -447,7 +447,7 @@ export default function BibleScreen() {
               style={{
                 fontSize: 13,
                 color: useSerif ? tok.accent : tok.text2,
-                fontFamily: useSerif ? 'Lora_600SemiBold' : 'Jakarta_700Bold',
+                fontFamily: useSerif ? 'Lora_600SemiBold' : 'Inter_700Bold',
               }}
             >
               Aa
@@ -517,7 +517,7 @@ const VerseRow = memo(function VerseRow({
           fontSize,
           lineHeight: fontSize * 1.65,
           color: tok.text1,
-          fontFamily: useSerif ? 'Lora_400Regular' : 'Jakarta_400Regular',
+          fontFamily: useSerif ? 'Lora_400Regular' : 'Inter_400Regular',
         }}
       >
         <Text
@@ -525,7 +525,7 @@ const VerseRow = memo(function VerseRow({
             fontSize: fontSize * 0.6,
             lineHeight: fontSize * 1.65,
             color: tok.text3,
-            fontFamily: 'Jakarta_600SemiBold',
+            fontFamily: 'Inter_600SemiBold',
           }}
         >
           {verse.number}{'  '}

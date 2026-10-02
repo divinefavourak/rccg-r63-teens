@@ -31,11 +31,24 @@ module.exports = {
           sunken: themed('surf-sunken'),
           overlay: themed('surf-overlay'),
         },
+        // `text-ink-1..3` are the text ramp; bare `bg-ink` / `text-on-ink` are
+        // the near-black fill and its foreground, which swap in dark mode.
         ink: {
+          DEFAULT: themed('ink'),
           1: themed('text-1'),
           2: themed('text-2'),
           3: themed('text-3'),
           inv: themed('text-inv'),
+        },
+        'on-ink': themed('on-ink'),
+        // Colour-block cards. Always paired with `text-pop-on`.
+        pop: {
+          green: themed('pop-green'),
+          amber: themed('pop-amber'),
+          violet: themed('pop-violet'),
+          pink: themed('pop-pink'),
+          sky: themed('pop-sky'),
+          on: themed('pop-on'),
         },
         green: {
           DEFAULT: themed('green'),
@@ -71,11 +84,11 @@ module.exports = {
        * `font-medium` / `font-bold` weight utilities.
        */
       fontFamily: {
-        ui: ['Jakarta_400Regular'],
-        'ui-md': ['Jakarta_500Medium'],
-        'ui-sb': ['Jakarta_600SemiBold'],
-        'ui-b': ['Jakarta_700Bold'],
-        'ui-xb': ['Jakarta_800ExtraBold'],
+        ui: ['Inter_400Regular'],
+        'ui-md': ['Inter_500Medium'],
+        'ui-sb': ['Inter_600SemiBold'],
+        'ui-b': ['Inter_700Bold'],
+        'ui-xb': ['Inter_800ExtraBold'],
         read: ['Lora_400Regular'],
         'read-i': ['Lora_400Regular_Italic'],
         'read-sb': ['Lora_600SemiBold'],
@@ -90,6 +103,7 @@ module.exports = {
         lg: '16px',
         xl: '20px',
         '2xl': '24px',
+        '3xl': '28px',
         full: '999px',
       },
     },

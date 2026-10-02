@@ -4,9 +4,9 @@ import BottomNav from '../../src/components/BottomNav';
 import { useTokens } from '../../src/theme/ThemeProvider';
 
 /**
- * Five destinations, forever — Today · Library · Bible · Tribe · Me — with
- * Bible in the centre slot. Both rules are binding (05-navigation.md), and the
- * file order here is what puts Bible under the nav's notch.
+ * Five destinations, forever (05-navigation.md) — Today · Bible · Library ·
+ * Tribe · Me, in the order the Figma "Bottom Nav" draws them. The order of the
+ * screens below is the order of the tabs.
  */
 export default function TabsLayout() {
   const tokens = useTokens();
@@ -24,8 +24,8 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'Today' }} />
-      <Tabs.Screen name="library" options={{ title: 'Library' }} />
       <Tabs.Screen name="bible" options={{ title: 'Bible' }} />
+      <Tabs.Screen name="library" options={{ title: 'Library' }} />
       <Tabs.Screen name="tribe" options={{ title: 'Tribe' }} />
       <Tabs.Screen name="me" options={{ title: 'Me' }} />
     </Tabs>

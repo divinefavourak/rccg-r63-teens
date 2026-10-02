@@ -1,10 +1,7 @@
-import { memo, useCallback, useEffect } from 'react';
+import { memo } from 'react';
 import { Pressable, Text, View, type ViewProps } from 'react-native';
 import Animated, {
-  cancelAnimation,
   useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
   withTiming,
   Easing,
   useReducedMotion,
@@ -13,6 +10,10 @@ import Animated, {
 import { Icon } from './Icon';
 import { useTokens } from '../theme/ThemeProvider';
 import { DURATION, ELEVATION } from '../theme/tokens';
+import { Press, Spinner } from '../ui/Press';
+
+// Moved to the new kit; re-exported so the screens not yet rebuilt keep working.
+export { Press, Spinner };
 
 /**
  * Shared primitives.
@@ -23,72 +24,6 @@ import { DURATION, ELEVATION } from '../theme/tokens';
  * build time, whereas an inline object literal allocates a new one on every
  * render and defeats `React.memo` on anything it is passed to.
  */
-
-// ─── Press feedback ────────────────────────────────────────────────────────
-
-/**
- * A pressable that scales slightly while held.
- *
- * One animated `Pressable` rather than a `Pressable` wrapping an
- * `Animated.View`: with two elements, layout classes land on the inner view
- * while the caller's sizing lands on the outer one, and things like
- * `className="flex-1"` on a fixed-height button silently do nothing.
- *
- * The scale itself lives in a shared value, so the press runs entirely on the
- * UI thread — no re-render per touch, and it stays responsive while JS is busy.
- */
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
-export function Press({
-  children,
-  onPress,
-  className,
-  style,
-  scaleTo = 0.97,
-  disabled,
-  accessibilityLabel,
-  accessibilityRole = 'button',
-  accessibilityState,
-}: {
-  children: React.ReactNode;
-  onPress?: () => void;
-  className?: string;
-  style?: ViewProps['style'];
-  scaleTo?: number;
-  disabled?: boolean;
-  accessibilityLabel?: string;
-  accessibilityRole?: 'button' | 'link' | 'switch' | 'tab';
-  accessibilityState?: { selected?: boolean; checked?: boolean; disabled?: boolean };
-}) {
-  const scale = useSharedValue(1);
-  const reduceMotion = useReducedMotion();
-
-  const onPressIn = useCallback(() => {
-    if (!reduceMotion) scale.value = withTiming(scaleTo, { duration: 100 });
-  }, [scale, scaleTo, reduceMotion]);
-
-  const onPressOut = useCallback(() => {
-    if (!reduceMotion) scale.value = withTiming(1, { duration: 100 });
-  }, [scale, reduceMotion]);
-
-  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
-
-  return (
-    <AnimatedPressable
-      onPress={onPress}
-      onPressIn={onPressIn}
-      onPressOut={onPressOut}
-      disabled={disabled}
-      accessibilityRole={accessibilityRole}
-      accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ disabled, ...accessibilityState }}
-      className={className}
-      style={[style, animStyle]}
-    >
-      {children}
-    </AnimatedPressable>
-  );
-}
 
 // ─── Surfaces ──────────────────────────────────────────────────────────────
 
@@ -212,44 +147,6 @@ export function IconButton({
 }
 
 // ─── Indicators ────────────────────────────────────────────────────────────
-
-/**
- * Rotating arc.
- *
- * Driven by a Reanimated shared value rather than `Animated.loop`, so it keeps
- * turning at a steady rate while the JS thread is busy doing the very work the
- * spinner is reporting on.
- */
-export function Spinner({ size = 18, color = '#fff' }: { size?: number; color?: string }) {
-  const reduceMotion = useReducedMotion();
-  const angle = useSharedValue(0);
-
-  useEffect(() => {
-    if (reduceMotion) return;
-    angle.value = withRepeat(withTiming(360, { duration: 800, easing: Easing.linear }), -1, false);
-    return () => cancelAnimation(angle);
-  }, [angle, reduceMotion]);
-
-  const style = useAnimatedStyle(() => ({ transform: [{ rotate: `${angle.value}deg` }] }));
-
-  return (
-    <Animated.View
-      accessibilityLabel="Loading"
-      style={[
-        {
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          borderWidth: 2,
-          borderColor: color,
-          // One transparent quadrant is what makes the rotation readable.
-          borderTopColor: 'transparent',
-        },
-        style,
-      ]}
-    />
-  );
-}
 
 /**
  * Progress bar. `track`/`fill` are passed as literal colours rather than
