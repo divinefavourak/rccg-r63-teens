@@ -1,0 +1,109 @@
+{% comment %}
+The one layout every email extends.
+
+Email clients are not browsers: Gmail drops most of <head>, Outlook renders
+with Word. So layout is tables, every style is inline, colours are hex, and
+the only <style> is the small-screen tweaks (Gmail keeps media queries).
+Inter and Lora load where the client allows web fonts (Apple Mail, iOS) and
+fall back to the system font everywhere else. Every date is shown in Lagos
+time; the server stores UTC.
+
+Blocks: title, preheader (the inbox preview line), accent (the hero colour,
+one of the pop colours), eyebrow, heading, lead, hero_after, content,
+footer_note, footer_extra.
+{% endcomment %}{% load tz %}{% timezone "Africa/Lagos" %}<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>{% block title %}Faith Tribe{% endblock %}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Lora:ital,wght@0,500;1,500&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; padding: 0; }
+  img { border: 0; outline: none; text-decoration: none; }
+  a { color: #047857; }
+  @media only screen and (max-width: 620px) {
+    .ft-card { padding: 26px 20px !important; }
+    .ft-hero { padding: 28px 22px !important; }
+    .ft-h1 { font-size: 30px !important; line-height: 36px !important; }
+    .ft-avatar { width: 64px !important; height: 64px !important; }
+  }
+</style>
+</head>
+<body style="margin:0;padding:0;background-color:#F9F6F1;">
+<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">{% block preheader %}{% endblock %}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#F9F6F1">
+<tr>
+<td align="center" style="padding:28px 12px 40px;">
+<!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1C1916;">
+
+  <!-- Masthead -->
+  <tr>
+    <td style="padding:0 6px 18px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td valign="middle">
+            <img src="{% firstof faith_logo_url 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/faith_logo.jpg' %}" width="40" height="40" alt="" style="display:inline-block;vertical-align:middle;width:40px;height:40px;border-radius:12px;">
+            <span style="display:inline-block;vertical-align:middle;padding-left:10px;font-size:19px;line-height:24px;font-weight:800;letter-spacing:-0.4px;color:#1C1916;">Faith Tribe</span>
+          </td>
+          <td align="right" valign="middle" style="font-size:12px;line-height:16px;color:#6F6862;">
+            <span style="display:inline-block;vertical-align:middle;padding-right:8px;">RCCG Region 63</span>
+            <img src="{% firstof logo_url 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/logo.jpg' %}" width="32" height="32" alt="RCCG" style="display:inline-block;vertical-align:middle;width:32px;height:32px;border-radius:50%;">
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- Hero: one colour block, the way cards look in the app -->
+  <tr>
+    <td class="ft-hero" bgcolor="{% block accent %}#FFC857{% endblock %}" style="border-radius:28px;padding:36px 32px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td valign="top">
+            <span style="display:inline-block;padding:6px 12px;border-radius:999px;background-color:#1C1916;color:#FDFAF5;font-size:12px;line-height:14px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;">{% block eyebrow %}Faith Tribe{% endblock %}</span>
+            <h1 class="ft-h1" style="margin:18px 0 0;font-size:36px;line-height:42px;font-weight:800;letter-spacing:-0.8px;color:#1C1916;">{% block heading %}{% endblock %}</h1>
+            <p style="margin:12px 0 0;font-size:17px;line-height:26px;color:#1C1916;">{% block lead %}{% endblock %}</p>
+          </td>
+          {% if avatar_url %}
+          <td width="96" valign="top" align="right" style="padding-left:16px;">
+            <img class="ft-avatar" src="{{ avatar_url }}" width="88" height="88" alt="" style="display:block;width:88px;height:88px;border-radius:50%;background-color:#FDFAF5;border:4px solid #FDFAF5;">
+          </td>
+          {% endif %}
+        </tr>
+      </table>
+      {% block hero_after %}{% endblock %}
+    </td>
+  </tr>
+
+  <tr><td style="height:14px;line-height:14px;font-size:0;">&nbsp;</td></tr>
+
+  <!-- Body card -->
+  <tr>
+    <td class="ft-card" bgcolor="#FDFAF5" style="border:1px solid #EAE3DA;border-radius:28px;padding:32px;font-size:16px;line-height:26px;color:#4B4540;">
+      {% block content %}{% endblock %}
+    </td>
+  </tr>
+
+  <!-- Footer -->
+  <tr>
+    <td align="center" style="padding:28px 24px 0;font-size:13px;line-height:20px;color:#6F6862;">
+      <p style="margin:0;font-weight:700;color:#1C1916;">Faith Tribe &middot; RCCG Region 63 Junior Church</p>
+      <p style="margin:6px 0 0;">{% block footer_note %}This email was sent automatically, so replies are not read.{% endblock %}</p>
+      {% block footer_extra %}{% endblock %}
+      <p style="margin:6px 0 0;">&copy; {% now "Y" %} RCCG Region 63</p>
+    </td>
+  </tr>
+
+</table>
+<!--[if mso]></td></tr></table><![endif]-->
+</td>
+</tr>
+</table>
+</body>
+</html>{% endtimezone %}

@@ -20,11 +20,11 @@ def send_daily_devotional_email(devotional_id):
     from django.conf import settings
     from django.core.mail import EmailMultiAlternatives
     from django.template.loader import render_to_string
-    from django.utils.html import strip_tags
 
     from content.models import Devotional
     from users.models import User
     from utils.email_senders import get_sender
+    from utils.email_text import html_to_text
 
     try:
         devotional = Devotional.objects.get(pk=devotional_id)
@@ -53,7 +53,7 @@ def send_daily_devotional_email(devotional_id):
     }
 
     html = render_to_string('emails/daily_devotional.html', context)
-    plain = strip_tags(html)
+    plain = html_to_text(html)
     from_email = get_sender('junior_church')
     subject = f"Today's Devotional – {devotional.title} ({devotional.date.strftime('%B %d, %Y')})"
 

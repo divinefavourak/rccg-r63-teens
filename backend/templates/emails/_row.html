@@ -1,0 +1,8 @@
+{% comment %}
+One label/value line of a details box: the sunken table the templates wrap
+these rows in. `first` drops the rule above it; `mono` is for IDs people
+might read out or type; `colour` tints the value.
+{% endcomment %}<tr>
+  <td valign="top" style="padding:12px 12px 12px 0;{% if not first %}border-top:1px solid #E2D8CC;{% endif %}font-size:14px;line-height:20px;color:#6F6862;">{{ label }}</td>
+  <td valign="top" align="right" style="padding:12px 0;{% if not first %}border-top:1px solid #E2D8CC;{% endif %}font-size:15px;line-height:20px;font-weight:700;color:{{ colour|default:'#1C1916' }};{% if mono %}font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;letter-spacing:0.4px;white-space:nowrap;{% endif %}">{{ value }}</td>
+</tr>
