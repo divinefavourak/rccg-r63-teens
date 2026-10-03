@@ -20,6 +20,8 @@ export interface AuthUser {
   last_name: string;
   gender?: string | null;
   is_verified?: boolean;
+  /** Absolute URL, or null until the teen adds a photo. */
+  profile_picture?: string | null;
 }
 
 export interface LoginResponse {

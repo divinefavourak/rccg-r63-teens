@@ -1,0 +1,68 @@
+# Local Postgres and Redis for development.
+#
+#   docker compose up -d          start both
+#   docker compose ps             check they are healthy
+#   docker compose down           stop (data is kept)
+#   docker compose down -v        stop and delete the database
+#
+# Redis needs no configuration: settings.py already defaults REDIS_URL to
+# redis://localhost:6379/0, which is this container. Without it every cache
+# call (and DRF throttling sits on the cache) waits for a refused connection
+# before the request carries on, which makes each request take seconds.
+#
+# The database is opt-in. To use it instead of the remote one, put this in
+# backend/.env and run the migrations once:
+#
+#   DATABASE_URL=postgres://faithtribe:faithtribe@localhost:5434/faithtribe
+#   ./venv/Scripts/python.exe manage.py migrate
+#
+# It starts empty: no users, no hierarchy, no devotionals. Port 5434 because
+# 5432 is the default another project is likely to hold and 5433 is this
+# repo's test database (docker-compose.test.yml).
+
+name: faithtribe-dev
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: faithtribe-dev-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: faithtribe
+      POSTGRES_PASSWORD: faithtribe
+      POSTGRES_DB: faithtribe
+    ports:
+      # Bound to this machine only: a development password must not be
+      # reachable from the rest of the Wi-Fi.
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U faithtribe -d faithtribe"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: faithtribe-dev-redis
+    restart: unless-stopped
+    # A cache and a task queue for one developer: cap the memory and evict the
+    # least-recently-used keys rather than refuse writes when it fills. No
+    # persistence — nothing in here is worth keeping across a restart.
+    command: >
+      redis-server
+      --save ""
+      --appendonly no
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  db-data:

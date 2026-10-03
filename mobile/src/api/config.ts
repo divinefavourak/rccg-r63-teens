@@ -6,7 +6,8 @@ import { Platform } from 'react-native';
  *
  * Order of preference:
  *   1. `EXPO_PUBLIC_API_URL` — set this in `.env` for staging/production.
- *   2. The machine currently serving the JS bundle, on port 8000.
+ *   2. The machine currently serving the JS bundle, on port 8000 — unless the
+ *      bundle comes through a tunnel, whose hostname cannot reach the API.
  *   3. Loopback, for the simulator.
  *
  * Step 2 is what makes a physical phone work in development. `localhost` on a
@@ -18,13 +19,41 @@ import { Platform } from 'react-native';
 const DEV_API_PORT = '8000';
 const API_PREFIX = '/api/v1';
 
-function devHost(): string | null {
+function bundleHost(): string | null {
   // e.g. "192.168.1.5:8081" in Expo Go / dev client.
   const hostUri = Constants.expoConfig?.hostUri ?? null;
   if (typeof hostUri !== 'string') return null;
   const host = hostUri.split(':')[0];
   return host || null;
 }
+
+/**
+ * True when the bundle is arriving through `expo start --tunnel`.
+ *
+ * A tunnel forwards Metro's port and nothing else, so its hostname is useless
+ * for reaching Django: `http://<something>.exp.direct:8000` goes nowhere. In
+ * that case the API address cannot be worked out and has to be given.
+ */
+function isTunnelHost(host: string): boolean {
+  return /\.(exp\.direct|ngrok\.io|ngrok-free\.app|ngrok\.app)$/i.test(host);
+}
+
+function devHost(): string | null {
+  const host = bundleHost();
+  return host && !isTunnelHost(host) ? host : null;
+}
+
+/**
+ * Set in development when the app is running through a tunnel with no
+ * `EXPO_PUBLIC_API_URL`. The request error shows it, because "you're offline"
+ * sends people looking at their Wi-Fi when the fix is one line in `.env`.
+ */
+export const API_SETUP_HINT: string | null =
+  __DEV__ && !process.env.EXPO_PUBLIC_API_URL && isTunnelHost(bundleHost() ?? '')
+    ? 'Expo is running with --tunnel, which only carries the app, not the API. ' +
+      'Put EXPO_PUBLIC_API_URL=http://<your-computer-ip>:8000/api/v1 in mobile/.env ' +
+      'and restart Expo, or start Expo without --tunnel.'
+    : null;
 
 function fallbackHost(): string {
   // The Android emulator reaches the host machine through a dedicated alias;

@@ -92,6 +92,7 @@ module.exports = {
         'ui-xb': ['Inter_800ExtraBold'],
         read: ['Lora_400Regular'],
         'read-i': ['Lora_400Regular_Italic'],
+        'read-md': ['Lora_500Medium'],
         'read-sb': ['Lora_600SemiBold'],
       },
 

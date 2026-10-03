@@ -16,9 +16,10 @@ cannot have that property — its whole job is to reach somebody with no account
 — so the abuse controls live here instead: a per-IP throttle, and a cap on how
 many codes any one address or number can be sent.
 
-Neither endpoint reveals whether an email or phone is already registered. If it
-is, ``start`` quietly sends that account a *login* code, and ``complete`` signs
-them in with it.
+Neither endpoint reveals whether an email is already registered. If it is,
+``start`` quietly sends that account a *login* code, and ``complete`` signs them
+in with it. A phone number already on another account is not a clash: families
+share numbers, so it is contact information, not identity.
 """
 import logging
 import re
@@ -101,15 +102,16 @@ def find_by_phone(value, active_only=True):
     return users.first()
 
 
-def find_account(email, phone):
-    """The existing active account for this email, else for this phone."""
-    user = User.objects.filter(email__iexact=email, is_active=True).first()
-    if user:
-        return user, email, OTPCode.Channel.EMAIL
-    user = find_by_phone(phone)
-    if user:
-        return user, phone, OTPCode.Channel.SMS
-    return None, None, None
+def find_account(email):
+    """The existing active account for this email address, if any.
+
+    Email only, on purpose. A phone number is not an identity here: teens give
+    a parent's number, siblings share one, and until an SMS gateway is switched
+    on nobody can prove they own a number at all. Matching sign-ups to accounts
+    by phone sent the code for a brand-new teen to somebody else's account, by
+    a channel that was not even delivering.
+    """
+    return User.objects.filter(email__iexact=email, is_active=True).first()
 
 
 # ─── Abuse control ──────────────────────────────────────────────────────────
@@ -191,11 +193,11 @@ class SignupStartView(APIView):
         if not all(allowed):
             return Response(_GENERIC_START)
 
-        user, destination, channel = find_account(email, phone)
+        user = find_account(email)
         if user is not None:
-            # Already registered: send that account a login code instead. The
-            # response is identical, so nothing is disclosed to the caller.
-            request_otp(destination, channel, OTPCode.Purpose.LOGIN, user=user)
+            # This email already has an account: send it a login code instead.
+            # The response is identical, so nothing is disclosed to the caller.
+            request_otp(email, OTPCode.Channel.EMAIL, OTPCode.Purpose.LOGIN, user=user)
             return Response(_GENERIC_START)
 
         code = generate_code()
@@ -218,11 +220,11 @@ class SignupCompleteView(APIView):
         data = serializer.validated_data
         email, phone, code = data['email'], data['phone'], data['code']
 
-        # An address or number that already had an account was sent a login
-        # code by `start`; honour it here so the teen is simply signed in.
-        existing, destination, _ = find_account(email, phone)
+        # An address that already had an account was sent a login code by
+        # `start`; honour it here so the teen is simply signed in.
+        existing = find_account(email)
         if existing is not None:
-            otp = verify_otp(destination, OTPCode.Purpose.LOGIN, code)
+            otp = verify_otp(email, OTPCode.Purpose.LOGIN, code)
             if otp is None:
                 return Response(_BAD_CODE, status=status.HTTP_400_BAD_REQUEST)
             return otp_login_response(existing, otp)

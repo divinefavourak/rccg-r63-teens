@@ -19,6 +19,7 @@ import { Inter_700Bold } from '@expo-google-fonts/inter/700Bold';
 import { Inter_800ExtraBold } from '@expo-google-fonts/inter/800ExtraBold';
 import { Lora_400Regular } from '@expo-google-fonts/lora/400Regular';
 import { Lora_400Regular_Italic } from '@expo-google-fonts/lora/400Regular_Italic';
+import { Lora_500Medium } from '@expo-google-fonts/lora/500Medium';
 import { Lora_600SemiBold } from '@expo-google-fonts/lora/600SemiBold';
 
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -48,6 +49,7 @@ export default function RootLayout() {
     Inter_800ExtraBold,
     Lora_400Regular,
     Lora_400Regular_Italic,
+    Lora_500Medium,
     Lora_600SemiBold,
   });
 

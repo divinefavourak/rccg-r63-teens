@@ -107,6 +107,24 @@ export function useCompleteChallenge() {
   });
 }
 
+/**
+ * Mark a devotional as read.
+ *
+ * Idempotent on the server (a read log dedupes it), so a double tap or a retry
+ * on a flaky connection cannot count twice. Today and Progress both show the
+ * streak this moves.
+ */
+export function useMarkDevotionalRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.post('/content/devotionals/' + id + '/mark_read/'),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.today });
+      qc.invalidateQueries({ queryKey: keys.progress });
+    },
+  });
+}
+
 // ─── Content ───────────────────────────────────────────────────────────────
 
 export function useDevotional(id: string | undefined) {

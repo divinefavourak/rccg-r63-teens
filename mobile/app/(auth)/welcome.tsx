@@ -9,7 +9,6 @@ import { LogoLockup } from '../../src/components/Logo';
 import { Drawing, Object3D, type DrawingName, type ObjectName } from '../../src/ui/art';
 import { Button } from '../../src/ui/Button';
 import { POP_BG } from '../../src/ui/cards';
-import { signUpStep } from '../../src/state/signup';
 import { markWelcomed } from '../../src/state/welcome';
 import { useTokens } from '../../src/theme/ThemeProvider';
 import type { PopColour } from '../../src/theme/tokens';
@@ -81,7 +80,7 @@ export default function WelcomeScreen() {
       markWelcomed();
       if (to === 'read') router.replace('/');
       else if (to === 'log-in') router.push('/log-in');
-      else router.push(signUpStep(1));
+      else router.push('/sign-up');
     },
     [router],
   );

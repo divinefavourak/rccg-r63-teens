@@ -59,6 +59,10 @@ class PublicChildrenTests(APITestCase):
         res = self.client.get(URL, {'parent': str(self.parish.id), 'type': 'department'})
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_the_unassigned_bucket_is_not_offered(self):
+        services.add_child(self.region, NodeType.PROVINCE, 'Unassigned')
+        self.assertEqual(self._names(parent=str(self.region.id)), ['Lagos Province 69'])
+
     def test_unknown_parent_is_404(self):
         res = self.client.get(URL, {'parent': '00000000-0000-0000-0000-000000000000'})
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)

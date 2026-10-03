@@ -1,4 +1,4 @@
-import { memo, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import {
   Pressable,
   Text,
@@ -7,6 +7,14 @@ import {
   type TextInputProps,
   type TextStyle,
 } from 'react-native';
+
+import Animated, {
+  useAnimatedStyle,
+  Easing,
+  useSharedValue,
+  withTiming,
+  ZoomIn,
+} from 'react-native-reanimated';
 
 import { Icon, type IconName } from '../components/Icon';
 import { Press } from './Press';
@@ -332,9 +340,21 @@ export const OptionRow = memo(function OptionRow({
         )}
       </View>
       {selected ? (
-        <View className="h-7 w-7 items-center justify-center rounded-full bg-pop-green">
+        // The tick scales in, without overshoot. Styled inline: on the web preview an
+        // animated view drops class-based styles.
+        <Animated.View
+          entering={ZoomIn.duration(160)}
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 14,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: POP.green,
+          }}
+        >
           <Icon name="check" size={16} color={POP.on} />
-        </View>
+        </Animated.View>
       ) : (
         <View className="h-7 w-7 rounded-full border-2 border-line-strong" />
       )}
@@ -374,15 +394,35 @@ export function StepperBar({
         accessibilityValue={{ min: 0, max: total, now: step }}
       >
         {Array.from({ length: total }, (_, i) => (
-          <View
-            key={i}
-            className={`h-1.5 flex-1 rounded-full ${i < step ? 'bg-ink' : 'bg-line'}`}
-          />
+          <ProgressSegment key={i} filled={i < step} colour={tokens.ink} />
         ))}
       </View>
       <Text className="font-ui-sb text-[14px] leading-5 text-ink-2">
         {step}/{total}
       </Text>
+    </View>
+  );
+}
+
+/**
+ * One segment of the progress bar. It fills from the left when its step is
+ * reached and drains the same way on Back, so progress is
+ * something you watch happen rather than a bar that redraws.
+ */
+function ProgressSegment({ filled, colour }: { filled: boolean; colour: string }) {
+  const fill = useSharedValue(filled ? 1 : 0);
+
+  useEffect(() => {
+    fill.value = withTiming(filled ? 1 : 0, { duration: 260, easing: Easing.out(Easing.cubic) });
+  }, [filled, fill]);
+
+  const style = useAnimatedStyle(() => ({
+    width: `${fill.value * 100}%`,
+  }));
+
+  return (
+    <View className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
+      <Animated.View style={[{ height: '100%', borderRadius: 999, backgroundColor: colour }, style]} />
     </View>
   );
 }

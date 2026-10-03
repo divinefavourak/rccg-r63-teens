@@ -136,11 +136,18 @@ class SignupTests(APITestCase):
         self.assertIn('access', res.data)
         self.assertEqual(User.objects.filter(email=EMAIL).count(), 1)
 
-    def test_existing_phone_in_local_format_is_recognised(self):
+    def test_a_phone_already_on_another_account_does_not_block_sign_up(self):
+        """Siblings share a parent's number; the phone is not an identity."""
         User.objects.create_user(username='old', email='old@example.com', password='x',
                                  first_name='Old', last_name='User', phone='08031234567')
-        self._start(email='different@example.com')
-        self.assertEqual([m['purpose'] for m in _SENT], ['login'])
+        self._start()
+        # A normal sign-up: a verify code to the new email, nothing to the old account.
+        self.assertEqual({m['purpose'] for m in _SENT}, {'verify'})
+        self.assertIn(EMAIL, {m['destination'] for m in _SENT})
+
+        res = self._complete(_SENT[0]['code'])
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(User.objects.filter(phone__in=['08031234567', PHONE]).count(), 2)
 
     def test_complete_records_the_church(self):
         national = services.create_root('RCCG National')

@@ -80,7 +80,9 @@ class UserEmailService:
         there is no account yet to hold a preference.
         """
         minutes = max(1, int(getattr(settings, 'OTP_TTL_SECONDS', 600)) // 60)
-        subject = f'{code} is your Faith Tribe code'
+        # The code stays out of the subject: the sender logs subjects, and a
+        # code in a log file undoes storing only its hash.
+        subject = 'Your Faith Tribe code'
         context = {
             **_base_context(),
             'code': code,
