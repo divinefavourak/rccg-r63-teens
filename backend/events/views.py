@@ -239,6 +239,22 @@ class EventViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+def own_registrations(user):
+    """
+    The registrations that belong to ``user``: filed under their account, or
+    made for their email address.
+
+    Email counts because it is how this app identifies a person. A leader may
+    register a teen before the teen has an account, or (before this was fixed)
+    the place was filed under the leader's account; either way the teen should
+    still find their ticket.
+    """
+    match = Q(user=user)
+    if user.email:
+        match |= Q(attendee_email__iexact=user.email)
+    return EventRegistration.objects.filter(match)
+
+
 class EventRegistrationViewSet(viewsets.ModelViewSet):
     """ViewSet for event registrations."""
     
@@ -273,14 +289,14 @@ class EventRegistrationViewSet(viewsets.ModelViewSet):
         # organization_node — see phase1-completion notes.)
         if has_any_permission(user, Perm.EVENTS_MANAGE):
             return self.queryset
-        return self.queryset.filter(user=user)
+        return self.queryset.filter(pk__in=own_registrations(user).values('pk'))
     
     @action(detail=False, methods=['get'])
     def mine(self, request):
         """Get current user's registrations."""
-        registrations = EventRegistration.objects.filter(
-            user=request.user
-        ).select_related('event').order_by('-created_at')
+        registrations = own_registrations(request.user).select_related(
+            'event'
+        ).order_by('-created_at')
         serializer = EventRegistrationDetailSerializer(registrations, many=True)
         return Response(serializer.data)
     
