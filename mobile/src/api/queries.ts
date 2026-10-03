@@ -1,9 +1,18 @@
+import { Platform } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { File } from 'expo-file-system';
 
 import { api, ApiError, fetchAllPages } from './client';
 import { STALE } from './config';
 import type {
   AppNotification,
+  ArticleDetail,
+  ArticleListItem,
+  Bookmark,
+  MediaEpisode,
+  ProgressCalendar,
+  ScriptureSearch,
+  VerseShare,
   EventRegistration,
   EventRegistrationDetail,
   EventRegistrationInput,
@@ -56,6 +65,15 @@ export const keys = {
   chapter: (id: string) => ['bible', 'chapter', id] as const,
   passage: (book: string, chapter: number, translation?: string) =>
     ['bible', 'passage', book, chapter, translation ?? 'default'] as const,
+  reference: (text: string) => ['bible', 'reference', text] as const,
+  scriptureSearch: (text: string, translation?: string) =>
+    ['bible', 'search', text, translation ?? 'default'] as const,
+  bookmarks: ['bible', 'bookmarks'] as const,
+  articles: (params?: string) => ['articles', params ?? ''] as const,
+  article: (id: string) => ['article', id] as const,
+  episodes: (params?: string) => ['episodes', params ?? ''] as const,
+  episode: (id: string) => ['episode', id] as const,
+  calendar: (month: string) => ['progress', 'calendar', month] as const,
 };
 
 /** DRF paginates some viewsets and not others. Accept either shape. */
@@ -500,21 +518,29 @@ export function useUpdateProfile() {
 export function useUploadAvatar() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (asset: { uri: string; mimeType?: string; fileName?: string }) => {
+    mutationFn: async (asset: { uri: string; mimeType?: string; fileName?: string }) => {
       const body = new FormData();
       const name = asset.fileName ?? `avatar.${extensionFor(asset.mimeType)}`;
 
-      body.append('avatar', {
-        uri: asset.uri,
-        name,
-        type: asset.mimeType ?? 'image/jpeg',
-        // RN's FormData accepts this shape; the DOM typings do not describe it.
-      } as unknown as Blob);
+      // The global fetch here is Expo's, which cannot send React Native's old
+      // `{ uri, name, type }` file object: it throws before any request goes
+      // out. It sends an expo-file-system `File`, read from the picked image.
+      // The web preview has no such file, so it sends the picked image's bytes.
+      const file =
+        Platform.OS === 'web'
+          ? await (await fetch(asset.uri)).blob()
+          : (new File(asset.uri) as unknown as Blob);
+      body.append('avatar', file, name);
 
       return api.patch<TeenProfile>('/profiles/me/', body);
     },
     onSuccess: (updated) => {
-      qc.setQueryData(keys.profile, updated);
+      // The update reply carries only the writable fields, so only the new
+      // photo is copied across; replacing the whole cached profile with it
+      // blanked the name and age until the refetch landed.
+      qc.setQueryData<TeenProfile>(keys.profile, (old) =>
+        old ? { ...old, avatar: updated.avatar } : old,
+      );
       qc.invalidateQueries({ queryKey: keys.profile });
     },
   });
@@ -678,6 +704,198 @@ export function useChurchNodes(
     },
     enabled,
     staleTime: STALE.catalogue,
+    retry: retryTransient,
+  });
+}
+
+// ─── Library: articles and media ───────────────────────────────────────────
+
+/** Published articles, newest first. */
+export function useArticles(search?: string) {
+  const params = new URLSearchParams();
+  if (search) params.set('search', search);
+  const query = params.toString();
+
+  return useQuery({
+    queryKey: keys.articles(search),
+    queryFn: async () =>
+      unwrap(
+        await api.get<Paginated<ArticleListItem>>(`/content/articles/${query ? `?${query}` : ''}`),
+      ),
+    staleTime: STALE.catalogue,
+    retry: retryTransient,
+  });
+}
+
+export function useArticle(id: string | undefined) {
+  return useQuery({
+    queryKey: keys.article(id ?? ''),
+    queryFn: () => api.get<ArticleDetail>('/content/articles/' + id + '/'),
+    enabled: !!id,
+    staleTime: STALE.catalogue,
+    retry: retryTransient,
+  });
+}
+
+/**
+ * Podcast and video episodes, newest first.
+ *
+ * One list for both kinds: the Library splits it into Listen and Watch by
+ * `has_audio` / `has_video`, so an episode published as both appears on both
+ * shelves without a second request.
+ */
+export function useEpisodes(search?: string) {
+  const params = new URLSearchParams();
+  if (search) params.set('search', search);
+  const query = params.toString();
+
+  return useQuery({
+    queryKey: keys.episodes(search),
+    queryFn: async () =>
+      unwrap(
+        await api.get<Paginated<MediaEpisode>>(`/media/episodes/${query ? `?${query}` : ''}`),
+      ),
+    staleTime: STALE.catalogue,
+    retry: retryTransient,
+  });
+}
+
+/**
+ * One reading or one episode, as query options rather than a hook, for
+ * screens that need several at once (`useQueries` on Saved).
+ *
+ * The episode detail endpoint names its series differently from the list
+ * (`series_detail.title`, not `series_title`), so it is brought into the
+ * list's shape here and every screen can treat the two alike.
+ */
+export function devotionalQuery(id: string) {
+  return {
+    queryKey: keys.devotional(id),
+    queryFn: () => api.get<DevotionalDetail>('/content/devotionals/' + id + '/'),
+    staleTime: STALE.catalogue,
+    retry: retryTransient,
+  };
+}
+
+export function episodeQuery(id: string) {
+  return {
+    queryKey: keys.episode(id),
+    queryFn: async (): Promise<MediaEpisode> => {
+      const episode = await api.get<MediaEpisode & { series_detail?: { title: string } | null }>(
+        '/media/episodes/' + id + '/',
+      );
+      return { ...episode, series_title: episode.series_title ?? episode.series_detail?.title ?? '' };
+    },
+    staleTime: STALE.catalogue,
+    retry: retryTransient,
+  };
+}
+
+// ─── Bible: search, sharing, bookmarks, history ────────────────────────────
+
+/**
+ * Turn "John 3" or "jn 3:16" into an address the reader can open.
+ *
+ * Used when another screen links into the Bible with only the words of a
+ * reference — the continue-reading card knows "John 3", not an OSIS code.
+ */
+export function useReference(text: string | undefined) {
+  return useQuery({
+    queryKey: keys.reference(text ?? ''),
+    queryFn: () =>
+      api.get<ScriptureLookup>('/bible/lookup/?' + new URLSearchParams({ q: text ?? '' }).toString()),
+    enabled: !!text,
+    staleTime: STALE.scripture,
+    retry: retryTransient,
+  });
+}
+
+export function useScriptureSearch(text: string, translation?: string) {
+  const params = new URLSearchParams({ q: text, limit: '40' });
+  if (translation) params.set('translation', translation);
+
+  return useQuery({
+    queryKey: keys.scriptureSearch(text, translation),
+    queryFn: () => api.get<ScriptureSearch>('/bible/search/?' + params.toString()),
+    enabled: text.length >= 2,
+    staleTime: STALE.scripture,
+    retry: retryTransient,
+  });
+}
+
+/**
+ * The share and copy text for one verse.
+ *
+ * Asked of the server rather than assembled here because it carries the
+ * attribution a licensed translation requires; a client that builds its own
+ * string will one day forget it.
+ */
+export function fetchVerseShare(book: string, chapter: number, verse: number, translation?: string) {
+  const params = new URLSearchParams({
+    book,
+    chapter: String(chapter),
+    start_verse: String(verse),
+  });
+  if (translation) params.set('translation', translation);
+  return api.get<VerseShare>('/bible/share/?' + params.toString());
+}
+
+export function useBookmarks(enabled = true) {
+  return useQuery({
+    queryKey: keys.bookmarks,
+    queryFn: () => fetchAllPages<Bookmark>('/bible/bookmarks/'),
+    enabled,
+    staleTime: STALE.personal,
+    retry: retryTransient,
+  });
+}
+
+/**
+ * Save or unsave one verse.
+ *
+ * A bookmark has nothing to edit, so saving creates the row and unsaving
+ * deletes it. The list is refetched afterwards rather than patched by hand:
+ * the server's copy carries the verse text the Saved screen shows.
+ */
+export function useToggleBookmark() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { verseId: string; bookmarkId?: string }) =>
+      input.bookmarkId
+        ? api.delete('/bible/bookmarks/' + input.bookmarkId + '/')
+        : api.post<Bookmark>('/bible/bookmarks/', { verse: input.verseId }),
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.bookmarks }),
+  });
+}
+
+/**
+ * Tell the server a chapter was read.
+ *
+ * This is what moves "Continue reading" on Today and the chapter count on Me.
+ * Every call also writes one entry to the teen's activity history, so the
+ * reader calls it once per chapter, never on every visit.
+ */
+export function useRecordChapterRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (chapterId: string) =>
+      api.post('/bible/reading-history/record/', { chapter: chapterId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.today });
+      qc.invalidateQueries({ queryKey: keys.progress });
+    },
+  });
+}
+
+// ─── Progress calendar ─────────────────────────────────────────────────────
+
+/** The days of one month the teen did something on. `month` is "YYYY-MM". */
+export function useProgressCalendar(month: string, enabled = true) {
+  return useQuery({
+    queryKey: keys.calendar(month),
+    queryFn: () => api.get<ProgressCalendar>('/progress/calendar/?month=' + month),
+    enabled,
+    staleTime: STALE.personal,
     retry: retryTransient,
   });
 }

@@ -11,11 +11,11 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, type IconName } from '../components/Icon';
-import { Drawing, type DrawingName } from './art';
+import { Drawing, DrawingIn, type DrawingName } from './art';
 import { Button } from './Button';
 import { PopCard } from './cards';
 import { Press } from './Press';
-import { useTokens } from '../theme/ThemeProvider';
+import { useTheme, useTokens } from '../theme/ThemeProvider';
 import { ELEVATION, POP } from '../theme/tokens';
 
 /**
@@ -72,6 +72,136 @@ export function TopAppBar({
   );
 }
 
+// ─── Tab and sub-screen headers ────────────────────────────────────────────
+
+/**
+ * The round 44px button used in every header: search, bell, back, share.
+ * `dot` adds the small unread mark.
+ */
+export function IconButton({
+  icon,
+  label,
+  onPress,
+  tone = 'sunken',
+  filled = false,
+  dot = false,
+}: {
+  icon: IconName;
+  /** What a screen reader says; the button has no visible text. */
+  label: string;
+  onPress: () => void;
+  tone?: 'sunken' | 'raised' | 'ink';
+  filled?: boolean;
+  dot?: boolean;
+}) {
+  const tokens = useTokens();
+  const surface =
+    tone === 'ink' ? 'bg-ink' : tone === 'raised' ? 'bg-surf-raised' : 'bg-surf-sunken';
+  return (
+    <Press
+      onPress={onPress}
+      accessibilityLabel={label}
+      className={`h-11 w-11 items-center justify-center rounded-full ${surface}`}
+    >
+      <Icon
+        name={icon}
+        size={20}
+        color={tone === 'ink' ? tokens.onInk : tokens.text1}
+        filled={filled}
+      />
+      {dot && (
+        <View
+          className="absolute right-2.5 top-2.5 h-2.5 w-2.5 rounded-full border-2 border-surf-sunken"
+          style={{ backgroundColor: POP.pink }}
+        />
+      )}
+    </Press>
+  );
+}
+
+/** The big title at the top of a tab, with its round buttons on the right. */
+export function TabHeader({ title, children }: { title: string; children?: React.ReactNode }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View
+      className="flex-row items-center gap-3 px-5 pb-2"
+      style={{ paddingTop: insets.top + HEADER_GAP }}
+    >
+      <Text
+        numberOfLines={1}
+        accessibilityRole="header"
+        className="flex-1 font-ui-xb text-[32px] leading-10 tracking-[-0.64px] text-ink-1"
+      >
+        {title}
+      </Text>
+      {children}
+    </View>
+  );
+}
+
+/** Round back button, a title and one optional round action, for pushed screens. */
+export function BackHeader({
+  title,
+  onBack,
+  action,
+}: {
+  title: string;
+  onBack: () => void;
+  action?: { icon: IconName; label: string; onPress: () => void; filled?: boolean };
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View
+      className="flex-row items-center gap-3 pb-1 pl-4 pr-5"
+      style={{ paddingTop: insets.top + HEADER_GAP }}
+    >
+      <IconButton icon="chevronLeft" label="Back" onPress={onBack} />
+      <Text
+        numberOfLines={1}
+        accessibilityRole="header"
+        className="flex-1 font-ui-b text-[20px] leading-7 tracking-[-0.2px] text-ink-1"
+      >
+        {title}
+      </Text>
+      {action && (
+        <IconButton
+          icon={action.icon}
+          label={action.label}
+          onPress={action.onPress}
+          filled={action.filled}
+        />
+      )}
+    </View>
+  );
+}
+
+/** The heading over a group of cards, with an optional "See all". */
+export function SectionTitle({
+  children,
+  actionLabel,
+  onAction,
+}: {
+  children: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <View className="w-full flex-row items-center">
+      <Text
+        accessibilityRole="header"
+        className="flex-1 font-ui-b text-[20px] leading-7 tracking-[-0.2px] text-ink-1"
+      >
+        {children}
+      </Text>
+      {actionLabel && (
+        <Pressable onPress={onAction} accessibilityRole="button" hitSlop={12}>
+          <Text className="font-ui-sb text-[14px] leading-5 text-ink-2">{actionLabel}</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
 // ─── States ────────────────────────────────────────────────────────────────
 
 /**
@@ -89,9 +219,19 @@ export function EmptyState({
   actionLabel?: string;
   onAction?: () => void;
 }) {
+  const { scheme } = useTheme();
   return (
     <View className="w-full items-center gap-4 px-6 py-8">
-      <Drawing name={drawing} width={158} />
+      {scheme === 'dark' ? (
+        // The drawings are black line art, which disappears on a dark
+        // surface. In dark mode they stand on a colour plate, as they do
+        // everywhere else in the app.
+        <View className="h-[196px] w-[196px] items-center justify-center rounded-full bg-pop-lime">
+          <DrawingIn name={drawing} box={150} />
+        </View>
+      ) : (
+        <Drawing name={drawing} width={158} />
+      )}
       <Text className="text-center font-ui text-[16px] leading-6 text-ink-2">{message}</Text>
       {actionLabel && (
         <Button label={actionLabel} variant="secondary" onPress={onAction} className="h-12" />

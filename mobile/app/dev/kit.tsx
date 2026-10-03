@@ -4,15 +4,35 @@ import { Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '../../src/ui/Button';
-import { Blob, HeroCard, PopCard, PopEyebrow, StreakCard, WeekPill } from '../../src/ui/cards';
-import { IconField, OptionRow, StepperBar } from '../../src/ui/inputs';
+import {
+  Avatar,
+  Blob,
+  ContentCard,
+  DateBadge,
+  FactChip,
+  HeroCard,
+  PopCard,
+  PopEyebrow,
+  StatTile,
+  StreakCard,
+  WeekPill,
+} from '../../src/ui/cards';
+import { ChipRow, IconField, OptionRow, StepperBar, Toggle } from '../../src/ui/inputs';
 import { Object3D } from '../../src/ui/art';
+import { EmptyState, IconButton, SectionTitle } from '../../src/ui/screen';
 import { useTheme } from '../../src/theme/ThemeProvider';
 
 const REGIONS = [
   { title: 'Region 63', detail: 'Lagos' },
   { title: 'Region 1', detail: 'Lagos' },
 ];
+
+const FILTERS = [
+  { value: 'all', label: 'All' },
+  { value: 'read', label: 'Read' },
+  { value: 'watch', label: 'Watch' },
+  { value: 'listen', label: 'Listen' },
+] as const;
 
 /**
  * Every kit component on one screen, for checking against the Figma
@@ -25,6 +45,8 @@ export default function KitScreen() {
   const [region, setRegion] = useState(0);
   const [contact, setContact] = useState('');
   const [password, setPassword] = useState('');
+  const [filter, setFilter] = useState<(typeof FILTERS)[number]['value']>('all');
+  const [quiet, setQuiet] = useState(true);
 
   if (!__DEV__) return <Redirect href="/" />;
 
@@ -122,6 +144,51 @@ export default function KitScreen() {
             onChange={setContact}
           />
           <IconField icon="lock" label="Password" value={password} onChange={setPassword} secure />
+
+          <SectionTitle actionLabel="See all" onAction={() => {}}>
+            Tab screens
+          </SectionTitle>
+
+          <View className="flex-row items-center gap-3">
+            <IconButton icon="search" label="Search" onPress={() => {}} />
+            <IconButton icon="bell" label="Notifications" dot onPress={() => {}} />
+            <Avatar name="Tolu Adeyemi" size={56} ring={3} />
+            <DateBadge date={new Date()} colour="violet" />
+            <Toggle on={quiet} onChange={setQuiet} label="Quiet hours" />
+          </View>
+
+          <ChipRow options={FILTERS} value={filter} onChange={setFilter} />
+
+          <View className="flex-row flex-wrap gap-2">
+            <FactChip icon="calendar" colour="amber">
+              Sat 12 Dec · 10:00 am
+            </FactChip>
+            <FactChip icon="mapPin" colour="sky">
+              Rehoboth Parish, Ikeja
+            </FactChip>
+          </View>
+
+          <View className="mt-2 flex-row" style={{ gap: 10 }}>
+            <StatTile value="48" label="Days read" colour="amber" object="fire" />
+            <StatTile value="12" label="Chapters" colour="sky" object="notebook" />
+            <StatTile value="6" label="Saved" colour="pink" object="star" />
+          </View>
+
+          <ContentCard
+            eyebrow="Article · 5 min read"
+            title="When your friends don’t believe what you believe"
+            detail="Relationships"
+            colour="amber"
+            drawing="sitting-reading"
+            onPress={() => {}}
+          />
+
+          <EmptyState
+            drawing="plant"
+            message="Nothing saved yet. Tap the bookmark on anything you want to keep."
+            actionLabel="Browse the Library"
+            onAction={() => {}}
+          />
 
           <Button label="Continue" onPress={() => {}} />
           <Button label="Continue" variant="secondary" onPress={() => {}} />

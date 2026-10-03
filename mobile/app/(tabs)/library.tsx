@@ -1,312 +1,380 @@
-import { memo, useCallback, useDeferredValue, useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useCallback, useDeferredValue, useMemo, useState } from 'react';
+import { BackHandler, FlatList, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Icon } from '../../src/components/Icon';
-import { Photo } from '../../src/components/Photo';
-import { Card, Press, ProgressBar, SectionHeader } from '../../src/components/ui';
-import { EmptyState, ErrorState, Skeleton } from '../../src/components/states';
-import { useTokens } from '../../src/theme/ThemeProvider';
-import { useAuth } from '../../src/state/auth';
+import { useArticles, useDevotionals, useEpisodes } from '../../src/api/queries';
+import {
+  LibraryCard,
+  MINI_PLAYER_HEIGHT,
+  MiniPlayer,
+  ShelfTile,
+  TILE_WIDTH,
+  useOpenLibraryItem,
+} from '../../src/components/LibraryPieces';
 import { useNavClearance } from '../../src/components/useNavClearance';
-import { useDevotionals, useSaved } from '../../src/api/queries';
-import type { DevotionalListItem } from '../../src/api/types';
+import {
+  actionFor,
+  fromArticle,
+  fromDevotional,
+  fromEpisode,
+  type LibraryItem,
+  type LibraryKind,
+} from '../../src/data/library';
+import { useAuth } from '../../src/state/auth';
+import { usePlayer } from '../../src/state/player';
+import { HeroCard } from '../../src/ui/cards';
+import { ChipRow, SearchField } from '../../src/ui/inputs';
+import {
+  EmptyState,
+  GuestBanner,
+  HEADER_GAP,
+  IconButton,
+  OfflineBar,
+  SectionTitle,
+  Skeleton,
+  TabHeader,
+} from '../../src/ui/screen';
+
+type Filter = 'all' | LibraryKind;
+
+const FILTERS = [
+  { value: 'all', label: 'All' },
+  { value: 'read', label: 'Read' },
+  { value: 'watch', label: 'Watch' },
+  { value: 'listen', label: 'Listen' },
+] as const;
+
+const FILTER_NAME: Record<Filter, string> = {
+  all: 'All',
+  read: 'Read',
+  watch: 'Watch',
+  listen: 'Listen',
+};
+
+/** How many readings the "All" view shows before "See all". */
+const READ_PREVIEW = 4;
 
 /**
- * Library — devotionals, videos, podcasts and courses.
+ * Library — things to read, watch and listen to.
  *
- * Search lives in the top bar rather than as a nav destination
- * (05-navigation.md), and opening it from here scopes it to content.
+ * Three endpoints feed it (daily readings, articles, media episodes), turned
+ * into one kind of item in `data/library.ts`. A shelf with nothing in it is
+ * simply not drawn, so the screen is honest about what has been published.
  *
- * Only devotionals are wired: `/content/` also exposes articles, manuals and
- * manual series, and `/media/` the video and podcast catalogue. Those shelves
- * arrive with the player work (see mobile/README.md).
+ * Search lives here rather than as a destination of its own
+ * (05-navigation.md): the header turns into a search field and the same
+ * filter chips narrow the results.
  */
 export default function LibraryScreen() {
-  const insets = useSafeAreaInsets();
-  const tokens = useTokens();
   const router = useRouter();
-  const navClearance = useNavClearance(24);
+  const insets = useSafeAreaInsets();
   const { isGuest } = useAuth();
+  const { episode: playing } = usePlayer();
+  const navClearance = useNavClearance(24);
+  const open = useOpenLibraryItem();
 
-  const [query, setQuery] = useState('');
-  // Keeps typing responsive: the field updates every keystroke while the list
-  // re-renders against the settled value.
-  const deferredQuery = useDeferredValue(query);
+  const [filter, setFilter] = useState<Filter>('all');
+  const [searching, setSearching] = useState(false);
+  const [text, setText] = useState('');
+  // The field updates on every key; the requests wait for typing to settle.
+  const deferred = useDeferredValue(text.trim());
+  const query = searching && deferred.length >= 2 ? deferred : undefined;
 
-  const devotionals = useDevotionals(deferredQuery.trim() || undefined);
-  const saved = useSaved('devotional', !isGuest);
+  const devotionals = useDevotionals(query);
+  const articles = useArticles(query);
+  const episodes = useEpisodes(query);
+  const sources = [devotionals, articles, episodes];
 
-  const items = devotionals.data ?? [];
+  const items = useMemo(() => {
+    const all: LibraryItem[] = [
+      ...(episodes.data ?? []).map(fromEpisode),
+      ...(articles.data ?? []).map(fromArticle),
+      ...(devotionals.data ?? []).map(fromDevotional),
+    ];
+    return all.sort((a, b) => b.when - a.when);
+  }, [devotionals.data, articles.data, episodes.data]);
 
-  // Newest first, and split into "this week" and the rest so the shelf
-  // structure the design calls for survives a flat API response.
-  const shelves = useMemo(() => {
-    const sorted = [...items].sort((a, b) => +new Date(b.date) - +new Date(a.date));
-    const weekAgo = Date.now() - 7 * 86_400_000;
-
-    const recent = sorted.filter((d) => +new Date(d.date) >= weekAgo);
-    const older = sorted.filter((d) => +new Date(d.date) < weekAgo);
-
-    return [
-      { id: 'recent', title: 'New this week', items: recent },
-      { id: 'earlier', title: 'Earlier devotionals', items: older },
-    ].filter((s) => s.items.length > 0);
-  }, [items]);
-
-  const openDevotional = useCallback(
-    (id: string) => router.push({ pathname: '/devotional', params: { id } }),
-    [router],
+  const byKind = useMemo(
+    () => ({
+      read: items.filter((i) => i.kind === 'read'),
+      watch: items.filter((i) => i.kind === 'watch'),
+      listen: items.filter((i) => i.kind === 'listen'),
+    }),
+    [items],
   );
 
+  // The editor's pick if there is one, otherwise simply the newest thing.
+  const featured = useMemo(() => items.find((i) => i.featured) ?? items[0] ?? null, [items]);
+
+  const closeSearch = useCallback(() => {
+    setSearching(false);
+    setText('');
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Hardware back leaves search before it leaves the tab.
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (!searching) return false;
+        closeSearch();
+        return true;
+      });
+      return () => sub.remove();
+    }, [searching, closeSearch]),
+  );
+
+  const refetch = () => sources.forEach((s) => s.refetch());
+
+  const pending = sources.every((s) => s.isPending);
+  const failed = sources.every((s) => s.isError) && items.length === 0;
+  // Something would not refresh while there is still something to show.
+  const offline = sources.some((s) => s.isError) && items.length > 0;
+  const shown = filter === 'all' ? items : byKind[filter];
+
+  const bottom = navClearance + (playing ? MINI_PLAYER_HEIGHT + 8 : 0);
+
   return (
-    <ScrollView
-      className="flex-1 bg-surf-base"
-      contentContainerStyle={{ paddingBottom: navClearance }}
-      showsVerticalScrollIndicator={false}
-      // Dismiss the keyboard when the user starts browsing rather than typing.
-      keyboardDismissMode="on-drag"
-      refreshControl={
-        <RefreshControl refreshing={devotionals.isRefetching} onRefresh={devotionals.refetch} />
-      }
-    >
-      <View className="px-5" style={{ paddingTop: insets.top + 16 }}>
-        <Text className="mb-1 font-ui-b text-[24px] text-ink-1">Library</Text>
-        <Text className="font-ui text-[14px] text-ink-3">
-          Devotionals, videos, podcasts and courses
-        </Text>
-
-        <View className="mt-4 h-12 flex-row items-center gap-2.5 rounded-md border border-line bg-surf-raised px-3.5">
-          <Icon name="search" size={18} color={tokens.text3} />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search devotionals, topics, speakers…"
-            placeholderTextColor={tokens.text3}
-            returnKeyType="search"
-            accessibilityLabel="Search the library"
-            className="flex-1 font-ui text-[15px] text-ink-1"
-            style={{ paddingVertical: 0 }}
+    <View className="flex-1 bg-surf-base">
+      {searching ? (
+        <View
+          className="flex-row items-center gap-2 pb-2 pl-4 pr-5"
+          style={{ paddingTop: insets.top + HEADER_GAP }}
+        >
+          <IconButton icon="chevronLeft" label="Close search" onPress={closeSearch} />
+          <SearchField
+            label="Search the Library"
+            value={text}
+            onChange={setText}
+            autoFocus
+            className="h-12 flex-1"
           />
-          {query.length > 0 && (
-            <Pressable
-              onPress={() => setQuery('')}
-              accessibilityRole="button"
-              accessibilityLabel="Clear search"
-              hitSlop={8}
-            >
-              <Icon name="close" size={16} color={tokens.text3} />
-            </Pressable>
-          )}
         </View>
-      </View>
-
-      {devotionals.isPending ? (
-        <ShelfSkeleton />
-      ) : devotionals.isError ? (
-        <ErrorState error={devotionals.error} onRetry={devotionals.refetch} />
-      ) : shelves.length === 0 ? (
-        <EmptyState
-          title="Nothing here yet"
-          body={
-            query
-              ? `We couldn't find anything for "${query}". Try a different word.`
-              : 'New devotionals will appear here as they are published.'
-          }
-        />
       ) : (
-        shelves.map((shelf) => (
-          <ShelfRow
-            key={shelf.id}
-            title={shelf.title}
-            items={shelf.items}
-            onOpen={openDevotional}
-            isSaved={saved.isSaved}
-            onToggleSave={isGuest || saved.unavailable ? undefined : saved.toggle}
-          />
-        ))
+        <TabHeader title="Library">
+          <IconButton icon="search" label="Search the Library" onPress={() => setSearching(true)} />
+          <IconButton icon="bookmark" label="Saved" onPress={() => router.push('/saved')} />
+        </TabHeader>
       )}
-    </ScrollView>
+
+      {offline && <OfflineBar />}
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        contentContainerStyle={{
+          flexGrow: 1,
+          gap: 20,
+          paddingHorizontal: 20,
+          // Room for the star that breaks out of the featured card.
+          paddingTop: searching ? 8 : 24,
+          paddingBottom: bottom,
+        }}
+        refreshControl={
+          <RefreshControl refreshing={sources.some((s) => s.isRefetching)} onRefresh={refetch} />
+        }
+      >
+        {searching ? (
+          <>
+            <ChipRow options={FILTERS} value={filter} onChange={setFilter} />
+            {!query ? (
+              <Text className="font-ui text-[16px] leading-6 text-ink-2">
+                Search readings, articles, talks and videos.
+              </Text>
+            ) : pending ? (
+              <ListSkeleton />
+            ) : shown.length === 0 ? (
+              <EmptyState
+                drawing="strolling"
+                message={
+                  filter === 'all'
+                    ? `Nothing for “${query}” yet. Try a shorter word.`
+                    : `Nothing for “${query}” in ${FILTER_NAME[filter]} yet. Try All, or a shorter word.`
+                }
+                actionLabel={filter === 'all' ? undefined : 'Search in All'}
+                onAction={() => setFilter('all')}
+              />
+            ) : (
+              shown.map((item) => <LibraryCard key={item.key} item={item} onOpen={open} />)
+            )}
+          </>
+        ) : pending ? (
+          <Loading />
+        ) : failed ? (
+          <View className="flex-1 justify-center">
+            <EmptyState
+              drawing="sitting"
+              message="We couldn’t load the Library. Check your connection, then try again."
+              actionLabel="Try again"
+              onAction={refetch}
+            />
+          </View>
+        ) : items.length === 0 ? (
+          <View className="flex-1 justify-center">
+            <EmptyState
+              drawing="reading"
+              message="Nothing has been published here yet. Today’s reading is on the Today tab."
+              actionLabel="Go to Today"
+              onAction={() => router.push('/')}
+            />
+          </View>
+        ) : (
+          <>
+            {isGuest && (
+              <GuestBanner
+                title="Keep what you love"
+                body="Sign up to save readings and talks for later."
+                onSignUp={() => router.push('/sign-up')}
+              />
+            )}
+
+            {featured && (
+              <HeroCard
+                colour="violet"
+                eyebrow={featured.eyebrow}
+                title={featured.title}
+                detail={featured.detail ?? undefined}
+                actionLabel={actionFor(featured.kind)}
+                play={featured.kind !== 'read'}
+                onPress={() => open(featured)}
+                drawing="selfie"
+                drawingWidth={116}
+                object="star"
+              />
+            )}
+
+            <ChipRow options={FILTERS} value={filter} onChange={setFilter} />
+
+            {filter === 'all' ? (
+              <>
+                <Shelf
+                  title="Listen"
+                  items={byKind.listen}
+                  onOpen={open}
+                  onSeeAll={() => setFilter('listen')}
+                />
+                <Shelf
+                  title="Watch"
+                  items={byKind.watch}
+                  onOpen={open}
+                  onSeeAll={() => setFilter('watch')}
+                />
+                {byKind.read.length > 0 && (
+                  <>
+                    <SectionTitle
+                      actionLabel={byKind.read.length > READ_PREVIEW ? 'See all' : undefined}
+                      onAction={() => setFilter('read')}
+                    >
+                      Read
+                    </SectionTitle>
+                    {byKind.read.slice(0, READ_PREVIEW).map((item) => (
+                      <LibraryCard key={item.key} item={item} onOpen={open} />
+                    ))}
+                  </>
+                )}
+              </>
+            ) : shown.length === 0 ? (
+              <EmptyState
+                drawing="strolling"
+                message={`Nothing to ${filter === 'listen' ? 'listen to' : filter} yet. New things show up here as they are published.`}
+                actionLabel="Show everything"
+                onAction={() => setFilter('all')}
+              />
+            ) : (
+              shown.map((item) => <LibraryCard key={item.key} item={item} onOpen={open} />)
+            )}
+          </>
+        )}
+      </ScrollView>
+
+      {/* Docked above the nav, and only once something has been started. */}
+      {playing && (
+        <View
+          pointerEvents="box-none"
+          className="absolute left-0 right-0 px-4"
+          style={{ bottom: navClearance - 24 }}
+        >
+          <MiniPlayer />
+        </View>
+      )}
+    </View>
   );
 }
 
 // ─── Shelves ───────────────────────────────────────────────────────────────
 
-const CARD_WIDTH = 160;
-const CARD_GAP = 12;
+const TILE_GAP = 12;
+const keyOfItem = (item: LibraryItem) => item.key;
 
-const ShelfRow = memo(function ShelfRow({
+/** A sideways row of covers. Draws nothing when there is nothing to show. */
+function Shelf({
   title,
   items,
   onOpen,
-  isSaved,
-  onToggleSave,
+  onSeeAll,
 }: {
   title: string;
-  items: DevotionalListItem[];
-  onOpen: (id: string) => void;
-  isSaved: (id: string) => boolean;
-  onToggleSave?: (id: string) => void;
+  items: LibraryItem[];
+  onOpen: (item: LibraryItem) => void;
+  onSeeAll: () => void;
 }) {
   const renderItem = useCallback(
-    ({ item }: { item: DevotionalListItem }) => (
-      <ItemCard
-        item={item}
-        onOpen={onOpen}
-        saved={isSaved(item.id)}
-        onToggleSave={onToggleSave}
-      />
-    ),
-    [onOpen, isSaved, onToggleSave],
+    ({ item }: { item: LibraryItem }) => <ShelfTile item={item} onOpen={onOpen} />,
+    [onOpen],
   );
+  if (items.length === 0) return null;
 
   return (
-    <View className="pt-7">
-      <SectionHeader title={title} actionLabel="See all" className="mb-3.5 px-5" />
-      {/* Horizontal FlatList rather than a ScrollView of all children: only the
-          visible cards mount, so their images are never fetched offscreen. */}
+    <>
+      <SectionTitle actionLabel={items.length > 2 ? 'See all' : undefined} onAction={onSeeAll}>
+        {title}
+      </SectionTitle>
+      {/* A FlatList rather than a row of children: only the covers on screen
+          mount, so their images are not fetched until they are scrolled to. */}
       <FlatList
+        horizontal
         data={items}
         keyExtractor={keyOfItem}
         renderItem={renderItem}
-        horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 20, gap: CARD_GAP }}
-        // Cards are a fixed width, so the list can position rows without
-        // measuring them — this removes a layout pass per scroll frame.
-        getItemLayout={getCardLayout}
+        // Bleeds to the screen edge, so a cut-off cover shows there is more.
+        style={{ marginHorizontal: -20, flexGrow: 0 }}
+        contentContainerStyle={{ paddingHorizontal: 20, gap: TILE_GAP }}
         initialNumToRender={3}
         windowSize={5}
-        removeClippedSubviews
       />
-    </View>
+    </>
   );
-});
-
-const keyOfItem = (item: DevotionalListItem) => item.id;
-
-const getCardLayout = (_: unknown, index: number) => ({
-  length: CARD_WIDTH,
-  offset: (CARD_WIDTH + CARD_GAP) * index,
-  index,
-});
-
-/** Cover tints, so a devotional without a cover image still reads as a card. */
-const TINTS = ['#E8F3EC', '#FDF0DC', '#EEF0FD', '#FDE8EE'];
-
-const ItemCard = memo(function ItemCard({
-  item,
-  onOpen,
-  saved,
-  onToggleSave,
-}: {
-  item: DevotionalListItem;
-  onOpen: (id: string) => void;
-  saved: boolean;
-  onToggleSave?: (id: string) => void;
-}) {
-  const tokens = useTokens();
-  const tint = TINTS[hash(item.id) % TINTS.length];
-
-  return (
-    <Press
-      onPress={() => onOpen(item.id)}
-      accessibilityLabel={item.title}
-      scaleTo={0.97}
-      style={{ width: CARD_WIDTH }}
-    >
-      <Card className="overflow-hidden">
-        <View className="h-[90px]" style={{ backgroundColor: tint }}>
-          {item.cover_image && (
-            <Photo
-              uri={item.cover_image}
-              recyclingKey={item.id}
-              fallbackColor={tint}
-              accessibilityLabel={item.title}
-              scrim={{ top: 0.12, bottom: 0.38 }}
-              style={{ width: '100%', height: '100%' }}
-            />
-          )}
-
-          {item.has_audio && (
-            <View
-              className="absolute bottom-2 left-2 h-7 w-7 items-center justify-center rounded-sm"
-              style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-            >
-              <Icon name="headphones" size={13} color="#fff" />
-            </View>
-          )}
-
-          {onToggleSave && (
-            <Pressable
-              onPress={() => onToggleSave(item.id)}
-              accessibilityRole="button"
-              accessibilityLabel={saved ? `Remove ${item.title} from saved` : `Save ${item.title}`}
-              accessibilityState={{ selected: saved }}
-              hitSlop={6}
-              className="absolute right-2 top-2 h-[30px] w-[30px] items-center justify-center rounded-sm"
-              style={{ backgroundColor: 'rgba(255,255,255,0.88)' }}
-            >
-              <Icon
-                name="bookmark"
-                size={14}
-                color={saved ? tokens.green : '#857D78'}
-                filled={saved}
-              />
-            </Pressable>
-          )}
-        </View>
-
-        <View className="px-3 pb-3.5 pt-3">
-          <View className="mb-1.5 flex-row items-center gap-1">
-            <Icon name="book" size={13} color={tokens.text3} />
-            <Text className="font-ui-md text-[11px] text-ink-3">
-              Read · {formatDate(item.date)}
-            </Text>
-          </View>
-          <Text numberOfLines={2} className="mb-1 font-ui-sb text-[13px] leading-[18px] text-ink-1">
-            {item.title}
-          </Text>
-          {!!item.memory_verse_passage && (
-            <Text numberOfLines={1} className="font-ui text-[11px] text-ink-3">
-              {item.memory_verse_passage}
-            </Text>
-          )}
-        </View>
-      </Card>
-    </Press>
-  );
-});
+}
 
 // ─── Loading ───────────────────────────────────────────────────────────────
 
-function ShelfSkeleton() {
+/** Blocks in the shape of what is coming, so nothing jumps when it lands. */
+function Loading() {
   return (
-    <View className="pt-7">
-      <View className="mb-3.5 px-5">
-        <Skeleton width={140} height={18} />
-      </View>
-      <View className="flex-row gap-3 px-5">
-        {[0, 1, 2].map((i) => (
-          <Skeleton key={i} width={CARD_WIDTH} height={180} radius={16} />
+    <>
+      <Skeleton height={212} radius={28} />
+      <View className="flex-row gap-2">
+        {[56, 72, 80, 76].map((w, i) => (
+          <Skeleton key={i} width={w} height={40} radius={999} />
         ))}
       </View>
-    </View>
+      <Skeleton width={96} height={24} radius={8} />
+      <View className="flex-row" style={{ gap: TILE_GAP }}>
+        <Skeleton width={TILE_WIDTH} height={TILE_WIDTH} />
+        <Skeleton width={TILE_WIDTH} height={TILE_WIDTH} />
+      </View>
+    </>
   );
 }
 
-// ─── Helpers ───────────────────────────────────────────────────────────────
-
-function formatDate(iso: string): string {
-  const d = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-}
-
-/** Stable per-id tint pick, so a card's colour does not change between loads. */
-function hash(id: string): number {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return h;
+function ListSkeleton() {
+  return (
+    <>
+      <Skeleton height={112} />
+      <Skeleton height={112} />
+      <Skeleton height={112} />
+    </>
+  );
 }

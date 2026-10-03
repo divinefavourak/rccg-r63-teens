@@ -152,7 +152,32 @@ export default function DevotionalScreen() {
                 {devotional.title}
               </Text>
 
-              <BibleLink devotional={devotional} onPress={() => router.push('/bible')} />
+              <BibleLink
+                devotional={devotional}
+                onPress={() => {
+                  const place = devotional.scripture_references[0];
+                  if (place) {
+                    router.push({
+                      pathname: '/bible',
+                      params: {
+                        book: place.book_osis,
+                        chapter: String(place.chapter_number),
+                        ...(place.start_verse_number
+                          ? { verse: String(place.start_verse_number) }
+                          : {}),
+                      },
+                    });
+                  } else if (devotional.bible_text_passage) {
+                    // Older readings hold the passage only as words.
+                    router.push({
+                      pathname: '/bible',
+                      params: { passage: devotional.bible_text_passage },
+                    });
+                  } else {
+                    router.push('/bible');
+                  }
+                }}
+              />
 
               {paragraphs(devotional.content).map((para, i) => (
                 <Text key={i} className="font-read text-[18px] leading-[30px] text-ink-1">

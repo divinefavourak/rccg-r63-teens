@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
 
 import { Icon } from '../../src/components/Icon';
 import { Button, Card } from '../../src/components/ui';
@@ -11,7 +10,8 @@ import { SelectField, TextField } from '../../src/components/form';
 import { ErrorState, Skeleton } from '../../src/components/states';
 import { useTokens } from '../../src/theme/ThemeProvider';
 import { useAuth } from '../../src/state/auth';
-import { useProfile, useUpdateProfile, useUploadAvatar } from '../../src/api/queries';
+import { useProfile, useUpdateProfile } from '../../src/api/queries';
+import { useChangePhoto } from '../../src/state/photo';
 import { GUARDIAN_RELATIONSHIPS } from '../../src/data/choices';
 import type { TeenProfile } from '../../src/api/types';
 
@@ -36,7 +36,7 @@ export default function AccountSettingsScreen() {
 
   const profile = useProfile();
   const update = useUpdateProfile();
-  const avatar = useUploadAvatar();
+  const photo = useChangePhoto();
 
   const [form, setForm] = useState<Partial<TeenProfile>>({});
   const [loaded, setLoaded] = useState(false);
@@ -58,44 +58,6 @@ export default function AccountSettingsScreen() {
   const set = useCallback((key: string, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   }, []);
-
-  /**
-   * Pick and upload a new profile picture.
-   *
-   * Cropped square at the point of choosing rather than after upload: the
-   * avatar is only ever shown in a circle, and sending a 12MP original over
-   * Nigerian mobile data to display it at 96px is indefensible.
-   */
-  const pickAvatar = useCallback(async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert(
-        'Photo access needed',
-        'Allow photo access to choose a profile picture. You can change this in your phone settings.',
-      );
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-
-    if (result.canceled || !result.assets[0]) return;
-
-    const asset = result.assets[0];
-    try {
-      await avatar.mutateAsync({
-        uri: asset.uri,
-        mimeType: asset.mimeType,
-        fileName: asset.fileName ?? undefined,
-      });
-    } catch {
-      // Surfaced inline below.
-    }
-  }, [avatar]);
 
   const save = useCallback(async () => {
     try {
@@ -172,15 +134,15 @@ export default function AccountSettingsScreen() {
         {/* Profile picture */}
         <View className="mb-7 items-center">
           <Pressable
-            onPress={pickAvatar}
-            disabled={avatar.isPending}
+            onPress={photo.change}
+            disabled={photo.pending}
             accessibilityRole="button"
             accessibilityLabel="Change profile picture"
             className="relative"
           >
             <View
               className="h-24 w-24 items-center justify-center overflow-hidden rounded-full"
-              style={{ backgroundColor: '#2D6340', opacity: avatar.isPending ? 0.6 : 1 }}
+              style={{ backgroundColor: '#2D6340', opacity: photo.pending ? 0.6 : 1 }}
             >
               {p?.avatar ? (
                 <Image
@@ -207,16 +169,16 @@ export default function AccountSettingsScreen() {
           </Pressable>
 
           <Text className="mt-3 font-ui text-[13px] text-ink-3">
-            {avatar.isPending ? 'Uploading…' : 'Tap to change your picture'}
+            {photo.pending ? 'Uploading…' : 'Tap to change your picture'}
           </Text>
 
-          {avatar.isError && (
+          {!!photo.error && (
             <Text
               accessibilityLiveRegion="polite"
               className="mt-1.5 text-center font-ui-md text-[12px] leading-[17px]"
               style={{ color: tokens.error }}
             >
-              {avatar.error instanceof Error ? avatar.error.message : 'Upload failed.'}
+              {photo.error}
             </Text>
           )}
         </View>

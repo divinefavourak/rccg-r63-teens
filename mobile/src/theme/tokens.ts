@@ -161,6 +161,13 @@ export interface ReaderTokens {
   border: string;
   accent: string;
   highlight: string;
+  /** Pills and round buttons in the reader bar. */
+  sunken: string;
+  /** The book picker and "next chapter": the reader's own ink pair. */
+  ink: string;
+  onInk: string;
+  /** The words of Jesus, set in red as printed Bibles do. */
+  christ: string;
 }
 
 export const READER_TOKENS: Record<ReaderTheme, ReaderTokens> = {
@@ -173,6 +180,10 @@ export const READER_TOKENS: Record<ReaderTheme, ReaderTokens> = {
     border: '#EAE3DA',
     accent: '#047857',
     highlight: 'rgba(255, 220, 100, 0.30)',
+    sunken: '#F2EAE0',
+    ink: '#1C1916',
+    onInk: '#FDFAF5',
+    christ: '#B42318',
   },
   sepia: {
     bg: '#F4EDD8',
@@ -183,6 +194,10 @@ export const READER_TOKENS: Record<ReaderTheme, ReaderTokens> = {
     border: '#DDD0B8',
     accent: '#047857',
     highlight: 'rgba(214, 168, 60, 0.32)',
+    sunken: '#EADFC6',
+    ink: '#2C2416',
+    onInk: '#F8F2E0',
+    christ: '#A32015',
   },
   dark: {
     bg: '#1C1916',
@@ -193,6 +208,10 @@ export const READER_TOKENS: Record<ReaderTheme, ReaderTokens> = {
     border: '#2E2822',
     accent: '#34D399',
     highlight: 'rgba(180, 140, 20, 0.30)',
+    sunken: '#141210',
+    ink: '#FDFAF5',
+    onInk: '#1C1916',
+    christ: '#FF8A7A',
   },
 };
 

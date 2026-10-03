@@ -62,6 +62,14 @@ const OUTLINE = {
   phone: 'phone-portrait-outline',
   mail: 'mail-outline',
   cloudOffline: 'cloud-offline-outline',
+  scan: 'scan-outline',
+  more: 'ellipsis-horizontal',
+  copy: 'copy-outline',
+  shareUp: 'share-outline',
+  flame: 'flame-outline',
+  info: 'alert-circle-outline',
+  pause: 'pause',
+  camera: 'camera-outline',
 } as const;
 
 // Only the icons that genuinely need a filled state are listed. Anything absent
