@@ -1,6 +1,8 @@
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 
 import BottomNav from '../../src/components/BottomNav';
+import { useAuth } from '../../src/state/auth';
+import { needsWelcome } from '../../src/state/welcome';
 import { useTokens } from '../../src/theme/ThemeProvider';
 
 /**
@@ -10,6 +12,11 @@ import { useTokens } from '../../src/theme/ThemeProvider';
  */
 export default function TabsLayout() {
   const tokens = useTokens();
+  const { isGuest } = useAuth();
+
+  // First launch on this device: start on the welcome pages. They mark
+  // themselves seen on the way out, so this fires once.
+  if (isGuest && needsWelcome()) return <Redirect href="/welcome" />;
 
   return (
     <Tabs

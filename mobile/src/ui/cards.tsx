@@ -7,12 +7,13 @@ import { Press } from './Press';
 import { useTokens } from '../theme/ThemeProvider';
 import { POP, type PopColour } from '../theme/tokens';
 
-const POP_BG: Record<PopColour, string> = {
+export const POP_BG: Record<PopColour, string> = {
   green: 'bg-pop-green',
   amber: 'bg-pop-amber',
   violet: 'bg-pop-violet',
   pink: 'bg-pop-pink',
   sky: 'bg-pop-sky',
+  lime: 'bg-pop-lime',
 };
 
 // ─── Colour block ──────────────────────────────────────────────────────────

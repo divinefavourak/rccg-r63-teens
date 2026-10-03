@@ -11,6 +11,7 @@ import { Flame } from '../../src/components/Flame';
 import { Button, Card, CheckBox, Eyebrow, IconButton, Press, SectionHeader } from '../../src/components/ui';
 import { DevotionalCardSkeleton, ErrorState, Skeleton } from '../../src/components/states';
 import { useTokens } from '../../src/theme/ThemeProvider';
+import { signUpStep } from '../../src/state/signup';
 import { useAuth } from '../../src/state/auth';
 import { useNavClearance } from '../../src/components/useNavClearance';
 import { useCompleteChallenge, useToday, useUnreadCount } from '../../src/api/queries';
@@ -42,8 +43,8 @@ export default function TodayScreen() {
   }, [router, today.data]);
 
   const openNotifications = useCallback(() => router.push('/notifications'), [router]);
-  const goSignIn = useCallback(() => router.push('/sign-in'), [router]);
-  const goRegister = useCallback(() => router.push('/register'), [router]);
+  const goSignIn = useCallback(() => router.push('/log-in'), [router]);
+  const goRegister = useCallback(() => router.push(signUpStep(1)), [router]);
 
   const data = today.data;
 

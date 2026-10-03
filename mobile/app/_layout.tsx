@@ -1,6 +1,6 @@
 import '../global.css';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -27,6 +27,7 @@ import { ThemeProvider, useTheme } from '../src/theme/ThemeProvider';
 import { ChromeProvider } from '../src/state/chrome';
 import { AuthProvider, useAuth } from '../src/state/auth';
 import { installAppStateBridges, queryClient } from '../src/api/queryClient';
+import { loadWelcomed } from '../src/state/welcome';
 
 // Hold the native splash until fonts and the stored theme are both ready.
 // Without this the first frame renders in the system font and the OS colour
@@ -87,7 +88,13 @@ function AppShell({ fontsSettled }: { fontsSettled: boolean }) {
   const { ready: authReady } = useAuth();
   // Hold the splash until the stored session has been read too, so a signed-in
   // teen never sees the guest version of Today flash before their own.
-  const canRender = fontsSettled && ready && authReady;
+  // ...and until the "seen the welcome pages?" flag is known, so a first
+  // launch opens on Welcome rather than flashing Today first.
+  const [welcomeLoaded, setWelcomeLoaded] = useState(false);
+  useEffect(() => {
+    loadWelcomed().then(() => setWelcomeLoaded(true));
+  }, []);
+  const canRender = fontsSettled && ready && authReady && welcomeLoaded;
 
   // Hidden from `onLayout` rather than an effect: the effect fires in the same
   // commit as the render, which can tear down the splash a frame before the
@@ -137,19 +144,11 @@ function AppShell({ fontsSettled }: { fontsSettled: boolean }) {
         <Stack.Screen name="settings/feedback" />
         <Stack.Screen name="console" />
         <Stack.Screen name="dev/kit" />
-        <Stack.Screen
-          name="register"
-          // Sign-up is a modal for the same reason sign-in is: dismissing it
-          // returns to the guest experience instead of trapping the teen.
-          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-        />
-        <Stack.Screen
-          name="sign-in"
-          // A modal, not a route the app can get stuck on: dismissing it returns
-          // to the guest experience rather than blocking the product
-          // (05-navigation.md — signup prompts are contextual and dismissible).
-          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-        />
+        {/* Welcome, sign-up and log in. Full screens rather than modals: the
+            sign-up steps push onto each other, and a modal stack inside a modal
+            loses the back gesture on Android. Every one of them offers a way
+            out to the guest experience (05-navigation.md — never a wall). */}
+        <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
       </Stack>
     </View>
   );

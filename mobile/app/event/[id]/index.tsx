@@ -33,7 +33,7 @@ export default function EventDetailScreen() {
     // Registering genuinely needs an account, so this is exactly the contextual
     // prompt 05-navigation.md permits — and the flow resumes here afterwards.
     if (isGuest) {
-      router.push('/sign-in');
+      router.push('/log-in');
       return;
     }
     // The endpoint needs eleven attendee and guardian fields, so this opens the

@@ -25,6 +25,24 @@ from identity.authorization import HasPermission, IsSelfOrHasPermission, has_any
 from identity.permissions_registry import Perm
 
 
+def _resolve_login_username(identifier):
+    """Map an email address or phone number to a username; pass usernames through.
+
+    An exact username always wins, so nobody is locked out by having an ``@``
+    in theirs. Unknown identifiers are returned unchanged and fail as before.
+    """
+    from .signup import find_by_phone
+
+    identifier = (identifier or '').strip()
+    if User.objects.filter(username=identifier).exists():
+        return identifier
+    if '@' in identifier:
+        match = User.objects.filter(email__iexact=identifier).first()
+    else:
+        match = find_by_phone(identifier, active_only=False)
+    return match.username if match else identifier
+
+
 class CustomTokenObtainPairView(TokenObtainPairView):
     """Custom token obtain view with login history tracking"""
     throttle_scope = 'auth'  # rate-limited via ScopedRateThrottle (settings)
@@ -36,6 +54,11 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         username = serializer.validated_data['username']
         password = serializer.validated_data['password']
         
+        # The app's sign-in field takes an email address or a phone number as
+        # well as a username; resolve whichever it is to the account's username
+        # so the rest of this view is unchanged.
+        username = _resolve_login_username(username)
+
         # Check if user exists
         try:
             user = User.objects.get(username=username)
@@ -498,7 +521,10 @@ def _find_user_by_destination(destination, channel):
     destination = (destination or '').strip().lower()
     if channel == OTPCode.Channel.EMAIL:
         return User.objects.filter(email=destination, is_active=True).first()
-    return User.objects.filter(phone=destination, is_active=True).first()
+    # Phones were typed into a free-text field for years, so the same number
+    # may be stored as 0803… or +234803…; match either.
+    from .signup import find_by_phone
+    return find_by_phone(destination)
 
 
 def otp_login_response(user, otp):

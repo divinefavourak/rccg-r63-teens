@@ -29,6 +29,15 @@ export interface LoginResponse {
   needs_gender: boolean;
 }
 
+/** One row of the public church picker (hierarchy/views.py PublicChildrenView). */
+export type ChurchLevel = 'region' | 'province' | 'zone' | 'area' | 'parish';
+
+export interface ChurchNode {
+  id: string;
+  name: string;
+  node_type: ChurchLevel;
+}
+
 // ─── Today (today/serializers.py) ──────────────────────────────────────────
 
 /** The devotional *card* — the body arrives separately from /content/. */

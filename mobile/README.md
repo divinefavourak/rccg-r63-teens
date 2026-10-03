@@ -92,10 +92,14 @@ app/                      routes (expo-router)
     _layout.tsx           the five destinations
     index.tsx             Today
     library.tsx  bible.tsx  tribe.tsx  me.tsx
+  (auth)/
+    welcome.tsx           first-launch pages
+    sign-up/[step].tsx    eight questions, one per screen
+    verify.tsx            the 6-digit code (sign-up and log in)
+    all-set.tsx  log-in.tsx
   devotional.tsx          full devotional (modal)
   notifications.tsx       inbox (bottom sheet over Today)
   event/[id].tsx          event detail
-  sign-in.tsx             auth (modal, dismissible)
   +not-found.tsx          dead deep links
 src/
   api/config.ts           base URL resolution, cache staleness
@@ -173,7 +177,8 @@ needs them most.
 | Notifications | `GET /notifications/inbox/`, `POST .../mark_read/` |
 | Me | `GET /profiles/me/`, `/progress/summary/`, `/events/registrations/mine/` |
 | Saved | `GET/POST /profiles/favorites/`, `DELETE .../remove/` |
-| Auth | `POST /auth/login/`, `/auth/refresh/`, `/auth/logout/`, `GET /auth/me/` |
+| Sign-up | `POST /auth/signup/start/`, `/auth/signup/complete/`, `GET /hierarchy/public/children/` |
+| Log in | `POST /auth/login/`, `/auth/otp/request/`, `/auth/otp/verify/`, `/auth/refresh/`, `/auth/logout/`, `GET /auth/me/` |
 
 Notes on the wiring:
 
@@ -184,6 +189,9 @@ Notes on the wiring:
   a true streak and challenge, so the screen keeps working and shows the empty
   state from 06-user-flows.md flow 5. If Today looks bare, check whether a
   devotional exists for *today's* date — the API is behaving correctly.
+- **Sign-up has no password.** The teen gives an email and a phone number, one
+  code goes to both, and either copy creates the account. Signing in later is
+  by code too, or by password for accounts made on the website.
 - **Tokens live in `expo-secure-store`** (iOS Keychain / Android Keystore), not
   AsyncStorage: these are bearer credentials for a minor's account.
 - **One refresh, shared.** Several requests 401 together on a cold start; a

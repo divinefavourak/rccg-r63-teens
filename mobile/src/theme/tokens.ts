@@ -133,6 +133,7 @@ export const POP = {
   violet: '#B9A5FF',
   pink: '#FF7BAC',
   sky: '#8EC5FF',
+  lime: '#7BE3B0',
   on: '#1C1916',
 } as const;
 

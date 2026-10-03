@@ -12,6 +12,8 @@ import type {
   Identity,
   NotificationPreferences,
   BibleBook,
+  ChurchLevel,
+  ChurchNode,
   BibleChapterDetail,
   BibleTranslation,
   ScriptureLookup,
@@ -47,6 +49,8 @@ export const keys = {
   notificationPrefs: ['notifications', 'preferences'] as const,
   favorites: ['favorites'] as const,
   myRegistrations: ['registrations', 'mine'] as const,
+  church: (parent: string | null, level: string, search: string) =>
+    ['church', parent ?? 'root', level, search] as const,
   translations: ['bible', 'translations'] as const,
   books: ['bible', 'books'] as const,
   chapter: (id: string) => ['bible', 'chapter', id] as const,
@@ -621,5 +625,41 @@ export function useDevotionalWorkflow() {
       // Publishing today's devotional changes what Today shows.
       qc.invalidateQueries({ queryKey: keys.today });
     },
+  });
+}
+
+/**
+ * The sign-up church picker.
+ *
+ * Public, so it works before an account exists. `level` is the kind of node
+ * wanted beneath `parent` — asking a zone for its parishes skips the Area
+ * level the sign-up flow does not show. With no parent it lists regions.
+ */
+export function useChurchNodes(
+  parent: string | null,
+  level: ChurchLevel,
+  search = '',
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: keys.church(parent, level, search),
+    queryFn: ({ signal }) => {
+      const params = new URLSearchParams();
+      if (parent) {
+        params.set('parent', parent);
+        params.set('type', level);
+      }
+      if (search) params.set('q', search);
+      const query = params.toString();
+      return api
+        .get<{ results: ChurchNode[] }>(
+          `/hierarchy/public/children/${query ? `?${query}` : ''}`,
+          { anonymous: true, signal },
+        )
+        .then((body) => body.results);
+    },
+    enabled,
+    staleTime: STALE.catalogue,
+    retry: retryTransient,
   });
 }

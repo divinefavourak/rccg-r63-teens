@@ -48,6 +48,7 @@ module.exports = {
           violet: themed('pop-violet'),
           pink: themed('pop-pink'),
           sky: themed('pop-sky'),
+          lime: themed('pop-lime'),
           on: themed('pop-on'),
         },
         green: {
