@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import {
   Pressable,
+  ScrollView,
   Text,
   TextInput,
   View,
@@ -255,14 +256,22 @@ export function SearchField({
   label,
   value,
   onChange,
+  onSubmit,
+  autoFocus = false,
+  className = 'h-[52px] w-full',
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  /** Called when the keyboard's search key is pressed. */
+  onSubmit?: () => void;
+  autoFocus?: boolean;
+  /** Size of the pill. Defaults to a full-width 52px field. */
+  className?: string;
 }) {
   const tokens = useTokens();
   return (
-    <View className="h-[52px] w-full flex-row items-center gap-2 rounded-full bg-surf-sunken px-4">
+    <View className={`flex-row items-center gap-2 rounded-full bg-surf-sunken px-4 ${className}`}>
       <Icon name="search" size={20} color={tokens.text3} />
       <TextInput
         value={value}
@@ -271,11 +280,147 @@ export function SearchField({
         placeholderTextColor={tokens.text3}
         accessibilityLabel={label}
         autoCorrect={false}
+        autoFocus={autoFocus}
         returnKeyType="search"
+        onSubmitEditing={onSubmit}
         className="min-w-0 flex-1 font-ui text-[16px] text-ink-1"
         style={INPUT_RESET}
       />
+      {value.length > 0 && (
+        <Pressable
+          onPress={() => onChange('')}
+          accessibilityRole="button"
+          accessibilityLabel="Clear"
+          hitSlop={12}
+        >
+          <Icon name="close" size={18} color={tokens.text3} />
+        </Pressable>
+      )}
     </View>
+  );
+}
+
+// ─── Chips ─────────────────────────────────────────────────────────────────
+
+/**
+ * Filter or choice chip (Figma "Chip"). The chosen one turns ink and gains a
+ * tick, so the choice never rests on colour alone.
+ */
+export const Chip = memo(function Chip({
+  label,
+  selected,
+  onPress,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const tokens = useTokens();
+  return (
+    <Press
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityLabel={label}
+      accessibilityState={{ selected, checked: selected }}
+      className={`h-10 flex-row items-center gap-1 rounded-full ${
+        selected ? 'bg-ink pl-3 pr-4' : 'bg-surf-sunken px-4'
+      }`}
+    >
+      {selected && <Icon name="check" size={16} color={tokens.onInk} />}
+      <Text
+        numberOfLines={1}
+        className={`font-ui-sb text-[14px] leading-5 ${selected ? 'text-on-ink' : 'text-ink-1'}`}
+      >
+        {label}
+      </Text>
+    </Press>
+  );
+});
+
+/**
+ * One row of chips where exactly one is chosen. Scrolls sideways when the
+ * labels do not fit, bleeding to the screen edge so the cut-off chip shows
+ * there is more; pass `wrap` to stack onto more lines instead (inside cards).
+ */
+export function ChipRow<T extends string>({
+  options,
+  value,
+  onChange,
+  wrap = false,
+}: {
+  options: readonly { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+  wrap?: boolean;
+}) {
+  const chips = options.map((option) => (
+    <Chip
+      key={option.value}
+      label={option.label}
+      selected={option.value === value}
+      onPress={() => onChange(option.value)}
+    />
+  ));
+
+  if (wrap) {
+    return (
+      <View accessibilityRole="radiogroup" className="w-full flex-row flex-wrap gap-2">
+        {chips}
+      </View>
+    );
+  }
+  return (
+    <ScrollView
+      horizontal
+      accessibilityRole="radiogroup"
+      showsHorizontalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      style={{ flexGrow: 0, marginHorizontal: -20 }}
+      contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}
+    >
+      {chips}
+    </ScrollView>
+  );
+}
+
+// ─── Toggle ────────────────────────────────────────────────────────────────
+
+/** On/off switch (Figma "Toggle"). Always sits beside the text that names it. */
+export function Toggle({
+  on,
+  onChange,
+  label,
+}: {
+  on: boolean;
+  onChange: (on: boolean) => void;
+  /** What a screen reader says: the name of the setting. */
+  label: string;
+}) {
+  const tokens = useTokens();
+  const x = useSharedValue(on ? 20 : 0);
+
+  useEffect(() => {
+    x.value = withTiming(on ? 20 : 0, { duration: 160, easing: Easing.out(Easing.cubic) });
+  }, [on, x]);
+
+  const knob = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
+
+  return (
+    <Pressable
+      onPress={() => onChange(!on)}
+      accessibilityRole="switch"
+      accessibilityLabel={label}
+      accessibilityState={{ checked: on }}
+      hitSlop={8}
+      className={`h-8 w-[52px] justify-center rounded-full px-1 ${on ? 'bg-green' : 'bg-line-strong'}`}
+    >
+      <Animated.View
+        style={[
+          { width: 24, height: 24, borderRadius: 12, backgroundColor: tokens.surfRaised },
+          knob,
+        ]}
+      />
+    </Pressable>
   );
 }
 

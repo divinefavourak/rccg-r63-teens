@@ -105,9 +105,20 @@ export default function WelcomeScreen() {
 
       <View className="flex-1 items-center justify-center overflow-hidden">
         <View style={{ width: STAGE_WIDTH, height: 320, alignItems: 'center', justifyContent: 'center' }}>
+          {/* Fixed cream, not the theme's raised surface: in dark mode that
+              turns near-black, and the black line drawing on it disappeared.
+              The page colour behind it is the same in both themes, so the
+              plate can be too. */}
           <View
-            className="rounded-full bg-surf-raised"
-            style={{ position: 'absolute', width: 260, height: 260, top: 20, left: 50 }}
+            className="rounded-full"
+            style={{
+              position: 'absolute',
+              width: 260,
+              height: 260,
+              top: 20,
+              left: 50,
+              backgroundColor: '#FDFAF5',
+            }}
           />
           <Drawing name={page.drawing} width={page.drawingWidth} />
           {page.objects.map((object) => (

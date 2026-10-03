@@ -133,10 +133,16 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     // default, which a phone or emulator cannot reach. Naming the URL it
     // actually tried turns a misleading "you're offline" into a fixable one.
     if (__DEV__) {
+      // fetch also rejects for reasons that have nothing to do with the
+      // network — a request body it cannot send, for one — so the underlying
+      // message is kept. Without it, a broken upload read as a server that
+      // could not be reached and sent the search to the firewall.
+      const cause = (err as Error)?.message;
       throw new ApiError(
         0,
         API_SETUP_HINT ??
-          `Could not reach ${options.baseUrl ?? API_URL}${path}. ` +
+          `Could not reach ${options.baseUrl ?? API_URL}${path}` +
+            (cause ? ` (${cause}). ` : '. ') +
             'If this is a local server, start it with `runserver 0.0.0.0:8000` ' +
             'so the device can reach it.',
       );

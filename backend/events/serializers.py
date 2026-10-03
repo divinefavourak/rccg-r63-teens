@@ -2,6 +2,7 @@
 Serializers for the events app (events, registrations, bulk uploads).
 """
 from rest_framework import serializers
+from django.contrib.auth import get_user_model
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 
@@ -378,8 +379,26 @@ class EventRegistrationCreateSerializer(serializers.ModelSerializer):
             'notes',
         ]
     
+    def get_unique_together_validators(self):
+        # DRF's own check for (event, attendee_email) answers a teen with "The
+        # fields event, attendee_email must make a unique set". The same rule is
+        # enforced in `validate` below with words a teen can act on, and the
+        # database constraint still backs both.
+        return []
+
     def validate(self, data):
         event = data.get('event')
+
+        email = data.get('attendee_email')
+        if email and EventRegistration.objects.filter(
+            event=event, attendee_email__iexact=email,
+        ).exists():
+            raise serializers.ValidationError({
+                'attendee_email': (
+                    'This email address is already registered for this event. '
+                    'If it is yours, your ticket is under My tickets.'
+                )
+            })
         
         # Check if event is open for registration
         if event.registration_status != Event.RegistrationStatus.OPEN:
@@ -415,11 +434,7 @@ class EventRegistrationCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         request = self.context.get('request')
         
-        # Set user and profile if authenticated
         if request and request.user.is_authenticated:
-            validated_data['user'] = request.user
-            if hasattr(request.user, 'teen_profile'):
-                validated_data['profile'] = request.user.teen_profile
             validated_data['registered_by'] = request.user
         
         # Set registration type — a *provenance label* ("who entered this row"),
@@ -433,6 +448,22 @@ class EventRegistrationCreateSerializer(serializers.ModelSerializer):
                 validated_data['registration_type'] = EventRegistration.RegistrationType.COORDINATOR
             else:
                 validated_data['registration_type'] = EventRegistration.RegistrationType.SELF
+
+        # Whose registration it is. A teen registering is registering themself.
+        # A leader registering someone is not registering *themself*: the place
+        # belongs to the account that owns the attendee's email, if there is
+        # one. Filing it under the leader hid it from the teen's My tickets, and
+        # the teen was then offered a Register button the server refused.
+        if request and request.user.is_authenticated:
+            if validated_data.get('registration_type') == EventRegistration.RegistrationType.SELF:
+                owner = request.user
+            else:
+                owner = get_user_model().objects.filter(
+                    email__iexact=validated_data['attendee_email'],
+                ).first()
+            validated_data['user'] = owner
+            if owner is not None and hasattr(owner, 'teen_profile'):
+                validated_data['profile'] = owner.teen_profile
         
         # Set amount due based on event pricing
         event = validated_data['event']

@@ -22,6 +22,14 @@ export interface AuthUser {
   is_verified?: boolean;
   /** Absolute URL, or null until the teen adds a photo. */
   profile_picture?: string | null;
+  /** In `+234…` form. */
+  phone?: string | null;
+  /** Where the teen worships, as free text copied from the tree at sign-up. */
+  province?: string | null;
+  province_display?: string | null;
+  zone?: string | null;
+  area?: string | null;
+  parish?: string | null;
 }
 
 export interface LoginResponse {
@@ -96,10 +104,17 @@ export interface StreakState {
 
 /** bible/serializers.py ContinueReadingSerializer. */
 export interface ContinueReading {
+  /** The chapter's id. */
   chapter: string;
-  reference: string;
+  chapter_detail: {
+    id: string;
+    number: number;
+    /** "John 3" */
+    reference: string;
+    translation_code: string | null;
+  };
   translation_code: string | null;
-  last_verse_number: number | null;
+  verse_number: number | null;
 }
 
 /**
@@ -227,6 +242,13 @@ export interface EventDetail extends EventListItem {
   description: string | null;
   address: string | null;
   virtual_link: string | null;
+  organizer_name: string | null;
+  /** A plain list of items; empty when the organiser gave none. */
+  what_to_bring: string[] | null;
+  is_full: boolean;
+  requires_guardian_consent: boolean;
+  min_age: number | null;
+  max_age: number | null;
 }
 
 // ─── Notifications (notifications/serializers.py) ──────────────────────────
@@ -290,6 +312,49 @@ export interface Highlight {
   color: string;
 }
 
+/** A saved verse or chapter (bible/serializers.py BookmarkSerializer). */
+export interface Bookmark {
+  id: string;
+  verse: string | null;
+  chapter: string | null;
+  verse_detail: {
+    id: string;
+    number: number;
+    text: string;
+    reference: string;
+    translation_code: string | null;
+  } | null;
+  /** "John 3:16", or "John 3" for a whole chapter. */
+  target_reference: string;
+  created_at: string;
+}
+
+/**
+ * `GET /bible/search/` — one field, two answers. A `reference` result is a
+ * passage to open; a `keyword` result is a list of hits grouped by book.
+ */
+export interface ScriptureSearch {
+  query: string;
+  kind: 'reference' | 'keyword';
+  reference?: string;
+  /** OSIS code, on a reference result. */
+  book?: string;
+  chapter?: number;
+  verses?: BibleVerse[];
+  results?: { osis_code: string; name: string; testament: string; verses: BibleVerse[] }[];
+  total?: number;
+}
+
+/** `GET /bible/share/` — the words the licence allows, ready to send. */
+export interface VerseShare {
+  reference: string;
+  text: string;
+  translation_code: string;
+  attribution: string;
+  share_text: string;
+  copy_text: string;
+}
+
 // ─── DRF pagination envelope ───────────────────────────────────────────────
 
 export interface Paginated<T> {
@@ -320,6 +385,11 @@ export interface TeenProfile {
   area: string | null;
   parish: string | null;
 
+  guardian_name: string | null;
+  guardian_phone: string | null;
+  guardian_email: string | null;
+  guardian_relationship: string | null;
+
   devotionals_read_count: number;
   events_attended_count: number;
   streak_days: number;
@@ -343,11 +413,25 @@ export interface Favorite {
 
 // ─── Event registration (events/serializers.py) ────────────────────────────
 
+/**
+ * One of the teen's own registrations, with its event
+ * (`EventRegistrationDetailSerializer`). `registration_id` is the human code
+ * printed on the ticket and encoded in its QR.
+ */
 export interface EventRegistration {
   id: string;
+  registration_id: string;
   event: string;
+  event_detail: EventListItem | null;
+  attendee_name: string;
+  /** pending · confirmed · cancelled · waitlisted · checked_in · attended · no_show */
   status: string;
-  ticket_code?: string | null;
+  /** not_required · pending · paid · refunded · failed */
+  payment_status: string;
+  amount_due: string | null;
+  amount_paid: string | null;
+  payment_reference: string | null;
+  checked_in_at: string | null;
   created_at: string;
 }
 
@@ -405,13 +489,8 @@ export interface EventRegistrationInput {
   notes?: string;
 }
 
-/** Registration response, including what is owed for a paid event. */
-export interface EventRegistrationDetail extends EventRegistration {
-  amount_due: string | null;
-  amount_paid: string | null;
-  payment_status: string;
-  payment_reference: string | null;
-}
+/** The registration response has the same shape as a row of "mine". */
+export type EventRegistrationDetail = EventRegistration;
 
 /**
  * Reminder settings (notifications/serializers.py).
@@ -465,8 +544,16 @@ export interface Identity {
   last_name: string;
   is_superuser: boolean;
   permissions: string[];
-  memberships: unknown[];
+  memberships: Membership[];
   role_assignments: unknown[];
+}
+
+/** Where a person belongs in the church tree (identity MembershipSerializer). */
+export interface Membership {
+  id: string;
+  organization_node: string;
+  organization_node_detail: ChurchNode | null;
+  is_primary: boolean;
 }
 
 /** Permission codes, as registered in `identity/permissions_registry.py`. */
@@ -478,3 +565,55 @@ export const PERM = {
   eventsManage: 'events.manage',
   eventsCheckin: 'events.checkin',
 } as const;
+
+// ─── Library (content/serializers.py, media/serializers.py) ────────────────
+
+export interface ArticleListItem {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string | null;
+  /** faith · relationships · education · health · lifestyle · testimonies · news */
+  category: string;
+  author_name: string | null;
+  cover_image: string | null;
+  read_time_minutes: number | null;
+  is_featured: boolean;
+  published_at: string | null;
+}
+
+export interface ArticleDetail extends ArticleListItem {
+  content: string;
+  author_bio: string | null;
+}
+
+/** One podcast or video episode (MediaEpisodeListSerializer). */
+export interface MediaEpisode {
+  id: string;
+  series: string | null;
+  series_title: string;
+  episode_number: number | null;
+  title: string;
+  description: string | null;
+  thumbnail: string | null;
+  /** audio · video · both */
+  media_type: string;
+  has_audio: boolean;
+  has_video: boolean;
+  audio_url: string | null;
+  audio_file: string | null;
+  video_url: string | null;
+  video_file: string | null;
+  duration_seconds: number | null;
+  published_at: string | null;
+  is_featured: boolean;
+}
+
+// ─── Progress calendar (progress/views.py CalendarView) ────────────────────
+
+export interface ProgressCalendar {
+  /** "2026-10" */
+  month: string;
+  /** ISO dates the teen did something on, oldest first. */
+  active_days: string[];
+}

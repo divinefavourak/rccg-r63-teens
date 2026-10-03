@@ -91,15 +91,27 @@ app/                      routes (expo-router)
   (tabs)/
     _layout.tsx           the five destinations
     index.tsx             Today
-    library.tsx  bible.tsx  tribe.tsx  me.tsx
+    bible.tsx             the reader, and its book and chapter picker
+    library.tsx           shelves, filters and search
+    tribe.tsx             events, notices, my church
+    me.tsx                profile, numbers and the way to everything of yours
   (auth)/
     welcome.tsx           first-launch pages
     sign-up.tsx           eight questions on one screen; only the question changes
     verify.tsx            the 6-digit code (sign-up and log in)
     all-set.tsx  log-in.tsx
   devotional.tsx          full devotional (modal)
-  notifications.tsx       inbox (bottom sheet over Today)
-  event/[id].tsx          event detail
+  article/[id].tsx        an article from the Library
+  player.tsx              the full audio player (modal)
+  watch/[id].tsx          a Library video, played in the app
+  event/[id]/             event detail, and the registration form
+  events/past.tsx         events that are over
+  ticket/[id].tsx         one ticket, with its QR code
+  tickets.tsx             every ticket the teen holds
+  progress.tsx            streak, this month, totals
+  saved.tsx               kept verses, readings and talks
+  notifications.tsx       inbox
+  settings/               reminders, appearance, profile, feedback
   +not-found.tsx          dead deep links
 src/
   api/config.ts           base URL resolution, cache staleness
@@ -112,8 +124,13 @@ src/
   theme/ThemeProvider.tsx light/dark, persisted
   state/auth.tsx          who is signed in
   state/chrome.tsx        nav visibility, shared with the reader's scroll
+  state/reader.tsx        reader theme, text size and last page, on this phone
+  state/player.tsx        the one audio player, held above the navigator
+  data/                   what each screen says about a reading, event or ticket
   ui/                     the Figma kit: Button, inputs, cards, art, Press
-  components/             older pieces, being replaced screen by screen
+  components/             pieces built from the kit for one tab (Bible picker,
+                          Library shelves, event rows), plus a few older ones
+                          the settings sub-screens and Console still use
 global.css                semantic colour tokens (light + dark)
 tailwind.config.js        tokens -> Tailwind scales
 ```

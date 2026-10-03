@@ -27,6 +27,8 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider, useTheme } from '../src/theme/ThemeProvider';
 import { ChromeProvider } from '../src/state/chrome';
 import { AuthProvider, useAuth } from '../src/state/auth';
+import { PlayerProvider } from '../src/state/player';
+import { ReaderProvider, useReader } from '../src/state/reader';
 import { installAppStateBridges, queryClient } from '../src/api/queryClient';
 import { loadWelcomed } from '../src/state/welcome';
 
@@ -71,7 +73,14 @@ export default function RootLayout() {
                 the same endpoints. */}
             <AuthProvider>
               <ChromeProvider>
-                <AppShell fontsSettled={fontsSettled} />
+                {/* The reader's choices and the audio player sit above the
+                    navigator: Settings and the Bible tab share the first, and
+                    sound has to outlive the screen that started it. */}
+                <ReaderProvider>
+                  <PlayerProvider>
+                    <AppShell fontsSettled={fontsSettled} />
+                  </PlayerProvider>
+                </ReaderProvider>
               </ChromeProvider>
             </AuthProvider>
           </ThemeProvider>
@@ -88,6 +97,7 @@ export default function RootLayout() {
 function AppShell({ fontsSettled }: { fontsSettled: boolean }) {
   const { scheme, tokens, ready } = useTheme();
   const { ready: authReady } = useAuth();
+  const { ready: readerReady } = useReader();
   // Hold the splash until the stored session has been read too, so a signed-in
   // teen never sees the guest version of Today flash before their own.
   // ...and until the "seen the welcome pages?" flag is known, so a first
@@ -96,7 +106,9 @@ function AppShell({ fontsSettled }: { fontsSettled: boolean }) {
   useEffect(() => {
     loadWelcomed().then(() => setWelcomeLoaded(true));
   }, []);
-  const canRender = fontsSettled && ready && authReady && welcomeLoaded;
+  // ...and until the reader knows its page, so the Bible tab never opens on
+  // the default chapter and then jumps to the one last read.
+  const canRender = fontsSettled && ready && authReady && welcomeLoaded && readerReady;
 
   // Hidden from `onLayout` rather than an effect: the effect fires in the same
   // commit as the render, which can tear down the splash a frame before the
@@ -124,23 +136,23 @@ function AppShell({ fontsSettled }: { fontsSettled: boolean }) {
           name="devotional"
           options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
         />
+        <Stack.Screen name="notifications" />
+        <Stack.Screen name="article/[id]" />
         <Stack.Screen
-          name="notifications"
-          options={{
-            // A bottom sheet, so the Today screen stays visible behind the
-            // scrim rather than being replaced.
-            presentation: 'transparentModal',
-            animation: 'fade',
-          }}
-        />
-        <Stack.Screen name="event/[id]/index" />
-        <Stack.Screen
-          name="event/[id]/register"
-          // A form, so it gets a modal presentation and its own cancel — backing
-          // out must not drop the teen somewhere unexpected mid-registration.
+          name="player"
+          // Rises over the Library and closes downwards, like the docked
+          // player it grows out of.
           options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
         />
+        <Stack.Screen name="watch/[id]" />
+        <Stack.Screen name="event/[id]/index" />
+        <Stack.Screen name="event/[id]/register" />
         <Stack.Screen name="events/past" />
+        <Stack.Screen name="ticket/[id]" />
+        <Stack.Screen name="tickets" />
+        <Stack.Screen name="progress" />
+        <Stack.Screen name="saved" />
+        <Stack.Screen name="settings/index" />
         <Stack.Screen name="settings/account" />
         <Stack.Screen name="settings/notifications" />
         <Stack.Screen name="settings/feedback" />

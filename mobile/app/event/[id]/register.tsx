@@ -1,377 +1,347 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Icon } from '../../../src/components/Icon';
-import { Button, Card } from '../../../src/components/ui';
-import { DateField, SelectField, StepProgress, TextField } from '../../../src/components/form';
-import { ErrorState, Skeleton } from '../../../src/components/states';
-import { useTokens } from '../../../src/theme/ThemeProvider';
-import { useAuth } from '../../../src/state/auth';
 import { useEvent, useProfile, useRegisterForEvent } from '../../../src/api/queries';
-import { PROVINCES, GENDERS, GUARDIAN_RELATIONSHIPS } from '../../../src/data/choices';
-import { formatNaira } from '../../../src/components/EventCard';
 import type { EventRegistrationInput } from '../../../src/api/types';
+import { EventPhoto } from '../../../src/components/EventPieces';
+import { GUARDIAN_RELATIONSHIPS, PROVINCES } from '../../../src/data/choices';
+import { dayLabel, priceLabel, startOf, whereLabel } from '../../../src/data/events';
+import { useAuth } from '../../../src/state/auth';
+import { Object3D } from '../../../src/ui/art';
+import { Button } from '../../../src/ui/Button';
+import { ChipRow, TextField, Toggle } from '../../../src/ui/inputs';
+import { BackHeader, EmptyState, Skeleton } from '../../../src/ui/screen';
 
-const STEPS = ['About you', 'Your church', 'Guardian'];
+/** The fields the server insists on (`EventRegistrationCreateSerializer`). */
+type Required =
+  | 'attendee_name'
+  | 'attendee_email'
+  | 'attendee_phone'
+  | 'attendee_age'
+  | 'attendee_province'
+  | 'attendee_parish'
+  | 'guardian_name'
+  | 'guardian_phone'
+  | 'guardian_email'
+  | 'guardian_relationship';
+
+/** Always on the form, as designed. The rest appear only if we do not know them. */
+const ALWAYS: Required[] = ['attendee_name', 'attendee_parish', 'guardian_phone'];
+
+type Form = Record<Required, string>;
+
+const EMPTY: Form = {
+  attendee_name: '',
+  attendee_email: '',
+  attendee_phone: '',
+  attendee_age: '',
+  attendee_province: '',
+  attendee_parish: '',
+  guardian_name: '',
+  guardian_phone: '',
+  guardian_email: '',
+  guardian_relationship: '',
+};
 
 /**
- * Event registration.
+ * Registering for an event (Figma "Register").
  *
- * `POST /events/events/{id}/register/` requires eleven attendee and guardian
- * fields. Asking for eleven on one screen is how sign-ups get abandoned, so
- * this is three steps — the same shape as the web app's `Register` page.
- *
- * Almost everything is prefilled from `/profiles/me/`: the teen confirms rather
- * than types. Guardian details in particular are already on the profile, and
- * re-asking a 14-year-old for their parent's email is the fastest way to lose
- * them.
+ * The endpoint wants ten things about the teen and a guardian. The profile
+ * already knows most of them, so the screen shows three to check and adds a
+ * field only for what is missing. One screen, not steps: for a teen whose
+ * profile is complete this is a glance and a tap.
  */
 export default function EventRegisterScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const tokens = useTokens();
   const { user, isGuest } = useAuth();
 
   const event = useEvent(id);
   const profile = useProfile(!isGuest);
   const register = useRegisterForEvent(id);
 
-  const [step, setStep] = useState(0);
-  const [form, setForm] = useState<Partial<EventRegistrationInput>>({});
-  const [prefilled, setPrefilled] = useState(false);
+  const [form, setForm] = useState<Form>(EMPTY);
+  /**
+   * Which fields to show. Decided once, when the profile arrives — deciding it
+   * from the live values would make a field vanish as soon as it was typed in.
+   */
+  const [fields, setFields] = useState<Required[] | null>(null);
+  const [consent, setConsent] = useState(false);
 
-  // Prefill once, when the profile lands. Guarded so it never overwrites
-  // something the teen has already corrected.
   useEffect(() => {
-    if (prefilled || !profile.data) return;
+    // A disabled query stays "pending" for ever, hence the guest check.
+    if (fields || (profile.isPending && !isGuest)) return;
     const p = profile.data;
+    const known: Form = {
+      attendee_name:
+        p?.full_name || [user?.first_name, user?.last_name].filter(Boolean).join(' ') || '',
+      attendee_email: p?.user_email || user?.email || '',
+      attendee_phone: user?.phone || '',
+      attendee_age: p?.age ? String(p.age) : '',
+      attendee_province: p?.province || user?.province || '',
+      attendee_parish: p?.parish || user?.parish || '',
+      guardian_name: p?.guardian_name || '',
+      guardian_phone: p?.guardian_phone || '',
+      guardian_email: p?.guardian_email || '',
+      guardian_relationship: p?.guardian_relationship || '',
+    };
+    setForm(known);
+    setFields(
+      (Object.keys(known) as Required[]).filter((key) => ALWAYS.includes(key) || !known[key]),
+    );
+  }, [fields, profile.isPending, profile.data, user, isGuest]);
 
-    setForm((prev) => ({
-      attendee_name: p.full_name || [user?.first_name, user?.last_name].filter(Boolean).join(' '),
-      attendee_email: p.user_email || user?.email || '',
-      attendee_phone: '',
-      attendee_age: p.age ?? undefined,
-      attendee_date_of_birth: p.date_of_birth ?? undefined,
-      attendee_gender: p.gender ?? undefined,
-      attendee_province: p.province ?? '',
-      attendee_zone: p.zone ?? undefined,
-      attendee_area: p.area ?? undefined,
-      attendee_parish: p.parish ?? '',
-      ...prev,
-    }));
-    setPrefilled(true);
-  }, [profile.data, user, prefilled]);
-
-  const set = useCallback(<K extends keyof EventRegistrationInput>(
-    key: K,
-    value: EventRegistrationInput[K],
-  ) => {
+  const set = useCallback((key: Required, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   }, []);
 
-  /**
-   * What is still missing on this step.
-   *
-   * Drives the disabled state of Next rather than a toast on submit: the teen
-   * should be able to see what is wrong before committing.
-   */
-  const missing = useMemo(() => {
-    if (step === 0) {
-      const gaps: string[] = [];
-      if (!form.attendee_name?.trim()) gaps.push('attendee_name');
-      if (!form.attendee_email?.trim()) gaps.push('attendee_email');
-      if (!form.attendee_phone?.trim()) gaps.push('attendee_phone');
-      if (!form.attendee_age) gaps.push('attendee_age');
-      return gaps;
-    }
-    if (step === 1) {
-      const gaps: string[] = [];
-      if (!form.attendee_province) gaps.push('attendee_province');
-      if (!form.attendee_parish?.trim()) gaps.push('attendee_parish');
-      return gaps;
-    }
-    const gaps: string[] = [];
-    if (!form.guardian_name?.trim()) gaps.push('guardian_name');
-    if (!form.guardian_phone?.trim()) gaps.push('guardian_phone');
-    if (!form.guardian_email?.trim()) gaps.push('guardian_email');
-    if (!form.guardian_relationship) gaps.push('guardian_relationship');
-    return gaps;
-  }, [step, form]);
+  const needsConsent = !!event.data?.requires_guardian_consent;
+  const age = Number(form.attendee_age);
+  const complete = useMemo(
+    () =>
+      (Object.keys(form) as Required[]).every((key) => form[key].trim().length > 0) &&
+      Number.isInteger(age) &&
+      age > 0 &&
+      (!needsConsent || consent),
+    [form, age, needsConsent, consent],
+  );
 
   const submit = useCallback(async () => {
-    if (missing.length > 0) return;
+    if (!complete) return;
+    const input: EventRegistrationInput = {
+      ...form,
+      attendee_age: age,
+      attendee_date_of_birth: profile.data?.date_of_birth ?? undefined,
+      attendee_gender: profile.data?.gender ?? undefined,
+      attendee_zone: profile.data?.zone ?? undefined,
+      attendee_area: profile.data?.area ?? undefined,
+      guardian_consent: consent,
+    };
     try {
-      await register.mutateAsync(form as EventRegistrationInput);
-      router.replace({ pathname: '/event/[id]', params: { id } });
+      const registration = await register.mutateAsync(input);
+      // Replace, so Back from the ticket returns to the event, not this form.
+      router.replace({ pathname: '/ticket/[id]', params: { id: registration.id } });
     } catch {
-      // The error is surfaced inline below; the form stays put so nothing is
-      // retyped.
+      // Shown above the button; the form stays as typed.
     }
-  }, [missing, register, form, router, id]);
+  }, [complete, form, age, profile.data, consent, register, router]);
 
-  if (event.isPending || (profile.isPending && !isGuest)) {
+  const back = () => (router.canGoBack() ? router.back() : router.replace('/tribe'));
+  const shows = (key: Required) => !!fields?.includes(key);
+
+  if (event.isPending || !fields) {
     return (
-      <View className="flex-1 gap-4 bg-surf-base p-6" style={{ paddingTop: insets.top + 24 }}>
-        <Skeleton width="60%" height={26} />
-        <Skeleton height={48} />
-        <Skeleton height={48} />
-        <Skeleton height={48} />
+      <View className="flex-1 bg-surf-base">
+        <BackHeader title="Register" onBack={back} />
+        <View className="gap-4 px-5 pt-4">
+          <Skeleton width="60%" height={40} radius={8} />
+          <Skeleton height={72} radius={20} />
+          <Skeleton height={84} radius={16} />
+          <Skeleton height={84} radius={16} />
+        </View>
       </View>
     );
   }
 
-  if (event.isError || !event.data) {
+  if (!event.data) {
     return (
-      <View className="flex-1 justify-center bg-surf-base">
-        <ErrorState error={event.error} onRetry={event.refetch} />
+      <View className="flex-1 bg-surf-base">
+        <BackHeader title="Register" onBack={back} />
+        <View className="flex-1 justify-center">
+          <EmptyState
+            drawing="sitting"
+            message="We couldn’t load this event. Check your connection, then try again."
+            actionLabel="Try again"
+            onAction={() => event.refetch()}
+          />
+        </View>
       </View>
     );
   }
 
-  const price = event.data.is_free
-    ? null
-    : formatNaira(event.data.current_price ?? event.data.price);
+  const price = priceLabel(event.data);
+  const paid = !event.data.is_free;
+  const summary = [dayLabel(startOf(event.data)), whereLabel(event.data)].filter(Boolean).join(' · ');
+  const extra = fields.filter((key) => !ALWAYS.includes(key));
 
   return (
     <View className="flex-1 bg-surf-base">
-      <View
-        className="flex-row items-center gap-2 border-b border-line bg-surf-raised px-4 pb-3.5"
-        style={{ paddingTop: insets.top + 10 }}
-      >
-        <Pressable
-          onPress={router.back}
-          accessibilityRole="button"
-          accessibilityLabel="Cancel registration"
-          hitSlop={8}
-          className="h-10 w-10 items-center justify-center rounded-md border border-line"
-        >
-          <Icon name="close" size={18} color={tokens.text2} />
-        </Pressable>
-        <View className="flex-1">
-          <Text numberOfLines={1} className="font-ui-b text-[15px] text-ink-1">
-            {event.data.title}
-          </Text>
-          <Text className="font-ui text-[12px] text-ink-3">
-            {price ? `Registration — ${price}` : 'Free registration'}
-          </Text>
-        </View>
-      </View>
+      <BackHeader title="Register" onBack={back} />
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
-          contentContainerStyle={{ padding: 20, paddingBottom: 32 }}
-          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ gap: 16, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 24 }}
         >
-          <StepProgress steps={STEPS} current={step} />
+          <View className="flex-row items-center gap-3">
+            <View className="flex-1 gap-2">
+              <Text
+                accessibilityRole="header"
+                className="font-ui-xb text-[32px] leading-10 tracking-[-0.64px] text-ink-1"
+              >
+                Almost there
+              </Text>
+              <Text className="font-ui text-[16px] leading-6 text-ink-2">
+                Check your details and you’re in.
+              </Text>
+            </View>
+            <View className="h-[88px] w-[88px] items-center justify-center rounded-full bg-pop-lime">
+              <Object3D name="thumb-up" size={76} />
+            </View>
+          </View>
 
-          {step === 0 && (
-            <>
-              <TextField
-                label="Full name"
-                required
-                value={form.attendee_name ?? ''}
-                onChange={(v) => set('attendee_name', v)}
-                autoCapitalize="words"
-                autoComplete="name"
-              />
-              <TextField
-                label="Email"
-                required
-                value={form.attendee_email ?? ''}
-                onChange={(v) => set('attendee_email', v)}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoComplete="email"
-              />
-              <TextField
-                label="Phone"
-                required
-                value={form.attendee_phone ?? ''}
-                onChange={(v) => set('attendee_phone', v)}
-                keyboardType="phone-pad"
-                autoComplete="tel"
-                placeholder="080…"
-              />
-              <DateField
-                label="Date of birth"
-                required
-                value={form.attendee_date_of_birth ?? ''}
-                onChange={(iso) => {
-                  set('attendee_date_of_birth', iso);
-                  // Age is a required field of its own, and the server checks it
-                  // against the event's min/max — so it is derived here rather
-                  // than asked for twice.
-                  const years = ageFrom(iso);
-                  if (years !== undefined) set('attendee_age', years);
-                }}
-                hint={
-                  form.attendee_age !== undefined
-                    ? `Age ${form.attendee_age}`
-                    : 'Used to check the age range for this event'
-                }
-              />
-              <SelectField
-                label="Gender"
-                value={form.attendee_gender ?? ''}
-                options={GENDERS}
-                onChange={(v) => set('attendee_gender', v)}
-              />
-            </>
-          )}
+          <View className="w-full flex-row items-center gap-3 rounded-xl bg-surf-sunken py-2 pl-2 pr-3">
+            <EventPhoto event={event.data} style={{ width: 56, height: 56, borderRadius: 14 }} />
+            <View className="min-w-0 flex-1">
+              <Text numberOfLines={1} className="font-ui-sb text-[16px] leading-6 text-ink-1">
+                {event.data.title}
+              </Text>
+              <Text numberOfLines={1} className="font-ui-md text-[12px] leading-4 text-ink-2">
+                {summary}
+              </Text>
+            </View>
+          </View>
 
-          {step === 1 && (
-            <>
-              <SelectField
-                label="Province"
-                required
-                value={form.attendee_province ?? ''}
-                options={PROVINCES}
-                onChange={(v) => set('attendee_province', v)}
-              />
-              <TextField
-                label="Parish"
-                required
-                value={form.attendee_parish ?? ''}
-                onChange={(v) => set('attendee_parish', v)}
-                autoCapitalize="words"
-                placeholder="e.g. RCCG Victory House"
-              />
-              <TextField
-                label="Zone"
-                value={form.attendee_zone ?? ''}
-                onChange={(v) => set('attendee_zone', v)}
-                autoCapitalize="words"
-              />
-              <TextField
-                label="Area"
-                value={form.attendee_area ?? ''}
-                onChange={(v) => set('attendee_area', v)}
-                autoCapitalize="words"
-              />
-            </>
-          )}
+          <TextField
+            label="Full name"
+            value={form.attendee_name}
+            onChange={(v) => set('attendee_name', v)}
+            autoCapitalize="words"
+            autoComplete="name"
+          />
+          <TextField
+            label="Your parish"
+            value={form.attendee_parish}
+            onChange={(v) => set('attendee_parish', v)}
+            autoCapitalize="words"
+          />
+          <TextField
+            label="Parent or guardian’s phone"
+            value={form.guardian_phone}
+            onChange={(v) => set('guardian_phone', v)}
+            keyboardType="phone-pad"
+            placeholder="0803 555 0142"
+            hint="We only use this number to reach a parent or guardian about this event."
+          />
 
-          {step === 2 && (
-            <>
-              <Card className="mb-5 flex-row items-start gap-3 p-4">
-                <Icon name="lock" size={18} color={tokens.green} />
-                <Text className="flex-1 font-ui text-[13px] leading-[19px] text-ink-2">
-                  A parent or guardian is required for every teen event. We only use these
-                  details for safeguarding and emergencies.
-                </Text>
-              </Card>
-
-              <TextField
-                label="Guardian name"
-                required
-                value={form.guardian_name ?? ''}
-                onChange={(v) => set('guardian_name', v)}
-                autoCapitalize="words"
-              />
-              <TextField
-                label="Guardian phone"
-                required
-                value={form.guardian_phone ?? ''}
-                onChange={(v) => set('guardian_phone', v)}
-                keyboardType="phone-pad"
-              />
-              <TextField
-                label="Guardian email"
-                required
-                value={form.guardian_email ?? ''}
-                onChange={(v) => set('guardian_email', v)}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-              <SelectField
-                label="Relationship"
-                required
-                value={form.guardian_relationship ?? ''}
-                options={GUARDIAN_RELATIONSHIPS}
-                onChange={(v) => set('guardian_relationship', v)}
-              />
-              <TextField
-                label="Allergies or medical notes"
-                value={form.medical_conditions ?? ''}
-                onChange={(v) => set('medical_conditions', v)}
-                multiline
-                hint="Anything the team should know if you need help"
-              />
-            </>
-          )}
-
-          {register.isError && (
+          {extra.length > 0 && (
             <Text
-              accessibilityLiveRegion="polite"
-              className="mt-1 font-ui-md text-[13px] leading-[19px]"
-              style={{ color: tokens.error }}
+              accessibilityRole="header"
+              className="pt-2 font-ui-b text-[20px] leading-7 tracking-[-0.2px] text-ink-1"
             >
-              {register.error instanceof Error
-                ? register.error.message
-                : 'Could not register. Please try again.'}
+              A few more details
             </Text>
           )}
 
-          {price && step === STEPS.length - 1 && (
-            <Card className="mt-4 flex-row items-center gap-3 p-4">
-              <Icon name="ticket" size={18} color={tokens.amber} />
-              <Text className="flex-1 font-ui text-[13px] leading-[19px] text-ink-2">
-                This event costs {price}. Your place is held once you register; payment is
-                confirmed by your teen leader.
+          {shows('attendee_email') && (
+            <TextField
+              label="Your email address"
+              value={form.attendee_email}
+              onChange={(v) => set('attendee_email', v)}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
+            />
+          )}
+          {shows('attendee_phone') && (
+            <TextField
+              label="Your phone number"
+              value={form.attendee_phone}
+              onChange={(v) => set('attendee_phone', v)}
+              keyboardType="phone-pad"
+              autoComplete="tel"
+            />
+          )}
+          {shows('attendee_age') && (
+            <TextField
+              label="Your age"
+              value={form.attendee_age}
+              onChange={(v) => set('attendee_age', v.replace(/\D/g, ''))}
+              keyboardType="number-pad"
+              maxLength={2}
+            />
+          )}
+          {shows('attendee_province') && (
+            <View className="gap-2">
+              <Text className="font-ui-sb text-[14px] leading-5 text-ink-2">Your province</Text>
+              <ChipRow
+                wrap
+                options={PROVINCES}
+                value={form.attendee_province}
+                onChange={(v) => set('attendee_province', v)}
+              />
+            </View>
+          )}
+          {shows('guardian_name') && (
+            <TextField
+              label="Parent or guardian’s name"
+              value={form.guardian_name}
+              onChange={(v) => set('guardian_name', v)}
+              autoCapitalize="words"
+            />
+          )}
+          {shows('guardian_email') && (
+            <TextField
+              label="Parent or guardian’s email"
+              value={form.guardian_email}
+              onChange={(v) => set('guardian_email', v)}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          )}
+          {shows('guardian_relationship') && (
+            <View className="gap-2">
+              <Text className="font-ui-sb text-[14px] leading-5 text-ink-2">Who are they to you?</Text>
+              <ChipRow
+                wrap
+                options={GUARDIAN_RELATIONSHIPS}
+                value={form.guardian_relationship}
+                onChange={(v) => set('guardian_relationship', v)}
+              />
+            </View>
+          )}
+
+          {needsConsent && (
+            <View className="flex-row items-center gap-3 rounded-xl bg-surf-sunken p-4">
+              <Text className="flex-1 font-ui-sb text-[16px] leading-6 text-ink-1">
+                My parent or guardian knows about this event and says I can go.
               </Text>
-            </Card>
+              <Toggle on={consent} onChange={setConsent} label="My parent or guardian agrees" />
+            </View>
+          )}
+
+          {paid && (
+            <Text className="font-ui text-[14px] leading-5 text-ink-2">
+              This event costs {price}. Registering holds your place, and your teen leader will
+              confirm it once the payment is in.
+            </Text>
           )}
         </ScrollView>
 
-        {/* Docked controls — one-thumb reachability (05-navigation.md). */}
-        <View
-          className="flex-row gap-3 border-t border-line bg-surf-raised px-5 pt-4"
-          style={{ paddingBottom: insets.bottom + 16 }}
-        >
-          {step > 0 && (
-            <Button
-              label="Back"
-              variant="secondary"
-              onPress={() => setStep((s) => s - 1)}
-              height={52}
-              className="flex-1"
-            />
+        <View className="gap-2 px-5 pt-3" style={{ paddingBottom: Math.max(insets.bottom, 16) }}>
+          {register.isError && (
+            <Text
+              accessibilityLiveRegion="polite"
+              className="text-center font-ui-md text-[14px] leading-5 text-feedback-error"
+            >
+              {register.error instanceof Error
+                ? register.error.message
+                : 'That did not go through. Please try again.'}
+            </Text>
           )}
           <Button
-            label={step < STEPS.length - 1 ? 'Continue' : 'Register'}
-            onPress={() => (step < STEPS.length - 1 ? setStep((s) => s + 1) : submit())}
-            disabled={missing.length > 0}
+            label={paid ? `Register · ${price}` : 'Register'}
+            onPress={submit}
+            disabled={!complete}
             loading={register.isPending}
-            height={52}
-            className="flex-[2]"
-            icon={
-              step < STEPS.length - 1 ? (
-                <Icon name="arrowRight" size={18} color="#fff" />
-              ) : undefined
-            }
+            className="w-full"
           />
         </View>
       </KeyboardAvoidingView>
     </View>
   );
-}
-
-/** Whole years between an ISO date and today. */
-function ageFrom(iso: string): number | undefined {
-  const dob = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(dob.getTime())) return undefined;
-
-  const today = new Date();
-  let age = today.getFullYear() - dob.getFullYear();
-  const monthDelta = today.getMonth() - dob.getMonth();
-  if (monthDelta < 0 || (monthDelta === 0 && today.getDate() < dob.getDate())) age -= 1;
-
-  return age >= 0 && age < 120 ? age : undefined;
 }

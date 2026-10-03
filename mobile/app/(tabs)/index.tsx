@@ -8,7 +8,9 @@ import { useCompleteChallenge, useToday, useUnreadCount } from '../../src/api/qu
 import type { StreakState, TodayResponse } from '../../src/api/types';
 import { Icon } from '../../src/components/Icon';
 import { useNavClearance } from '../../src/components/useNavClearance';
+import { DAY_MS, inRun, startOfDay, streakWeek, streakWords } from '../../src/data/streak';
 import { useAuth } from '../../src/state/auth';
+import { useMyPhoto } from '../../src/state/photo';
 import { Object3D } from '../../src/ui/art';
 import {
   HeroCard,
@@ -44,6 +46,7 @@ export default function TodayScreen() {
   const router = useRouter();
   const { isGuest, user } = useAuth();
   const navClearance = useNavClearance(24);
+  const photo = useMyPhoto();
 
   const today = useToday();
   const unread = useUnreadCount(!isGuest);
@@ -66,7 +69,7 @@ export default function TodayScreen() {
     <View className="flex-1 bg-surf-base">
       <Header
         name={isGuest ? null : (user?.first_name ?? null)}
-        photo={user?.profile_picture ?? null}
+        photo={photo}
         date={data?.date}
         streak={isGuest ? null : (data?.streak?.current_length ?? null)}
         hasUnread={(unread.data?.unread_count ?? 0) > 0}
@@ -246,25 +249,6 @@ function Reading({ data, onOpen }: { data: TodayResponse; onOpen: () => void }) 
 
 // ─── Week strip ────────────────────────────────────────────────────────────
 
-const DAY_MS = 86_400_000;
-
-function startOfDay(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
-/**
- * Was `daysAgo` (0 = today) part of the current run?
- *
- * The API gives the run's length and its last active day, not a list of dates,
- * so the run is the `current_length` days ending on `last_active_on`.
- */
-function inRun(streak: StreakState | null, daysAgo: number): boolean {
-  if (!streak?.last_active_on || streak.current_length <= 0) return false;
-  const last = startOfDay(new Date(`${streak.last_active_on}T00:00:00`));
-  const sinceLast = Math.round((startOfDay(new Date()).getTime() - last.getTime()) / DAY_MS);
-  return daysAgo >= sinceLast && daysAgo < sinceLast + streak.current_length;
-}
-
 /**
  * Seven days with today fifth: four behind, two ahead — as drawn. A past day
  * outside the run looks the same as a day still to come. There is no "missed"
@@ -301,7 +285,8 @@ function WeekStrip({ streak }: { streak: StreakState | null }) {
 function DayGrid({ data, isGuest }: { data: TodayResponse; isGuest: boolean }) {
   const router = useRouter();
   const verse = data.memory_verse;
-  const next = data.continue_reading;
+  // "John 3": where the teen left off in the Bible, if they have begun.
+  const next = data.continue_reading?.chapter_detail.reference ?? null;
 
   return (
     <View className="w-full flex-row gap-3">
@@ -332,14 +317,19 @@ function DayGrid({ data, isGuest }: { data: TodayResponse; isGuest: boolean }) {
 
         <PopCard
           colour="pink"
-          onPress={() => router.push('/bible')}
-          accessibilityLabel={next ? `Continue reading ${next.reference}` : 'Open the Bible'}
+          onPress={() =>
+            // The card knows "John 3" as words; the reader resolves them.
+            next
+              ? router.push({ pathname: '/bible', params: { passage: next } })
+              : router.push('/bible')
+          }
+          accessibilityLabel={next ? `Continue reading ${next}` : 'Open the Bible'}
           className="h-[72px] flex-row items-center gap-2 py-3 pl-4 pr-3"
         >
           <View className="flex-1">
             <PopEyebrow>{next ? 'Continue' : 'Bible'}</PopEyebrow>
             <Text numberOfLines={1} className="font-ui-sb text-[16px] leading-6 text-pop-on">
-              {next ? next.reference : 'Read'}
+              {next ?? 'Read'}
             </Text>
           </View>
           {/* Always dark with a light arrow: it sits on pink in both themes. */}
@@ -412,32 +402,8 @@ function Challenge({ data, isGuest }: { data: TodayResponse; isGuest: boolean })
 
 // ─── Streak ────────────────────────────────────────────────────────────────
 
-const WEEK_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
 function Streak({ streak, done }: { streak: StreakState; done: boolean }) {
-  // JS weeks start on Sunday; this row starts on Monday.
-  const todayIndex = (new Date().getDay() + 6) % 7;
-  const week = WEEK_LETTERS.map((letter, i) => {
-    const daysAgo = todayIndex - i;
-    const state: WeekDayState =
-      daysAgo === 0 ? (done ? 'done' : 'today') : daysAgo > 0 && inRun(streak, daysAgo) ? 'done' : 'next';
-    return { letter, state };
-  });
-
-  const length = streak.current_length;
-  return (
-    <StreakCard
-      title={length > 0 ? `${length}-day streak` : 'Start your streak'}
-      message={
-        done
-          ? 'You showed up today. See you tomorrow.'
-          : length > 0
-            ? 'Today’s reading keeps it going.'
-            : 'Read today and this becomes day one.'
-      }
-      week={week}
-    />
-  );
+  return <StreakCard {...streakWords(streak, done)} week={streakWeek(streak, done)} />;
 }
 
 // ─── Loading ───────────────────────────────────────────────────────────────
