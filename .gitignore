@@ -129,3 +129,6 @@ frontend/dist/stats.html
 # Untracked build/scratch artifacts that were one `git add .` from being committed
 docs/designer.zip
 backend/debug.log
+
+# Launch-video renders from the brag tool: thousands of frames per run.
+brag-output*/
