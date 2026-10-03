@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Faith Tribe code</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Poppins', -apple-system, sans-serif; background: #252432; color: #fff; margin: 0; padding: 20px 0; }
+        .container { max-width: 600px; margin: 0 auto; background: #252432; border-radius: 20px; overflow: hidden; box-shadow: 0 0 40px rgba(255,39,112,0.15); }
+        .header { background: #1e1e2a; padding: 36px 24px; text-align: center; border-bottom: 3px solid #ff2770; }
+        .logos { display: flex; justify-content: center; align-items: center; gap: 16px; margin-bottom: 18px; }
+        .logo { width: 64px; height: 64px; border-radius: 50%; border: 2px solid #45f3ff; object-fit: cover; box-shadow: 0 0 12px rgba(69,243,255,0.35); }
+        .header h1 { color: #45f3ff; font-size: 24px; font-weight: 800; margin: 0 0 6px; letter-spacing: 0.06em; text-transform: uppercase; text-shadow: 0 0 20px rgba(69,243,255,0.5); }
+        .header-sub { color: rgba(255,255,255,0.5); font-size: 13px; }
+        .content { padding: 36px 28px; }
+        .avatar-wrap { text-align: center; margin-bottom: 22px; }
+        .avatar { width: 84px; height: 84px; border-radius: 50%; border: 3px solid #ff2770; object-fit: cover; box-shadow: 0 0 18px rgba(255,39,112,0.45); }
+        .greeting { font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 10px; }
+        .message { color: #999; font-size: 15px; line-height: 1.7; margin-bottom: 24px; }
+        .infobox { background: #2d2d39; border: 1px solid rgba(69,243,255,0.15); border-radius: 14px; padding: 16px 20px; margin: 18px 0; color: #999; font-size: 14px; line-height: 1.65; }
+        .infobox strong { color: #fff; }
+        .btn { display: inline-block; text-decoration: none; font-weight: 700; padding: 14px 42px; border-radius: 30px; font-size: 15px; background: #ff2770; color: #fff; box-shadow: 0 0 20px rgba(255,39,112,0.5); }
+        .code { font-size: 38px; font-weight: 800; letter-spacing: 0.32em; color: #45f3ff; text-align: center; margin: 28px 0; text-shadow: 0 0 20px rgba(69,243,255,0.5); }
+        .footer { background: #1e1e2a; padding: 28px; text-align: center; border-top: 2px solid rgba(255,39,112,0.2); }
+        .footer-brand { color: #45f3ff; font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+        .footer p { color: #555; font-size: 12px; margin: 3px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logos">
+                {% if logo_url %}<img src="{{ logo_url }}" alt="RCCG Logo" class="logo">{% endif %}
+                {% if faith_logo_url %}<img src="{{ faith_logo_url }}" alt="Faith Tribe Logo" class="logo">{% endif %}
+            </div>
+            <h1>Your Code</h1>
+            <p class="header-sub">RCCG Region 63 Junior Church</p>
+        </div>
+
+        <div class="content">
+            <p class="greeting">Here is your code</p>
+
+            <p class="message">
+                {% if is_login %}Use this code to sign in to
+                {% else %}Use this code to finish creating your account on
+                {% endif %}<strong style="color:#fff;">Faith Tribe</strong>.
+            </p>
+
+            <p class="code">{{ code }}</p>
+
+            <div class="infobox">
+                This code is valid for <strong>{{ minutes }} minutes</strong> and can only be used once.
+                Nobody from the church will ever ask you for it. If you did not ask for
+                a code, you can safely ignore this email.
+            </div>
+        </div>
+
+        <div class="footer">
+            <p class="footer-brand">RCCG Region 63 Junior Church</p>
+            <p>&copy; {% now "Y" %} All rights reserved.</p>
+            <p>This is an automated security email. Please do not reply.</p>
+        </div>
+    </div>
+</body>
+</html>

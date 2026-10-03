@@ -54,6 +54,39 @@ class NoOpOTPProvider(OTPProvider):
         return None
 
 
+class EmailAndSmsOTPProvider(OTPProvider):
+    """Production provider: email through the transactional mailer, SMS through
+    a pluggable backend.
+
+    Email works as soon as the mail settings do. SMS needs a paid gateway
+    (Termii / Africa's Talking), so it is a separate switch: point
+    ``settings.OTP_SMS_BACKEND`` at a callable ``(phone, message) -> None``.
+    Until that is set the SMS leg is skipped — logged, never raised — because
+    sign-up issues the same code to the email address and that copy is enough
+    to finish.
+    """
+
+    def send(self, destination, channel, code, purpose):
+        if channel == 'email':
+            from .email_service import UserEmailService
+            UserEmailService.send_otp_email(destination, code, purpose)
+            return
+
+        dotted = getattr(settings, 'OTP_SMS_BACKEND', '')
+        if not dotted:
+            logger.info('[OTP] SMS skipped for %s: no OTP_SMS_BACKEND configured',
+                        mask_destination(destination))
+            return
+        minutes = max(1, int(getattr(settings, 'OTP_TTL_SECONDS', 600)) // 60)
+        message = f'Your Faith Tribe code is {code}. It expires in {minutes} minutes.'
+        try:
+            import_string(dotted)(destination, message)
+        except Exception:
+            # A gateway outage must not turn into a 500 on sign-up: the email
+            # copy of the code is still on its way.
+            logger.exception('[OTP] SMS send failed for %s', mask_destination(destination))
+
+
 def get_otp_provider():
     """Instantiate the configured provider (dotted path in settings.OTP_PROVIDER)."""
     dotted = getattr(settings, 'OTP_PROVIDER', 'users.otp_providers.ConsoleOTPProvider')

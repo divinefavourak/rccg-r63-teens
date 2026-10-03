@@ -73,6 +73,24 @@ def _base_context(user=None):
 class UserEmailService:
 
     @staticmethod
+    def send_otp_email(email, code, purpose):
+        """
+        Send a one-time code. Sent regardless of `email_notifications`: this is
+        a message the person just asked for, not a notification, and at sign-up
+        there is no account yet to hold a preference.
+        """
+        minutes = max(1, int(getattr(settings, 'OTP_TTL_SECONDS', 600)) // 60)
+        subject = f'{code} is your Faith Tribe code'
+        context = {
+            **_base_context(),
+            'code': code,
+            'minutes': minutes,
+            'is_login': purpose == 'login',
+        }
+        html = render_to_string('emails/otp_code.html', context)
+        _send_in_thread(subject, html, [email], sender='junior_church')
+
+    @staticmethod
     def send_welcome_email(user):
         """
         Send a welcome email after a user self-registers.

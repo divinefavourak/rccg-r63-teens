@@ -501,6 +501,46 @@ def _find_user_by_destination(destination, channel):
     return User.objects.filter(phone=destination, is_active=True).first()
 
 
+def otp_login_response(user, otp):
+    """Sign ``user`` in on the strength of a verified one-time code.
+
+    Shared by OTP login and by sign-up, so there is exactly one place that
+    decides what a code is allowed to do. Full parity with password login (no
+    weaker parallel auth path): lockout and email-verification enforcement both
+    apply.
+    """
+    from django.conf import settings as dj_settings
+    from .models import OTPCode
+
+    if user.account_locked_until and user.account_locked_until > timezone.now():
+        return Response({"detail": "Account is temporarily locked. Try again later."},
+                        status=status.HTTP_423_LOCKED)
+    # An email OTP proves email ownership → mark verified rather than block.
+    newly_verified = False
+    if otp.channel == OTPCode.Channel.EMAIL and not user.is_verified:
+        user.is_verified = True
+        newly_verified = True
+    if getattr(dj_settings, 'ENFORCE_EMAIL_VERIFICATION', False) and not user.is_verified:
+        return Response({"detail": "Please verify your email before logging in."},
+                        status=status.HTTP_403_FORBIDDEN)
+    # Reset login state consistently with the password path.
+    user.failed_login_attempts = 0
+    user.account_locked_until = None
+    user.last_login = timezone.now()
+    update_fields = ['failed_login_attempts', 'account_locked_until', 'last_login']
+    if newly_verified:
+        update_fields.append('is_verified')
+    user.save(update_fields=update_fields)
+    refresh = RefreshToken.for_user(user)
+    resp = Response({
+        'access': str(refresh.access_token),
+        'refresh': str(refresh),
+        'user': UserSerializer(user).data,
+    })
+    set_auth_cookies(resp, access=str(refresh.access_token), refresh=str(refresh))
+    return resp
+
+
 class RequestOTPView(APIView):
     """Request a one-time code. Always 200 (no account enumeration)."""
     permission_classes = [permissions.AllowAny]
@@ -562,35 +602,7 @@ class VerifyOTPView(APIView):
             if user is None:
                 return Response({"detail": "No account for that destination."},
                                 status=status.HTTP_400_BAD_REQUEST)
-            # Full parity with password login (no weaker parallel auth path).
-            if user.account_locked_until and user.account_locked_until > timezone.now():
-                return Response({"detail": "Account is temporarily locked. Try again later."},
-                                status=status.HTTP_423_LOCKED)
-            from django.conf import settings as dj_settings
-            # An email OTP proves email ownership → mark verified rather than block.
-            newly_verified = False
-            if otp.channel == OTPCode.Channel.EMAIL and not user.is_verified:
-                user.is_verified = True
-                newly_verified = True
-            if getattr(dj_settings, 'ENFORCE_EMAIL_VERIFICATION', False) and not user.is_verified:
-                return Response({"detail": "Please verify your email before logging in."},
-                                status=status.HTTP_403_FORBIDDEN)
-            # Reset login state consistently with the password path.
-            user.failed_login_attempts = 0
-            user.account_locked_until = None
-            user.last_login = timezone.now()
-            update_fields = ['failed_login_attempts', 'account_locked_until', 'last_login']
-            if newly_verified:
-                update_fields.append('is_verified')
-            user.save(update_fields=update_fields)
-            refresh = RefreshToken.for_user(user)
-            resp = Response({
-                'access': str(refresh.access_token),
-                'refresh': str(refresh),
-                'user': UserSerializer(user).data,
-            })
-            set_auth_cookies(resp, access=str(refresh.access_token), refresh=str(refresh))
-            return resp
+            return otp_login_response(user, otp)
 
         return Response({"detail": "Verified."})
 
