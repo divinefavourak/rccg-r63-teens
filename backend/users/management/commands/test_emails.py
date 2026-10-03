@@ -47,14 +47,14 @@ def _sync_send_patch(backend=None):
         backend: optional Django email backend path to force (e.g. console).
     """
     from django.core.mail import EmailMultiAlternatives
-    from django.utils.html import strip_tags
     from utils.email_senders import get_sender
+    from utils.email_text import html_to_text
 
     originals = {}
     modules = [importlib.import_module(m) for m in _EMAIL_MODULES]
 
     def _sync(subject, html, recipients, sender='default', fail_silently=False):
-        plain = strip_tags(html)
+        plain = html_to_text(html)
         conn_kwargs = {}
         if backend:
             conn_kwargs['backend'] = backend
@@ -165,7 +165,6 @@ class Command(BaseCommand):
         from django.conf import settings
         from django.core.mail import EmailMultiAlternatives
         from django.template.loader import render_to_string
-        from django.utils.html import strip_tags
         from utils.email_senders import get_sender
 
         frontend_url = getattr(settings, 'FRONTEND_URL', '') or 'https://rccg-r63-juniorchurch.vercel.app'
@@ -177,7 +176,6 @@ class Command(BaseCommand):
             'faith_logo_url': 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/faith_logo.jpg',
         }
         html    = render_to_string('emails/daily_devotional.html', context)
-        plain   = strip_tags(html)
         subject = f"Today's Devotional – {devotional.title} ({devotional.date.strftime('%B %d, %Y')})"
 
         # _send_in_thread is already patched to be synchronous at this point

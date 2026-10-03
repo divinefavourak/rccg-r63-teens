@@ -1,135 +1,42 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Registration Status Update</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap');
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Poppins', -apple-system, sans-serif; background: #252432; color: #fff; margin: 0; padding: 20px 0; }
-        .container { max-width: 600px; margin: 0 auto; background: #252432; border-radius: 20px; overflow: hidden; box-shadow: 0 0 40px rgba(255,39,112,0.15); }
-        .header { background: #1e1e2a; padding: 36px 24px; text-align: center; border-bottom: 3px solid #ff2770; }
-        .logos { display: flex; justify-content: center; align-items: center; gap: 16px; margin-bottom: 18px; }
-        .logo { width: 64px; height: 64px; border-radius: 50%; border: 2px solid #45f3ff; object-fit: cover; box-shadow: 0 0 12px rgba(69,243,255,0.35); }
-        .header h1 { color: #45f3ff; font-size: 24px; font-weight: 800; margin: 0 0 6px; letter-spacing: 0.06em; text-transform: uppercase; text-shadow: 0 0 20px rgba(69,243,255,0.5); }
-        .header-sub { color: rgba(255,255,255,0.5); font-size: 13px; }
-        .content { padding: 36px 28px; }
-        .avatar-wrap { text-align: center; margin-bottom: 22px; }
-        .avatar { width: 84px; height: 84px; border-radius: 50%; border: 3px solid #ff2770; object-fit: cover; box-shadow: 0 0 18px rgba(255,39,112,0.45); }
-        .greeting { font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 10px; }
-        .message { color: #999; font-size: 15px; line-height: 1.7; margin-bottom: 24px; }
-        .badge { display: inline-block; padding: 10px 28px; border-radius: 30px; font-weight: 800; font-size: 15px; letter-spacing: 0.04em; }
-        .badge-confirmed  { background: #22c55e; color: #fff; box-shadow: 0 0 14px rgba(34,197,94,0.45); }
-        .badge-pending    { background: #f59e0b; color: #111; }
-        .badge-rejected   { background: #ef4444; color: #fff; box-shadow: 0 0 14px rgba(239,68,68,0.4); }
-        .badge-cancelled  { background: #555; color: #fff; }
-        .badge-waitlisted { background: #ff2770; color: #fff; box-shadow: 0 0 14px rgba(255,39,112,0.45); }
-        .badge-default    { background: #45f3ff; color: #111; }
-        .event-box { background: #2d2d39; border-left: 3px solid #ff2770; border-radius: 0 12px 12px 0; padding: 14px 18px; margin: 18px 0; }
-        .event-title { color: #45f3ff; font-weight: 700; font-size: 15px; margin: 0 0 5px; }
-        .event-detail { color: #777; font-size: 13px; margin: 2px 0; }
-        .card { background: #2d2d39; border: 1px solid rgba(69,243,255,0.18); border-radius: 16px; padding: 22px 24px; margin: 18px 0; }
-        .row { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 14px; }
-        .row:last-child { border-bottom: none; }
-        .lbl { color: #45f3ff; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
-        .val { color: #fff; font-weight: 600; text-align: right; max-width: 65%; }
-        .infobox { background: #2d2d39; border: 1px solid rgba(255,39,112,0.18); border-radius: 14px; padding: 16px 20px; margin: 18px 0; color: #999; font-size: 14px; line-height: 1.65; }
-        .footer { background: #1e1e2a; padding: 28px; text-align: center; border-top: 2px solid rgba(255,39,112,0.2); }
-        .footer-brand { color: #45f3ff; font-weight: 700; font-size: 13px; margin-bottom: 6px; }
-        .footer p { color: #555; font-size: 12px; margin: 3px 0; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <div class="logos">
-                {% if logo_url %}<img src="{{ logo_url }}" alt="RCCG Logo" class="logo">{% endif %}
-                {% if faith_logo_url %}<img src="{{ faith_logo_url }}" alt="Faith Tribe Logo" class="logo">{% endif %}
-            </div>
-            <h1>Status Update</h1>
-            <p class="header-sub">RCCG Region 63 Junior Church</p>
-        </div>
+{% extends "emails/_base.html" %}
+{% load email_extras %}
+{% block title %}Registration update{% endblock %}
+{% block preheader %}Your registration{% if event %} for {{ event.title }}{% endif %} is now: {{ new_status|humanize }}.{% endblock %}
+{% block accent %}{% if new_status == 'confirmed' or new_status == 'checked_in' or new_status == 'attended' %}#10B981{% elif new_status == 'rejected' or new_status == 'cancelled' %}#FF7BAC{% elif new_status == 'pending' %}#FFC857{% elif new_status == 'waitlisted' %}#B9A5FF{% else %}#8EC5FF{% endif %}{% endblock %}
+{% block eyebrow %}Registration update{% endblock %}
+{% block heading %}{% if new_status == 'confirmed' %}You&rsquo;re confirmed!{% elif new_status == 'rejected' %}Your registration wasn&rsquo;t approved{% elif new_status == 'cancelled' %}Your registration was cancelled{% elif new_status == 'waitlisted' %}You&rsquo;re on the waiting list{% elif new_status == 'pending' %}Your registration is being reviewed{% elif new_status == 'checked_in' %}You&rsquo;re checked in{% else %}Your registration was updated{% endif %}{% endblock %}
+{% block lead %}Hi {{ full_name }}, here&rsquo;s the latest on your registration{% if event %} for {{ event.title }}{% endif %}.{% endblock %}
 
-        <div class="content">
-            {% if avatar_url %}
-            <div class="avatar-wrap">
-                <img src="{{ avatar_url }}" alt="{{ full_name }}" class="avatar">
-            </div>
-            {% endif %}
+{% block content %}
+{% if event %}{% include "emails/_event.html" with top="0" %}{% endif %}
 
-            <p class="greeting">Hello, {{ full_name }}!</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:{% if event %}16px{% else %}0{% endif %};">
+  <tr>
+    <td bgcolor="#F2EAE0" style="border-radius:20px;padding:6px 20px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        {% include "emails/_row.html" with label="Registration ID" value=ticket_id mono=True first=True %}
+        {% include "emails/_row.html" with label="Name" value=full_name %}
+        {% if category %}{% include "emails/_row.html" with label="Category" value=category %}{% endif %}
+        {% include "emails/_row.html" with label="Was" value=old_status|humanize colour="#6F6862" %}
+        {% include "emails/_row.html" with label="Now" value=new_status|humanize %}
+      </table>
+    </td>
+  </tr>
+</table>
 
-            <p class="message">
-                Your registration{% if event %} for
-                <strong style="color:#fff;">{{ event.title }}</strong>{% endif %}
-                status has been updated.
-            </p>
+{% if new_status == 'waitlisted' %}
+<p style="margin:24px 0 0;">The event is full for now. If a place opens up, it goes to the next person on the list and we&rsquo;ll email you straight away.</p>
+{% elif new_status == 'rejected' or new_status == 'cancelled' %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;">
+  <tr>
+    <td bgcolor="#FFE1EC" style="border-radius:16px;padding:16px 20px;font-size:14px;line-height:22px;color:#1C1916;">
+      <strong>Think this is a mistake?</strong> Speak to your parish coordinator and they can look into it.
+    </td>
+  </tr>
+</table>
+{% endif %}
 
-            <div style="text-align:center; margin-bottom:20px;">
-                {% if new_status == 'confirmed' %}
-                    <span class="badge badge-confirmed">CONFIRMED</span>
-                {% elif new_status == 'rejected' %}
-                    <span class="badge badge-rejected">REJECTED</span>
-                {% elif new_status == 'pending' %}
-                    <span class="badge badge-pending">PENDING</span>
-                {% elif new_status == 'cancelled' %}
-                    <span class="badge badge-cancelled">CANCELLED</span>
-                {% elif new_status == 'waitlisted' %}
-                    <span class="badge badge-waitlisted">WAITLISTED</span>
-                {% else %}
-                    <span class="badge badge-default">{{ new_status|upper }}</span>
-                {% endif %}
-            </div>
+{% if registration_url %}{% include "emails/_button.html" with href=registration_url label="View my registration" %}{% endif %}
+{% endblock %}
 
-            {% if event %}
-            <div class="event-box">
-                <p class="event-title">{{ event.title }}</p>
-                {% if event.start_datetime %}
-                <p class="event-detail">Date: {{ event.start_datetime|date:"F d, Y" }}</p>
-                {% endif %}
-                {% if event.venue %}<p class="event-detail">Venue: {{ event.venue }}</p>{% endif %}
-            </div>
-            {% endif %}
-
-            <div class="card">
-                <div class="row">
-                    <span class="lbl">Registration ID</span>
-                    <span class="val">{{ ticket_id }}</span>
-                </div>
-                <div class="row">
-                    <span class="lbl">Name</span>
-                    <span class="val">{{ full_name }}</span>
-                </div>
-                {% if category %}
-                <div class="row">
-                    <span class="lbl">Category</span>
-                    <span class="val">{{ category }}</span>
-                </div>
-                {% endif %}
-                <div class="row">
-                    <span class="lbl">Previous Status</span>
-                    <span class="val" style="color:#777;">{{ old_status|title }}</span>
-                </div>
-                <div class="row">
-                    <span class="lbl">New Status</span>
-                    <span class="val" style="color:#45f3ff;">{{ new_status|title }}</span>
-                </div>
-            </div>
-
-            {% if new_status == 'rejected' or new_status == 'cancelled' %}
-            <div class="infobox">
-                If you believe this is an error or have any questions,
-                please contact your parish coordinator directly.
-            </div>
-            {% endif %}
-        </div>
-
-        <div class="footer">
-            <p class="footer-brand">RCCG Region 63 Junior Church</p>
-            <p>&copy; {% now "Y" %} All rights reserved.</p>
-            <p>For inquiries, contact your parish coordinator.</p>
-        </div>
-    </div>
-</body>
-</html>
+{% block footer_note %}Questions? Your parish coordinator can help.{% endblock %}

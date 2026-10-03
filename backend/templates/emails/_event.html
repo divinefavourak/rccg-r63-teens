@@ -1,0 +1,32 @@
+{% comment %}
+An event as the app shows it in a list: a violet date badge, then the title,
+when and where. `top` is the space above it (24px unless it opens the card).
+{% endcomment %}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:{{ top|default:'24px' }};border:1px solid #EAE3DA;border-radius:20px;">
+  <tr>
+    {% if event.start_datetime %}
+    <td width="64" valign="top" style="padding:16px 0 16px 16px;">
+      <table role="presentation" width="64" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td align="center" bgcolor="#B9A5FF" style="border-radius:16px;padding:10px 0 8px;color:#1C1916;">
+            <span style="display:block;font-size:12px;line-height:14px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;">{{ event.start_datetime|date:"M" }}</span>
+            <span style="display:block;font-size:28px;line-height:32px;font-weight:800;">{{ event.start_datetime|date:"j" }}</span>
+          </td>
+        </tr>
+      </table>
+    </td>
+    {% endif %}
+    <td valign="top" style="padding:16px;">
+      <p style="margin:0;font-size:18px;line-height:24px;font-weight:800;color:#1C1916;">{{ event.title }}</p>
+      {% if event.start_datetime %}
+      <p style="margin:4px 0 0;font-size:14px;line-height:20px;color:#4B4540;">
+        {{ event.start_datetime|date:"l j F" }}{% if event.end_datetime and event.end_datetime|date:"Ymd" != event.start_datetime|date:"Ymd" %} &ndash; {{ event.end_datetime|date:"l j F" }}{% endif %}, {{ event.start_datetime|date:"g:i A" }}
+      </p>
+      {% endif %}
+      {% if event.venue or event.city %}
+      <p style="margin:2px 0 0;font-size:14px;line-height:20px;color:#4B4540;">
+        {% if event.venue %}{{ event.venue }}{% endif %}{% if event.venue and event.city %}, {% endif %}{% if event.city %}{{ event.city }}{% if event.state %}, {{ event.state }}{% endif %}{% endif %}
+      </p>
+      {% endif %}
+    </td>
+  </tr>
+</table>

@@ -1,100 +1,34 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Account Created</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap');
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Poppins', -apple-system, sans-serif; background: #252432; color: #fff; margin: 0; padding: 20px 0; }
-        .container { max-width: 600px; margin: 0 auto; background: #252432; border-radius: 20px; overflow: hidden; box-shadow: 0 0 40px rgba(255,39,112,0.15); }
-        .header { background: #1e1e2a; padding: 36px 24px; text-align: center; border-bottom: 3px solid #ff2770; }
-        .logos { display: flex; justify-content: center; align-items: center; gap: 16px; margin-bottom: 18px; }
-        .logo { width: 64px; height: 64px; border-radius: 50%; border: 2px solid #45f3ff; object-fit: cover; box-shadow: 0 0 12px rgba(69,243,255,0.35); }
-        .header h1 { color: #45f3ff; font-size: 24px; font-weight: 800; margin: 0 0 6px; letter-spacing: 0.06em; text-transform: uppercase; text-shadow: 0 0 20px rgba(69,243,255,0.5); }
-        .header-sub { color: rgba(255,255,255,0.5); font-size: 13px; }
-        .content { padding: 36px 28px; }
-        .avatar-wrap { text-align: center; margin-bottom: 22px; }
-        .avatar { width: 84px; height: 84px; border-radius: 50%; border: 3px solid #ff2770; object-fit: cover; box-shadow: 0 0 18px rgba(255,39,112,0.45); }
-        .greeting { font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 10px; }
-        .message { color: #999; font-size: 15px; line-height: 1.7; margin-bottom: 24px; }
-        .card { background: #2d2d39; border: 1px solid rgba(69,243,255,0.18); border-radius: 16px; padding: 22px 24px; margin: 18px 0; }
-        .row { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 14px; }
-        .row:last-child { border-bottom: none; }
-        .lbl { color: #45f3ff; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
-        .val { color: #fff; font-weight: 600; }
-        .warningbox { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.3); border-radius: 12px; padding: 14px 18px; margin: 18px 0; color: #fcd34d; font-size: 14px; line-height: 1.65; }
-        .warningbox strong { color: #fff; }
-        .btn { display: inline-block; text-decoration: none; font-weight: 700; padding: 14px 42px; border-radius: 30px; font-size: 15px; letter-spacing: 0.04em; background: #45f3ff; color: #111; box-shadow: 0 0 20px rgba(69,243,255,0.5); }
-        .footer { background: #1e1e2a; padding: 28px; text-align: center; border-top: 2px solid rgba(255,39,112,0.2); }
-        .footer-brand { color: #45f3ff; font-weight: 700; font-size: 13px; margin-bottom: 6px; }
-        .footer p { color: #555; font-size: 12px; margin: 3px 0; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <div class="logos">
-                {% if logo_url %}<img src="{{ logo_url }}" alt="RCCG Logo" class="logo">{% endif %}
-                {% if faith_logo_url %}<img src="{{ faith_logo_url }}" alt="Faith Tribe Logo" class="logo">{% endif %}
-            </div>
-            <h1>Account Created</h1>
-            <p class="header-sub">RCCG Region 63 Junior Church</p>
-        </div>
+{% extends "emails/_base.html" %}
+{% block title %}Your account is ready{% endblock %}
+{% block preheader %}Set your password within 24 hours to start using your account.{% endblock %}
+{% block accent %}#B9A5FF{% endblock %}
+{% block eyebrow %}New account{% endblock %}
+{% block heading %}An account is waiting for you{% endblock %}
+{% block lead %}Hi {{ full_name }}, {% if created_by %}{{ created_by.get_display_name }} has{% else %}we&rsquo;ve{% endif %} set you up on Faith Tribe. Choose a password and you&rsquo;re ready to go.{% endblock %}
 
-        <div class="content">
-            {% if avatar_url %}
-            <div class="avatar-wrap">
-                <img src="{{ avatar_url }}" alt="{{ full_name }}" class="avatar">
-            </div>
-            {% endif %}
+{% block content %}
+<p style="margin:0 0 8px;">These are the details on your account:</p>
 
-            <p class="greeting">Hello, {{ full_name }}!</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">
+  <tr>
+    <td bgcolor="#F2EAE0" style="border-radius:20px;padding:6px 20px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        {% include "emails/_row.html" with label="Username" value=user.username first=True %}
+        {% include "emails/_row.html" with label="Email" value=user.email %}
+        {% include "emails/_row.html" with label="Role" value=user.get_role_display %}
+        {% if user.province %}{% include "emails/_row.html" with label="Province" value=user.get_province_display %}{% endif %}
+      </table>
+    </td>
+  </tr>
+</table>
 
-            <p class="message">
-                An account has been created for you on the
-                <strong style="color:#fff;">RCCG Region 63 Junior Church</strong> platform
-                {% if created_by %}by <strong style="color:#45f3ff;">{{ created_by.get_display_name }}</strong>{% endif %}.
-                Use the button below to set your password and access your account.
-            </p>
+{% include "emails/_button.html" with href=set_password_url label="Set my password" %}
 
-            <div class="card">
-                <div class="row">
-                    <span class="lbl">Username</span>
-                    <span class="val">{{ user.username }}</span>
-                </div>
-                <div class="row">
-                    <span class="lbl">Email</span>
-                    <span class="val">{{ user.email }}</span>
-                </div>
-                <div class="row">
-                    <span class="lbl">Role</span>
-                    <span class="val">{{ user.get_role_display }}</span>
-                </div>
-                {% if user.province %}
-                <div class="row">
-                    <span class="lbl">Province</span>
-                    <span class="val">{{ user.get_province_display }}</span>
-                </div>
-                {% endif %}
-            </div>
-
-            <div class="warningbox">
-                <strong>Action required:</strong> This link is valid for <strong>24 hours</strong>.
-                Click the button below to set your password before it expires.
-            </div>
-
-            <div style="text-align:center; margin-top:28px;">
-                <a href="{{ set_password_url }}" class="btn">SET MY PASSWORD</a>
-            </div>
-        </div>
-
-        <div class="footer">
-            <p class="footer-brand">RCCG Region 63 Junior Church</p>
-            <p>&copy; {% now "Y" %} All rights reserved.</p>
-            <p>This is an automated email. Please do not reply.</p>
-        </div>
-    </div>
-</body>
-</html>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;">
+  <tr>
+    <td bgcolor="#FEF3C7" style="border-radius:16px;padding:16px 20px;font-size:14px;line-height:22px;color:#1C1916;">
+      <strong>This link works for 24 hours.</strong> If it runs out, use &ldquo;Forgot password&rdquo; on the sign-in page to get a new one.
+    </td>
+  </tr>
+</table>
+{% endblock %}
