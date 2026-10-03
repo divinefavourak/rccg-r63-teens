@@ -166,7 +166,17 @@ class User(AbstractBaseUser, PermissionsMixin):
     @property
     def full_name(self):
         return f"{self.first_name} {self.last_name}"
-    
+
+    # Django's AbstractUser provides these two; AbstractBaseUser, which this
+    # model extends, does not. Serializers (`source='user.get_full_name'`), the
+    # admin and TeenProfile.__str__ all call them, and without them DRF silently
+    # dropped `full_name` from every profile, so the app showed no name at all.
+    def get_full_name(self):
+        return f"{self.first_name} {self.last_name}".strip()
+
+    def get_short_name(self):
+        return self.first_name
+
     @property
     def is_admin(self):
         return self.role == self.Role.ADMIN
