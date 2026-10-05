@@ -1,6 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "cleanUrls": true,
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
@@ -49,7 +48,7 @@
         },
         {
           "key": "Permissions-Policy",
-          "value": "camera=(self), microphone=(), geolocation=(), interest-cohort=()"
+          "value": "camera=(self), microphone=(), geolocation=()"
         },
         {
           "key": "Strict-Transport-Security",
