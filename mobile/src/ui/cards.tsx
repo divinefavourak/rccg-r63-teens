@@ -455,27 +455,46 @@ export function StatTile({
 
 // ─── People ────────────────────────────────────────────────────────────────
 
+/** The plates a letter avatar can sit on. Green is left for "done". */
+const AVATAR_COLOURS: PopColour[] = ['amber', 'lime', 'violet', 'sky', 'pink'];
+
 /**
- * A person: their photo, or the first letter of their name on amber until
- * they add one. `ring` is the width of the pale border drawn round it.
+ * A colour for someone, always the same one for the same name.
+ *
+ * In a list of people without photos, one colour for everybody turns the list
+ * into a column of identical discs. A colour that follows the name lets the
+ * eye find "the violet one" again on the next screen.
+ */
+export function colourFor(name: string): PopColour {
+  let sum = 0;
+  for (let i = 0; i < name.length; i++) sum = (sum * 31 + name.charCodeAt(i)) % 9973;
+  return AVATAR_COLOURS[sum % AVATAR_COLOURS.length];
+}
+
+/**
+ * A person: their photo, or the first letter of their name on a colour until
+ * they add one (amber unless `colour` says otherwise). `ring` is the width of
+ * the pale border drawn round it.
  */
 export function Avatar({
   name,
   photo,
   size,
   ring = 0,
+  colour = 'amber',
 }: {
   name: string;
   photo?: string | null;
   size: number;
   ring?: number;
+  colour?: PopColour;
 }) {
   return (
     <View
       accessible
       accessibilityRole="image"
       accessibilityLabel={photo ? `Photo of ${name}` : name}
-      className="items-center justify-center overflow-hidden rounded-full border-surf-raised bg-pop-amber"
+      className={`items-center justify-center overflow-hidden rounded-full border-surf-raised ${POP_BG[colour]}`}
       style={{ width: size, height: size, borderWidth: ring }}
     >
       {photo ? (

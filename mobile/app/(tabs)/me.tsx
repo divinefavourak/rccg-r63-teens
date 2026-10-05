@@ -4,20 +4,20 @@ import { useRouter } from 'expo-router';
 
 import {
   useBookmarks,
-  useCan,
   useFavorites,
   useMyRegistrations,
   useProfile,
   useProgress,
   useUnreadCount,
 } from '../../src/api/queries';
-import { PERM, type StreakState } from '../../src/api/types';
+import type { StreakState } from '../../src/api/types';
 import { Icon, type IconName } from '../../src/components/Icon';
 import { useNavClearance } from '../../src/components/useNavClearance';
 import { isLive } from '../../src/data/events';
 import { activeToday, streakWeek, streakWords } from '../../src/data/streak';
 import { useAuth } from '../../src/state/auth';
 import { useChangePhoto, useMyPhoto } from '../../src/state/photo';
+import { useTeacherTools } from '../../src/state/teacher';
 import { DrawingIn, Object3D } from '../../src/ui/art';
 import { Button } from '../../src/ui/Button';
 import { Avatar, POP_BG, StatTile, StreakCard } from '../../src/ui/cards';
@@ -62,10 +62,9 @@ function MemberMe() {
   const changePhoto = useChangePhoto();
 
   // What someone may do comes from their permissions, never from a role's
-  // name (05-navigation.md). Leaders keep the whole teen app; the Console is
-  // one more place to go, shown only to those who can use it.
-  const canManageContent = useCan(PERM.contentManage);
-  const canManageEvents = useCan(PERM.eventsManage);
+  // name (05-navigation.md). Leaders keep the whole teen app; teacher tools
+  // are one more place to go, shown only to those who can use them.
+  const teacher = useTeacherTools();
 
   const refetch = useCallback(() => {
     profile.refetch();
@@ -212,6 +211,10 @@ function MemberMe() {
           </Text>
         )}
 
+        {/* Missing, not locked, for anyone who cannot use it (Figma "Me
+            (Teacher) · entry"). Ink, so it swaps with the theme like a button. */}
+        {teacher.any && <TeacherToolsCard onOpen={() => router.push('/console')} />}
+
         {streak && <StreakCard {...streakWords(streak, done)} week={streakWeek(streak, done)} />}
 
         {/* ── Menu ────────────────────────────────────────────────────── */}
@@ -249,17 +252,42 @@ function MemberMe() {
             label="Settings"
             onPress={() => router.push('/settings')}
           />
-          {/* Missing, not locked, for anyone who cannot use it. */}
-          {(canManageContent || canManageEvents) && (
-            <MenuRow
-              icon="school"
-              colour="green"
-              label="Console"
-              onPress={() => router.push('/console')}
-            />
-          )}
         </View>
       </ScrollView>
+    </View>
+  );
+}
+
+/** The way in to teacher tools, for someone who has any (Figma "teacher tools entry"). */
+function TeacherToolsCard({ onOpen }: { onOpen: () => void }) {
+  return (
+    // Extra room above for the notebook that breaks out of the corner.
+    <View className="mt-3 w-full gap-2.5 rounded-[28px] bg-ink p-5">
+      <Text
+        className="font-ui-md text-[12px] uppercase leading-4 tracking-[0.96px] text-on-ink"
+      >
+        For leaders
+      </Text>
+      <Text
+        accessibilityRole="header"
+        className="font-ui-xb text-[24px] leading-8 tracking-[-0.36px] text-on-ink"
+      >
+        Teacher tools
+      </Text>
+      <Text className="font-ui text-[14px] leading-5 text-on-ink">
+        This week’s lesson, your class and check-in, made for teaching from your phone.
+      </Text>
+      <Press
+        onPress={onOpen}
+        accessibilityLabel="Open teacher tools"
+        className="h-12 flex-row items-center gap-2 self-start rounded-full bg-pop-green px-5"
+      >
+        <Text className="font-ui-sb text-[16px] leading-6 text-pop-on">Open teacher tools</Text>
+        <Icon name="chevronRight" size={18} color={POP.on} />
+      </Press>
+      <View pointerEvents="none" style={{ position: 'absolute', right: 8, top: -22 }}>
+        <Object3D name="notebook" size={76} />
+      </View>
     </View>
   );
 }

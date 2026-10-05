@@ -1,5 +1,3 @@
-import type { Option } from '../components/form';
-
 /**
  * Choice lists mirrored from the Django models.
  *
@@ -11,6 +9,11 @@ import type { Option } from '../components/form';
  * Source: `profiles/models.py` (province, gender) and the registration
  * serializer's guardian fields.
  */
+
+export interface Option {
+  value: string;
+  label: string;
+}
 
 /** `TeenProfile.province` choices, verbatim. */
 export const PROVINCES: Option[] = [

@@ -30,6 +30,7 @@ import { AuthProvider, useAuth } from '../src/state/auth';
 import { PlayerProvider } from '../src/state/player';
 import { ReaderProvider, useReader } from '../src/state/reader';
 import { installAppStateBridges, queryClient } from '../src/api/queryClient';
+import { usePushSync } from '../src/state/push';
 import { loadWelcomed } from '../src/state/welcome';
 
 // Hold the native splash until fonts and the stored theme are both ready.
@@ -96,7 +97,7 @@ export default function RootLayout() {
  */
 function AppShell({ fontsSettled }: { fontsSettled: boolean }) {
   const { scheme, tokens, ready } = useTheme();
-  const { ready: authReady } = useAuth();
+  const { ready: authReady, user } = useAuth();
   const { ready: readerReady } = useReader();
   // Hold the splash until the stored session has been read too, so a signed-in
   // teen never sees the guest version of Today flash before their own.
@@ -109,6 +110,10 @@ function AppShell({ fontsSettled }: { fontsSettled: boolean }) {
   // ...and until the reader knows its page, so the Bible tab never opens on
   // the default chapter and then jumps to the one last read.
   const canRender = fontsSettled && ready && authReady && welcomeLoaded && readerReady;
+
+  // Registers this phone for push and routes a tapped notification. Held until
+  // the navigator below exists, since a tap has to be pushed onto it.
+  usePushSync(user?.id, canRender);
 
   // Hidden from `onLayout` rather than an effect: the effect fires in the same
   // commit as the render, which can tear down the splash a frame before the
@@ -156,6 +161,7 @@ function AppShell({ fontsSettled }: { fontsSettled: boolean }) {
         <Stack.Screen name="settings/account" />
         <Stack.Screen name="settings/notifications" />
         <Stack.Screen name="settings/feedback" />
+        {/* Teacher tools: its own stack and nav, in `console/_layout.tsx`. */}
         <Stack.Screen name="console" />
         <Stack.Screen name="dev/kit" />
         {/* Welcome, sign-up and log in. Full screens rather than modals: the

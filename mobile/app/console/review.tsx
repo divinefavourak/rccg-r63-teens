@@ -1,36 +1,46 @@
-import { useCallback } from 'react';
-import { Alert, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import { memo, useCallback, useState } from 'react';
+import { FlatList, RefreshControl, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Icon } from '../src/components/Icon';
-import { Button, Card, Pill } from '../src/components/ui';
-import { EmptyState, ErrorState, ListSkeleton } from '../src/components/states';
-import { useTokens } from '../src/theme/ThemeProvider';
-import {
-  useCan,
-  useDevotionalWorkflow,
-  useDraftDevotionals,
-} from '../src/api/queries';
-import { PERM, type DevotionalListItem } from '../src/api/types';
+import { useCan, useDevotionalWorkflow, useDraftDevotionals } from '../../src/api/queries';
+import { PERM, type DevotionalListItem } from '../../src/api/types';
+import { Icon } from '../../src/components/Icon';
+import { Button } from '../../src/ui/Button';
+import { Press } from '../../src/ui/Press';
+import { BackHeader, EmptyState, Sheet, Skeleton } from '../../src/ui/screen';
+import { useTokens } from '../../src/theme/ThemeProvider';
+import { ELEVATION } from '../../src/theme/tokens';
+
+type Action = 'submit_for_review' | 'approve' | 'publish';
+
+/** The button on a draft, and the question the sheet asks before doing it. */
+const ACTIONS: Record<Action, { verb: string; consequence: string }> = {
+  submit_for_review: {
+    verb: 'Submit for review',
+    consequence: 'It goes to a reviewer, who can approve it for publishing.',
+  },
+  approve: {
+    verb: 'Approve',
+    consequence: 'It moves on to whoever publishes for your region.',
+  },
+  publish: {
+    verb: 'Publish',
+    consequence: 'It shows on Today and in Library for every teen straight away.',
+  },
+};
 
 /**
- * The Console.
+ * The review queue: devotionals that are written but not yet published.
  *
- * 05-navigation.md: "Leaders keep the full teen experience; a coordinator has a
- * streak too. The Console is an *additional* place, entered deliberately, never
- * mixed into teen surfaces." So this sits behind Me → Console rather than
- * becoming a sixth tab, and the teen Library stays pinned to published content
- * no matter who is signed in.
- *
- * Scope here is deliberately narrow: the unpublished queue, and the workflow
- * transitions the backend already models. People, events and analytics remain
- * the web Console's job.
+ * Reached from Teacher home by someone who holds `content.manage`. It stays
+ * narrow on purpose: the unpublished queue, and the workflow steps the backend
+ * already models. Writing and editing a devotional is the web Console's job; a
+ * phone is where a reviewer reads one through and lets it go.
  */
-export default function ConsoleScreen() {
+export default function ReviewQueueScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const tokens = useTokens();
 
   const canManage = useCan(PERM.contentManage);
   const canPublish = useCan(PERM.contentPublish);
@@ -38,115 +48,152 @@ export default function ConsoleScreen() {
   const drafts = useDraftDevotionals(canManage);
   const workflow = useDevotionalWorkflow();
 
-  const act = useCallback(
-    (item: DevotionalListItem, action: 'submit_for_review' | 'approve' | 'publish') => {
-      const verb = action === 'publish' ? 'Publish' : action === 'approve' ? 'Approve' : 'Submit';
-      Alert.alert(
-        `${verb} "${item.title}"?`,
-        action === 'publish'
-          ? 'Once published it appears on Today and in Library for every teen.'
-          : 'This moves it to the next step of review.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: verb,
-            onPress: () => workflow.mutate({ id: item.id, action }),
-          },
-        ],
-      );
-    },
-    [workflow],
+  /** The step waiting on a yes in the sheet. */
+  const [asking, setAsking] = useState<{ item: DevotionalListItem; action: Action } | null>(null);
+
+  const back = () => (router.canGoBack() ? router.back() : router.replace('/console'));
+
+  const onOpen = useCallback(
+    (item: DevotionalListItem) => router.push({ pathname: '/devotional', params: { id: item.id } }),
+    [router],
   );
 
-  const header = (
-    <View
-      className="flex-row items-center gap-3 border-b border-line bg-surf-raised px-4 pb-3.5"
-      style={{ paddingTop: insets.top + 10 }}
-    >
-      <Pressable
-        onPress={router.back}
-        accessibilityRole="button"
-        accessibilityLabel="Back"
-        hitSlop={8}
-        className="h-10 w-10 items-center justify-center rounded-md border border-line"
-      >
-        <Icon name="chevronLeft" size={20} color={tokens.text2} />
-      </Pressable>
-      <View className="flex-1">
-        <Text className="font-ui-b text-[16px] text-ink-1">Console</Text>
-        <Text className="font-ui text-[12px] text-ink-3">Devotionals awaiting publication</Text>
-      </View>
-    </View>
+  const onAct = useCallback(
+    (item: DevotionalListItem, action: Action) => setAsking({ item, action }),
+    [],
   );
 
-  // The entry point is already permission-gated, but a deep link is not.
+  const confirm = () => {
+    if (!asking) return;
+    workflow.mutate({ id: asking.item.id, action: asking.action });
+    setAsking(null);
+  };
+
+  const renderItem = useCallback(
+    ({ item }: { item: DevotionalListItem }) => (
+      <DraftCard
+        item={item}
+        canPublish={canPublish}
+        busy={workflow.isPending}
+        onOpen={onOpen}
+        onAct={onAct}
+      />
+    ),
+    [canPublish, workflow.isPending, onOpen, onAct],
+  );
+
+  // The entry on Teacher home is permission-gated, but a deep link is not.
   if (!canManage) {
     return (
       <View className="flex-1 bg-surf-base">
-        {header}
-        <EmptyState
-          title="Not available"
-          body="This area is for teen leaders and coordinators."
-          actionLabel="Back to Me"
-          onAction={() => router.replace('/me')}
-        />
+        <BackHeader title="Review queue" onBack={back} />
+        <View className="flex-1 justify-center">
+          <EmptyState
+            drawing="sitting"
+            message="Reviewing devotionals is for the people who write and publish them."
+            actionLabel="Back"
+            onAction={back}
+          />
+        </View>
       </View>
     );
   }
 
   return (
     <View className="flex-1 bg-surf-base">
-      {header}
+      <BackHeader title="Review queue" onBack={back} />
 
       {drafts.isPending ? (
-        <View className="pt-4">
-          <ListSkeleton rows={4} height={96} />
+        <View className="gap-3 px-5 pt-2">
+          <Skeleton height={176} />
+          <Skeleton height={176} />
+          <Skeleton height={176} />
         </View>
-      ) : drafts.isError ? (
-        <ErrorState error={drafts.error} onRetry={drafts.refetch} />
       ) : (
         <FlatList
           data={drafts.data ?? []}
-          keyExtractor={(d) => d.id}
-          contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32, gap: 12 }}
+          keyExtractor={keyOfDraft}
+          renderItem={renderItem}
+          ListHeaderComponent={
+            drafts.data?.length ? (
+              <View className="gap-2 pb-1">
+                <Text className="font-ui text-[16px] leading-6 text-ink-2">
+                  Devotionals waiting to be published.
+                </Text>
+                {workflow.isError && (
+                  <Text
+                    accessibilityLiveRegion="polite"
+                    className="font-ui-md text-[14px] leading-5 text-feedback-error"
+                  >
+                    {workflow.error instanceof Error
+                      ? workflow.error.message
+                      : 'That did not go through. Please try again.'}
+                  </Text>
+                )}
+              </View>
+            ) : null
+          }
+          ListEmptyComponent={
+            <View className="flex-1 justify-center">
+              <EmptyState
+                drawing={drafts.isError ? 'sitting' : 'jumping'}
+                message={
+                  drafts.isError
+                    ? 'We couldn’t load the drafts. Check your connection, then try again.'
+                    : 'Everything is published. Nothing is waiting on you.'
+                }
+                actionLabel={drafts.isError ? 'Try again' : undefined}
+                onAction={() => drafts.refetch()}
+              />
+            </View>
+          }
+          contentContainerStyle={{
+            flexGrow: 1,
+            gap: 12,
+            paddingHorizontal: 20,
+            paddingTop: 8,
+            paddingBottom: Math.max(insets.bottom, 16) + 16,
+          }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={drafts.isRefetching} onRefresh={drafts.refetch} />
           }
-          ListEmptyComponent={
-            <EmptyState
-              title="Everything is published"
-              body="No drafts are waiting. Nice work."
-            />
-          }
-          renderItem={({ item }) => (
-            <DraftRow
-              item={item}
-              canPublish={canPublish}
-              busy={workflow.isPending}
-              onOpen={() => router.push({ pathname: '/devotional', params: { id: item.id } })}
-              onAct={act}
-            />
-          )}
         />
       )}
 
-      {workflow.isError && (
-        <Text
-          accessibilityLiveRegion="polite"
-          className="px-5 pb-4 font-ui-md text-[13px]"
-          style={{ color: tokens.error }}
-        >
-          {workflow.error instanceof Error
-            ? workflow.error.message
-            : 'That did not work. Try again.'}
-        </Text>
-      )}
+      <Sheet visible={!!asking} onClose={() => setAsking(null)}>
+        {asking && (
+          <View className="w-full gap-3 pt-2">
+            <Text
+              accessibilityRole="header"
+              className="font-ui-b text-[20px] leading-7 tracking-[-0.2px] text-ink-1"
+            >
+              {ACTIONS[asking.action].verb} “{asking.item.title}”?
+            </Text>
+            <Text className="font-ui text-[16px] leading-6 text-ink-2">
+              {ACTIONS[asking.action].consequence}
+            </Text>
+            <Button label={ACTIONS[asking.action].verb} onPress={confirm} className="mt-1 w-full" />
+            <Button
+              label="Not yet"
+              variant="tertiary"
+              onPress={() => setAsking(null)}
+              className="w-full"
+            />
+          </View>
+        )}
+      </Sheet>
     </View>
   );
 }
 
-function DraftRow({
+const keyOfDraft = (d: DevotionalListItem) => d.id;
+
+/**
+ * One unpublished devotional: tap the top to read it as a teen would, and one
+ * button for the next step it can take.
+ */
+const DraftCard = memo(function DraftCard({
   item,
   canPublish,
   busy,
@@ -156,68 +203,57 @@ function DraftRow({
   item: DevotionalListItem;
   canPublish: boolean;
   busy: boolean;
-  onOpen: () => void;
-  onAct: (item: DevotionalListItem, action: 'submit_for_review' | 'approve' | 'publish') => void;
+  onOpen: (item: DevotionalListItem) => void;
+  onAct: (item: DevotionalListItem, action: Action) => void;
 }) {
+  const tokens = useTokens();
   const inReview = item.status === 'in_review';
+  // Publishing is its own permission: a teacher may draft without being able
+  // to put something in front of the whole region.
+  const action: Action = canPublish ? 'publish' : inReview ? 'approve' : 'submit_for_review';
 
   return (
-    <Card className="p-4">
-      <View className="mb-2 flex-row items-start justify-between gap-3">
-        <Pressable onPress={onOpen} accessibilityRole="button" className="flex-1">
-          <Text className="font-ui-b text-[16px] leading-[21px] text-ink-1">{item.title}</Text>
-          <Text className="mt-0.5 font-ui text-[12px] text-ink-3">{formatDate(item.date)}</Text>
-        </Pressable>
-
-        <Pill tone={inReview ? 'green' : 'neutral'}>
-          <Text
-            className={`font-ui-sb text-[11px] ${inReview ? 'text-green' : 'text-ink-3'}`}
+    <View className="w-full gap-3 rounded-2xl bg-surf-raised p-4" style={ELEVATION.card}>
+      <Press
+        onPress={() => onOpen(item)}
+        scaleTo={0.985}
+        accessibilityLabel={`Preview ${item.title}. ${inReview ? 'In review' : 'Draft'}`}
+        className="flex-row items-center gap-3"
+      >
+        <View className="min-w-0 flex-1 gap-1">
+          <View
+            className={`self-start rounded-full px-3 py-1 ${
+              inReview ? 'bg-green-tonal' : 'bg-surf-sunken'
+            }`}
           >
-            {inReview ? 'In review' : 'Draft'}
+            <Text
+              className={`font-ui-sb text-[12px] leading-4 ${inReview ? 'text-green' : 'text-ink-2'}`}
+            >
+              {inReview ? 'In review' : 'Draft'}
+            </Text>
+          </View>
+          <Text numberOfLines={2} className="font-ui-b text-[17px] leading-6 text-ink-1">
+            {item.title}
           </Text>
-        </Pill>
-      </View>
+          <Text numberOfLines={1} className="font-ui text-[14px] leading-5 text-ink-2">
+            {[formatDate(item.date), item.memory_verse_passage].filter(Boolean).join(' · ')}
+          </Text>
+        </View>
+        <Icon name="chevronRight" size={20} color={tokens.text1} />
+      </Press>
 
-      {!!item.memory_verse_passage && (
-        <Text numberOfLines={1} className="mb-3 font-ui text-[13px] text-ink-2">
-          {item.memory_verse_passage}
-        </Text>
-      )}
-
-      <View className="flex-row gap-2">
-        <Button
-          label="Preview"
-          variant="secondary"
-          onPress={onOpen}
-          height={44}
-          className="flex-1"
-        />
-        {/* Publishing is its own permission: a teacher may draft without being
-            able to put something in front of the whole region. */}
-        {canPublish ? (
-          <Button
-            label="Publish"
-            onPress={() => onAct(item, 'publish')}
-            disabled={busy}
-            height={44}
-            className="flex-1"
-          />
-        ) : (
-          <Button
-            label={inReview ? 'Approve' : 'Submit'}
-            onPress={() => onAct(item, inReview ? 'approve' : 'submit_for_review')}
-            disabled={busy}
-            height={44}
-            className="flex-1"
-          />
-        )}
-      </View>
-    </Card>
+      <Button
+        label={ACTIONS[action].verb}
+        onPress={() => onAct(item, action)}
+        disabled={busy}
+        className="w-full"
+      />
+    </View>
   );
-}
+});
 
 function formatDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
 }

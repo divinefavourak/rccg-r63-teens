@@ -564,6 +564,7 @@ export const PERM = {
   eventsView: 'events.view',
   eventsManage: 'events.manage',
   eventsCheckin: 'events.checkin',
+  profilesView: 'profiles.view',
 } as const;
 
 // ─── Library (content/serializers.py, media/serializers.py) ────────────────
@@ -616,4 +617,119 @@ export interface ProgressCalendar {
   month: string;
   /** ISO dates the teen did something on, oldest first. */
   active_days: string[];
+}
+
+// ─── Teacher tools (content, identity/class_views.py, events/checkin.py) ───
+
+/**
+ * A weekly teaching manual (content/serializers.py ManualDetailSerializer).
+ *
+ * The four teacher fields only arrive for someone holding `content.view`; for
+ * anyone else the server leaves them out, so they are optional here.
+ */
+export interface ManualDetail {
+  id: string;
+  series_detail: { id: string; title: string } | null;
+  week_number: number;
+  week_start_date: string;
+  week_end_date: string;
+  title: string;
+  theme: string;
+  memory_verse: string;
+  memory_verse_text: string;
+  /** JSON lists: usually strings, sometimes small objects. See `data/lesson.ts`. */
+  lesson_objectives: unknown[];
+  lesson_content: string;
+  key_takeaways: unknown[];
+  discussion_questions: unknown[];
+  practical_application: string;
+  activity_suggestions: unknown[];
+  opening_prayer_points: unknown[];
+  closing_prayer: string;
+
+  has_teacher_edition?: boolean;
+  teacher_notes?: string;
+  teacher_resources?: unknown[];
+  discussion_guide?: string;
+}
+
+/** One teen in a leader's class (identity/class_views.py). */
+export interface ClassMember {
+  id: string;
+  name: string;
+  age: number | null;
+  photo: string | null;
+  parish: string;
+  /** Monday first. A day still to come is simply false. */
+  week: boolean[];
+  days_this_week: number;
+  read_today: boolean;
+  /** ISO date of the last day they read anything, or null. */
+  last_read_on: string | null;
+}
+
+export interface ClassRoster {
+  today: string;
+  week_start: string;
+  /** Everyone in the class; `members` is capped at 300. */
+  total: number;
+  read_today: number;
+  members: ClassMember[];
+}
+
+export interface ClassMemberDetail extends ClassMember {
+  today: string;
+  guardian_name: string;
+  guardian_phone: string;
+  guardian_relationship: string;
+}
+
+/** An event that is on today and that this person may check people in to. */
+export interface CheckInEvent {
+  id: string;
+  title: string;
+  start_datetime: string;
+  end_datetime: string;
+  venue: string;
+  city: string;
+  is_free: boolean;
+  max_attendees: number | null;
+  registered: number;
+  checked_in: number;
+}
+
+export interface CheckInAttendee {
+  registration_id: string;
+  name: string;
+  parish: string;
+  photo: string | null;
+  status: string;
+  payment_status: string;
+}
+
+export type CheckInOutcome =
+  | 'checked_in'
+  | 'already_checked_in'
+  | 'not_found'
+  | 'wrong_event'
+  | 'not_paid'
+  | 'cancelled'
+  | 'waitlisted';
+
+/**
+ * What a scan turned out to be (events/checkin.py `scan`).
+ *
+ * Always a 200: a cancelled ticket is an answer for the volunteer, not a
+ * failed request. Only the fields that belong to the outcome are present.
+ */
+export interface CheckInResult {
+  outcome: CheckInOutcome;
+  attendee: CheckInAttendee | null;
+  counts: { registered: number; checked_in: number };
+  checked_in_at?: string | null;
+  checked_in_by?: string;
+  other_event?: { title: string; start_datetime: string };
+  cancelled_at?: string | null;
+  refunded?: boolean;
+  amount_due?: string | null;
 }

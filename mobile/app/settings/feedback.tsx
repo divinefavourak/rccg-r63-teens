@@ -1,15 +1,17 @@
 import { useCallback, useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Linking, Platform, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 
-import { Icon } from '../../src/components/Icon';
-import { Button, Card } from '../../src/components/ui';
-import { SelectField, TextField } from '../../src/components/form';
-import { useTokens } from '../../src/theme/ThemeProvider';
-import { useAuth } from '../../src/state/auth';
 import { useProfile } from '../../src/api/queries';
+import { Icon } from '../../src/components/Icon';
+import { useAuth } from '../../src/state/auth';
+import { Object3D } from '../../src/ui/art';
+import { Button } from '../../src/ui/Button';
+import { ChipRow, TextField } from '../../src/ui/inputs';
+import { BackHeader } from '../../src/ui/screen';
+import { useTokens } from '../../src/theme/ThemeProvider';
 
 /** Where feedback goes until there is somewhere to POST it. */
 const FEEDBACK_ADDRESS = 'teens@rccgregion63.org';
@@ -19,7 +21,9 @@ const KINDS = [
   { value: 'problem', label: 'Something is broken' },
   { value: 'content', label: 'Something in a devotional' },
   { value: 'other', label: 'Something else' },
-];
+] as const;
+
+type Kind = (typeof KINDS)[number]['value'];
 
 /**
  * Give feedback.
@@ -39,9 +43,9 @@ export default function FeedbackScreen() {
   const { user, isGuest } = useAuth();
   const profile = useProfile(!isGuest);
 
-  const [kind, setKind] = useState('idea');
+  const [kind, setKind] = useState<Kind>('idea');
   const [message, setMessage] = useState('');
-  const [sent, setSent] = useState(false);
+  const [outcome, setOutcome] = useState<'opened' | 'no-mail' | null>(null);
 
   /**
    * Context the team needs to act on a report, gathered rather than asked for.
@@ -61,107 +65,108 @@ export default function FeedbackScreen() {
   const send = useCallback(async () => {
     const subject = `Faith Tribe feedback — ${KINDS.find((k) => k.value === kind)?.label ?? kind}`;
     const body = `${message}\n\n---\n${context}`;
-
     const url = `mailto:${FEEDBACK_ADDRESS}?subject=${encodeURIComponent(
       subject,
     )}&body=${encodeURIComponent(body)}`;
 
-    const canOpen = await Linking.canOpenURL(url);
-    if (!canOpen) {
-      // No mail app configured. Say so plainly and leave the address visible so
-      // the teen can still act on it.
-      setSent(false);
-      return;
+    try {
+      await Linking.openURL(url);
+      setOutcome('opened');
+    } catch {
+      // No mail app on this phone. The address stays on screen so the teen can
+      // still write from wherever they do read mail.
+      setOutcome('no-mail');
     }
-
-    await Linking.openURL(url);
-    setSent(true);
   }, [kind, message, context]);
 
+  const back = () => (router.canGoBack() ? router.back() : router.replace('/settings'));
+
   return (
-    <KeyboardAvoidingView
-      className="flex-1 bg-surf-base"
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <View
-        className="flex-row items-center gap-3 border-b border-line bg-surf-raised px-4 pb-3.5"
-        style={{ paddingTop: insets.top + 10 }}
-      >
-        <Pressable
-          onPress={router.back}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          hitSlop={8}
-          className="h-10 w-10 items-center justify-center rounded-md border border-line"
+    <View className="flex-1 bg-surf-base">
+      <BackHeader title="Give feedback" onBack={back} />
+
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ gap: 16, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 24 }}
         >
-          <Icon name="chevronLeft" size={20} color={tokens.text2} />
-        </Pressable>
-        <Text className="flex-1 font-ui-b text-[16px] text-ink-1">Give feedback</Text>
-      </View>
-
-      <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: 32 }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <Text className="mb-5 font-ui text-[14px] leading-[21px] text-ink-2">
-          Tell us what would make Faith Tribe better. We read everything.
-        </Text>
-
-        <SelectField
-          label="What is this about?"
-          required
-          value={kind}
-          options={KINDS}
-          onChange={setKind}
-        />
-
-        <TextField
-          label="Your message"
-          required
-          value={message}
-          onChange={setMessage}
-          multiline
-          placeholder="Whatever is on your mind…"
-        />
-
-        {sent && (
-          <Card className="mb-4 flex-row items-start gap-3 p-4">
-            <Icon name="check" size={18} color={tokens.green} />
-            <Text className="flex-1 font-ui text-[13px] leading-[19px] text-ink-2">
-              Your mail app is open with the message ready. Send it from there and we will
-              get it.
-            </Text>
-          </Card>
-        )}
-
-        <Card className="flex-row items-start gap-3 p-4">
-          <Icon name="chat" size={18} color={tokens.text3} />
-          <View className="flex-1">
-            <Text className="font-ui-sb text-[13px] text-ink-1">Prefer to write directly?</Text>
-            <Text className="mt-0.5 font-ui text-[13px] leading-[19px] text-ink-2">
-              {FEEDBACK_ADDRESS}
-            </Text>
-            <Text className="mt-2 font-ui text-[12px] leading-[17px] text-ink-3">
-              We attach your app version and parish so we can find the problem — nothing
-              else.
-            </Text>
+          <View className="flex-row items-center gap-3">
+            <View className="flex-1 gap-2">
+              <Text
+                accessibilityRole="header"
+                className="font-ui-xb text-[32px] leading-10 tracking-[-0.64px] text-ink-1"
+              >
+                Tell us
+              </Text>
+              <Text className="font-ui text-[16px] leading-6 text-ink-2">
+                What would make Faith Tribe better? We read everything.
+              </Text>
+            </View>
+            <View className="h-[88px] w-[88px] items-center justify-center rounded-full bg-pop-sky">
+              <Object3D name="chat-bubble" size={72} />
+            </View>
           </View>
-        </Card>
-      </ScrollView>
 
-      <View
-        className="border-t border-line bg-surf-raised px-5 pt-4"
-        style={{ paddingBottom: insets.bottom + 16 }}
-      >
-        <Button
-          label="Send feedback"
-          onPress={send}
-          disabled={message.trim().length < 3}
-          height={52}
-          icon={<Icon name="arrowRight" size={18} color="#fff" />}
-        />
-      </View>
-    </KeyboardAvoidingView>
+          <View className="gap-2">
+            <Text className="font-ui-sb text-[14px] leading-5 text-ink-2">What is this about?</Text>
+            <ChipRow wrap options={KINDS} value={kind} onChange={setKind} />
+          </View>
+
+          <TextField
+            label="Your message"
+            value={message}
+            onChange={setMessage}
+            multiline
+            placeholder="Whatever is on your mind"
+          />
+
+          {outcome && (
+            <View
+              accessibilityLiveRegion="polite"
+              className={`w-full flex-row items-start gap-3 rounded-xl p-4 ${
+                outcome === 'opened' ? 'bg-green-tonal' : 'bg-amber-tonal'
+              }`}
+            >
+              <Icon
+                name={outcome === 'opened' ? 'check' : 'info'}
+                size={20}
+                color={outcome === 'opened' ? tokens.green : tokens.caution}
+              />
+              <Text className="flex-1 font-ui text-[14px] leading-5 text-ink-1">
+                {outcome === 'opened'
+                  ? 'Your mail app has the message ready. Send it from there and it will reach us.'
+                  : `This phone has no mail app set up. Write to ${FEEDBACK_ADDRESS} from any email instead.`}
+              </Text>
+            </View>
+          )}
+
+          <View className="w-full flex-row items-start gap-3 rounded-xl bg-surf-sunken p-4">
+            <Icon name="mail" size={20} color={tokens.text1} />
+            <View className="flex-1 gap-0.5">
+              <Text className="font-ui-sb text-[16px] leading-6 text-ink-1">
+                Prefer to write directly?
+              </Text>
+              <Text selectable className="font-ui text-[14px] leading-5 text-ink-2">
+                {FEEDBACK_ADDRESS}
+              </Text>
+              <Text className="pt-1 font-ui-md text-[12px] leading-4 text-ink-3">
+                Your app version and parish go with the message, so we can find the problem.
+                Nothing else does.
+              </Text>
+            </View>
+          </View>
+        </ScrollView>
+
+        <View className="px-5 pt-3" style={{ paddingBottom: Math.max(insets.bottom, 16) }}>
+          <Button
+            label="Send feedback"
+            onPress={send}
+            disabled={message.trim().length < 3}
+            className="w-full"
+          />
+        </View>
+      </KeyboardAvoidingView>
+    </View>
   );
 }

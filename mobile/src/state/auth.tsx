@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { api, ApiError, onSessionExpired } from '../api/client';
 import { clearTokens, loadTokens, saveTokens } from '../api/tokens';
+import { unregisterPushDevice } from './push';
 import type { AuthUser, LoginResponse } from '../api/types';
 
 /**
@@ -246,6 +247,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
+    // While the session still exists: stop this account's notifications
+    // reaching this phone. Best effort, like the blacklist below.
+    await unregisterPushDevice();
     // Best-effort blacklist; the local session is cleared either way, because a
     // teen tapping "sign out" on a dead connection must still be signed out.
     try {

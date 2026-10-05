@@ -6,6 +6,12 @@ import { api, ApiError, fetchAllPages } from './client';
 import { STALE } from './config';
 import type {
   AppNotification,
+  CheckInAttendee,
+  CheckInEvent,
+  CheckInResult,
+  ClassMemberDetail,
+  ClassRoster,
+  ManualDetail,
   ArticleDetail,
   ArticleListItem,
   Bookmark,
@@ -74,6 +80,12 @@ export const keys = {
   episodes: (params?: string) => ['episodes', params ?? ''] as const,
   episode: (id: string) => ['episode', id] as const,
   calendar: (month: string) => ['progress', 'calendar', month] as const,
+  lesson: ['console', 'lesson'] as const,
+  classRoster: ['console', 'class'] as const,
+  classMember: (id: string) => ['console', 'class', id] as const,
+  checkInToday: ['console', 'check-in', 'today'] as const,
+  checkInSearch: (event: string, text: string) =>
+    ['console', 'check-in', 'search', event, text] as const,
 };
 
 /** DRF paginates some viewsets and not others. Accept either shape. */
@@ -896,6 +908,101 @@ export function useProgressCalendar(month: string, enabled = true) {
     queryFn: () => api.get<ProgressCalendar>('/progress/calendar/?month=' + month),
     enabled,
     staleTime: STALE.personal,
+    retry: retryTransient,
+  });
+}
+
+// ─── Teacher tools ─────────────────────────────────────────────────────────
+
+/**
+ * This week's lesson, in the teacher's edition.
+ *
+ * Two requests on purpose. `manuals/current/` knows which manual belongs to
+ * this week but always answers with the teen edition; the detail route is the
+ * one that adds the teacher notes for someone holding `content.view`. A week
+ * with nothing published is `null`, not an error: it is a normal state the
+ * screen has words for.
+ */
+export function useCurrentLesson(enabled = true) {
+  return useQuery({
+    queryKey: keys.lesson,
+    queryFn: async () => {
+      let current: ManualDetail;
+      try {
+        current = await api.get<ManualDetail>('/content/manuals/current/');
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) return null;
+        throw err;
+      }
+      try {
+        return await api.get<ManualDetail>(`/content/manuals/${current.id}/`);
+      } catch {
+        // The lesson itself is worth showing even if the teacher's half fails.
+        return current;
+      }
+    },
+    enabled,
+    staleTime: STALE.catalogue,
+    retry: retryTransient,
+  });
+}
+
+/** The class list with this week's reading (identity/class_views.py). */
+export function useClassRoster(enabled = true) {
+  return useQuery({
+    queryKey: keys.classRoster,
+    queryFn: () => api.get<ClassRoster>('/identity/class/'),
+    enabled,
+    staleTime: STALE.personal,
+    retry: retryTransient,
+  });
+}
+
+export function useClassMember(id: string | undefined) {
+  return useQuery({
+    queryKey: keys.classMember(id ?? ''),
+    queryFn: () => api.get<ClassMemberDetail>(`/identity/class/${id}/`),
+    enabled: !!id,
+    staleTime: STALE.personal,
+    retry: retryTransient,
+  });
+}
+
+/** Events on today that this person may check people in to. Often none. */
+export function useCheckInToday(enabled = true) {
+  return useQuery({
+    queryKey: keys.checkInToday,
+    queryFn: async () =>
+      (await api.get<{ events: CheckInEvent[] }>('/events/checkin/today/')).events,
+    enabled,
+    staleTime: STALE.personal,
+    retry: retryTransient,
+  });
+}
+
+/**
+ * Send one ticket code to be checked in.
+ *
+ * A plain function rather than a mutation hook: the scanner also replays
+ * scans it saved while offline, from outside any component's render.
+ */
+export function scanTicket(event: string, code: string, method: 'qr_scan' | 'manual') {
+  return api.post<CheckInResult>('/events/checkin/scan/', { event, code, method });
+}
+
+/** Find a ticket by name or number. Needs two letters before it asks. */
+export function useCheckInSearch(event: string | undefined, text: string) {
+  const query = text.trim();
+  return useQuery({
+    queryKey: keys.checkInSearch(event ?? '', query),
+    queryFn: async () =>
+      (
+        await api.get<{ results: CheckInAttendee[] }>(
+          `/events/checkin/search/?event=${event}&q=${encodeURIComponent(query)}`,
+        )
+      ).results,
+    enabled: !!event && query.length >= 2,
+    staleTime: 15 * 1000,
     retry: retryTransient,
   });
 }

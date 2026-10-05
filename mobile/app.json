@@ -31,7 +31,13 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -64,10 +70,31 @@
           "recordAudioAndroid": false
         }
       ],
-      "expo-video"
+      "expo-video",
+      [
+        "expo-notifications",
+        {
+          "color": "#10B981"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Faith Tribe uses the camera to scan tickets when you help with check-in at an event.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "bb507760-6903-481d-861f-7c52f7bff030"
+      }
+    },
+    "owner": "akcodex"
   }
 }
