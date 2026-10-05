@@ -571,6 +571,16 @@ VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY")
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY")
 VAPID_ADMIN_EMAIL = os.getenv("VAPID_ADMIN_EMAIL", "")
 
+# Push to the native app. Same honest default as the web transport above: it
+# logs until this names `notifications.push.ExpoPushBackend`. Expo forwards to
+# APNs and FCM, so the server needs no Apple or Google credentials of its own;
+# `EXPO_ACCESS_TOKEN` is only needed if the Expo project turns on enhanced push
+# security.
+NOTIFICATIONS_DEVICE_PUSH_BACKEND = os.getenv(
+    "NOTIFICATIONS_DEVICE_PUSH_BACKEND", "notifications.push.LoggingDevicePushBackend",
+)
+EXPO_ACCESS_TOKEN = os.getenv("EXPO_ACCESS_TOKEN")
+
 # PayStack payment gateway
 PAYSTACK_SECRET_KEY=os.getenv("PAYSTACK_SECRET_KEY")
 PAYSTACK_PUBLIC_KEY=os.getenv("PAYSTACK_PUBLIC_KEY")

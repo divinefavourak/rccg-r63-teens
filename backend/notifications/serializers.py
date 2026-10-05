@@ -1,7 +1,7 @@
 """Serializers for the notification inbox, preferences and push subscriptions."""
 from rest_framework import serializers
 
-from .models import Notification, NotificationPreference, PushSubscription
+from .models import Notification, NotificationPreference, PushDevice, PushSubscription
 
 
 class NotificationSerializer(serializers.ModelSerializer):
@@ -69,6 +69,32 @@ class PushSubscriptionSerializer(serializers.ModelSerializer):
         model = PushSubscription
         fields = ['id', 'endpoint', 'p256dh', 'auth', 'user_agent', 'created_at']
         read_only_fields = ['id', 'created_at']
+
+
+class PushDeviceSerializer(serializers.ModelSerializer):
+    """
+    A phone's push token, as the native app reports it.
+
+    `token` drops the model's uniqueness validator on purpose: the app reports
+    the same token on every launch, and the view upserts it through
+    `services.register_device` rather than creating a row each time.
+    """
+
+    token = serializers.CharField(max_length=255)
+
+    class Meta:
+        model = PushDevice
+        fields = ['id', 'token', 'platform', 'device_name', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+    def validate_token(self, value):
+        value = value.strip()
+        # Expo's tokens have exactly this shape. Refusing anything else keeps a
+        # stray string from ever being posted to the push service.
+        if not (value.startswith(('ExponentPushToken[', 'ExpoPushToken['))
+                and value.endswith(']')):
+            raise serializers.ValidationError('This is not an Expo push token.')
+        return value
 
 
 class MarkReadSerializer(serializers.Serializer):
