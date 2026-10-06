@@ -88,6 +88,12 @@ class WebPushBackend(BasePushBackend):
         private_key = getattr(settings, 'VAPID_PRIVATE_KEY', None)
         if not private_key:
             raise PushDeliveryError('VAPID_PRIVATE_KEY is not configured.')
+        # The push services require a contact address in every request. Without
+        # one the library fails deep inside signing with "Missing 'sub' from
+        # claims", which says nothing about which setting to fix.
+        admin_email = getattr(settings, 'VAPID_ADMIN_EMAIL', '')
+        if not admin_email:
+            raise PushDeliveryError('VAPID_ADMIN_EMAIL is not configured.')
 
         try:
             webpush(
@@ -97,9 +103,7 @@ class WebPushBackend(BasePushBackend):
                 },
                 data=json.dumps(payload_for(notification)),
                 vapid_private_key=private_key,
-                vapid_claims={
-                    'sub': f'mailto:{getattr(settings, "VAPID_ADMIN_EMAIL", "")}',
-                },
+                vapid_claims={'sub': f'mailto:{admin_email}'},
             )
         except WebPushException as exc:
             status = getattr(getattr(exc, 'response', None), 'status_code', None)

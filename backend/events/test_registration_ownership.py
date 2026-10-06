@@ -67,7 +67,9 @@ class RegistrationOwnershipTests(APITestCase):
         response = self.client.get('/api/v1/events/registrations/mine/')
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual([r['event'] for r in response.data], [str(self.event.id)])
+        # `response.data` is the serializer's output before JSON, so the id is
+        # still a UUID object here; the comparison is on its text.
+        self.assertEqual([str(r['event']) for r in response.data], [str(self.event.id)])
 
     def test_a_second_registration_is_refused_in_plain_words(self):
         self.client.force_authenticate(user=self.teen)

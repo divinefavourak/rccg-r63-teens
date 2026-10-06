@@ -28,6 +28,24 @@ def subscribe(user, endpoint='https://push.example/abc'):
     return services.subscribe(user, endpoint=endpoint, p256dh='key', auth='auth')
 
 
+class DaytimeMixin:
+    """
+    Pins the clock to midday for tests that are not about the hour.
+
+    `services.send` reads the real time to apply quiet hours when it is not given
+    one. Tests that expected a push therefore passed by day and failed between
+    21:30 and 06:00 Lagos time, reporting `quiet_hours` where they expected the
+    rule they were written to check.
+    """
+
+    def setUp(self):
+        super().setUp()
+        patcher = mock.patch.object(
+            services, '_local_now', return_value=mock.Mock(time=lambda: time(12, 0)))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+
 class QuietHoursTests(TestCase):
     """The overnight wrap is the bug this class exists to prevent."""
 
@@ -102,9 +120,10 @@ class ActiveRungTests(TestCase):
         self.assertEqual(preference.active_rungs(), [LadderRung.MORNING])
 
 
-class SendTests(TestCase):
+class SendTests(DaytimeMixin, TestCase):
 
     def setUp(self):
+        super().setUp()
         self.user = make_user()
         subscribe(self.user)
 
@@ -227,10 +246,11 @@ class QuietHoursSendTests(TestCase):
         self.assertIsNotNone(notification.pushed_at)
 
 
-class AnnouncementCapTests(TestCase):
+class AnnouncementCapTests(DaytimeMixin, TestCase):
     """docs/07 §10, §17: "never more than one announcement push per day"."""
 
     def setUp(self):
+        super().setUp()
         self.user = make_user()
         subscribe(self.user)
 
@@ -284,10 +304,11 @@ class AnnouncementCapTests(TestCase):
         self.assertEqual(second.data['suppressed'], 'announcement_cap')
 
 
-class StepDownTests(TestCase):
+class StepDownTests(DaytimeMixin, TestCase):
     """docs/12: "7 consecutive days of ignored reminders auto-steps intensity down"."""
 
     def setUp(self):
+        super().setUp()
         self.user = make_user()
         subscribe(self.user)
 
@@ -393,9 +414,10 @@ class SubscriptionTests(TestCase):
             PushSubscription.objects.filter(user=user, is_active=True).exists())
 
 
-class InboxTests(TestCase):
+class InboxTests(DaytimeMixin, TestCase):
 
     def setUp(self):
+        super().setUp()
         self.user = make_user()
         self.other = make_user('other')
 
