@@ -1,14 +1,33 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import {
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  Vibration,
+  View,
+  type LayoutChangeEvent,
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { keys, scanTicket, useCheckInSearch, useCheckInToday } from '../../src/api/queries';
 import type { CheckInAttendee, CheckInEvent, CheckInResult } from '../../src/api/types';
 import { Icon } from '../../src/components/Icon';
+import { useDebounced } from '../../src/data/debounce';
 import { dayLabel, formatNaira, timeLabel } from '../../src/data/events';
 import { isOffline, useCheckInQueue } from '../../src/state/checkinQueue';
 import { useTeacherTools } from '../../src/state/teacher';
@@ -58,6 +77,9 @@ export default function CheckInScreen() {
   const [busy, setBusy] = useState(false);
   const [searching, setSearching] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
+  // Where in the viewfinder the code was seen, so the frame can close on it.
+  const [seen, setSeen] = useState<Box | null>(null);
+  const [finder, setFinder] = useState({ width: 0, height: 0 });
 
   const queue = useCheckInQueue(event?.id, setCounts);
 
@@ -82,7 +104,14 @@ export default function CheckInScreen() {
       setBusy(true);
       setSearching(false);
       try {
-        const answer = await scanTicket(event.id, code, method);
+        // A scanned code is held in the frame for a beat before the answer
+        // takes over the screen. On a fast connection the reply lands before
+        // the eye has seen the frame close, and the capture is what tells the
+        // volunteer the ticket was read.
+        const [answer] = await Promise.all([
+          scanTicket(event.id, code, method),
+          new Promise((done) => setTimeout(done, method === 'qr_scan' ? CAPTURE_MS : 0)),
+        ]);
         setCounts(answer.counts);
         setResult(answer);
         // A request got through, so anything saved earlier can go now too.
@@ -107,7 +136,27 @@ export default function CheckInScreen() {
     [event, queue],
   );
 
-  const next = () => setResult(null);
+  const next = () => {
+    setResult(null);
+    setSeen(null);
+  };
+
+  const onFinderLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setFinder({ width, height });
+  }, []);
+
+  const onCode = useCallback(
+    (scan: BarcodeScanningResult) => {
+      if (locked.current) return;
+      setSeen(boxAround(scan, finder));
+      // A short tick, so the volunteer feels the capture without looking.
+      // Android only: iOS has one long buzz and nothing shorter here.
+      if (Platform.OS === 'android') Vibration.vibrate(30);
+      submit(scan.data, 'qr_scan');
+    },
+    [finder, submit],
+  );
 
   if (!tools.checkIn || (!today.isPending && !event)) {
     return (
@@ -168,16 +217,24 @@ export default function CheckInScreen() {
       )}
 
       {/* ── Viewfinder ─────────────────────────────────────────────────── */}
-      <View className="flex-1 items-center justify-center overflow-hidden">
+      <View className="flex-1 overflow-hidden" onLayout={onFinderLayout}>
         {permission?.granted && Platform.OS !== 'web' && !result && (
           <CameraView
             style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
             facing="back"
             barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-            onBarcodeScanned={({ data }) => submit(data, 'qr_scan')}
+            onBarcodeScanned={onCode}
           />
         )}
-        <ScanFrame busy={busy || today.isPending} />
+        {finder.width > 0 && (
+          <ScanFrame
+            finder={finder}
+            // Held on the code while the answer is fetched; a search by name
+            // has no code to hold, so the frame closes in the middle instead.
+            target={seen ?? (busy ? centred(finder, LOCKED_SIZE) : null)}
+            busy={busy || today.isPending}
+          />
+        )}
       </View>
 
       {/* ── Footer ─────────────────────────────────────────────────────── */}
@@ -240,6 +297,7 @@ export default function CheckInScreen() {
           onNext={next}
           onSearch={() => {
             setResult(null);
+            setSeen(null);
             setSearching(true);
           }}
         />
@@ -249,6 +307,8 @@ export default function CheckInScreen() {
 }
 
 const ZERO = { registered: 0, checked_in: 0 };
+/** How long a captured code stays in the frame before its result shows. */
+const CAPTURE_MS = 450;
 
 /** The dark room: a close button, the event, and the running count. */
 function Room({
@@ -322,32 +382,180 @@ function Room({
   );
 }
 
-/** Four green corners and a line (Figma "scan frame"). */
-function ScanFrame({ busy }: { busy: boolean }) {
-  const corner = { position: 'absolute', width: 64, height: 64, borderColor: POP.green } as const;
-  const WIDTH = 8;
-  const RADIUS = 28;
+interface Box {
+  x: number;
+  y: number;
+  size: number;
+}
+
+/** The frame at rest, as drawn. */
+const IDLE_SIZE = 240;
+/** The frame once it has something, when the camera did not say where. */
+const LOCKED_SIZE = 190;
+/** Never smaller than this: the corners are 64 long and must not cross. */
+const MIN_SIZE = 136;
+
+function centred(finder: { width: number; height: number }, size: number): Box {
+  return { x: (finder.width - size) / 2, y: (finder.height - size) / 2, size };
+}
+
+/**
+ * A square round the code the camera just read, in the viewfinder's own
+ * points.
+ *
+ * The camera reports where the code is, but not dependably: the box can be
+ * empty, or cover only part of the code (the library's own notes say so). If
+ * what comes back is not a believable square inside the viewfinder, the frame
+ * closes on the middle instead, which is where a ticket is held anyway.
+ */
+function boxAround(scan: BarcodeScanningResult, finder: { width: number; height: number }): Box {
+  const fallback = centred(finder, LOCKED_SIZE);
+  const origin = scan.bounds?.origin;
+  const extent = scan.bounds?.size;
+  if (!origin || !extent) return fallback;
+
+  const side = Math.max(extent.width, extent.height);
+  const cx = origin.x + extent.width / 2;
+  const cy = origin.y + extent.height / 2;
+  const believable =
+    side >= 40 &&
+    side <= Math.min(finder.width, finder.height) &&
+    cx > 0 &&
+    cx < finder.width &&
+    cy > 0 &&
+    cy < finder.height;
+  if (!believable) return fallback;
+
+  // A little air round the code, so the corners frame it instead of covering it.
+  const size = Math.max(MIN_SIZE, Math.min(side + 36, Math.min(finder.width, finder.height) - 24));
+  return {
+    x: Math.max(8, Math.min(cx - size / 2, finder.width - size - 8)),
+    y: Math.max(8, Math.min(cy - size / 2, finder.height - size - 8)),
+    size,
+  };
+}
+
+const CORNER = { position: 'absolute', width: 64, height: 64, borderColor: POP.green } as const;
+const STROKE = 8;
+const RADIUS = 28;
+const EASE = Easing.out(Easing.cubic);
+
+/**
+ * Four green corners and a line (Figma "scan frame"), alive.
+ *
+ * Looking: the corners breathe in and out and a line sweeps down, so the
+ * screen is plainly doing something. Found: the breathing stops and the frame
+ * closes on the code and fills with a wash of green, the way a camera shows it
+ * has focus. That moment matters at a door: the volunteer knows the ticket was
+ * read before the answer has come back from the server.
+ *
+ * All of it is timed and eased, with no bounce, and none of it runs for
+ * someone who has asked their phone for less motion: the frame then simply
+ * steps to the code.
+ */
+function ScanFrame({
+  finder,
+  target,
+  busy,
+}: {
+  finder: { width: number; height: number };
+  /** Where to close in, or null to keep looking. */
+  target: Box | null;
+  busy: boolean;
+}) {
+  const reduceMotion = useReducedMotion();
+  const rest = centred(finder, IDLE_SIZE);
+  const found = target !== null;
+  const box = target ?? rest;
+
+  const x = useSharedValue(rest.x);
+  const y = useSharedValue(rest.y);
+  const size = useSharedValue(rest.size);
+  /** 0 while looking, 1 once held on a code. */
+  const hold = useSharedValue(0);
+  /** 0 to 1 and back, for as long as it is looking. */
+  const pulse = useSharedValue(0);
+  /** 0 at the top of the frame, 1 at the bottom. */
+  const sweep = useSharedValue(0);
+
+  useEffect(() => {
+    // Closing in is quick, like a shutter; letting go is slower and calmer.
+    const duration = reduceMotion ? 0 : found ? 180 : 320;
+    x.value = withTiming(box.x, { duration, easing: EASE });
+    y.value = withTiming(box.y, { duration, easing: EASE });
+    size.value = withTiming(box.size, { duration, easing: EASE });
+    hold.value = withTiming(found ? 1 : 0, { duration, easing: EASE });
+  }, [box.x, box.y, box.size, found, reduceMotion, x, y, size, hold]);
+
+  useEffect(() => {
+    if (found || reduceMotion) {
+      cancelAnimation(pulse);
+      cancelAnimation(sweep);
+      pulse.value = withTiming(0, { duration: 120 });
+      return;
+    }
+    const slow = Easing.inOut(Easing.quad);
+    pulse.value = withRepeat(withTiming(1, { duration: 750, easing: slow }), -1, true);
+    sweep.value = withRepeat(withTiming(1, { duration: 1700, easing: slow }), -1, true);
+    return () => {
+      cancelAnimation(pulse);
+      cancelAnimation(sweep);
+    };
+  }, [found, reduceMotion, pulse, sweep]);
+
+  const frame = useAnimatedStyle(() => ({
+    left: x.value,
+    top: y.value,
+    width: size.value,
+    height: size.value,
+    transform: [{ scale: 1 + pulse.value * 0.035 }],
+  }));
+  // The corners dim as the frame swells and come back as it settles: the beat.
+  const corners = useAnimatedStyle(() => ({ opacity: 1 - pulse.value * 0.45 }));
+  const wash = useAnimatedStyle(() => ({ opacity: hold.value * 0.22 }));
+  const line = useAnimatedStyle(() => ({
+    opacity: (1 - hold.value) * 0.85,
+    transform: [{ translateY: 20 + sweep.value * (size.value - 43) }],
+  }));
 
   return (
-    <View pointerEvents="none" style={{ width: 240, height: 240 }} className="items-center justify-center">
-      <View
-        style={{ ...corner, left: 0, top: 0, borderLeftWidth: WIDTH, borderTopWidth: WIDTH, borderTopLeftRadius: RADIUS }}
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute' }, frame]}>
+      <Animated.View
+        style={[
+          { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, borderRadius: RADIUS, backgroundColor: POP.green },
+          wash,
+        ]}
       />
-      <View
-        style={{ ...corner, right: 0, top: 0, borderRightWidth: WIDTH, borderTopWidth: WIDTH, borderTopRightRadius: RADIUS }}
-      />
-      <View
-        style={{ ...corner, left: 0, bottom: 0, borderLeftWidth: WIDTH, borderBottomWidth: WIDTH, borderBottomLeftRadius: RADIUS }}
-      />
-      <View
-        style={{ ...corner, right: 0, bottom: 0, borderRightWidth: WIDTH, borderBottomWidth: WIDTH, borderBottomRightRadius: RADIUS }}
-      />
-      {busy ? (
-        <Spinner size={28} color={ON_INK} />
-      ) : (
-        <View style={{ width: 164, height: 3, borderRadius: 2, backgroundColor: ON_INK, opacity: 0.8 }} />
+      <Animated.View style={[{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }, corners]}>
+        <View
+          style={{ ...CORNER, left: 0, top: 0, borderLeftWidth: STROKE, borderTopWidth: STROKE, borderTopLeftRadius: RADIUS }}
+        />
+        <View
+          style={{ ...CORNER, right: 0, top: 0, borderRightWidth: STROKE, borderTopWidth: STROKE, borderTopRightRadius: RADIUS }}
+        />
+        <View
+          style={{ ...CORNER, left: 0, bottom: 0, borderLeftWidth: STROKE, borderBottomWidth: STROKE, borderBottomLeftRadius: RADIUS }}
+        />
+        <View
+          style={{ ...CORNER, right: 0, bottom: 0, borderRightWidth: STROKE, borderBottomWidth: STROKE, borderBottomRightRadius: RADIUS }}
+        />
+      </Animated.View>
+
+      {!reduceMotion && (
+        <Animated.View
+          style={[
+            { position: 'absolute', left: 38, right: 38, top: 0, height: 3, borderRadius: 2, backgroundColor: ON_INK },
+            line,
+          ]}
+        />
       )}
-    </View>
+
+      {busy && (
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center' }}>
+          <Spinner size={28} color={ON_INK} />
+        </View>
+      )}
+    </Animated.View>
   );
 }
 
@@ -557,11 +765,7 @@ function SearchSheet({
 }) {
   const [text, setText] = useState('');
   // Ask once typing has paused, not on every letter: this is a slow connection.
-  const [asked, setAsked] = useState('');
-  useEffect(() => {
-    const timer = setTimeout(() => setAsked(text), 350);
-    return () => clearTimeout(timer);
-  }, [text]);
+  const asked = useDebounced(text);
   useEffect(() => {
     if (!visible) setText('');
   }, [visible]);
@@ -571,7 +775,8 @@ function SearchSheet({
 
   return (
     <Sheet visible={visible} onClose={onClose}>
-      <View className="w-full gap-3 pt-2">
+      {/* `shrink` lets the sheet's height limit reach the list below. */}
+      <View className="w-full shrink gap-3 pt-2">
         <Text
           accessibilityRole="header"
           className="font-ui-b text-[20px] leading-7 tracking-[-0.2px] text-ink-1"
@@ -582,8 +787,10 @@ function SearchSheet({
 
         <ScrollView
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
-          style={{ maxHeight: 320 }}
+          // Shrinks when the keyboard is up, so the search box stays on screen.
+          style={{ maxHeight: 320, flexShrink: 1 }}
           contentContainerStyle={{ gap: 8 }}
         >
           {!ready ? (
