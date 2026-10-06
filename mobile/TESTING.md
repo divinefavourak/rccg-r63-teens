@@ -15,11 +15,11 @@ Last updated 6 October 2026, on branch `feat/mobile-teacher-tools`.
 |---|---|
 | Push notifications, two phones | **4 of 4 passed** |
 | Check-in at the door, two phones | **1 of 9 passed**, 1 fixed and waiting for a retest, 7 not yet run |
-| Keyboard over text fields | Fixed, **not yet retested** |
-| Scanner frame animation | Built, **not yet run** |
-| The Bible kept on the phone | Built, **not yet run** |
+| Keyboard over text fields | Fixed, **Tested and passed** |
+| Scanner frame animation | Built, **Tested and passed** |
+| The Bible kept on the phone | Built, **psssed** |
 | Remembering between launches | Built, **not yet run** |
-| Keeping a whole translation | Built, **not yet run** |
+| Keeping a whole translation | Built, **passed** |
 | Backend automated tests | **48 passed**; 4 newer ones not yet run |
 | Website deep links (production) | **Passed** after the fix |
 
@@ -110,6 +110,9 @@ Not yet tried:
 |---|---|---|---|
 | 1.5 | Tap a notification with the app closed | The app opens on the screen the message is about, and the message is marked read | Not yet run |
 | 1.6 | A reminder inside quiet hours | No buzz; the message is in the inbox, with `quiet_hours` recorded as the reason | Not yet run |
+| 1.6a | Finish sign-up and tap **Start today's reading** | A sheet asks "Want a gentle nudge each day?". **Yes, remind me** shows the phone's own dialog; **Not now** goes straight to Today. Either way the reading opens | Not yet run |
+| 1.6b | Log in on a phone that has never been asked | The same sheet, once, before Today | Not yet run |
+| 1.6c | Log in on a phone that already allowed or refused notifications | No sheet | Not yet run |
 | 1.7 | Refuse the phone's permission question | The card changes to "Notifications are off" with a **Settings** button | Not yet run |
 | 1.8 | An iPhone | Same as 1.1 | Not yet run (needs an iOS build) |
 
@@ -288,7 +291,8 @@ $env:TEST_DATABASE_URL = 'postgres://faithtribe:faithtribe@localhost:5434/faitht
 | When | What | Result |
 |---|---|---|
 | 6 October 2026 | The three new test files: native push, check-in, class roster | **48 passed** in 55 seconds |
-| | Four tests added afterwards in `events.test_checkin` (the teen is told when they are checked in) | Not yet run |
+| 6 October 2026 | Everything this branch touches: `notifications events identity bible common content media` | **521 of 535 passed.** The 14 failures were in the tests and the test setup, not the features; see below |
+| | The same run again, after the fixes below | Not yet run |
 | | The rest of `notifications`, `events` and `identity`, whose code this branch also changed | Not yet run |
 | | `bible.tests.test_pack` (a whole translation in one download) | Not yet run |
 | | `common.test_view_counts` (a view counted once per viewer) | Not yet run |
@@ -299,6 +303,19 @@ To run everything this branch touches:
 ```powershell
 .\venv\Scripts\python.exe manage.py test notifications events identity bible common content media --noinput
 ```
+
+### The 14 failures of 6 October, and what was done
+
+| How many | Cause | Fix |
+|---|---|---|
+| 10 | The tests assumed the "log only" push backends, but `.env` names the real WebPush backend, so every test expecting a push failed. With the Expo backend also named in the shell, the suite was sending real requests to Expo | Both backends are pinned to logging during a test run (`settings.py`) |
+| 3 | Older tests read the real clock. Run between 21:30 and 06:00 Lagos time they hit quiet hours and reported `quiet_hours` instead of the rule under test | Those test classes pin the clock to midday |
+| 1 | A test compared a UUID object with its text | The test compares text with text |
+
+The first row also showed a real configuration gap: web push has VAPID keys in
+`.env` but no `VAPID_ADMIN_EMAIL`, and the push services refuse a request
+without it. Web push now says so plainly instead of failing inside the
+signing library.
 
 Expected noise in a passing run: lines such as `Forbidden:` and `Not Found:`
 are tests making requests that should be refused, and one `Push failed for
