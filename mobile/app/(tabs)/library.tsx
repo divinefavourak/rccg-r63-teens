@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { BackHandler, FlatList, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,6 +24,7 @@ import {
 import { useAuth } from '../../src/state/auth';
 import { usePlayer } from '../../src/state/player';
 import { HeroCard } from '../../src/ui/cards';
+import { useDebounced } from '../../src/data/debounce';
 import { ChipRow, SearchField } from '../../src/ui/inputs';
 import {
   EmptyState,
@@ -78,7 +79,8 @@ export default function LibraryScreen() {
   const [searching, setSearching] = useState(false);
   const [text, setText] = useState('');
   // The field updates on every key; the requests wait for typing to settle.
-  const deferred = useDeferredValue(text.trim());
+  // Three lists are searched at once, so each letter let through costs three.
+  const deferred = useDebounced(text.trim());
   const query = searching && deferred.length >= 2 ? deferred : undefined;
 
   const devotionals = useDevotionals(query);

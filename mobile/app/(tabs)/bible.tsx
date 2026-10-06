@@ -6,7 +6,6 @@ import Animated, { useAnimatedScrollHandler, useSharedValue, withTiming } from '
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
-  fetchVerseShare,
   useBookmarks,
   useBooks,
   useRecordChapterRead,
@@ -20,8 +19,9 @@ import { BibleNavigator, isOldTestament } from '../../src/components/BibleNaviga
 import { Icon, type IconName } from '../../src/components/Icon';
 import { useNavClearance } from '../../src/components/useNavClearance';
 import { useAuth } from '../../src/state/auth';
+import { downloadTranslation, useDownloadState } from '../../src/state/bibleDownload';
 import { useChrome } from '../../src/state/chrome';
-import { plainVerse, redLetterParts } from '../../src/data/scripture';
+import { copyWords, plainVerse, redLetterParts, shareWords } from '../../src/data/scripture';
 import { READER_THEMES, TEXT_SIZES, useReader } from '../../src/state/reader';
 import { Object3D } from '../../src/ui/art';
 import { POP_BG } from '../../src/ui/cards';
@@ -197,30 +197,33 @@ export default function BibleScreen() {
   const [copied, setCopied] = useState(false);
   useEffect(() => setCopied(false), [selected]);
 
-  /** The words to send, with the attribution the translation's licence needs. */
-  const wordsFor = useCallback(
-    async (verse: BibleVerse, kind: 'share_text' | 'copy_text') => {
-      try {
-        return plainVerse((await fetchVerseShare(book, chapter, verse.number, translation))[kind]);
-      } catch {
-        // Offline: the verse on screen and its address are still true.
-        return `“${plainVerse(verse.text)}”\n${verse.reference}${translationCode ? ` (${translationCode})` : ''}`;
-      }
-    },
-    [book, chapter, translation, translationCode],
-  );
+  // Both are made from the verse already on screen, with no request: sharing
+  // and copying work with no signal, and cost a teen no data.
+  const licence = passage.data?.translation;
 
-  const onShare = useCallback(async () => {
+  const onShare = useCallback(() => {
     if (!selected) return;
-    const message = await wordsFor(selected, 'share_text');
+    const message = shareWords(
+      {
+        text: selected.text,
+        reference: selected.reference,
+        code: translationCode,
+        book,
+        chapter,
+        verse: selected.number,
+      },
+      licence,
+    );
     Share.share({ message }).catch(() => {});
-  }, [selected, wordsFor]);
+  }, [selected, translationCode, book, chapter, licence]);
 
   const onCopy = useCallback(async () => {
     if (!selected) return;
-    await Clipboard.setStringAsync(await wordsFor(selected, 'copy_text'));
+    await Clipboard.setStringAsync(
+      copyWords({ text: selected.text, reference: selected.reference, code: translationCode }),
+    );
     setCopied(true);
-  }, [selected, wordsFor]);
+  }, [selected, translationCode]);
 
   const onSave = useCallback(() => {
     if (!selected) return;
@@ -473,6 +476,9 @@ export default function BibleScreen() {
               We couldn’t load the list of translations. Close this and try again.
             </Text>
           )}
+          <KeepOnPhone
+            translation={(translations.data ?? []).find((t) => t.code === translationCode)}
+          />
         </View>
       </Sheet>
 
@@ -498,6 +504,90 @@ export default function BibleScreen() {
 const keyOfVerse = (v: BibleVerse) => v.id;
 
 // ─── Pieces ────────────────────────────────────────────────────────────────
+
+/**
+ * "Keep WEB on this phone": fetch the whole translation for reading offline.
+ *
+ * Offered only where the translation's licence allows it. A licensed text may
+ * often be read online and not stored, and the server refuses the download in
+ * that case anyway; not showing the button is kinder than showing one that
+ * fails.
+ */
+function KeepOnPhone({
+  translation,
+}: {
+  translation: { code: string; is_offline_capable?: boolean } | undefined;
+}) {
+  const state = useDownloadState(translation?.code);
+  if (!translation?.is_offline_capable) return null;
+
+  const { code } = translation;
+
+  if (state.status === 'saved') {
+    return (
+      <View className="w-full flex-row items-center gap-3 rounded-xl bg-green-tonal p-4">
+        <Icon name="check" size={20} color={POP.green} />
+        <Text className="flex-1 font-ui-sb text-[14px] leading-5 text-ink-1">
+          All of {code} is on this phone. It opens with no signal.
+        </Text>
+      </View>
+    );
+  }
+
+  if (state.status === 'fetching' || state.status === 'saving') {
+    const saving = state.status === 'saving';
+    return (
+      <View
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityLabel={saving ? `Saving ${code}` : `Downloading ${code}`}
+        accessibilityValue={saving ? { min: 0, max: state.total, now: state.done } : undefined}
+        accessibilityState={{ busy: true }}
+        className="w-full gap-2 rounded-xl bg-surf-sunken p-4"
+      >
+        <Text className="font-ui-sb text-[14px] leading-5 text-ink-1">
+          {saving
+            ? `Saving ${code}: ${state.done} of ${state.total} books`
+            : `Downloading ${code}…`}
+        </Text>
+        <View className="h-1.5 w-full overflow-hidden rounded-full bg-line">
+          <View
+            className="h-full rounded-full bg-ink"
+            // The download has no running total to show, so the bar waits at a
+            // sliver until there are books to count.
+            style={{ width: saving ? `${Math.round((state.done / state.total) * 100)}%` : '4%' }}
+          />
+        </View>
+        <Text className="font-ui-md text-[12px] leading-4 text-ink-3">
+          You can close this and keep reading. It carries on.
+        </Text>
+      </View>
+    );
+  }
+
+  const stopped = state.status === 'stopped';
+  return (
+    <View className="w-full gap-3 rounded-xl bg-surf-sunken p-4">
+      <View className="gap-0.5">
+        <Text className="font-ui-sb text-[16px] leading-6 text-ink-1">Keep {code} on this phone</Text>
+        <Text className="font-ui text-[14px] leading-5 text-ink-2">
+          {stopped
+            ? state.message
+            : 'Read any chapter with no signal. One download of about 2 MB, best on Wi-Fi.'}
+        </Text>
+      </View>
+      <Press
+        onPress={() => downloadTranslation(code)}
+        accessibilityLabel={stopped ? `Try saving ${code} again` : `Save all of ${code} to this phone`}
+        className="h-11 items-center justify-center self-start rounded-full bg-ink px-5"
+      >
+        <Text className="font-ui-sb text-[14px] leading-5 text-on-ink">
+          {stopped ? 'Try again' : 'Save to this phone'}
+        </Text>
+      </Press>
+    </View>
+  );
+}
 
 function SheetTitle({ children }: { children: string }) {
   return (

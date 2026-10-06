@@ -29,6 +29,7 @@ import { ChromeProvider } from '../src/state/chrome';
 import { AuthProvider, useAuth } from '../src/state/auth';
 import { PlayerProvider } from '../src/state/player';
 import { ReaderProvider, useReader } from '../src/state/reader';
+import { restoreQueries, watchQueries } from '../src/api/persist';
 import { installAppStateBridges, queryClient } from '../src/api/queryClient';
 import { usePushSync } from '../src/state/push';
 import { loadWelcomed } from '../src/state/welcome';
@@ -64,6 +65,24 @@ export default function RootLayout() {
   // exist in React Native. Installed once, for the life of the app.
   useEffect(installAppStateBridges, []);
 
+  // What the app loaded last time, read back before any screen asks for it.
+  // Watching starts only once that is done, or the first write would replace
+  // the saved cache with an empty one.
+  const [cacheRestored, setCacheRestored] = useState(false);
+  useEffect(() => {
+    let stop = () => {};
+    let cancelled = false;
+    restoreQueries(queryClient).finally(() => {
+      if (cancelled) return;
+      stop = watchQueries(queryClient);
+      setCacheRestored(true);
+    });
+    return () => {
+      cancelled = true;
+      stop();
+    };
+  }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
@@ -79,7 +98,7 @@ export default function RootLayout() {
                     sound has to outlive the screen that started it. */}
                 <ReaderProvider>
                   <PlayerProvider>
-                    <AppShell fontsSettled={fontsSettled} />
+                    <AppShell fontsSettled={fontsSettled && cacheRestored} />
                   </PlayerProvider>
                 </ReaderProvider>
               </ChromeProvider>

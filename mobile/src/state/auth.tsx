@@ -1,7 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQueryClient } from '@tanstack/react-query';
 
-import { api, ApiError, onSessionExpired } from '../api/client';
+import { api, ApiError, forgetResponses, onSessionExpired } from '../api/client';
+import { forgetQueries } from '../api/persist';
 import { clearTokens, loadTokens, saveTokens } from '../api/tokens';
 import { unregisterPushDevice } from './push';
 import type { AuthUser, LoginResponse } from '../api/types';
@@ -88,32 +90,97 @@ export function codeDestination(input: string): { destination: string; channel: 
 
 const AuthContext = createContext<AuthValue | null>(null);
 
+/**
+ * Who was signed in when the app last closed.
+ *
+ * Only the name-and-address card the app shows, never a credential: the tokens
+ * stay in the keychain. It lets a launch know who the teen is without a round
+ * trip, which is the difference between opening on their own Today and waiting
+ * on a splash screen for a server that may be asleep.
+ */
+const USER_KEY = 'faithtribe.user';
+
+async function loadUser(): Promise<AuthUser | null> {
+  try {
+    const raw = await AsyncStorage.getItem(USER_KEY);
+    return raw ? (JSON.parse(raw) as AuthUser) : null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberUser(user: AuthUser | null): void {
+  const done = user
+    ? AsyncStorage.setItem(USER_KEY, JSON.stringify(user))
+    : AsyncStorage.removeItem(USER_KEY);
+  done.catch(() => {
+    // Not remembered. The next launch asks the server, as it always used to.
+  });
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient();
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUserState] = useState<AuthUser | null>(null);
   const [ready, setReady] = useState(false);
+
+  /** Every change of who is signed in goes through here, so it is remembered. */
+  const setUser = useCallback((next: AuthUser | null) => {
+    setUserState(next);
+    rememberUser(next);
+  }, []);
+
+  /**
+   * Drop everything loaded for the previous person, in memory and on the phone.
+   * Guest and member see different answers from the same addresses.
+   */
+  const startClean = useCallback(() => {
+    qc.clear();
+    forgetQueries();
+    forgetResponses();
+  }, [qc]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Cold start: if a refresh token survives in the keychain, ask the server who
-  // it belongs to. `/auth/me/` doubles as a token validity check, so an expired
-  // or revoked session resolves to signed-out rather than to a broken UI.
+  // Cold start. A session is a token in the keychain plus the remembered card
+  // of who it belongs to. With both, the app opens as that teen straight away
+  // and checks with the server behind the first screen. It used to wait for
+  // that check before drawing anything, and to sign the teen out if the check
+  // could not be made: opening the app with no signal logged you out.
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      const { access, refresh } = await loadTokens();
+      const [{ access, refresh }, remembered] = await Promise.all([loadTokens(), loadUser()]);
       if (!access && !refresh) {
+        // A remembered teen with no token left: the session was lost some
+        // other way. What was saved for them must not greet a guest.
+        if (remembered) {
+          rememberUser(null);
+          startClean();
+        }
         if (!cancelled) setReady(true);
         return;
       }
+
+      if (remembered && !cancelled) {
+        setUserState(remembered);
+        setReady(true);
+      }
+
       try {
         const me = await api.get<AuthUser>('/auth/me/');
         if (!cancelled) setUser(me);
-      } catch {
-        // The client already cleared the tokens and announced expiry if the
-        // refresh failed; anything else here is equally a signed-out state.
-        await clearTokens();
+      } catch (err) {
+        // Only the server saying "no" ends a session. The client has already
+        // cleared the tokens and announced it if the refresh was refused. No
+        // signal, or a server that is down, says nothing about the session:
+        // the teen stays signed in and the next request tries again.
+        const refused = err instanceof ApiError && !err.isTransient;
+        if (refused) {
+          await clearTokens();
+          if (!cancelled) setUser(null);
+          startClean();
+        }
       } finally {
         if (!cancelled) setReady(true);
       }
@@ -122,7 +189,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [setUser, startClean]);
 
   // A refresh that fails mid-session must drop the user back to the guest view
   // rather than leave every query erroring in place.
@@ -130,9 +197,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () =>
       onSessionExpired(() => {
         setUser(null);
-        qc.clear();
+        startClean();
       }),
-    [qc],
+    [setUser, startClean],
   );
 
   const signIn = useCallback(
@@ -151,7 +218,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(data.user);
         // Guest and member see different payloads from the same endpoints, so
         // nothing cached while signed out should survive signing in.
-        qc.clear();
+        startClean();
       } catch (err) {
         const message =
           err instanceof ApiError ? err.message : 'Could not sign in. Please try again.';
@@ -161,7 +228,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setPending(false);
       }
     },
-    [qc],
+    [setUser, startClean],
   );
 
   /**
@@ -181,7 +248,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const session = data as LoginResponse;
           await saveTokens(session.access, session.refresh);
           setUser(session.user);
-          qc.clear();
+          startClean();
         }
       } catch (err) {
         setError(err instanceof ApiError ? err.message : fallback);
@@ -190,7 +257,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setPending(false);
       }
     },
-    [qc],
+    [setUser, startClean],
   );
 
   const startSignUp = useCallback(
@@ -259,8 +326,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     await clearTokens();
     setUser(null);
-    qc.clear();
-  }, [qc]);
+    startClean();
+  }, [setUser, startClean]);
 
   const clearError = useCallback(() => setError(null), []);
 

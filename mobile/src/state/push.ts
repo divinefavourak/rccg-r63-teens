@@ -26,6 +26,14 @@ import { routeFor } from '../data/links';
  */
 
 const TOKEN_KEY = 'faithtribe.pushToken';
+/** Which account this phone was last registered to, and when. */
+const REGISTERED_KEY = 'faithtribe.pushRegistered';
+/**
+ * How long a registration is trusted before the server is told again. Often
+ * enough to heal a row the server lost; rare enough not to be a request on
+ * every launch.
+ */
+const REREGISTER_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 const SUPPORTED = Platform.OS === 'ios' || Platform.OS === 'android';
 
 if (SUPPORTED) {
@@ -99,17 +107,39 @@ async function readToken(): Promise<string | null> {
   }
 }
 
-/** Tell the server how to reach this phone. Safe to call on every launch. */
-async function register(): Promise<void> {
+/**
+ * Who is signed in, as `usePushSync` last saw it. The "Turn on" card registers
+ * the phone the moment permission is given, and it lives outside the root
+ * where the session is known.
+ */
+let signedIn: string | undefined;
+
+/**
+ * Tell the server how to reach this phone.
+ *
+ * Called on every launch, but it only asks the server when something has
+ * changed: a different account, a new token, or a week gone by.
+ */
+async function register(userId: string): Promise<void> {
   const token = await readToken();
   if (!token) return;
   try {
+    const mark = `${userId}|${token}`;
+    const last = await AsyncStorage.getItem(REGISTERED_KEY);
+    if (last) {
+      const [savedMark, at] = last.split('@');
+      if (savedMark === mark && Date.now() - Number(at) < REREGISTER_AFTER_MS) return;
+    }
+
     await api.post('/notifications/devices/', {
       token,
       platform: Platform.OS,
       device_name: Device.deviceName ?? '',
     });
-    await AsyncStorage.setItem(TOKEN_KEY, token);
+    await AsyncStorage.multiSet([
+      [TOKEN_KEY, token],
+      [REGISTERED_KEY, `${mark}@${Date.now()}`],
+    ]);
   } catch {
     // Offline, or the server is down. The next launch tries again.
   }
@@ -127,7 +157,7 @@ export async function unregisterPushDevice(): Promise<void> {
   try {
     const token = await AsyncStorage.getItem(TOKEN_KEY);
     if (!token) return;
-    await AsyncStorage.removeItem(TOKEN_KEY);
+    await AsyncStorage.multiRemove([TOKEN_KEY, REGISTERED_KEY]);
     await request('/notifications/devices/', { method: 'DELETE', body: { token } });
   } catch {
     // Best effort: registering under the next account moves the token anyway.
@@ -169,7 +199,7 @@ export function usePushPermission(): {
       return;
     }
     const answer = await Notifications.requestPermissionsAsync().catch(() => null);
-    if (answer?.granted) await register();
+    if (answer?.granted && signedIn) await register(signedIn);
     refresh();
   }, [refresh]);
 
@@ -193,9 +223,10 @@ export function usePushSync(userId: string | undefined, ready: boolean): void {
   const qc = useQueryClient();
 
   useEffect(() => {
+    signedIn = userId;
     if (!SUPPORTED || !userId) return;
     readStatus().then((status) => {
-      if (status === 'granted') register();
+      if (status === 'granted') register(userId);
     });
   }, [userId]);
 
@@ -205,6 +236,9 @@ export function usePushSync(userId: string | undefined, ready: boolean): void {
     const refreshInbox = () => {
       qc.invalidateQueries({ queryKey: keys.notifications });
       qc.invalidateQueries({ queryKey: keys.unreadCount });
+      // Most pushes about an event change a ticket too: confirmed, cancelled,
+      // checked in at the door. An open ticket should follow without a reload.
+      qc.invalidateQueries({ queryKey: keys.myRegistrations });
     };
 
     const open = (response: Notifications.NotificationResponse | null) => {

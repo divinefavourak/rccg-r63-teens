@@ -274,6 +274,11 @@ export interface BibleTranslation {
   code: string;
   name: string;
   attribution?: string | null;
+  /** Whether the licence allows keeping the text on a device. */
+  is_offline_capable?: boolean;
+  /** True when the licence requires `copyright_notice` wherever the text is shown. */
+  attribution_required?: boolean;
+  copyright_notice?: string | null;
 }
 
 export interface BibleBook {

@@ -76,11 +76,47 @@ function refreshAccessToken(): Promise<string> {
 
   // Clear the lock either way, so a later 401 can start a fresh attempt rather
   // than awaiting a settled promise for ever.
-  refreshPromise.finally(() => {
+  //
+  // Both outcomes are handled here on purpose. `.finally()` hands back a new
+  // promise that rejects whenever the refresh does, and nothing was listening
+  // to that copy: every expired session was also reported as an uncaught
+  // error, on top of being handled properly by the caller below.
+  const unlock = () => {
     refreshPromise = null;
-  });
+  };
+  refreshPromise.then(unlock, unlock);
 
   return refreshPromise;
+}
+
+/**
+ * Answers the server has already given, kept with the tag it gave them.
+ *
+ * The server stamps every answer with an ETag, a fingerprint of its contents.
+ * Sent back with the next request for the same address, it lets the server
+ * reply "unchanged" in a few bytes instead of sending the whole list again.
+ * The request is still made, so anything new is still seen at once; what is
+ * saved is the download, which is the part a teen pays for.
+ *
+ * Kept in memory for the life of the app, and emptied whenever the session
+ * changes: the same address answers differently for a guest and a member.
+ */
+const remembered = new Map<string, { etag: string; payload: unknown }>();
+/** Enough for every screen in the app; a cap so it cannot grow without end. */
+const REMEMBER_AT_MOST = 80;
+
+export function forgetResponses(): void {
+  remembered.clear();
+}
+
+function remember(url: string, etag: string, payload: unknown): void {
+  // Re-inserting moves it to the end, so the first key is always the oldest.
+  remembered.delete(url);
+  remembered.set(url, { etag, payload });
+  if (remembered.size > REMEMBER_AT_MOST) {
+    const oldest = remembered.keys().next().value;
+    if (oldest !== undefined) remembered.delete(oldest);
+  }
 }
 
 export interface RequestOptions {
@@ -105,6 +141,10 @@ async function send(path: string, options: RequestOptions, token: string | null)
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (body !== undefined && !isMultipart) headers['Content-Type'] = 'application/json';
   if (token && !options.anonymous) headers.Authorization = `Bearer ${token}`;
+  if (method === 'GET') {
+    const known = remembered.get(`${baseUrl}${path}`);
+    if (known) headers['If-None-Match'] = known.etag;
+  }
 
   return fetch(`${baseUrl}${path}`, {
     method,
@@ -163,11 +203,28 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 
   if (res.status === 204) return undefined as T;
 
+  const url = `${options.baseUrl ?? API_URL}${path}`;
+  const isGet = (options.method ?? 'GET') === 'GET';
+
+  // "Unchanged since the copy you have": hand that copy back.
+  if (res.status === 304) {
+    const known = remembered.get(url);
+    if (known) return known.payload as T;
+    // A 304 for something not held should not happen. Treat it as a failed
+    // request, so the caller retries without the tag, never as empty data.
+    throw new ApiError(0, 'Network unavailable');
+  }
+
   const text = await res.text();
   const payload = text ? safeJson(text) : null;
 
   if (!res.ok) {
     throw new ApiError(res.status, describe(payload, res.status), payload);
+  }
+
+  if (isGet) {
+    const etag = res.headers.get('ETag');
+    if (etag) remember(url, etag, payload);
   }
 
   return payload as T;
