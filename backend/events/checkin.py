@@ -17,6 +17,8 @@ volunteer needs to be told, in words, with the attendee's name attached. So
 of them. Only a request the app itself got wrong (no event, no permission) is a
 4xx.
 """
+import logging
+
 from django.db import transaction
 from django.db.models import Count, Q
 
@@ -24,8 +26,11 @@ from common.dates import app_today, day_bounds
 from identity.authorization import scope_queryset
 from identity.permissions_registry import Perm
 
+from . import notifications as event_notifications
 from . import scoping
 from .models import Event, EventRegistration, RegistrationAuditLog
+
+logger = logging.getLogger(__name__)
 
 # What a scan can turn out to be. The app draws one screen per value.
 CHECKED_IN = 'checked_in'
@@ -169,7 +174,19 @@ def scan(event, code, user, method='qr_scan'):
                 'method': registration.check_in_method,
             },
         )
+        # Tell the teen, but only once the check-in is safely stored, and never
+        # while the row is still locked: a push is a network call, and a slow one
+        # must not hold up the next scan of the queue at the door.
+        transaction.on_commit(lambda: _announce(registration))
         return _result(CHECKED_IN, registration, checked_in_at=registration.checked_in_at)
+
+
+def _announce(registration):
+    """Notify the attendee. A failure here must never undo or fail a check-in."""
+    try:
+        event_notifications.notify_checked_in(registration)
+    except Exception:
+        logger.exception('Could not notify %s of their check-in', registration.registration_id)
 
 
 def search(event, query, limit=20):

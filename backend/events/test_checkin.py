@@ -17,6 +17,7 @@ from events.models import Event, EventRegistration
 from identity.authorization import set_membership
 from identity.permissions_registry import Perm
 from identity.tests.base import build_tree, make_user
+from notifications.models import Notification, NotificationType
 
 
 def grant(user, node, *codes):
@@ -177,6 +178,59 @@ class ScanOutcomeTests(TestCase):
         result = self.scan(registration.registration_id)
 
         self.assertEqual(result['outcome'], checkin.WAITLISTED)
+
+
+class CheckInNotificationTests(TestCase):
+    """The teen's own phone should answer the scan."""
+
+    def setUp(self):
+        self.tree = build_tree()
+        self.teacher = make_user('ngozi')
+        self.teen = make_user('tolu')
+        self.event = make_event('Teens Hangout', self.tree['r1'])
+
+    def scan(self, registration):
+        # The message goes out after the check-in commits; run that step here.
+        with self.captureOnCommitCallbacks(execute=True):
+            return checkin.scan(self.event, registration.registration_id, self.teacher)
+
+    def test_the_teen_is_told_they_are_in(self):
+        registration = make_registration(self.event, user=self.teen)
+
+        self.scan(registration)
+
+        note = Notification.objects.get(user=self.teen)
+        self.assertEqual(note.notification_type, NotificationType.TRANSACTIONAL)
+        self.assertEqual(note.title, 'You’re checked in')
+        self.assertIn('Teens Hangout', note.body)
+        self.assertIn('Tolu', note.body)
+        self.assertEqual(
+            note.deep_link, f'/events/{self.event.id}/ticket/{registration.id}')
+
+    def test_a_second_scan_does_not_tell_them_again(self):
+        registration = make_registration(self.event, user=self.teen)
+
+        self.scan(registration)
+        self.scan(registration)
+
+        self.assertEqual(Notification.objects.filter(user=self.teen).count(), 1)
+
+    def test_a_refused_ticket_tells_nobody(self):
+        registration = make_registration(
+            self.event, user=self.teen, status=EventRegistration.Status.CANCELLED)
+
+        self.scan(registration)
+
+        self.assertFalse(Notification.objects.exists())
+
+    def test_an_attendee_without_an_account_is_still_checked_in(self):
+        """A coordinator can register someone who has never opened the app."""
+        registration = make_registration(self.event, name='Amaka Eze')
+
+        result = self.scan(registration)
+
+        self.assertEqual(result['outcome'], checkin.CHECKED_IN)
+        self.assertFalse(Notification.objects.exists())
 
 
 class CheckInAPITests(TestCase):

@@ -136,6 +136,31 @@ def notify_status_changed(registration, old_status, new_status):
     )
 
 
+def notify_checked_in(registration):
+    """
+    The ticket was scanned at the door and accepted.
+
+    Sent so the teen's own phone answers the scan: their ticket turns to
+    "Checked in" in front of them instead of a volunteer saying "you're fine, go
+    in" while the screen still shows a QR code. `TRANSACTIONAL`, because it is the
+    result of something that happened seconds ago and an evening event can easily
+    start inside quiet hours.
+    """
+    if registration.user_id is None:
+        return None
+
+    first_name = (registration.attendee_name or '').strip().split(' ')[0]
+    return send(
+        registration.user,
+        NotificationType.TRANSACTIONAL,
+        'You’re checked in',
+        f'Welcome to {registration.event.title}{", " + first_name if first_name else ""}.',
+        deep_link=_ticket_link(registration),
+        data=_base_data(registration),
+        dedupe_key=f'event:checked_in:{registration.id}',
+    )
+
+
 def _live_registrations(event):
     """Registrations that still care about this event."""
     Status = event.registrations.model.Status
