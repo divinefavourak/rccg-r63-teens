@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -13,7 +13,7 @@ import { Button } from '../../src/ui/Button';
 import { Avatar } from '../../src/ui/cards';
 import { ChipRow, TextField } from '../../src/ui/inputs';
 import { Press } from '../../src/ui/Press';
-import { BackHeader, EmptyState, SectionTitle, Skeleton } from '../../src/ui/screen';
+import { BackHeader, EmptyState, KeyboardView, SectionTitle, Skeleton } from '../../src/ui/screen';
 import { useTokens } from '../../src/theme/ThemeProvider';
 import { ELEVATION } from '../../src/theme/tokens';
 
@@ -131,10 +131,11 @@ export default function AccountSettingsScreen() {
     <View className="flex-1 bg-surf-base">
       <BackHeader title="Your profile" onBack={back} />
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardView>
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           contentContainerStyle={{ gap: 16, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 24 }}
         >
           {/* ── Photo ─────────────────────────────────────────────── */}
@@ -280,7 +281,7 @@ export default function AccountSettingsScreen() {
           )}
           <Button label="Save changes" onPress={save} loading={update.isPending} className="w-full" />
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardView>
     </View>
   );
 }

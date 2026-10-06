@@ -107,6 +107,7 @@ export default function ClassScreen() {
       ) : (
         <ScrollView
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ gap: 12, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 24 }}
           refreshControl={

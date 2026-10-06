@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,6 +12,7 @@ import { FormError } from '../../src/ui/AuthShell';
 import { Button } from '../../src/ui/Button';
 import { Blob } from '../../src/ui/cards';
 import { IconField } from '../../src/ui/inputs';
+import { KeyboardView } from '../../src/ui/screen';
 import { Press } from '../../src/ui/Press';
 import { useTokens } from '../../src/theme/ThemeProvider';
 import { ELEVATION } from '../../src/theme/tokens';
@@ -80,9 +81,8 @@ export default function LogInScreen() {
   }, [router]);
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardView
       className="flex-1 bg-surf-base"
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       {/* Soft colour circles, mostly off-screen. Behind everything and clipped
           by this view, so they never catch a touch or widen the page. */}
@@ -221,6 +221,6 @@ export default function LogInScreen() {
           Read · Pray · Grow together
         </Text>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardView>
   );
 }
