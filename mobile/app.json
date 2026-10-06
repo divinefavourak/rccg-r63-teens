@@ -24,6 +24,7 @@
     },
     "android": {
       "package": "org.rccgregion63.faithtribe",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#10B981",
         "foregroundImage": "./assets/android-icon-foreground.png",
