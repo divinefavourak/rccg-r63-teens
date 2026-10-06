@@ -16,6 +16,7 @@ from rest_framework.views import APIView
 
 from identity.authorization import HasPermission, HasPermissionOrReadOnly, has_any_permission
 from identity.permissions_registry import Perm
+from common.view_counts import count_view
 from .models import (
     Article, Devotional, DiscussionQuestion, Manual, ManualSeries, MemoryVerse,
     ScriptureReference, UserLikeLog, UserReadLog,
@@ -132,7 +133,7 @@ class DevotionalViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
     
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
-        instance.increment_view_count()
+        count_view(request, instance)
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
     
@@ -155,7 +156,7 @@ class DevotionalViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        devotional.increment_view_count()
+        count_view(request, devotional)
         serializer = DevotionalDetailSerializer(devotional)
         return Response(serializer.data)
 
@@ -509,7 +510,7 @@ class ManualViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
-        instance.increment_view_count()
+        count_view(request, instance)
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
     
@@ -539,8 +540,14 @@ class ManualViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        manual.increment_view_count()
-        serializer = ManualDetailSerializer(manual)
+        count_view(request, manual)
+        # The same choice `retrieve` makes: someone who may see the teacher's
+        # edition gets it here too. It used to be the teen edition for everyone,
+        # which made the app ask twice for every lesson it opened.
+        if has_any_permission(request.user, Perm.CONTENT_VIEW):
+            serializer = ManualTeacherDetailSerializer(manual)
+        else:
+            serializer = ManualDetailSerializer(manual)
         return Response(serializer.data)
     
     @action(detail=True, methods=['post'])
@@ -641,7 +648,7 @@ class ArticleViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
     
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
-        instance.increment_view_count()
+        count_view(request, instance)
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
     

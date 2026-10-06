@@ -13,6 +13,7 @@ from django.db.models.functions import Coalesce
 from identity.authorization import HasPermission, HasPermissionOrReadOnly, has_any_permission
 from identity.permissions_registry import Perm
 from content.views import get_age_group_filter
+from common.view_counts import count_view
 from . import notifications as event_notifications
 from . import scoping
 from .email_service import EventEmailService
@@ -107,7 +108,7 @@ class EventViewSet(viewsets.ModelViewSet):
     
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
-        instance.increment_view_count()
+        count_view(request, instance)
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
     
