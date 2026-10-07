@@ -3,6 +3,7 @@ Serializers for the events app (events, registrations, bulk uploads).
 """
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 
@@ -379,6 +380,11 @@ class EventRegistrationCreateSerializer(serializers.ModelSerializer):
             'notes',
         ]
     
+    ALREADY_REGISTERED = (
+        'This email address is already registered for this event. '
+        'If it is yours, your ticket is under My tickets.'
+    )
+
     def get_unique_together_validators(self):
         # DRF's own check for (event, attendee_email) answers a teen with "The
         # fields event, attendee_email must make a unique set". The same rule is
@@ -393,13 +399,8 @@ class EventRegistrationCreateSerializer(serializers.ModelSerializer):
         if email and EventRegistration.objects.filter(
             event=event, attendee_email__iexact=email,
         ).exists():
-            raise serializers.ValidationError({
-                'attendee_email': (
-                    'This email address is already registered for this event. '
-                    'If it is yours, your ticket is under My tickets.'
-                )
-            })
-        
+            raise serializers.ValidationError({'attendee_email': self.ALREADY_REGISTERED})
+
         # Check if event is open for registration
         if event.registration_status != Event.RegistrationStatus.OPEN:
             raise serializers.ValidationError({
@@ -432,11 +433,23 @@ class EventRegistrationCreateSerializer(serializers.ModelSerializer):
         return data
     
     def create(self, validated_data):
+        # One transaction, holding the event's row: the capacity decision at the
+        # end must see every registration that got in before this one.
+        with transaction.atomic():
+            return self._create(validated_data)
+
+    def _create(self, validated_data):
         request = self.context.get('request')
-        
+
+        # Two teens going for the last place queue here. `validate` has already
+        # said "full" to anyone who was plainly too late; this is the answer
+        # that counts.
+        event = Event.objects.select_for_update().get(pk=validated_data['event'].pk)
+        validated_data['event'] = event
+
         if request and request.user.is_authenticated:
             validated_data['registered_by'] = request.user
-        
+
         # Set registration type — a *provenance label* ("who entered this row"),
         # not an authorization decision. Derived from capabilities rather than the
         # legacy `User.role` string, which Phase 1 replaced with RoleAssignments and
@@ -466,7 +479,6 @@ class EventRegistrationCreateSerializer(serializers.ModelSerializer):
                 validated_data['profile'] = owner.teen_profile
         
         # Set amount due based on event pricing
-        event = validated_data['event']
         if event.is_free:
             validated_data['payment_status'] = EventRegistration.PaymentStatus.NOT_REQUIRED
         else:
@@ -477,10 +489,24 @@ class EventRegistrationCreateSerializer(serializers.ModelSerializer):
             validated_data['consent_timestamp'] = timezone.now()
         
         # Check if should be waitlisted
-        if event.is_full and event.waitlist_enabled:
+        if event.is_full:
+            if not event.waitlist_enabled:
+                raise serializers.ValidationError({
+                    'event': 'This event is full and waitlist is not enabled.'
+                })
             validated_data['status'] = EventRegistration.Status.WAITLISTED
-        
-        return super().create(validated_data)
+
+        try:
+            with transaction.atomic():
+                return super().create(validated_data)
+        except IntegrityError:
+            # The same email registering twice at once: both passed `validate`,
+            # and the database constraint refused the second.
+            if not EventRegistration.objects.filter(
+                event=event, attendee_email__iexact=validated_data['attendee_email'],
+            ).exists():
+                raise
+            raise serializers.ValidationError({'attendee_email': self.ALREADY_REGISTERED})
 
 
 class EventRegistrationStatusUpdateSerializer(serializers.Serializer):
