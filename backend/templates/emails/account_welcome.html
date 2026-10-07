@@ -1,92 +1,25 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome!</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap');
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Poppins', -apple-system, sans-serif; background: #252432; color: #fff; margin: 0; padding: 20px 0; }
-        .container { max-width: 600px; margin: 0 auto; background: #252432; border-radius: 20px; overflow: hidden; box-shadow: 0 0 40px rgba(255,39,112,0.15); }
-        .header { background: #1e1e2a; padding: 36px 24px; text-align: center; border-bottom: 3px solid #ff2770; }
-        .logos { display: flex; justify-content: center; align-items: center; gap: 16px; margin-bottom: 18px; }
-        .logo { width: 64px; height: 64px; border-radius: 50%; border: 2px solid #45f3ff; object-fit: cover; box-shadow: 0 0 12px rgba(69,243,255,0.35); }
-        .header h1 { color: #45f3ff; font-size: 26px; font-weight: 800; margin: 0 0 6px; letter-spacing: 0.06em; text-transform: uppercase; text-shadow: 0 0 20px rgba(69,243,255,0.5); }
-        .header-sub { color: rgba(255,255,255,0.5); font-size: 13px; }
-        .content { padding: 36px 28px; }
-        .avatar-wrap { text-align: center; margin-bottom: 22px; }
-        .avatar { width: 84px; height: 84px; border-radius: 50%; border: 3px solid #ff2770; object-fit: cover; box-shadow: 0 0 18px rgba(255,39,112,0.45); }
-        .greeting { font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 10px; }
-        .message { color: #999; font-size: 15px; line-height: 1.7; margin-bottom: 24px; }
-        .badge { display: inline-block; padding: 10px 30px; border-radius: 30px; font-weight: 800; font-size: 16px; letter-spacing: 0.04em; background: #45f3ff; color: #111; box-shadow: 0 0 16px rgba(69,243,255,0.5); }
-        .card { background: #2d2d39; border: 1px solid rgba(69,243,255,0.18); border-radius: 16px; padding: 22px 24px; margin: 18px 0; }
-        .row { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 14px; }
-        .row:last-child { border-bottom: none; }
-        .lbl { color: #45f3ff; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
-        .val { color: #fff; font-weight: 600; }
-        .btn { display: inline-block; text-decoration: none; font-weight: 700; padding: 14px 42px; border-radius: 30px; font-size: 15px; letter-spacing: 0.04em; background: #ff2770; color: #fff; box-shadow: 0 0 20px rgba(255,39,112,0.5); }
-        .footer { background: #1e1e2a; padding: 28px; text-align: center; border-top: 2px solid rgba(255,39,112,0.2); }
-        .footer-brand { color: #45f3ff; font-weight: 700; font-size: 13px; margin-bottom: 6px; }
-        .footer p { color: #555; font-size: 12px; margin: 3px 0; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <div class="logos">
-                {% if logo_url %}<img src="{{ logo_url }}" alt="RCCG Logo" class="logo">{% endif %}
-                {% if faith_logo_url %}<img src="{{ faith_logo_url }}" alt="Faith Tribe Logo" class="logo">{% endif %}
-            </div>
-            <h1>Welcome!</h1>
-            <p class="header-sub">RCCG Region 63 Junior Church</p>
-        </div>
+{% extends "emails/_base.html" %}
+{% block title %}Welcome to Faith Tribe{% endblock %}
+{% block preheader %}Your account is ready. Today&rsquo;s devotional is waiting for you.{% endblock %}
+{% block accent %}#10B981{% endblock %}
+{% block eyebrow %}Welcome{% endblock %}
+{% block heading %}You&rsquo;re in, {{ full_name }}!{% endblock %}
+{% block lead %}Your Faith Tribe account is ready. We&rsquo;re so glad you&rsquo;re part of the family.{% endblock %}
 
-        <div class="content">
-            {% if avatar_url %}
-            <div class="avatar-wrap">
-                <img src="{{ avatar_url }}" alt="{{ full_name }}" class="avatar">
-            </div>
-            {% endif %}
+{% block content %}
+<p style="margin:0 0 16px;">Faith Tribe is where RCCG Region 63&rsquo;s teens read the Bible, keep up with the daily devotional and find out what&rsquo;s on across the region. Here are your account details:</p>
 
-            <p class="greeting">Hello, {{ full_name }}!</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">
+  <tr>
+    <td bgcolor="#F2EAE0" style="border-radius:20px;padding:6px 20px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        {% include "emails/_row.html" with label="Username" value=user.username first=True %}
+        {% include "emails/_row.html" with label="Email" value=user.email %}
+        {% if user.province %}{% include "emails/_row.html" with label="Province" value=user.get_province_display %}{% endif %}
+      </table>
+    </td>
+  </tr>
+</table>
 
-            <div style="text-align:center; margin-bottom:22px;">
-                <span class="badge">Welcome Aboard ✦</span>
-            </div>
-
-            <p class="message">
-                Your account on the <strong style="color:#fff;">RCCG Region 63 Junior Church</strong>
-                platform has been created successfully. We're thrilled to have you join the family!
-            </p>
-
-            <div class="card">
-                <div class="row">
-                    <span class="lbl">Username</span>
-                    <span class="val">{{ user.username }}</span>
-                </div>
-                <div class="row">
-                    <span class="lbl">Email</span>
-                    <span class="val">{{ user.email }}</span>
-                </div>
-                {% if user.province %}
-                <div class="row">
-                    <span class="lbl">Province</span>
-                    <span class="val">{{ user.get_province_display }}</span>
-                </div>
-                {% endif %}
-            </div>
-
-            <div style="text-align:center; margin-top:28px;">
-                <a href="{{ login_url }}" class="btn">LOG IN TO YOUR ACCOUNT</a>
-            </div>
-        </div>
-
-        <div class="footer">
-            <p class="footer-brand">RCCG Region 63 Junior Church</p>
-            <p>&copy; {% now "Y" %} All rights reserved.</p>
-            <p>This is an automated email. Please do not reply.</p>
-        </div>
-    </div>
-</body>
-</html>
+{% include "emails/_button.html" with href=login_url label="Open Faith Tribe" %}
+{% endblock %}

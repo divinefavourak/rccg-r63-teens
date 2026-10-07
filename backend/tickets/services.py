@@ -66,11 +66,11 @@ class QRCodeService:
 from django.core.mail import send_mail, EmailMultiAlternatives
 from django.conf import settings
 from django.template.loader import render_to_string
-from django.utils.html import strip_tags
 import logging
 
 # Import sender utilities
 from utils.email_senders import get_sender, EmailSender
+from utils.email_text import html_to_text
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +94,7 @@ class EmailService:
             bool: True if sent successfully, False otherwise
         """
         try:
-            plain_message = strip_tags(html_content)
+            plain_message = html_to_text(html_content)
             from_email = get_sender(sender)
             
             msg = EmailMultiAlternatives(

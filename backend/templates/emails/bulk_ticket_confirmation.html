@@ -1,240 +1,29 @@
-<!DOCTYPE html>
-<html>
+{% extends "emails/_base.html" %}
+{% block title %}Group registration received{% endblock %}
+{% block preheader %}{{ ticket_count }} ticket{{ ticket_count|pluralize }} registered. Each person hears from us once they&rsquo;re approved.{% endblock %}
+{% block accent %}#8EC5FF{% endblock %}
+{% block eyebrow %}Group registration{% endblock %}
+{% block heading %}{{ ticket_count }} ticket{{ ticket_count|pluralize }} registered{% endblock %}
+{% block lead %}Thanks, {{ coordinator_name }}. Your group registration went through and is waiting for approval.{% endblock %}
 
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bulk Registration Confirmation</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+{% block content %}
+{% for category, category_tickets in tickets_by_category.items %}
+<p style="margin:{% if forloop.first %}0{% else %}28px{% endif %} 0 4px;font-size:18px;line-height:24px;font-weight:800;color:#1C1916;">{{ category }} <span style="font-weight:600;color:#6F6862;">&middot; {{ category_tickets|length }}</span></p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+  {% for ticket in category_tickets %}
+  <tr>
+    <td valign="top" style="padding:12px 12px 12px 0;{% if not forloop.first %}border-top:1px solid #EAE3DA;{% endif %}font-size:16px;line-height:22px;font-weight:700;color:#1C1916;">{{ ticket.full_name }}</td>
+    <td valign="top" align="right" style="padding:12px 0;{% if not forloop.first %}border-top:1px solid #EAE3DA;{% endif %}font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:14px;line-height:22px;font-weight:700;letter-spacing:0.4px;color:#1C1916;">{{ ticket.ticket_id }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endfor %}
 
-        body {
-            font-family: 'Inter', -apple-system, sans-serif;
-            margin: 0;
-            padding: 0;
-            background: linear-gradient(135deg, #1a0505 0%, #2b0303 100%);
-            color: #ffffff;
-        }
-
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-            background: #1a0505;
-        }
-
-        .header {
-            background: linear-gradient(135deg, #8B0000 0%, #660000 100%);
-            padding: 40px 20px;
-            text-align: center;
-            border-bottom: 4px solid #FFD700;
-        }
-
-        .logos {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-
-        .logo {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            border: 3px solid #FFD700;
-            object-fit: cover;
-        }
-
-        .header h1 {
-            color: #FFD700;
-            font-size: 24px;
-            font-weight: 800;
-            margin: 0 0 10px 0;
-        }
-
-        .header p {
-            color: #ffffff;
-            opacity: 0.9;
-            margin: 0;
-            font-size: 14px;
-        }
-
-        .count-badge {
-            display: inline-block;
-            background: linear-gradient(to bottom, #FFD700, #B8860B);
-            color: #8B0000;
-            font-weight: 800;
-            font-size: 24px;
-            padding: 15px 40px;
-            border-radius: 30px;
-            margin: 20px 0;
-            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
-        }
-
-        .content {
-            padding: 40px 30px;
-            background: #1a0505;
-        }
-
-        .greeting {
-            font-size: 20px;
-            font-weight: 700;
-            color: #ffffff;
-            margin-bottom: 15px;
-        }
-
-        .message {
-            color: #cccccc;
-            font-size: 16px;
-            line-height: 1.6;
-            margin-bottom: 25px;
-        }
-
-        .category-section {
-            margin: 25px 0;
-        }
-
-        .category-title {
-            color: #FFD700;
-            font-weight: 700;
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 10px;
-            padding-bottom: 5px;
-            border-bottom: 1px solid rgba(255, 215, 0, 0.3);
-        }
-
-        .ticket-list {
-            background: #2b0303;
-            border-radius: 12px;
-            padding: 15px;
-        }
-
-        .ticket-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 0;
-            border-bottom: 1px solid rgba(255, 215, 0, 0.1);
-            font-size: 14px;
-        }
-
-        .ticket-item:last-child {
-            border-bottom: none;
-        }
-
-        .ticket-name {
-            color: #ffffff;
-            font-weight: 600;
-        }
-
-        .ticket-id {
-            color: #FFD700;
-            font-family: monospace;
-            font-size: 12px;
-        }
-
-        .info-box {
-            background: #2b0303;
-            border: 1px solid rgba(255, 215, 0, 0.3);
-            border-radius: 12px;
-            padding: 20px;
-            margin: 25px 0;
-        }
-
-        .info-title {
-            color: #FFD700;
-            font-weight: 700;
-            font-size: 14px;
-            margin-bottom: 10px;
-        }
-
-        .info-text {
-            color: #aaaaaa;
-            font-size: 14px;
-            line-height: 1.6;
-        }
-
-        .footer {
-            background: #0d0202;
-            padding: 30px;
-            text-align: center;
-            border-top: 1px solid rgba(255, 215, 0, 0.2);
-        }
-
-        .footer p {
-            color: #888888;
-            font-size: 12px;
-            margin: 5px 0;
-        }
-
-        .social-text {
-            color: #FFD700;
-            font-weight: 600;
-            margin-bottom: 10px;
-        }
-    </style>
-</head>
-
-<body>
-    <div class="container">
-        <div class="header">
-            <div class="logos">
-                {% if logo_url %}
-                <img src="{{ logo_url }}" alt="RCCG Logo" class="logo">
-                {% endif %}
-                {% if faith_logo_url %}
-                <img src="{{ faith_logo_url }}" alt="Faith Tribe Logo" class="logo">
-                {% endif %}
-            </div>
-            <h1>BULK REGISTRATION</h1>
-            <p>RCCG Region 63 Junior Church</p>
-        </div>
-
-        <div class="content">
-            <p class="greeting">Hello, {{ coordinator_name }}!</p>
-
-            <p class="message">
-                Your bulk registration has been successfully processed.
-            </p>
-
-            <div style="text-align: center;">
-                <div class="count-badge">{{ ticket_count }} TICKET{{ ticket_count|pluralize }}</div>
-            </div>
-
-            {% for category, category_tickets in tickets_by_category.items %}
-            <div class="category-section">
-                <p class="category-title">{{ category }} ({{ category_tickets|length }})</p>
-                <div class="ticket-list">
-                    {% for ticket in category_tickets %}
-                    <div class="ticket-item">
-                        <span class="ticket-name">{{ ticket.full_name }}</span>
-                        <span class="ticket-id">{{ ticket.ticket_id }}</span>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endfor %}
-
-            <div class="info-box">
-                <p class="info-title">What's Next?</p>
-                <p class="info-text">
-                    All registrations are currently <strong style="color:#FFD700;">PENDING APPROVAL</strong>.
-                    Each attendee will receive their own confirmation email once their ticket is approved.
-                    Please keep this email for your records.
-                </p>
-            </div>
-        </div>
-
-        <div class="footer">
-            <p class="social-text">RCCG Region 63 Junior Church</p>
-            <p>&copy; {% now "Y" %} All rights reserved.</p>
-            {% if registered_at %}
-            <p>Registered: {{ registered_at|date:"F d, Y H:i" }}</p>
-            {% endif %}
-            <p>This is an automated email. Please do not reply.</p>
-        </div>
-    </div>
-</body>
-
-</html>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;">
+  <tr>
+    <td bgcolor="#FEF3C7" style="border-radius:16px;padding:16px 20px;font-size:14px;line-height:22px;color:#1C1916;">
+      <strong>All waiting for approval.</strong> Each person gets their own email once their ticket is approved. Keep this one for your records.
+    </td>
+  </tr>
+</table>
+{% endblock %}

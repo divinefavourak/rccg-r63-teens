@@ -15,11 +15,11 @@ from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils.encoding import force_bytes
-from django.utils.html import strip_tags
 from django.utils.http import urlsafe_base64_encode
 
 from utils.avatars import get_user_avatar
 from utils.email_senders import get_sender
+from utils.email_text import html_to_text
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ def _send_in_thread(subject, html_content, recipients, sender='default', fail_si
 
     def _worker():
         try:
-            plain = strip_tags(html_content)
+            plain = html_to_text(html_content)
             from_email = get_sender(sender)
             msg = EmailMultiAlternatives(
                 subject=subject,

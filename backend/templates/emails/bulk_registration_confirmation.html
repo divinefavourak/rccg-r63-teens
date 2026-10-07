@@ -1,91 +1,32 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bulk Registration Confirmation</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap');
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Poppins', -apple-system, sans-serif; background: #252432; color: #fff; margin: 0; padding: 20px 0; }
-        .container { max-width: 600px; margin: 0 auto; background: #252432; border-radius: 20px; overflow: hidden; box-shadow: 0 0 40px rgba(255,39,112,0.15); }
-        .header { background: #1e1e2a; padding: 36px 24px; text-align: center; border-bottom: 3px solid #ff2770; }
-        .logos { display: flex; justify-content: center; align-items: center; gap: 16px; margin-bottom: 18px; }
-        .logo { width: 64px; height: 64px; border-radius: 50%; border: 2px solid #45f3ff; object-fit: cover; box-shadow: 0 0 12px rgba(69,243,255,0.35); }
-        .header h1 { color: #45f3ff; font-size: 24px; font-weight: 800; margin: 0 0 6px; letter-spacing: 0.06em; text-transform: uppercase; text-shadow: 0 0 20px rgba(69,243,255,0.5); }
-        .header-sub { color: rgba(255,255,255,0.5); font-size: 13px; }
-        .content { padding: 36px 28px; }
-        .message { color: #999; font-size: 15px; line-height: 1.7; margin-bottom: 24px; }
-        .badge { display: inline-block; padding: 10px 28px; border-radius: 30px; font-weight: 800; font-size: 15px; background: #45f3ff; color: #111; box-shadow: 0 0 14px rgba(69,243,255,0.5); }
-        .event-box { background: #2d2d39; border-left: 3px solid #ff2770; border-radius: 0 12px 12px 0; padding: 14px 18px; margin: 18px 0; }
-        .event-title { color: #45f3ff; font-weight: 700; font-size: 15px; margin: 0 0 5px; }
-        .event-detail { color: #777; font-size: 13px; margin: 2px 0; }
-        .reg-card { background: #2d2d39; border: 1px solid rgba(69,243,255,0.15); border-radius: 14px; padding: 14px 18px; margin: 8px 0; display: flex; justify-content: space-between; align-items: center; }
-        .reg-name { color: #fff; font-weight: 700; font-size: 14px; }
-        .reg-meta { color: #777; font-size: 12px; margin-top: 2px; }
-        .reg-id { color: #45f3ff; font-size: 12px; font-weight: 600; text-align: right; }
-        .infobox { background: #2d2d39; border: 1px solid rgba(255,39,112,0.18); border-radius: 14px; padding: 16px 20px; margin: 18px 0; color: #999; font-size: 14px; line-height: 1.65; }
-        .footer { background: #1e1e2a; padding: 28px; text-align: center; border-top: 2px solid rgba(255,39,112,0.2); }
-        .footer-brand { color: #45f3ff; font-weight: 700; font-size: 13px; margin-bottom: 6px; }
-        .footer p { color: #555; font-size: 12px; margin: 3px 0; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <div class="logos">
-                {% if logo_url %}<img src="{{ logo_url }}" alt="RCCG Logo" class="logo">{% endif %}
-                {% if faith_logo_url %}<img src="{{ faith_logo_url }}" alt="Faith Tribe Logo" class="logo">{% endif %}
-            </div>
-            <h1>Registrations Received</h1>
-            <p class="header-sub">RCCG Region 63 Junior Church</p>
-        </div>
+{% extends "emails/_base.html" %}
+{% block title %}Registrations received{% endblock %}
+{% block preheader %}{{ registrations|length }} registration{{ registrations|length|pluralize }} sent in{% if event %} for {{ event.title }}{% endif %}. Each person hears from us once they&rsquo;re confirmed.{% endblock %}
+{% block accent %}#8EC5FF{% endblock %}
+{% block eyebrow %}Group registration{% endblock %}
+{% block heading %}{{ registrations|length }} registration{{ registrations|length|pluralize }} received{% endblock %}
+{% block lead %}{% if coordinator_name %}Thanks, {{ coordinator_name }}. {% endif %}Everyone below is waiting to be confirmed.{% endblock %}
 
-        <div class="content">
-            <p class="message">
-                The following registrations have been submitted and are pending approval.
-                Each attendee will receive a separate confirmation email once approved.
-            </p>
+{% block content %}
+{% if event %}{% include "emails/_event.html" with top="0" %}{% endif %}
 
-            <div style="text-align:center; margin-bottom:24px;">
-                <span class="badge">{{ registrations|length }} SUBMITTED</span>
-            </div>
+<p style="margin:{% if event %}28px{% else %}0{% endif %} 0 4px;font-size:18px;line-height:24px;font-weight:800;color:#1C1916;">Who you registered</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+  {% for reg in registrations %}
+  <tr>
+    <td valign="top" style="padding:14px 12px 14px 0;{% if not forloop.first %}border-top:1px solid #EAE3DA;{% endif %}">
+      <span style="display:block;font-size:16px;line-height:22px;font-weight:700;color:#1C1916;">{{ reg.attendee_name }}</span>
+      {% if reg.attendee_category %}<span style="display:block;font-size:14px;line-height:20px;color:#6F6862;">{{ reg.attendee_category }}</span>{% endif %}
+    </td>
+    <td valign="top" align="right" style="padding:14px 0;{% if not forloop.first %}border-top:1px solid #EAE3DA;{% endif %}font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:14px;line-height:22px;font-weight:700;letter-spacing:0.4px;color:#1C1916;">{{ reg.registration_id }}</td>
+  </tr>
+  {% endfor %}
+</table>
 
-            {% if registrations %}
-            {% with first_reg=registrations.0 %}
-            {% if first_reg.event %}
-            <div class="event-box">
-                <p class="event-title">{{ first_reg.event.title }}</p>
-                {% if first_reg.event.start_datetime %}
-                <p class="event-detail">Date: {{ first_reg.event.start_datetime|date:"F d, Y" }}{% if first_reg.event.end_datetime %} &ndash; {{ first_reg.event.end_datetime|date:"F d, Y" }}{% endif %}</p>
-                {% endif %}
-                {% if first_reg.event.venue %}<p class="event-detail">Venue: {{ first_reg.event.venue }}</p>{% endif %}
-            </div>
-            {% endif %}
-            {% endwith %}
-            {% endif %}
-
-            {% for reg in registrations %}
-            <div class="reg-card">
-                <div>
-                    <p class="reg-name">{{ reg.attendee_name }}</p>
-                    {% if reg.attendee_category %}<p class="reg-meta">{{ reg.attendee_category }}</p>{% endif %}
-                </div>
-                <p class="reg-id">{{ reg.registration_id }}</p>
-            </div>
-            {% endfor %}
-
-            <div class="infobox">
-                Keep these Registration IDs safe. Each attendee will receive their own
-                confirmation email once their registration is reviewed and approved.
-            </div>
-        </div>
-
-        <div class="footer">
-            <p class="footer-brand">RCCG Region 63 Junior Church</p>
-            <p>&copy; {% now "Y" %} All rights reserved.</p>
-            <p>For inquiries, contact your parish coordinator.</p>
-        </div>
-    </div>
-</body>
-</html>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:20px;">
+  <tr>
+    <td bgcolor="#DCEBFF" style="border-radius:16px;padding:16px 20px;font-size:14px;line-height:22px;color:#1C1916;">
+      <strong>Keep these IDs.</strong> Each person gets their own email with their ticket once a coordinator confirms them.
+    </td>
+  </tr>
+</table>
+{% endblock %}
