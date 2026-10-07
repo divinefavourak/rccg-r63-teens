@@ -528,7 +528,9 @@ class EventRegistration(UUIDMixin, TimestampMixin):
                 .values_list('status', flat=True).get(pk=self.pk)
             )
             if old_status == new_status:
-                self.status = old_status
+                # Someone else got here first. Show their change, not this
+                # copy's idea of the row from before it.
+                self.refresh_from_db()
                 return None
 
             self.status = new_status

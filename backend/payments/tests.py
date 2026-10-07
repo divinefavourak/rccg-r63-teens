@@ -955,3 +955,9 @@ class PaystackWebhookTests(APITestCase):
             PaymentService().verify_and_complete_payment(self.payment.reference)
 
         self.assertEqual(self.status_now(), Payment.Status.SUCCESS)
+
+    def test_a_signature_that_is_not_ascii_is_refused_not_an_error(self):
+        response = self.post(self.body(), signature='caf\u00e9')
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(self.status_now(), Payment.Status.PENDING)

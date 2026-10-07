@@ -42,9 +42,13 @@ These decide priority or cannot be answered from the repo.
 ## Status on 2026-10-07
 
 Ticked items are fixed and committed on `fix/perf-concurrency-audit`. The
-backend suite passes (494 tests across payments, events, users, notifications,
-content, today, identity, tickets, profiles and progress). The mobile typecheck
-passes; **no mobile change has been tried on a device.**
+backend suite (494 tests across payments, events, users, notifications,
+content, today, identity, tickets, profiles and progress) ran with two
+failures, both in tests. Those were fixed and the two affected files pass (41
+tests). **The full suite has not been run again since, nor since the review
+fixes that followed.** Where a finding below says "backend tests pass", read it
+with that limit. The mobile typecheck passes; **no mobile change has been tried
+on a device.**
 
 Not covered by any test: the background push thread, the permission-cache bump
 after commit, the reminder close-out guard and the Redis timeouts.

@@ -368,7 +368,10 @@ class PaymentService:
         expected = hmac.new(
             self.paystack.secret_key.encode('utf-8'), raw_body, hashlib.sha512,
         ).hexdigest()
-        return hmac.compare_digest(expected, signature)
+        # As bytes: compare_digest raises on a str with non-ASCII characters,
+        # and anyone can send this endpoint any header they like.
+        return hmac.compare_digest(
+            expected.encode('ascii'), signature.encode('utf-8', 'replace'))
 
     def handle_webhook(self, raw_body, signature):
         """
