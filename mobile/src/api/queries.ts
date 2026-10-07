@@ -677,15 +677,23 @@ export function useDraftDevotionals(enabled = true) {
   return useQuery({
     queryKey: keys.drafts,
     queryFn: async () => {
-      const [drafts, review] = await Promise.all([
+      // Approved items are still waiting on a publish, so they stay in the queue.
+      const [drafts, review, approved] = await Promise.all([
         fetchAllPages<DevotionalListItem>('/content/devotionals/?status=draft&page_size=200'),
         fetchAllPages<DevotionalListItem>(
           '/content/devotionals/?status=in_review&page_size=200',
         ).catch(
           () => [] as DevotionalListItem[],
         ),
+        fetchAllPages<DevotionalListItem>(
+          '/content/devotionals/?status=approved&page_size=200',
+        ).catch(
+          () => [] as DevotionalListItem[],
+        ),
       ]);
-      return [...drafts, ...review].sort((a, b) => +new Date(b.date) - +new Date(a.date));
+      return [...drafts, ...review, ...approved].sort(
+        (a, b) => +new Date(b.date) - +new Date(a.date),
+      );
     },
     enabled,
     staleTime: STALE.personal,

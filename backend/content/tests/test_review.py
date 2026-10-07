@@ -106,6 +106,41 @@ class ReviewTransitionTests(TestCase):
         with self.assertRaises(ValidationError):
             review.submit_for_review(bare, self.author)
 
+    def test_a_legacy_verse_becomes_the_primary_memory_verse(self):
+        """
+        Scraped and form-authored devotionals carry their verse only in the
+        legacy text fields. The gate derives the primary verse from them rather
+        than refusing a devotional whose verse is plainly there.
+        """
+        legacy = make_devotional(
+            on=app_today() + timedelta(days=2), with_verse=False,
+            memory_verse_passage='Song of Solomon 8:4',
+            memory_verse_content='I charge you, O daughters of Jerusalem...',
+        )
+        review.submit_for_review(legacy, self.author)
+        review.approve(legacy, self.reviewer)
+        review.publish(legacy, self.reviewer)
+
+        legacy.refresh_from_db()
+        self.assertEqual(legacy.status, Status.PUBLISHED)
+        verse = legacy.memory_verses.get(is_primary=True)
+        self.assertEqual(verse.reference_display, 'Song of Solomon 8:4')
+        self.assertEqual(verse.text_override, 'I charge you, O daughters of Jerusalem...')
+
+    def test_an_in_review_legacy_devotional_can_be_approved(self):
+        """The case already stuck in production: submitted before the verse existed."""
+        legacy = make_devotional(
+            on=app_today() + timedelta(days=3), with_verse=False,
+            status=Status.IN_REVIEW, submitted_by=self.author,
+            memory_verse_passage='Ephesians 5:19', memory_verse_content='Speaking to yourselves...',
+        )
+        legacy = Devotional.objects.prefetch_related('memory_verses').get(pk=legacy.pk)
+
+        review.approve(legacy, self.reviewer)
+
+        legacy.refresh_from_db()
+        self.assertEqual(legacy.status, Status.APPROVED)
+
     def test_rejecting_returns_it_to_draft_with_notes(self):
         review.submit_for_review(self.devotional, self.author)
 
