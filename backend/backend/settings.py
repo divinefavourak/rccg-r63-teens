@@ -530,7 +530,13 @@ if MAILING:
     # On Windows, Python's SSL bundle sometimes can't verify Brevo's cert via STARTTLS,
     # so we use a custom backend that disables cert verification as a workaround.
     # On Linux/Render, the standard backend works fine.
-    if sys.platform == 'win32':
+    # With a Brevo API key, mail goes over HTTPS. That is the one to use on a
+    # host that blocks outbound SMTP ports, where every send below would fail
+    # at the connection.
+    BREVO_API_KEY = os.environ.get('BREVO_API_KEY', '')
+    if BREVO_API_KEY:
+        EMAIL_BACKEND = 'backend.email_backend.BrevoApiEmailBackend'
+    elif sys.platform == 'win32':
         EMAIL_BACKEND = 'backend.email_backend.BrevoEmailBackend'
     else:
         EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -558,9 +564,10 @@ else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # Email validation
-if not os.environ.get('BREVO_SMTP_KEY') and MAILING:
+if MAILING and not (os.environ.get('BREVO_SMTP_KEY') or os.environ.get('BREVO_API_KEY')):
     import warnings
-    warnings.warn('BREVO_SMTP_KEY not set. Email functionality will not work.')
+    warnings.warn(
+        'Neither BREVO_API_KEY nor BREVO_SMTP_KEY is set. Email will not send.')
 
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 

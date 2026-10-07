@@ -104,8 +104,13 @@ class EmailService:
                 to=recipients
             )
             msg.attach_alternative(html_content, "text/html")
-            msg.send(fail_silently=fail_silently)
-            
+            # `send` returns how many went out; with fail_silently it returns 0
+            # instead of raising, and this used to log success regardless.
+            if not msg.send(fail_silently=fail_silently):
+                logger.error(
+                    f"Email NOT sent to {recipients}: the mail backend reported a failure")
+                return False
+
             # Safely log with ASCII encoding to handle emojis on Windows
             try:
                 safe_subject = subject.encode('ascii', 'replace').decode('ascii')

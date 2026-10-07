@@ -45,7 +45,14 @@ def _send_in_thread(subject, html_content, recipients, sender='default', fail_si
                 to=recipients,
             )
             msg.attach_alternative(html_content, 'text/html')
-            msg.send(fail_silently=fail_silently)
+            # `send` returns how many went out. With fail_silently it returns 0
+            # instead of raising, and this used to log "Email sent" regardless.
+            if not msg.send(fail_silently=fail_silently):
+                logger.error(
+                    'Email NOT sent to %s: the mail backend reported a failure '
+                    '(%s). Check the mail settings and the host\'s outbound ports.',
+                    recipients, settings.EMAIL_BACKEND)
+                return
             try:
                 safe_subject = subject.encode('ascii', 'replace').decode('ascii')
                 logger.info('Email sent: %s -> %s', safe_subject, recipients)
