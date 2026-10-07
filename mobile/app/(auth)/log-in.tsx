@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,11 +7,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../src/components/Icon';
 import { FaithTribeLogo } from '../../src/components/Logo';
 import { codeDestination, useAuth } from '../../src/state/auth';
+import { useReminderInvite } from '../../src/components/ReminderInvite';
 import { markWelcomed } from '../../src/state/welcome';
 import { FormError } from '../../src/ui/AuthShell';
 import { Button } from '../../src/ui/Button';
 import { Blob } from '../../src/ui/cards';
 import { IconField } from '../../src/ui/inputs';
+import { KeyboardView } from '../../src/ui/screen';
 import { Press } from '../../src/ui/Press';
 import { useTokens } from '../../src/theme/ThemeProvider';
 import { ELEVATION } from '../../src/theme/tokens';
@@ -49,16 +51,22 @@ export default function LogInScreen() {
     [error, clearError],
   );
 
+  const enter = useCallback(() => {
+    markWelcomed();
+    router.dismissTo('/');
+  }, [router]);
+  // A new phone has never been asked about reminders, even for an old account.
+  const invite = useReminderInvite(enter);
+
   const logIn = useCallback(async () => {
     if (!identifier.trim() || !password || pending) return;
     try {
       await signIn(identifier.trim(), password);
-      markWelcomed();
-      router.dismissTo('/');
+      invite.begin();
     } catch {
       // `useAuth` holds the message.
     }
-  }, [identifier, password, pending, signIn, router]);
+  }, [identifier, password, pending, signIn, invite]);
 
   const sendCode = useCallback(async () => {
     if (pending) return;
@@ -80,9 +88,8 @@ export default function LogInScreen() {
   }, [router]);
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardView
       className="flex-1 bg-surf-base"
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       {/* Soft colour circles, mostly off-screen. Behind everything and clipped
           by this view, so they never catch a touch or widen the page. */}
@@ -221,6 +228,7 @@ export default function LogInScreen() {
           Read · Pray · Grow together
         </Text>
       </ScrollView>
-    </KeyboardAvoidingView>
+      {invite.sheet}
+    </KeyboardView>
   );
 }

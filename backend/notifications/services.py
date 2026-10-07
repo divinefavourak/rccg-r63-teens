@@ -29,9 +29,9 @@ from common.dates import app_today, day_bounds
 
 from .models import (
     IGNORED_DAYS_BEFORE_STEP_DOWN, STEP_DOWN, Notification, NotificationPreference,
-    NotificationType, PushSubscription,
+    NotificationType, PushDevice, PushSubscription,
 )
-from .push import push_backend
+from .push import device_push_backend, push_backend
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +103,10 @@ def may_push(user, notification_type, preference=None, at=None, today=None):
         if _announcement_cap_spent(user, today or app_today()):
             return False, 'announcement_cap'
 
-    if not PushSubscription.objects.filter(user=user, is_active=True).exists():
+    if not (
+        PushSubscription.objects.filter(user=user, is_active=True).exists()
+        or PushDevice.objects.filter(user=user, is_active=True).exists()
+    ):
         return False, 'no_subscription'
 
     return True, ''
@@ -155,7 +158,7 @@ def send(user, notification_type, title, body, *, deep_link='', data=None,
 
 
 def _push(notification):
-    """Fan the notification out to the user's active push subscriptions."""
+    """Fan the notification out to the user's browsers and phones."""
     subscriptions = PushSubscription.objects.filter(
         user=notification.user, is_active=True,
     )
@@ -169,6 +172,17 @@ def _push(notification):
             # committed and is the durable record.
             logger.exception('Push failed for subscription %s', subscription.id)
             continue
+        delivered = True
+
+    devices = PushDevice.objects.filter(user=notification.user, is_active=True)
+    for device in devices:
+        try:
+            device_push_backend().send(device, notification)
+        except Exception:
+            # Same rule as above: an uninstalled app is not the caller's problem.
+            logger.exception('Push failed for device %s', device.id)
+            continue
+        PushDevice.objects.filter(pk=device.pk).update(last_used_at=timezone.now())
         delivered = True
 
     if delivered:
@@ -230,6 +244,39 @@ def retire_subscription(subscription):
     subscription.is_active = False
     subscription.failed_at = timezone.now()
     subscription.save(update_fields=['is_active', 'failed_at', 'updated_at'])
+
+
+# ---------------------------------------------------------------------------
+# Phones (the native app)
+# ---------------------------------------------------------------------------
+
+def register_device(user, token, platform='', device_name=''):
+    """
+    Register (or reclaim) a phone's push token.
+
+    An upsert on `token`, so the app can call this on every launch without
+    piling up rows, and so a phone a second teen signs in on moves to them.
+    """
+    device, _ = PushDevice.objects.update_or_create(
+        token=token,
+        defaults={
+            'user': user, 'platform': platform, 'device_name': device_name,
+            'is_active': True, 'failed_at': None,
+        },
+    )
+    return device
+
+
+def unregister_device(user, token):
+    """Signing out on a phone: stop sending this account's pushes to it."""
+    return PushDevice.objects.filter(user=user, token=token).update(is_active=False)
+
+
+def retire_device(device):
+    """Called when the push service says the app is gone (`DeviceNotRegistered`)."""
+    device.is_active = False
+    device.failed_at = timezone.now()
+    device.save(update_fields=['is_active', 'failed_at', 'updated_at'])
 
 
 # ---------------------------------------------------------------------------

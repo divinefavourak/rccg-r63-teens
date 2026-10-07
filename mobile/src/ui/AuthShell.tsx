@@ -1,4 +1,4 @@
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import Animated, {
   FadeInDown,
   FadeInLeft,
@@ -12,6 +12,7 @@ import { Object3D, type ObjectName } from './art';
 import { POP_BG } from './cards';
 import { StepperBar } from './inputs';
 import { Press } from './Press';
+import { KeyboardView } from './screen';
 import { useTokens } from '../theme/ThemeProvider';
 import type { PopColour } from '../theme/tokens';
 
@@ -69,9 +70,8 @@ export function QuestionScreen({
   const tokens = useTokens();
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardView
       className="flex-1 bg-surf-base"
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       // Figma draws the bar under a 44px status bar. A real inset is often
       // smaller (24–30px on Android), which left the bar hugging the top edge,
       // so it gets its own space on top of whatever the device reports.
@@ -137,7 +137,7 @@ export function QuestionScreen({
       <View className="px-5 pt-3" style={{ paddingBottom: Math.max(insets.bottom, 16) }}>
         {footer}
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardView>
   );
 }
 

@@ -17,7 +17,7 @@ from . import services
 from .models import Notification
 from .serializers import (
     MarkReadSerializer, NotificationPreferenceSerializer, NotificationSerializer,
-    PushSubscriptionSerializer,
+    PushDeviceSerializer, PushSubscriptionSerializer,
 )
 
 
@@ -108,4 +108,39 @@ class PushSubscriptionView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         services.unsubscribe(request.user, endpoint)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PushDeviceView(APIView):
+    """
+    Register or drop this phone's push token (the native app).
+
+    `POST` is an upsert on `token`: the app reports its token on every launch,
+    and a token that moves to a new account must stop reaching the old one.
+    `DELETE` is what signing out does, so a shared phone goes quiet for the teen
+    who left it.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        serializer = PushDeviceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        device = services.register_device(
+            request.user,
+            token=serializer.validated_data['token'],
+            platform=serializer.validated_data.get('platform', ''),
+            device_name=serializer.validated_data.get('device_name', ''),
+        )
+        return Response(PushDeviceSerializer(device).data, status=status.HTTP_201_CREATED)
+
+    def delete(self, request, *args, **kwargs):
+        token = request.data.get('token')
+        if not token:
+            return Response(
+                {'detail': 'token is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        services.unregister_device(request.user, token)
         return Response(status=status.HTTP_204_NO_CONTENT)

@@ -21,6 +21,8 @@ urlpatterns = [
     path('search/', views.ScriptureSearchView.as_view(), name='bible-search'),
     path('share/', views.VerseShareView.as_view(), name='bible-share'),
     path('lookup/', views.ScriptureLookupView.as_view(), name='bible-lookup'),
+    # A whole translation in one file, for keeping it on a phone.
+    path('pack/', views.TranslationPackView.as_view(), name='bible-pack'),
     path('continue-reading/', views.ContinueReadingView.as_view(), name='bible-continue-reading'),
     path('', include(router.urls)),
 ]

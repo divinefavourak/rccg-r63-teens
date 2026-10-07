@@ -571,6 +571,26 @@ VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY")
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY")
 VAPID_ADMIN_EMAIL = os.getenv("VAPID_ADMIN_EMAIL", "")
 
+# Push to the native app. Same honest default as the web transport above: it
+# logs until this names `notifications.push.ExpoPushBackend`. Expo forwards to
+# APNs and FCM, so the server needs no Apple or Google credentials of its own;
+# `EXPO_ACCESS_TOKEN` is only needed if the Expo project turns on enhanced push
+# security.
+NOTIFICATIONS_DEVICE_PUSH_BACKEND = os.getenv(
+    "NOTIFICATIONS_DEVICE_PUSH_BACKEND", "notifications.push.LoggingDevicePushBackend",
+)
+EXPO_ACCESS_TOKEN = os.getenv("EXPO_ACCESS_TOKEN")
+
+# A test run never delivers. Both transports are pinned to the logging backends
+# whatever the environment says, for two reasons. A `.env` that names the real
+# WebPush backend made every test that expects a push fail on this machine and
+# pass on one without it. Worse, with the Expo backend named in the shell, the
+# suite was making real requests to Expo's push service. A test that needs a
+# real backend asks for it by name with `override_settings`.
+if _running_tests():
+    NOTIFICATIONS_PUSH_BACKEND = "notifications.push.LoggingPushBackend"
+    NOTIFICATIONS_DEVICE_PUSH_BACKEND = "notifications.push.LoggingDevicePushBackend"
+
 # PayStack payment gateway
 PAYSTACK_SECRET_KEY=os.getenv("PAYSTACK_SECRET_KEY")
 PAYSTACK_PUBLIC_KEY=os.getenv("PAYSTACK_PUBLIC_KEY")

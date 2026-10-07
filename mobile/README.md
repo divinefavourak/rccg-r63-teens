@@ -112,6 +112,12 @@ app/                      routes (expo-router)
   saved.tsx               kept verses, readings and talks
   notifications.tsx       inbox
   settings/               reminders, appearance, profile, feedback
+  console/                teacher tools: its own stack and bottom nav
+    index.tsx             Teacher home
+    lesson.tsx            this week's manual, a part at a time
+    class/                the class list, and one teen read-only
+    check-in.tsx          the ticket scanner and its result screens
+    review.tsx            devotionals waiting to be published
   +not-found.tsx          dead deep links
 src/
   api/config.ts           base URL resolution, cache staleness
@@ -126,11 +132,13 @@ src/
   state/chrome.tsx        nav visibility, shared with the reader's scroll
   state/reader.tsx        reader theme, text size and last page, on this phone
   state/player.tsx        the one audio player, held above the navigator
+  state/push.ts           push permission, registration and tap routing
+  state/teacher.ts        which teacher tools this person's permissions allow
+  state/checkinQueue.ts   scans made offline, kept until they can be sent
   data/                   what each screen says about a reading, event or ticket
   ui/                     the Figma kit: Button, inputs, cards, art, Press
   components/             pieces built from the kit for one tab (Bible picker,
-                          Library shelves, event rows), plus a few older ones
-                          the settings sub-screens and Console still use
+                          Library shelves, event rows, the teacher nav)
 global.css                semantic colour tokens (light + dark)
 tailwind.config.js        tokens -> Tailwind scales
 ```
@@ -159,6 +167,216 @@ EXPO_PUBLIC_API_URL=http://<your-computer-ip>:8000/api/v1
 
 The phone must be on the same Wi-Fi, and Windows Firewall must allow Python on
 private networks.
+
+## A build you can install, and push notifications
+
+Expo Go is enough for most screens. It is not enough for two things:
+
+- **Push.** Expo Go on Android has not been able to receive remote push since
+  SDK 53.
+- **Anything that needs this app's own native setup**, such as its notification
+  icon and its camera permission text.
+
+So push, and a proper test of check-in, need a *development build*: this app
+with its own native code, which still loads the JavaScript from your computer.
+
+The steps are in the order they depend on each other. Steps 1 to 3 give you an
+installable app. Steps 4 to 6 make push work on Android. Step 7 is the server.
+
+### 1. Link the project to Expo (done once)
+
+```powershell
+cd mobile
+npx eas init
+```
+
+This is already done: the project is `@akcodex/faith-tribe`, and its id is in
+`app.json` under `extra.eas.projectId`. The app reads that id to ask for a push
+token, so do not remove it.
+
+### 2. Build the development app
+
+```powershell
+npm install -g eas-cli          # keep the CLI current; old ones fail in odd ways
+npx eas build --profile development --platform android
+```
+
+Answer **yes** to installing `expo-dev-client` and to generating a keystore.
+The build runs on Expo's servers and takes 10 to 20 minutes. It ends with a
+link and a QR code for an `.apk`.
+
+If it stops with *"Android app build credentials with name already exists"*:
+the keystore was made and the CLI then tried to save it twice. Run the same
+command again and it will pick up the credentials that now exist. If it does
+it a second time, run `npx eas credentials`, choose Android, and remove the
+duplicate entry.
+
+### 3. Install it and start the app
+
+Open the build's link on the phone and install the `.apk` (Android will ask
+you to allow installs from the browser). Then, on your computer:
+
+```powershell
+npx expo start --dev-client
+```
+
+Open **Faith Tribe** on the phone (not Expo Go) and scan the QR code, with the
+phone on the same Wi-Fi. Start the backend as described in *Running the
+backend* below.
+
+At this point the whole app works, including the check-in camera. Push does
+not yet: on Android it needs Firebase.
+
+### 4. Create the Firebase project (Android push)
+
+Expo delivers to Android through Google's Firebase Cloud Messaging, and Google
+will only talk to an app it knows about.
+
+1. Go to <https://console.firebase.google.com> and create a project (the name
+   is yours to choose; Analytics can be off).
+2. In the project, choose **Add app → Android**.
+3. For **Android package name** enter exactly `org.rccgregion63.faithtribe`.
+   It must match `android.package` in `app.json`.
+4. Download **`google-services.json`** and put it in `mobile/`.
+5. Tell the app where it is, in `app.json`:
+
+   ```json
+   "android": {
+     "package": "org.rccgregion63.faithtribe",
+     "googleServicesFile": "./google-services.json"
+   }
+   ```
+
+`google-services.json` identifies the app to Google. It is not a password: the
+same values are inside every copy of the installed app. It is still left out of
+this repository for now, because the repository is public and the file holds an
+API key that scanners will flag. EAS builds pick it up from your folder whether
+or not it is committed. The file in the next step is a different matter.
+
+### 5. Give Expo the key to send through Firebase
+
+1. In the Firebase console: **Project settings (the gear) → Service accounts →
+   Generate new private key**. A `.json` file downloads.
+
+   **This file is a secret.** It can send notifications to every phone with the
+   app. Never commit it and never put it in `mobile/`. Keep it somewhere safe
+   and delete the copy in Downloads once it is uploaded.
+
+2. Upload it to Expo:
+
+   ```powershell
+   npx eas credentials
+   ```
+
+   Choose **Android → development → Google Service Account → Manage your
+   Google Service Account Key for Push Notifications (FCM V1) → Set up a
+   Google Service Account Key → Upload a new service account key**, and give
+   it the path to the file.
+
+   The same upload is available on the web: expo.dev → the project →
+   **Credentials → Android → FCM V1 service account key**.
+
+### 6. Build again
+
+`google-services.json` is compiled into the app, so the build from step 2 does
+not have it:
+
+```powershell
+npx eas build --profile development --platform android
+```
+
+Install the new `.apk` over the old one.
+
+### 7. Turn delivery on in the backend
+
+Until this is set the server writes every notification to the in-app inbox and
+*logs* the push instead of sending it. From `backend/`:
+
+```powershell
+.\venv\Scripts\python.exe manage.py migrate notifications
+```
+
+Then add to the backend's `.env` and restart the server:
+
+```
+NOTIFICATIONS_DEVICE_PUSH_BACKEND=notifications.push.ExpoPushBackend
+```
+
+`EXPO_ACCESS_TOKEN` is only needed if "enhanced security for push" is switched
+on for the project at expo.dev; leave it unset otherwise.
+
+Daily reminders are sent by a scheduled job, so they also need the Celery
+worker and beat running. A message sent by hand, as below, does not.
+
+### 8. Check that it works
+
+1. In the app, sign in, then go to **Me → Settings → What you hear about** and
+   tap **Turn on**. Say yes to the phone's question.
+2. Confirm the server knows the phone. From `backend/`:
+
+   ```powershell
+   .\venv\Scripts\python.exe manage.py shell -c "from notifications.models import PushDevice; print(list(PushDevice.objects.values_list('user__username', 'platform', 'token', 'is_active')))"
+   ```
+
+   One row with your username means registration worked.
+
+3. Send yourself one, replacing `YOUR_USERNAME`:
+
+   ```powershell
+   .\venv\Scripts\python.exe manage.py shell -c "from django.contrib.auth import get_user_model; from notifications import services; from notifications.models import NotificationType as T; u = get_user_model().objects.get(username='YOUR_USERNAME'); n = services.send(u, T.TRANSACTIONAL, 'It works', 'Push from the Faith Tribe server.', deep_link='/notifications'); print('pushed at:', n.pushed_at, '| held back because:', n.data.get('suppressed'))"
+   ```
+
+   `TRANSACTIONAL` is used on purpose: it is the one type quiet hours
+   (21:30 to 06:00) do not hold back, so the test works at night too.
+
+   - `pushed at:` shows a time, and the phone buzzes: done.
+   - `held back because: no_subscription`: the phone is not registered. Go
+     back to step 8.2.
+   - `pushed at: None` with nothing held back: the send failed. The reason is
+     in the server log, on a line starting `Push failed for device`.
+
+4. Tap the notification. It should open the inbox, with that message marked
+   read.
+
+To test a token without the server at all, paste it into
+<https://expo.dev/notifications>.
+
+### iPhone
+
+iOS needs no Firebase. It needs a paid Apple Developer account:
+
+```powershell
+npx eas build --profile development --platform ios
+```
+
+EAS asks to sign in to Apple and offers to create the push key itself; say
+yes. Installing a development build on an iPhone also means registering the
+phone first with `npx eas device:create`.
+
+What has been tried on real phones so far, with results, is in
+[`TESTING.md`](TESTING.md).
+
+### When something is wrong
+
+| What you see | Why | What to do |
+|---|---|---|
+| Dev warning: *"Push is not set up on this build"* | No push token could be made | In Expo Go: expected, use the development build. In the build: steps 4 to 6 are not done |
+| *"Default FirebaseApp is not initialized"* | The app was built without `google-services.json` | Step 4, then build again (step 6) |
+| The "Turn on" card says *Notifications are off* | The phone's permission was refused | Tap **Settings** on the card and allow notifications for Faith Tribe |
+| Registered, test says `pushed at: None` | Expo refused the message | Usually step 5 was skipped: `InvalidCredentials` in the server log |
+| Works, then stops after reinstalling | The token changed and the old one was retired | Open the app once while signed in; it registers again on launch |
+| A reminder never arrives but shows in the inbox | It was held back on purpose | Open the row's `data.suppressed`: `quiet_hours`, `type_muted` or `announcement_cap` |
+| Nothing arrives and the server log says `DEVICE PUSH ->` | The server is still on the logging backend | Step 7, and restart the server |
+
+### What must not be committed
+
+- The **service account key** from step 5. Ever.
+- `.env` files. `mobile/.gitignore` already covers `.env*.local`; the backend's
+  `.env` is ignored at the repo root.
+
+`eas.json` and `app.json` (with the project id) are fine to commit.
+`google-services.json` is not a secret, but see the note in step 4 before
+adding it to a public repository.
 
 ## Running the backend
 
@@ -205,7 +423,8 @@ needs them most.
 | Library | `GET /content/devotionals/?search=` |
 | Bible | `GET /bible/lookup/?book=&chapter=`, `/bible/books/`, `/bible/translations/` |
 | Tribe | `GET /events/events/`, `POST /events/events/{id}/register/` |
-| Notifications | `GET /notifications/inbox/`, `POST .../mark_read/` |
+| Notifications | `GET /notifications/inbox/`, `POST .../mark_read/`, `POST/DELETE /notifications/devices/` |
+| Teacher tools | `GET /content/manuals/current/`, `/identity/class/`, `/events/checkin/today/`, `POST /events/checkin/scan/` |
 | Me | `GET /profiles/me/`, `/progress/summary/`, `/events/registrations/mine/` |
 | Saved | `GET/POST /profiles/favorites/`, `DELETE .../remove/` |
 | Sign-up | `POST /auth/signup/start/`, `/auth/signup/complete/`, `GET /hierarchy/public/children/` |
@@ -251,7 +470,9 @@ Not restated in code, but load-bearing:
 - Audio/video playback and the docked mini-player
 - A real scannable QR on the ticket sheet; the registration code is shown but
   the symbol is a placeholder glyph
-- Offline sync, and push registration via `/notifications/push/`
+- Offline sync (check-in queues its own scans; nothing else does)
+- Push on a real phone has not been tested end to end yet: it needs the
+  Firebase steps above
 - **Tribe's community half.** `04-information-architecture.md` defines Tribe as
   "events + community"; the design export and this build cover events only.
   Friends, prayer and groups join this tab later — the nav never grows past

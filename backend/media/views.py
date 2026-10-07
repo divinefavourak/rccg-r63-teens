@@ -10,6 +10,7 @@ from django.db.models.functions import Coalesce
 from identity.authorization import HasPermission, HasPermissionOrReadOnly, has_any_permission
 from identity.permissions_registry import Perm
 from content.views import get_age_group_filter
+from common.view_counts import count_view
 from .models import MediaCategory, MediaSeries, MediaEpisode, Playlist
 from .serializers import (
     MediaCategorySerializer,
@@ -146,7 +147,7 @@ class MediaEpisodeViewSet(viewsets.ModelViewSet):
     
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
-        instance.increment_view_count()
+        count_view(request, instance)
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
     

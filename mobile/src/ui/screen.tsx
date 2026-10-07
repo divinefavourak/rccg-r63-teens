@@ -1,5 +1,16 @@
-import { useEffect } from 'react';
-import { Modal, Pressable, Text, View, type DimensionValue } from 'react-native';
+import { useEffect, useState } from 'react';
+import {
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  Text,
+  useWindowDimensions,
+  View,
+  type DimensionValue,
+  type ViewProps,
+} from 'react-native';
 import Animated, {
   cancelAnimation,
   useAnimatedStyle,
@@ -24,6 +35,59 @@ import { ELEVATION, POP } from '../theme/tokens';
  * leaves a header hugging the top edge without this.
  */
 export const HEADER_GAP = 12;
+
+// ─── Keyboard ──────────────────────────────────────────────────────────────
+
+/**
+ * Keeps what is being typed into, and the button under it, above the keyboard.
+ *
+ * Wrap the part of a screen that should give way: usually the scroll view and
+ * the footer button together, below the header.
+ *
+ * It pads on Android as well as iOS. The usual advice is to leave Android
+ * alone and let the system shrink the window, but this app draws edge to edge
+ * (`edgeToEdgeEnabled`), and in that mode Android no longer shrinks anything:
+ * the keyboard simply slides over the form. Doing the padding here is what
+ * makes both platforms behave the same.
+ */
+export function KeyboardView({
+  children,
+  className = 'flex-1',
+  style,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  style?: ViewProps['style'];
+}) {
+  return (
+    <KeyboardAvoidingView behavior="padding" className={className} style={style}>
+      {children}
+    </KeyboardAvoidingView>
+  );
+}
+
+/**
+ * How much of the screen the keyboard is covering right now, in points.
+ * Zero while it is closed.
+ */
+export function useKeyboardHeight(): number {
+  const [height, setHeight] = useState(0);
+
+  useEffect(() => {
+    // iOS announces the keyboard before it moves, so the layout can travel
+    // with it. Android only says so once it has arrived.
+    const showing = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hiding = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const shown = Keyboard.addListener(showing, (event) => setHeight(event.endCoordinates.height));
+    const hidden = Keyboard.addListener(hiding, () => setHeight(0));
+    return () => {
+      shown.remove();
+      hidden.remove();
+    };
+  }, []);
+
+  return height;
+}
 
 // ─── Top app bar ───────────────────────────────────────────────────────────
 
@@ -365,6 +429,13 @@ export function VerseCard({
 /**
  * A bottom sheet over a scrim. Tapping the scrim or the system back gesture
  * closes it — a sheet is an offer, never a trap.
+ *
+ * A sheet may hold a search box (finding a ticket, choosing a country). It
+ * then rises with the keyboard, and is also kept short enough to fit in the
+ * space that is left: a tall list plus a keyboard is more than a phone is
+ * high, and without the limit it was the search box itself that slid off the
+ * top. A list inside a sheet should carry `flexShrink: 1` so it is the part
+ * that gives way.
  */
 export function Sheet({
   visible,
@@ -376,6 +447,12 @@ export function Sheet({
   children: React.ReactNode;
 }) {
   const insets = useSafeAreaInsets();
+  const window = useWindowDimensions();
+  const keyboard = useKeyboardHeight();
+  // What is left between the status bar and the keyboard, less a strip of
+  // scrim at the top to tap on.
+  const room = window.height - keyboard - insets.top - 24;
+
   return (
     <Modal
       visible={visible}
@@ -384,7 +461,9 @@ export function Sheet({
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      <View className="flex-1 justify-end">
+      {/* Rides up with the keyboard, so a sheet with a search box in it (the
+          country picker, finding a ticket) is never typed into blind. */}
+      <KeyboardView className="flex-1 justify-end">
         <Pressable
           onPress={onClose}
           accessibilityRole="button"
@@ -395,12 +474,20 @@ export function Sheet({
         <View
           accessibilityViewIsModal
           className="items-center gap-3 rounded-t-[36px] bg-surf-raised px-6 pt-2"
-          style={[{ paddingBottom: Math.max(insets.bottom, 24) }, ELEVATION.sheet]}
+          style={[
+            {
+              maxHeight: room,
+              // With the keyboard up, the gesture bar is under it; the sheet
+              // only needs a little air above the keys.
+              paddingBottom: keyboard > 0 ? 16 : Math.max(insets.bottom, 24),
+            },
+            ELEVATION.sheet,
+          ]}
         >
           <View className="h-1 w-10 rounded-full bg-line-strong" />
           {children}
         </View>
-      </View>
+      </KeyboardView>
     </Modal>
   );
 }

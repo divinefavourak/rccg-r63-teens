@@ -89,6 +89,19 @@ export const STALE = {
   scripture: 24 * 60 * 60 * 1000,
   /** Library and events change on an editorial cadence, not a live one. */
   catalogue: 10 * 60 * 1000,
-  /** Anything the teen's own actions mutate. */
+  /**
+   * What only this teen changes, from this app: their profile, what they
+   * saved, their reminder settings, their streak. Every action that changes
+   * one of these already refreshes it on the spot, so in between there is
+   * nothing new to fetch. Five minutes is there for the second phone.
+   */
+  mine: 5 * 60 * 1000,
+  /**
+   * What the server changes without being asked: the inbox, a ticket's
+   * status. A push refreshes these straight away; this is the fallback for a
+   * phone with notifications off.
+   */
+  inbox: 2 * 60 * 1000,
+  /** Live working data for leaders: the class, today's check-in, drafts. */
   personal: 30 * 1000,
 } as const;

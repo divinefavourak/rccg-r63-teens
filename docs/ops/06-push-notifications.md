@@ -4,6 +4,12 @@ The notification service is complete and correct with one deliberate gap:
 **delivery is behind a pluggable backend, and the default only logs.** This runbook
 turns on real WebPush.
 
+> **This page is about browsers.** Push to the native app is a separate
+> transport with its own switch (`NOTIFICATIONS_DEVICE_PUSH_BACKEND`) and its own
+> setup (an EAS build and, for Android, Firebase). The steps are in
+> [`mobile/README.md`](../../mobile/README.md), under *A build you can install,
+> and push notifications*.
+
 Until you do this, the product behaves correctly in every respect *except the
 interruption itself* — preferences are honoured, the in-app inbox fills, dedupe
 works, the habit ladder runs. No teen's phone ever buzzes. For a habit-formation

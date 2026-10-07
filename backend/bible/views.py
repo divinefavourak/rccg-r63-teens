@@ -6,6 +6,7 @@ Personal-layer endpoints are owner-scoped twice over: `get_queryset` filters to
 `request.user` (so a foreign object 404s rather than 403s, leaking nothing), and
 `IsOwner` guards object access. Business logic lives in `bible.services`.
 """
+from django.http import FileResponse
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.generics import RetrieveAPIView
@@ -16,7 +17,7 @@ from rest_framework.views import APIView
 from identity.authorization import HasPermissionOrReadOnly, has_any_permission
 from identity.permissions_registry import Perm
 
-from . import references, search, services, sharing
+from . import packs, references, search, services, sharing
 from .models import (
     BibleBook, BibleChapter, BibleTranslation, BibleVerse, Bookmark,
     Highlight, Note, ReadingHistory, ReadingProgress,
@@ -210,6 +211,44 @@ class ScriptureLookupView(APIView):
                 book_name, chapter_number, start_verse, end_verse),
             'verses': BibleVerseSerializer(verses, many=True).data,
         })
+
+
+class TranslationPackView(APIView):
+    """
+    A whole translation in one download, for keeping on a phone.
+
+    `GET /bible/pack/?translation=WEB`
+
+    One request, served from a file that is built once (see `bible/packs.py` for
+    why and for the shape). Public, like the rest of Scripture: a guest may read
+    the Bible, so a guest may keep it.
+
+    **Only translations whose licence allows it.** Offline storage is the thing
+    licensed translations most often restrict, so `is_offline_capable` is checked
+    here, on the server, and a refusal is a 403 with the reason.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        translation = services.resolve_translation(request.query_params.get('translation'))
+        if translation is None:
+            return Response(
+                {'detail': 'No translation is available yet.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if not translation.is_offline_capable:
+            return Response(
+                {'detail': f'{translation.code} may be read here, but its licence does '
+                           'not allow keeping it on a device.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        path = packs.ensure(translation)
+        response = FileResponse(open(path, 'rb'), content_type='application/json')
+        # The text can change (a re-import), so a day, not for ever.
+        response['Cache-Control'] = 'public, max-age=86400'
+        return response
 
 
 class ScriptureSearchView(APIView):

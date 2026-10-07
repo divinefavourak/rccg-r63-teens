@@ -112,8 +112,9 @@ export function IconField({
 // ─── Text field ────────────────────────────────────────────────────────────
 
 /**
- * Single-line text input (Figma "Text Field"): label above, sunken field, an
- * ink outline while focused, a specific error below.
+ * Text input (Figma "Text Field"): label above, sunken field, an ink outline
+ * while focused, a specific error below. `multiline` makes it a taller box for
+ * a few sentences; everything else about it stays the same.
  */
 export function TextField({
   label,
@@ -122,6 +123,7 @@ export function TextField({
   error,
   hint,
   large = false,
+  multiline = false,
   ...input
 }: {
   label: string;
@@ -131,6 +133,8 @@ export function TextField({
   hint?: string;
   /** The bigger, bolder value used for a phone number. */
   large?: boolean;
+  /** Room for a few sentences. The box grows with what is typed. */
+  multiline?: boolean;
 } & Pick<
   TextInputProps,
   | 'placeholder'
@@ -150,9 +154,9 @@ export function TextField({
     <View className="w-full gap-2">
       <Text className="font-ui-sb text-[14px] leading-5 text-ink-2">{label}</Text>
       <View
-        className={`h-14 flex-row items-center rounded-lg border-2 bg-surf-sunken px-4 ${
-          error ? 'border-feedback-error' : focused ? 'border-ink' : 'border-transparent'
-        }`}
+        className={`flex-row rounded-lg border-2 bg-surf-sunken px-4 ${
+          multiline ? 'min-h-[112px] py-3' : 'h-14 items-center'
+        } ${error ? 'border-feedback-error' : focused ? 'border-ink' : 'border-transparent'}`}
       >
         <TextInput
           value={value}
@@ -161,7 +165,10 @@ export function TextField({
           onBlur={() => setFocused(false)}
           placeholderTextColor={tokens.text3}
           accessibilityLabel={label}
-          autoCorrect={false}
+          // Sentences are worth correcting; names, numbers and emails are not.
+          autoCorrect={multiline}
+          multiline={multiline}
+          textAlignVertical={multiline ? 'top' : 'center'}
           className={`min-w-0 flex-1 text-ink-1 ${
             large ? 'font-ui-b text-[20px] tracking-[-0.2px]' : 'font-ui text-[16px]'
           }`}

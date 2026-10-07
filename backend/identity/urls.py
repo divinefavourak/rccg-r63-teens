@@ -1,7 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from . import analytics_views, role_views, views
+from . import analytics_views, class_views, role_views, views
 
 router = DefaultRouter()
 router.register(r'roles', views.RoleViewSet, basename='identity-role')
@@ -14,6 +14,10 @@ urlpatterns = [
     path('permissions/', views.PermissionListView.as_view(), name='identity-permissions'),
     # Scoped aggregate counts for the Console's Analytics and Overview screens.
     path('stats/', analytics_views.ConsoleStatsView.as_view(), name='identity-stats'),
+    # My Class: the teens inside the caller's `profiles.view` subtrees.
+    path('class/', class_views.ClassRosterView.as_view(), name='identity-class'),
+    path('class/<uuid:user_id>/', class_views.ClassMemberView.as_view(),
+         name='identity-class-member'),
     # Editing what a role *means* — distinct from granting one to somebody.
     # Declared before the router so it is not shadowed by the roles detail route.
     path('roles/<uuid:pk>/permissions/', role_views.RolePermissionsView.as_view(),

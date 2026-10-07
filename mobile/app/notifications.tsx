@@ -1,10 +1,12 @@
 import { memo, useCallback } from 'react';
 import { FlatList, RefreshControl, Text, View } from 'react-native';
-import { useRouter, type Href } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMarkNotificationsRead, useNotifications } from '../src/api/queries';
 import type { AppNotification } from '../src/api/types';
+import { PushPrompt } from '../src/components/PushPrompt';
+import { routeFor } from '../src/data/links';
 import { whenAgo } from '../src/data/time';
 import { useAuth } from '../src/state/auth';
 import { Object3D, type ObjectName } from '../src/ui/art';
@@ -72,14 +74,17 @@ export default function NotificationsScreen() {
           keyExtractor={keyOfNote}
           renderItem={renderItem}
           ListHeaderComponent={
-            unread > 0 ? (
-              <Button
-                label="Mark all as read"
-                variant="tertiary"
-                onPress={() => markRead.mutate(undefined)}
-                className="h-11 self-end"
-              />
-            ) : null
+            <View className="gap-2">
+              <PushPrompt />
+              {unread > 0 && (
+                <Button
+                  label="Mark all as read"
+                  variant="tertiary"
+                  onPress={() => markRead.mutate(undefined)}
+                  className="h-11 self-end"
+                />
+              )}
+            </View>
           }
           ListEmptyComponent={
             <View className="flex-1 justify-center">
@@ -166,27 +171,3 @@ const Row = memo(function Row({
     </Press>
   );
 });
-
-/**
- * Where a notification leads.
- *
- * The server writes its links as web paths (`/events/<id>`), which are shared
- * with the website. The app's routes are named differently, so they are
- * translated here; anything unrecognised opens nothing rather than a dead page.
- */
-function routeFor(link: string | null): Href | null {
-  if (!link) return null;
-
-  const ticket = /^\/events\/[^/]+\/ticket\/([^/]+)\/?$/.exec(link);
-  if (ticket) return { pathname: '/ticket/[id]', params: { id: ticket[1] } };
-
-  const event = /^\/events\/([^/]+)\/?$/.exec(link);
-  if (event) return { pathname: '/event/[id]', params: { id: event[1] } };
-
-  if (link.startsWith('/settings')) return '/settings';
-  if (link.startsWith('/bible')) return '/bible';
-  if (link.startsWith('/library')) return '/library';
-  if (link.startsWith('/devotional')) return '/devotional';
-  if (link === '/' || link.startsWith('/today')) return '/';
-  return null;
-}

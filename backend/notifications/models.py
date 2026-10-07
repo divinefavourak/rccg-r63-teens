@@ -7,7 +7,7 @@ would betray the product's character. The design resolves both: remind
 persistently, word everything with grace, and stop instantly once the day is
 done."
 
-Three models carry that:
+Four models carry that:
 
 * `NotificationPreference` — what a teen has agreed to receive. One row per user,
   created lazily with documented defaults (Standard intensity, quiet hours
@@ -16,6 +16,7 @@ Three models carry that:
   inbox is the durable record and push is merely the interruption.
 * `PushSubscription` — a browser's PWA push endpoint. A user may have several
   (phone, shared family laptop).
+* `PushDevice` — a phone running the native app, addressed by its Expo token.
 
 The rules — presets, quiet hours, per-type consent, the announcement cap, the
 step-down — are enforced in `notifications/services.py`, not here. §10:
@@ -309,3 +310,46 @@ class PushSubscription(UUIDMixin, TimestampMixin):
 
     def __str__(self):
         return f'{self.user} — {self.endpoint[:40]}...'
+
+
+class PushDevice(UUIDMixin, TimestampMixin):
+    """
+    A phone running the native app, addressed by its Expo push token.
+
+    Separate from `PushSubscription` because the two have nothing in common but
+    their owner: a browser endpoint is a URL with two encryption keys, a phone is
+    one opaque token. Folding them into one table would have meant three nullable
+    columns and a `kind` switch on every read.
+
+    `token` is unique globally for the same reason `endpoint` is: a phone handed
+    to a younger sibling who signs in must *move* to them, not buzz both teens.
+    """
+
+    class Platform(models.TextChoices):
+        IOS = 'ios', 'iOS'
+        ANDROID = 'android', 'Android'
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='push_devices',
+    )
+    token = models.CharField(max_length=255, unique=True)
+    platform = models.CharField(max_length=16, choices=Platform.choices, blank=True)
+    device_name = models.CharField(max_length=120, blank=True)
+
+    is_active = models.BooleanField(default=True, db_index=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    # Set when the push service says the app was uninstalled or the token
+    # rotated (`DeviceNotRegistered`), so it is retired rather than retried.
+    failed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Push Device'
+        verbose_name_plural = 'Push Devices'
+        indexes = [
+            models.Index(fields=['user', 'is_active'], name='notif_device_user_active'),
+        ]
+
+    def __str__(self):
+        return f'{self.user} — {self.platform or "device"} {self.token[:24]}...'

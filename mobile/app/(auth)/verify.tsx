@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, Text } from 'react-native';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 
+import { useReminderInvite } from '../../src/components/ReminderInvite';
 import { codeDestination, useAuth } from '../../src/state/auth';
 import { toDetails, useSignUp } from '../../src/state/signup';
 import { FormError, QuestionScreen } from '../../src/ui/AuthShell';
@@ -63,12 +64,16 @@ export default function VerifyScreen() {
     [error, clearError],
   );
 
+  // Signing in with a code, on a phone that has never been asked about
+  // reminders. Sign-up asks on the next screen, All set, instead.
+  const invite = useReminderInvite(useCallback(() => router.dismissTo('/'), [router]));
+
   const submit = useCallback(async () => {
     if (code.length !== CODE_LENGTH || pending) return;
     try {
       if (isLogin) {
         await signInWithCode(to, code);
-        router.dismissTo('/');
+        invite.begin();
       } else {
         await completeSignUp(details, code);
         router.replace('/all-set');
@@ -77,7 +82,7 @@ export default function VerifyScreen() {
       // The message is in `error`; clear the cells so the next try starts clean.
       setCode('');
     }
-  }, [code, pending, isLogin, signInWithCode, to, completeSignUp, details, router]);
+  }, [code, pending, isLogin, signInWithCode, to, completeSignUp, details, router, invite]);
 
   const resend = useCallback(async () => {
     try {
@@ -156,6 +161,7 @@ export default function VerifyScreen() {
           </Text>
         </Pressable>
       )}
+      {invite.sheet}
     </QuestionScreen>
   );
 }

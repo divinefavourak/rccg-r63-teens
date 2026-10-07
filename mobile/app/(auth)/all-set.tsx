@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RccgLogo } from '../../src/components/Logo';
+import { useReminderInvite } from '../../src/components/ReminderInvite';
 import { useAuth } from '../../src/state/auth';
 import { CHURCH_STEPS, deepestChurch, useSignUp } from '../../src/state/signup';
 import { markWelcomed } from '../../src/state/welcome';
@@ -37,6 +38,9 @@ export default function AllSetScreen() {
     // Drop the whole sign-up stack: Back from Today must not return to it.
     router.dismissTo('/');
   }, [reset, router]);
+
+  // The last step of joining: offer a daily reminder, then on to the reading.
+  const invite = useReminderInvite(start);
 
   return (
     <View className="flex-1 bg-pop-green" style={{ paddingTop: insets.top }}>
@@ -88,8 +92,9 @@ export default function AllSetScreen() {
           </View>
         )}
 
-        <Button label="Start today’s reading" onPress={start} className="w-full" />
+        <Button label="Start today’s reading" onPress={invite.begin} className="w-full" />
       </View>
+      {invite.sheet}
     </View>
   );
 }

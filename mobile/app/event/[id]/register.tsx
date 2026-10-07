@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -12,7 +12,7 @@ import { useAuth } from '../../../src/state/auth';
 import { Object3D } from '../../../src/ui/art';
 import { Button } from '../../../src/ui/Button';
 import { ChipRow, TextField, Toggle } from '../../../src/ui/inputs';
-import { BackHeader, EmptyState, Skeleton } from '../../../src/ui/screen';
+import { BackHeader, EmptyState, KeyboardView, Skeleton } from '../../../src/ui/screen';
 
 /** The fields the server insists on (`EventRegistrationCreateSerializer`). */
 type Required =
@@ -171,10 +171,11 @@ export default function EventRegisterScreen() {
     <View className="flex-1 bg-surf-base">
       <BackHeader title="Register" onBack={back} />
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardView>
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           contentContainerStyle={{ gap: 16, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 24 }}
         >
           <View className="flex-row items-center gap-3">
@@ -341,7 +342,7 @@ export default function EventRegisterScreen() {
             className="w-full"
           />
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardView>
     </View>
   );
 }

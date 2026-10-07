@@ -4,15 +4,21 @@ import { File } from 'expo-file-system';
 
 import { api, ApiError, fetchAllPages } from './client';
 import { STALE } from './config';
+import { readChapter, readList, writeChapter, writeList } from '../data/bibleStore';
 import type {
   AppNotification,
+  CheckInAttendee,
+  CheckInEvent,
+  CheckInResult,
+  ClassMemberDetail,
+  ClassRoster,
+  ManualDetail,
   ArticleDetail,
   ArticleListItem,
   Bookmark,
   MediaEpisode,
   ProgressCalendar,
   ScriptureSearch,
-  VerseShare,
   EventRegistration,
   EventRegistrationDetail,
   EventRegistrationInput,
@@ -23,7 +29,6 @@ import type {
   BibleBook,
   ChurchLevel,
   ChurchNode,
-  BibleChapterDetail,
   BibleTranslation,
   ScriptureLookup,
   DevotionalDetail,
@@ -74,6 +79,12 @@ export const keys = {
   episodes: (params?: string) => ['episodes', params ?? ''] as const,
   episode: (id: string) => ['episode', id] as const,
   calendar: (month: string) => ['progress', 'calendar', month] as const,
+  lesson: ['console', 'lesson'] as const,
+  classRoster: ['console', 'class'] as const,
+  classMember: (id: string) => ['console', 'class', id] as const,
+  checkInToday: ['console', 'check-in', 'today'] as const,
+  checkInSearch: (event: string, text: string) =>
+    ['console', 'check-in', 'search', event, text] as const,
 };
 
 /** DRF paginates some viewsets and not others. Accept either shape. */
@@ -188,7 +199,7 @@ export function useProgress(enabled = true) {
     queryKey: keys.progress,
     queryFn: () => api.get<ProgressSummary>('/progress/summary/'),
     enabled,
-    staleTime: STALE.personal,
+    staleTime: STALE.mine,
     retry: retryTransient,
   });
 }
@@ -244,7 +255,7 @@ export function useNotifications(enabled = true) {
     queryFn: async () =>
       unwrap(await api.get<Paginated<AppNotification>>('/notifications/inbox/')),
     enabled,
-    staleTime: STALE.personal,
+    staleTime: STALE.inbox,
     retry: retryTransient,
   });
 }
@@ -254,7 +265,7 @@ export function useUnreadCount(enabled = true) {
     queryKey: keys.unreadCount,
     queryFn: () => api.get<{ unread_count: number }>('/notifications/inbox/unread_count/'),
     enabled,
-    staleTime: STALE.personal,
+    staleTime: STALE.inbox,
     retry: retryTransient,
   });
 }
@@ -299,7 +310,7 @@ export function useProfile(enabled = true) {
     queryKey: keys.profile,
     queryFn: () => api.get<TeenProfile>('/profiles/me/'),
     enabled,
-    staleTime: STALE.personal,
+    staleTime: STALE.mine,
     retry: retryTransient,
   });
 }
@@ -309,7 +320,7 @@ export function useFavorites(enabled = true) {
     queryKey: keys.favorites,
     queryFn: async () => unwrap(await api.get<Paginated<Favorite>>('/profiles/favorites/')),
     enabled,
-    staleTime: STALE.personal,
+    staleTime: STALE.mine,
     retry: retryTransient,
   });
 }
@@ -373,7 +384,7 @@ export function useMyRegistrations(enabled = true) {
     queryFn: async () =>
       unwrap(await api.get<Paginated<EventRegistration>>('/events/registrations/mine/')),
     enabled,
-    staleTime: STALE.personal,
+    staleTime: STALE.inbox,
     retry: retryTransient,
   });
 }
@@ -383,8 +394,23 @@ export function useMyRegistrations(enabled = true) {
 export function useTranslations() {
   return useQuery({
     queryKey: keys.translations,
-    queryFn: async () => unwrap(await api.get<Paginated<BibleTranslation>>('/bible/translations/')),
+    // The server first, because a translation can be added; the phone's copy
+    // when the server cannot be reached, so the picker still opens offline.
+    queryFn: async () => {
+      try {
+        const rows = unwrap(await api.get<Paginated<BibleTranslation>>('/bible/translations/'));
+        writeList('translations', rows);
+        return rows;
+      } catch (err) {
+        const saved = await readList<BibleTranslation[]>('translations');
+        if (saved) return saved;
+        throw err;
+      }
+    },
     staleTime: STALE.scripture,
+    gcTime: STALE.scripture,
+    // Runs with no signal too: it has somewhere to look besides the network.
+    networkMode: 'always',
     retry: retryTransient,
   });
 }
@@ -406,6 +432,11 @@ export function useBooks() {
   return useQuery({
     queryKey: keys.books,
     queryFn: async () => {
+      // The 66 books do not change. Once this phone has the list, it is never
+      // asked for again: that was four or more requests on every cold start.
+      const saved = await readList<BibleBook[]>('books');
+      if (saved?.length) return saved;
+
       const rows = await fetchAllPages<BibleBook>('/bible/books/');
 
       const byOsis = new Map<string, BibleBook>();
@@ -413,22 +444,14 @@ export function useBooks() {
         if (!byOsis.has(book.osis_code)) byOsis.set(book.osis_code, book);
       }
 
-      return [...byOsis.values()].sort((a, b) => a.book_number - b.book_number);
+      const books = [...byOsis.values()].sort((a, b) => a.book_number - b.book_number);
+      if (books.length) writeList('books', books);
+      return books;
     },
     staleTime: STALE.scripture,
     gcTime: STALE.scripture,
-    retry: retryTransient,
-  });
-}
-
-export function useChapter(id: string | undefined) {
-  return useQuery({
-    queryKey: keys.chapter(id ?? ''),
-    queryFn: () => api.get<BibleChapterDetail>('/bible/chapters/' + id + '/'),
-    enabled: !!id,
-    // Scripture text is immutable, so once fetched it never needs revalidating.
-    staleTime: STALE.scripture,
-    gcTime: STALE.scripture,
+    // Runs with no signal too: it has somewhere to look besides the network.
+    networkMode: 'always',
     retry: retryTransient,
   });
 }
@@ -482,10 +505,23 @@ export function useScripture(book: string, chapter: number, translation?: string
 
   return useQuery({
     queryKey: keys.passage(book, chapter, translation),
-    queryFn: () => api.get<ScriptureLookup>('/bible/lookup/?' + params.toString()),
+    // The phone first. A chapter read once is kept on the device (see
+    // `data/bibleStore.ts`), so opening it again costs no request and needs no
+    // signal. Only a chapter this phone has never seen goes to the server.
+    queryFn: async () => {
+      const saved = await readChapter(book, chapter, translation);
+      if (saved) return saved;
+
+      const fetched = await api.get<ScriptureLookup>('/bible/lookup/?' + params.toString());
+      writeChapter(fetched, !translation);
+      return fetched;
+    },
     // Scripture text is immutable, so once fetched it never needs revalidating.
     staleTime: STALE.scripture,
     gcTime: STALE.scripture,
+    // Without this the query waits for a connection before it even looks on
+    // the phone, which defeats the point of having the chapter saved.
+    networkMode: 'always',
     retry: retryTransient,
   });
 }
@@ -561,7 +597,7 @@ export function useNotificationPreferences(enabled = true) {
     queryKey: keys.notificationPrefs,
     queryFn: () => api.get<NotificationPreferences>('/notifications/preferences/'),
     enabled,
-    staleTime: STALE.personal,
+    staleTime: STALE.mine,
     retry: retryTransient,
   });
 }
@@ -606,7 +642,7 @@ export function useIdentity(enabled = true) {
     queryKey: keys.identity,
     queryFn: () => api.get<Identity>('/identity/me/'),
     enabled,
-    staleTime: 10 * 60 * 1000,
+    staleTime: 30 * 60 * 1000,
     retry: retryTransient,
   });
 }
@@ -823,29 +859,12 @@ export function useScriptureSearch(text: string, translation?: string) {
   });
 }
 
-/**
- * The share and copy text for one verse.
- *
- * Asked of the server rather than assembled here because it carries the
- * attribution a licensed translation requires; a client that builds its own
- * string will one day forget it.
- */
-export function fetchVerseShare(book: string, chapter: number, verse: number, translation?: string) {
-  const params = new URLSearchParams({
-    book,
-    chapter: String(chapter),
-    start_verse: String(verse),
-  });
-  if (translation) params.set('translation', translation);
-  return api.get<VerseShare>('/bible/share/?' + params.toString());
-}
-
 export function useBookmarks(enabled = true) {
   return useQuery({
     queryKey: keys.bookmarks,
     queryFn: () => fetchAllPages<Bookmark>('/bible/bookmarks/'),
     enabled,
-    staleTime: STALE.personal,
+    staleTime: STALE.mine,
     retry: retryTransient,
   });
 }
@@ -895,7 +914,106 @@ export function useProgressCalendar(month: string, enabled = true) {
     queryKey: keys.calendar(month),
     queryFn: () => api.get<ProgressCalendar>('/progress/calendar/?month=' + month),
     enabled,
+    staleTime: STALE.mine,
+    retry: retryTransient,
+  });
+}
+
+// ─── Teacher tools ─────────────────────────────────────────────────────────
+
+/**
+ * This week's lesson, in the teacher's edition.
+ *
+ * `manuals/current/` knows which manual belongs to this week, and sends the
+ * teacher's notes with it to someone holding `content.view`. An older server
+ * answered with the teen edition whoever asked, so if the notes are missing a
+ * second request fetches them from the detail route. A week with nothing
+ * published is `null`, not an error: it is a normal state the screen has
+ * words for.
+ */
+export function useCurrentLesson(enabled = true) {
+  return useQuery({
+    queryKey: keys.lesson,
+    queryFn: async () => {
+      let current: ManualDetail;
+      try {
+        current = await api.get<ManualDetail>('/content/manuals/current/');
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) return null;
+        throw err;
+      }
+      // A server that knows the caller may see the teacher's edition sends it
+      // in that first answer, and there is nothing more to ask for.
+      if ('has_teacher_edition' in current) return current;
+      try {
+        return await api.get<ManualDetail>(`/content/manuals/${current.id}/`);
+      } catch {
+        // The lesson itself is worth showing even if the teacher's half fails.
+        return current;
+      }
+    },
+    enabled,
+    staleTime: STALE.catalogue,
+    retry: retryTransient,
+  });
+}
+
+/** The class list with this week's reading (identity/class_views.py). */
+export function useClassRoster(enabled = true) {
+  return useQuery({
+    queryKey: keys.classRoster,
+    queryFn: () => api.get<ClassRoster>('/identity/class/'),
+    enabled,
     staleTime: STALE.personal,
+    retry: retryTransient,
+  });
+}
+
+export function useClassMember(id: string | undefined) {
+  return useQuery({
+    queryKey: keys.classMember(id ?? ''),
+    queryFn: () => api.get<ClassMemberDetail>(`/identity/class/${id}/`),
+    enabled: !!id,
+    staleTime: STALE.personal,
+    retry: retryTransient,
+  });
+}
+
+/** Events on today that this person may check people in to. Often none. */
+export function useCheckInToday(enabled = true) {
+  return useQuery({
+    queryKey: keys.checkInToday,
+    queryFn: async () =>
+      (await api.get<{ events: CheckInEvent[] }>('/events/checkin/today/')).events,
+    enabled,
+    staleTime: STALE.personal,
+    retry: retryTransient,
+  });
+}
+
+/**
+ * Send one ticket code to be checked in.
+ *
+ * A plain function rather than a mutation hook: the scanner also replays
+ * scans it saved while offline, from outside any component's render.
+ */
+export function scanTicket(event: string, code: string, method: 'qr_scan' | 'manual') {
+  return api.post<CheckInResult>('/events/checkin/scan/', { event, code, method });
+}
+
+/** Find a ticket by name or number. Needs two letters before it asks. */
+export function useCheckInSearch(event: string | undefined, text: string) {
+  const query = text.trim();
+  return useQuery({
+    queryKey: keys.checkInSearch(event ?? '', query),
+    queryFn: async () =>
+      (
+        await api.get<{ results: CheckInAttendee[] }>(
+          `/events/checkin/search/?event=${event}&q=${encodeURIComponent(query)}`,
+        )
+      ).results,
+    enabled: !!event && query.length >= 2,
+    staleTime: 15 * 1000,
     retry: retryTransient,
   });
 }

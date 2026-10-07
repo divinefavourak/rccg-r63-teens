@@ -93,11 +93,13 @@ export function PhoneField({
 
         <ScrollView
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
           className="w-full"
           // Tall enough to browse, short enough that the scrim above still
-          // shows and can be tapped to close.
-          style={{ maxHeight: 360 }}
+          // shows and can be tapped to close. It shrinks when the keyboard is
+          // up, so the search box above it stays on screen.
+          style={{ maxHeight: 360, flexShrink: 1 }}
         >
           <View accessibilityRole="radiogroup">
             {matches.map((item) => {

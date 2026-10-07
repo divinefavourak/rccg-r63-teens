@@ -35,3 +35,47 @@ export function redLetterParts(text: string): VersePart[] {
 export function plainVerse(text: string): string {
   return text.split(OPEN).join('').split(CLOSE).join('');
 }
+
+/** Where a shared verse points back to. The website opens the reader there. */
+const SITE = 'https://www.thefaithtribe.live';
+
+interface Quoted {
+  /** The verse as stored, marks and all. */
+  text: string;
+  /** "John 3:16", as the server rendered it. */
+  reference: string;
+  /** "WEB". */
+  code: string;
+}
+
+/** `"For God so loved…" — John 3:16 (WEB)`: the Copy action. */
+export function copyWords({ text, reference, code }: Quoted): string {
+  const quote = `"${plainVerse(text).trim()}" — ${reference}`;
+  return code ? `${quote} (${code})` : quote;
+}
+
+/**
+ * The Share action: the quote, where it came from, and a link back.
+ *
+ * Composed here, from the chapter already on the phone, in the same shape the
+ * server's `bible/sharing.py` produces. It used to be a request per share,
+ * which made sharing a verse fail with no signal and cost data for words the
+ * phone was already showing.
+ *
+ * What the server was guarding is still guarded. A licensed translation's
+ * copyright line travels with every chapter (`attribution_required`,
+ * `copyright_notice`) and is appended here exactly as it was there. The other
+ * licence rule, a cap on how many verses may be quoted together, cannot be
+ * broken from this screen: it shares one verse at a time.
+ */
+export function shareWords(
+  quoted: Quoted & { book: string; chapter: number; verse: number },
+  licence?: { attribution_required?: boolean; copyright_notice?: string | null } | null,
+): string {
+  const link = `${SITE}/bible/${quoted.book}/${quoted.chapter}?verse=${quoted.verse}`;
+  let words = `${copyWords(quoted)}, via Faith Tribe\n${link}`;
+  if (licence?.attribution_required && licence.copyright_notice) {
+    words += `\n\n${licence.copyright_notice}`;
+  }
+  return words;
+}

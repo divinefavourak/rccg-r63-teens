@@ -1,8 +1,9 @@
-import { useCallback } from 'react';
-import { ScrollView, Share, Text, View } from 'react-native';
+import { useCallback, useEffect } from 'react';
+import { AppState, ScrollView, Share, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import QRCode from 'react-native-qrcode-svg';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMyRegistrations } from '../../src/api/queries';
@@ -14,6 +15,16 @@ import { Object3D } from '../../src/ui/art';
 import { BackHeader, EmptyState, Skeleton } from '../../src/ui/screen';
 import { useTokens } from '../../src/theme/ThemeProvider';
 import { ELEVATION } from '../../src/theme/tokens';
+
+/** How often an open ticket asks whether it has been scanned yet. */
+const POLL_MS = 5000;
+/**
+ * How long it keeps asking. Long enough for any queue at a door; short enough
+ * that a ticket left open on a table does not ask 700 times an hour all day.
+ */
+const POLL_FOR_MS = 10 * 60 * 1000;
+/** Doors open before the start time; watch from this long beforehand. */
+const DOORS_MS = 6 * 60 * 60 * 1000;
 
 /**
  * One ticket (Figma "Ticket").
@@ -34,6 +45,38 @@ export default function TicketScreen() {
   const mine = useMyRegistrations(!isGuest);
   const ticket = (mine.data ?? []).find((r) => r.id === id);
   const event = ticket?.event_detail ?? null;
+
+  const arrived = ticket?.status === 'checked_in' || ticket?.status === 'attended';
+  // A ticket that could be scanned any moment now: still good, not yet used,
+  // and its event is on or about to be.
+  const startsAt = event ? new Date(event.start_datetime).getTime() : null;
+  const endsAt = event?.end_datetime ? new Date(event.end_datetime).getTime() : null;
+  const atTheDoor =
+    !!ticket &&
+    !arrived &&
+    (ticket.status === 'confirmed' || ticket.status === 'pending') &&
+    startsAt !== null &&
+    Date.now() > startsAt - DOORS_MS &&
+    Date.now() < (endsAt ?? startsAt + DOORS_MS);
+
+  // While the teen is holding this screen up to a scanner, keep asking the
+  // server whether the scan went through, so the ticket answers in front of
+  // them. A push does the same job faster, but only for those who allowed
+  // notifications; this works for everyone, and stops once they are in.
+  const { refetch } = mine;
+  useEffect(() => {
+    if (!atTheDoor) return;
+    const until = Date.now() + POLL_FOR_MS;
+    const timer = setInterval(() => {
+      if (Date.now() > until) {
+        clearInterval(timer);
+        return;
+      }
+      // Nobody is being scanned while the phone is in a pocket.
+      if (AppState.currentState === 'active') refetch();
+    }, POLL_MS);
+    return () => clearInterval(timer);
+  }, [atTheDoor, refetch]);
 
   const back = useCallback(
     () => (router.canGoBack() ? router.back() : router.replace('/tribe')),
@@ -198,9 +241,28 @@ export default function TicketScreen() {
           </View>
         </View>
 
-        <Text className="text-center font-ui text-[14px] leading-5 text-ink-3">
-          Turn your brightness up at the door so the code scans easily.
-        </Text>
+        {arrived ? (
+          // Fades in when the scan lands. The classes sit on the inner view:
+          // an animated view drops them on the web preview.
+          <Animated.View entering={FadeIn.duration(250)}>
+            <View
+              accessibilityLiveRegion="polite"
+              className="w-full flex-row items-center gap-3 rounded-2xl bg-pop-lime py-3 pl-3 pr-4"
+            >
+              <Object3D name="thumb-up" size={56} />
+              <View className="min-w-0 flex-1 gap-0.5">
+                <Text className="font-ui-b text-[17px] leading-6 text-pop-on">You’re in</Text>
+                <Text className="font-ui text-[14px] leading-5 text-pop-on">
+                  Welcome, {holder.trim().split(/\s+/)[0]}. Enjoy {event?.title ?? 'the event'}.
+                </Text>
+              </View>
+            </View>
+          </Animated.View>
+        ) : (
+          <Text className="text-center font-ui text-[14px] leading-5 text-ink-3">
+            Turn your brightness up at the door so the code scans easily.
+          </Text>
+        )}
       </ScrollView>
     </View>
   );
