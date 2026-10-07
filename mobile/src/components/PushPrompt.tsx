@@ -1,4 +1,4 @@
-import { Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 
 import { usePushPermission } from '../state/push';
 import { Object3D } from '../ui/art';
@@ -32,16 +32,20 @@ export function PushPrompt() {
             : 'A gentle nudge to read, and news about your events.'}
         </Text>
       </View>
-      {/* Always dark with light text: it sits on amber in both themes. */}
-      <Press
-        onPress={turnOn}
-        accessibilityLabel={refused ? 'Open phone settings' : 'Turn on notifications'}
-        className="h-11 items-center justify-center rounded-full bg-pop-on px-4"
-      >
-        <Text className="font-ui-sb text-[14px] leading-5" style={{ color: '#FDFAF5' }}>
-          {refused ? 'Settings' : 'Turn on'}
-        </Text>
-      </Press>
+      {/* Always dark with light text: it sits on amber in both themes. A
+          browser has no settings screen a page can open, so after a refusal
+          there the words stand alone. */}
+      {!(refused && Platform.OS === 'web') && (
+        <Press
+          onPress={turnOn}
+          accessibilityLabel={refused ? 'Open phone settings' : 'Turn on notifications'}
+          className="h-11 items-center justify-center rounded-full bg-pop-on px-4"
+        >
+          <Text className="font-ui-sb text-[14px] leading-5" style={{ color: '#FDFAF5' }}>
+            {refused ? 'Settings' : 'Turn on'}
+          </Text>
+        </Press>
+      )}
     </View>
   );
 }

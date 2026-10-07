@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCompleteChallenge, useToday, useUnreadCount } from '../../src/api/queries';
 import type { StreakState, TodayResponse } from '../../src/api/types';
 import { Icon } from '../../src/components/Icon';
+import { InstallHint } from '../../src/components/InstallHint';
 import { useNavClearance } from '../../src/components/useNavClearance';
 import { DAY_MS, inRun, startOfDay, streakWeek, streakWords } from '../../src/data/streak';
 import { useAuth } from '../../src/state/auth';
@@ -107,6 +108,9 @@ export default function TodayScreen() {
         ) : data ? (
           <>
             <Reading data={data} onOpen={openReading} />
+
+            {/* Web only, and only until the site is on the Home Screen. */}
+            <InstallHint />
 
             {isGuest ? (
               <GuestBanner

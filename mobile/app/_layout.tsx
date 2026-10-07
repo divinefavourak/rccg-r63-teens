@@ -1,7 +1,7 @@
 import '../global.css';
 
 import { useCallback, useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -31,6 +31,7 @@ import { PlayerProvider } from '../src/state/player';
 import { ReaderProvider, useReader } from '../src/state/reader';
 import { restoreQueries, watchQueries } from '../src/api/persist';
 import { installAppStateBridges, queryClient } from '../src/api/queryClient';
+import { startWebApp } from '../src/state/install';
 import { usePushSync } from '../src/state/push';
 import { loadWelcomed } from '../src/state/welcome';
 
@@ -64,6 +65,10 @@ export default function RootLayout() {
   // React Query's focus and online managers default to DOM APIs that do not
   // exist in React Native. Installed once, for the life of the app.
   useEffect(installAppStateBridges, []);
+
+  // On the web: the service worker that opens the app offline and shows
+  // notifications. Nothing in the app itself.
+  useEffect(startWebApp, []);
 
   // What the app loaded last time, read back before any screen asks for it.
   // Watching starts only once that is done, or the first write would replace
@@ -111,6 +116,14 @@ export default function RootLayout() {
 }
 
 /**
+ * Every screen is drawn for a phone. Opened on a laptop, the web app keeps to
+ * a phone's width in the middle of the window instead of stretching each card
+ * across it.
+ */
+const WEB_COLUMN =
+  Platform.OS === 'web' ? ({ width: '100%', maxWidth: 520, alignSelf: 'center' } as const) : null;
+
+/**
  * Split from `RootLayout` because it needs `useTheme`, which only exists below
  * the provider.
  */
@@ -144,7 +157,7 @@ function AppShell({ fontsSettled }: { fontsSettled: boolean }) {
   if (!canRender) return null;
 
   return (
-    <View style={{ flex: 1, backgroundColor: tokens.surfBase }} onLayout={onLayout}>
+    <View style={[{ flex: 1, backgroundColor: tokens.surfBase }, WEB_COLUMN]} onLayout={onLayout}>
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <Stack
         screenOptions={{

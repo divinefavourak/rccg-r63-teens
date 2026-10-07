@@ -1,6 +1,7 @@
-import { AppState, Platform } from 'react-native';
+import { AppState } from 'react-native';
 import { dehydrate, hydrate, type Query, type QueryClient } from '@tanstack/react-query';
-import { Directory, File, Paths } from 'expo-file-system';
+
+import { readJson, removeJson, writeJson } from '../data/disk';
 
 /**
  * What the app loaded, remembered between launches.
@@ -11,7 +12,8 @@ import { Directory, File, Paths } from 'expo-file-system';
  * that is data spent to redraw yesterday's screen, and on a slow one it is a
  * splash screen followed by skeletons.
  *
- * Now the cache is written to the phone as it changes and read back at launch,
+ * Now the cache is saved as it changes (`data/disk.ts`: a file in the app,
+ * IndexedDB in the browser) and read back at launch,
  * before the first screen draws. A screen shows what it showed last time at
  * once, and only what has gone stale by its own rule (five minutes for a
  * profile, ten for the library) is fetched again, quietly, behind it.
@@ -19,8 +21,6 @@ import { Directory, File, Paths } from 'expo-file-system';
  * Nothing here decides what is fresh. Each saved answer keeps the time it was
  * fetched, and the same `staleTime` rules that apply in memory apply to it.
  */
-
-const AVAILABLE = Platform.OS === 'ios' || Platform.OS === 'android';
 
 /** Bump when the shape of any saved answer changes. Old files are then ignored. */
 const VERSION = 1;
@@ -39,9 +39,7 @@ interface Saved {
   state: ReturnType<typeof dehydrate>;
 }
 
-function file(): File {
-  return new File(new Directory(Paths.document, 'cache'), `queries-v${VERSION}.json`);
-}
+const PATH = ['cache', `queries-v${VERSION}`];
 
 /**
  * What is worth keeping, and what must not be kept.
@@ -63,34 +61,22 @@ function worthKeeping(query: Query): boolean {
 
 /** Read the saved cache into `client`. Call once, before anything renders. */
 export async function restoreQueries(client: QueryClient): Promise<void> {
-  if (!AVAILABLE) return;
   try {
-    const source = file();
-    if (!source.exists) return;
-    const saved = JSON.parse(await source.text()) as Saved;
-    if (saved.version !== VERSION || Date.now() - saved.at > MAX_AGE_MS) return;
+    const saved = await readJson<Saved>(PATH);
+    if (!saved || saved.version !== VERSION || Date.now() - saved.at > MAX_AGE_MS) return;
     hydrate(client, saved.state);
   } catch {
-    // A half-written or unreadable file is the same as no file: start clean.
+    // Saved in a shape this version cannot use: the same as nothing saved.
   }
 }
 
 function write(client: QueryClient): void {
-  if (!AVAILABLE) return;
-  try {
-    const saved: Saved = {
-      version: VERSION,
-      at: Date.now(),
-      state: dehydrate(client, { shouldDehydrateQuery: worthKeeping }),
-    };
-    const target = file();
-    const dir = new Directory(Paths.document, 'cache');
-    if (!dir.exists) dir.create({ intermediates: true, idempotent: true });
-    if (!target.exists) target.create();
-    target.write(JSON.stringify(saved));
-  } catch {
-    // Out of space. The app still works; it just starts cold next time.
-  }
+  const saved: Saved = {
+    version: VERSION,
+    at: Date.now(),
+    state: dehydrate(client, { shouldDehydrateQuery: worthKeeping }),
+  };
+  writeJson(PATH, saved);
 }
 
 /**
@@ -102,8 +88,6 @@ function write(client: QueryClient): void {
  * system closes it.
  */
 export function watchQueries(client: QueryClient): () => void {
-  if (!AVAILABLE) return () => {};
-
   let timer: ReturnType<typeof setTimeout> | null = null;
   const flush = () => {
     if (timer) clearTimeout(timer);
@@ -138,11 +122,5 @@ export function watchQueries(client: QueryClient): () => void {
  * what the next person to pick up the phone sees.
  */
 export function forgetQueries(): void {
-  if (!AVAILABLE) return;
-  try {
-    const target = file();
-    if (target.exists) target.delete();
-  } catch {
-    // Nothing to delete, or it could not be. The next write replaces it.
-  }
+  removeJson(PATH);
 }

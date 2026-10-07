@@ -353,6 +353,9 @@ EAS asks to sign in to Apple and offers to create the push key itself; say
 yes. Installing a development build on an iPhone also means registering the
 phone first with `npx eas device:create`.
 
+Until there is such an account, iPhone users have the web app instead: see
+[The web app, for iPhones](#the-web-app-for-iphones).
+
 What has been tried on real phones so far, with results, is in
 [`TESTING.md`](TESTING.md).
 
@@ -377,6 +380,99 @@ What has been tried on real phones so far, with results, is in
 `eas.json` and `app.json` (with the project id) are fine to commit.
 `google-services.json` is not a secret, but see the note in step 4 before
 adding it to a public repository.
+
+## The web app, for iPhones
+
+There is no Apple Developer account, so there is no iPhone app in the App
+Store. iPhone users get the same app as a website they add to their Home
+Screen (a PWA). It is this codebase built for the web, not a second app:
+`npx expo export --platform web` turns it into a folder of static files.
+
+What an iPhone user gets, once it is on the Home Screen:
+
+- It opens full screen from its own icon, with no browser bars.
+- It opens with no signal. The page and scripts are kept by the service worker
+  (`public/sw.js`); Today, the profile and so on come back from the saved cache,
+  and the Bible from the chapters saved on the phone.
+- A whole translation can be kept on the phone, as in the Android app.
+- Reminders and event news as notifications (iOS 16.4 or later).
+
+What is different from the Android app:
+
+| | Android app | Web app |
+|---|---|---|
+| Sign-in is kept in | The phone's keystore | `localStorage` (see `src/api/tokens.web.ts` for why) |
+| Bible and cache are kept in | Files | IndexedDB (`src/data/disk.web.ts`) |
+| Notifications go through | Expo and Firebase (`/notifications/devices/`) | Web Push (`/notifications/push/`) |
+| Ticket scanning with the camera | Yes | Not yet: search by name or ticket number instead |
+
+Files that exist only for the web end in `.web.ts`; Metro picks them over the
+plain file when building for the web. Everything else is shared.
+
+### Try it on this computer
+
+```powershell
+cd mobile
+npx expo start --web
+```
+
+The service worker is left out while developing, so offline and notifications
+can only be tried on a real build:
+
+```powershell
+$env:EXPO_PUBLIC_API_URL = "http://127.0.0.1:8000/api/v1"
+npx expo export --platform web
+npx serve dist --single
+```
+
+### Put it online (once)
+
+It is hosted as its own Vercel project, separate from the website.
+
+1. In Vercel, **Add New → Project**, pick this repository, and set **Root
+   Directory** to `mobile`. `mobile/vercel.json` supplies the build command,
+   the output folder and the rule that sends every address to the app.
+2. Under **Environment Variables** add:
+
+   | Name | Value |
+   |---|---|
+   | `EXPO_PUBLIC_API_URL` | The API, ending in `/api/v1`. The same address the website uses |
+   | `EXPO_PUBLIC_VAPID_PUBLIC_KEY` | The backend's `VAPID_PUBLIC_KEY`. Leave it out and the app works without notifications |
+
+   Both are read when the site is built, so changing one means redeploying.
+3. Give it an address, for example `app.thefaithtribe.live` (**Settings →
+   Domains**). It must be HTTPS; a service worker does not run otherwise.
+4. Tell the API to accept requests from that address. On the backend host, add
+   it to `CORS_ALLOWED_ORIGINS`, for example:
+
+   ```
+   CORS_ALLOWED_ORIGINS=https://www.thefaithtribe.live,https://app.thefaithtribe.live
+   ```
+
+   Without this every request from the web app is refused by the browser and
+   the app shows its "couldn't load" screens.
+5. For notifications, the backend needs web push turned on
+   ([`docs/ops/06-push-notifications.md`](../docs/ops/06-push-notifications.md)):
+   `NOTIFICATIONS_PUSH_BACKEND=notifications.push.WebPushBackend`, both VAPID
+   keys, and `VAPID_ADMIN_EMAIL`.
+
+### How a teen installs it
+
+On an iPhone, in **Safari**: open the address, tap **Share**, then **Add to
+Home Screen**. Today shows a card saying exactly this until it is done
+(`src/components/InstallHint.tsx`). On Android or desktop Chrome the same card
+has an **Install** button.
+
+Two things only work after it has been added, and this is Apple's rule, not
+ours: notifications, and keeping saved data for good. In a Safari tab the
+reminder question is never asked, because the answer could not be honoured.
+
+### Releasing a change
+
+Push to the branch Vercel builds from. The next time someone opens the app
+with a connection they get the new version; nothing is installed again. If
+`public/sw.js` itself changes in a way that makes old kept files wrong, bump
+`VERSION` at the top of it.
 
 ## Running the backend
 
