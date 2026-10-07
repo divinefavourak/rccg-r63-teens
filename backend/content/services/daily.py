@@ -14,7 +14,7 @@ from django.core.exceptions import ValidationError
 
 from common.dates import app_today
 
-from ..models import Devotional
+from ..models import Devotional, MemoryVerse
 
 
 def _published(queryset):
@@ -76,6 +76,40 @@ def verse_of_the_day(published_only=True):
     existence, no randomness and no separate storage. It is today's memory verse.
     """
     return todays_memory_verse(published_only=published_only)
+
+
+def ensure_primary_memory_verse(devotional):
+    """
+    Give a devotional its primary memory verse from the legacy text fields when
+    it has none.
+
+    Devotionals that arrive through the scraper or the plain authoring form carry
+    their verse only in `memory_verse_passage` / `memory_verse_content`; nothing
+    ever wrote a `MemoryVerse` row for them, so the publish gate refused every one
+    of them even though the verse is right there. Deriving it here keeps the gate
+    strict (no verse, no publish) without making editors re-enter what they
+    already typed.
+
+    Returns the primary verse, or None when the legacy fields are empty too.
+    """
+    existing = primary_memory_verse(devotional)
+    if existing is not None:
+        return existing
+
+    reference = (devotional.memory_verse_passage or '').strip()
+    text = (devotional.memory_verse_content or '').strip()
+    if not reference or not text:
+        return None
+
+    verse = MemoryVerse.objects.create(
+        devotional=devotional,
+        is_primary=True,
+        reference_display=reference[:255],
+        text_override=text,
+    )
+    # Drop any prefetched (and now stale) `memory_verses` so the gate sees it.
+    getattr(devotional, '_prefetched_objects_cache', {}).pop('memory_verses', None)
+    return verse
 
 
 def validate_publishable(devotional):

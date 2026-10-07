@@ -208,28 +208,36 @@ const DraftCard = memo(function DraftCard({
 }) {
   const tokens = useTokens();
   const inReview = item.status === 'in_review';
-  // Publishing is its own permission: a teacher may draft without being able
-  // to put something in front of the whole region.
-  const action: Action = canPublish ? 'publish' : inReview ? 'approve' : 'submit_for_review';
+  const approved = item.status === 'approved';
+  // The next step follows the item's status: draft -> submit, in review ->
+  // approve, approved -> publish. Approving and publishing are their own
+  // permission: a teacher may draft without being able to put something in
+  // front of the whole region. `null` means the next step is someone else's.
+  const action: Action | null = approved
+    ? canPublish ? 'publish' : null
+    : inReview
+      ? canPublish ? 'approve' : null
+      : 'submit_for_review';
+  const badge = approved ? 'Approved' : inReview ? 'In review' : 'Draft';
 
   return (
     <View className="w-full gap-3 rounded-2xl bg-surf-raised p-4" style={ELEVATION.card}>
       <Press
         onPress={() => onOpen(item)}
         scaleTo={0.985}
-        accessibilityLabel={`Preview ${item.title}. ${inReview ? 'In review' : 'Draft'}`}
+        accessibilityLabel={`Preview ${item.title}. ${badge}`}
         className="flex-row items-center gap-3"
       >
         <View className="min-w-0 flex-1 gap-1">
           <View
             className={`self-start rounded-full px-3 py-1 ${
-              inReview ? 'bg-green-tonal' : 'bg-surf-sunken'
+              inReview || approved ? 'bg-green-tonal' : 'bg-surf-sunken'
             }`}
           >
             <Text
-              className={`font-ui-sb text-[12px] leading-4 ${inReview ? 'text-green' : 'text-ink-2'}`}
+              className={`font-ui-sb text-[12px] leading-4 ${inReview || approved ? 'text-green' : 'text-ink-2'}`}
             >
-              {inReview ? 'In review' : 'Draft'}
+              {badge}
             </Text>
           </View>
           <Text numberOfLines={2} className="font-ui-b text-[17px] leading-6 text-ink-1">
@@ -242,12 +250,18 @@ const DraftCard = memo(function DraftCard({
         <Icon name="chevronRight" size={20} color={tokens.text1} />
       </Press>
 
-      <Button
-        label={ACTIONS[action].verb}
-        onPress={() => onAct(item, action)}
-        disabled={busy}
-        className="w-full"
-      />
+      {action ? (
+        <Button
+          label={ACTIONS[action].verb}
+          onPress={() => onAct(item, action)}
+          disabled={busy}
+          className="w-full"
+        />
+      ) : (
+        <Text className="font-ui text-[14px] leading-5 text-ink-2">
+          {approved ? 'Approved — waiting for someone who can publish.' : 'Waiting for a reviewer.'}
+        </Text>
+      )}
     </View>
   );
 });

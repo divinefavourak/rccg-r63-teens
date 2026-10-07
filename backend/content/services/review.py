@@ -23,7 +23,7 @@ from django.utils import timezone
 
 from common.models import PublishableMixin
 
-from .daily import validate_publishable
+from .daily import ensure_primary_memory_verse, validate_publishable
 
 Status = PublishableMixin.Status
 
@@ -48,7 +48,10 @@ def _validate_content(item):
     """Type-specific publish preconditions."""
     # A devotional's memory verse is the Verse of the Day; without it the whole
     # day has no verse (`docs/08-bible-experience.md` §7). The existing gate.
+    # Devotionals whose verse lives only in the legacy text fields get their
+    # primary `MemoryVerse` derived from them first.
     if hasattr(item, 'memory_verses'):
+        ensure_primary_memory_verse(item)
         validate_publishable(item)
 
 
