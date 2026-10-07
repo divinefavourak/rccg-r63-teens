@@ -108,7 +108,14 @@ class MeSerializer(serializers.Serializer):
 
     def get_role_assignments(self, user):
         from .authorization import active_role_assignments
-        return RoleAssignmentSerializer(active_role_assignments(user), many=True).data
+        # RoleAssignmentSerializer reads the role's permissions and both users'
+        # profiles; without these that is up to five queries per assignment.
+        assignments = (
+            active_role_assignments(user)
+            .select_related('user__profile', 'appointed_by__profile')
+            .prefetch_related('role__permissions')
+        )
+        return RoleAssignmentSerializer(assignments, many=True).data
 
     def get_permissions(self, user):
         from .authorization import effective_permissions

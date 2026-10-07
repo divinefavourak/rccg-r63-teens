@@ -17,6 +17,8 @@ cheaper trade.
 is a save rather than a delete — hence post_save covers revocation too. post_delete
 is still connected for hard deletes from the admin or a data migration.
 """
+from django.db import transaction
+from django.db import transaction
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
@@ -31,4 +33,10 @@ from .models import Role, RoleAssignment, RolePermission
 @receiver(post_save, sender=Role)
 @receiver(post_delete, sender=Role)
 def invalidate_authority_cache(sender, **kwargs):
+    # Now, so the rest of this transaction sees its own change...
     bump_authz_version()
+    # ...and again once it is committed. A request that lands between the first
+    # bump and the commit still reads the old rows, and would cache them under
+    # the new version for the full TTL: a revoked leader keeping access for a
+    # quarter of an hour. The second bump throws that snapshot away.
+    transaction.on_commit(bump_authz_version)

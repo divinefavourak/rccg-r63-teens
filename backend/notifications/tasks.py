@@ -32,6 +32,18 @@ def close_out_reminder_day():
     End-of-day step-down accounting. Runs once, after quiet hours begin, when no
     further rung can fire.
     """
-    result = ladder.close_out_day()
+    from django.core.cache import cache
+
+    from common.dates import app_today
+
+    # Closing a day adds one to each teen's run of ignored days, so doing it
+    # twice (a duplicated beat, a retried worker) steps a teen down early.
+    # `add` only succeeds for the first caller of the day.
+    day = app_today()
+    if not cache.add(f'notifications:closed_out:{day.isoformat()}', 1, 36 * 60 * 60):
+        logger.info('Reminder day %s was already closed; nothing done.', day)
+        return None
+
+    result = ladder.close_out_day(on=day)
     logger.info('Reminder day closed: %s', result)
     return result

@@ -211,6 +211,12 @@ class ChallengeTests(TestCase):
 class TodayEndpointTests(TestCase):
 
     def setUp(self):
+        # The view caches the shared half of Today under (day, age group). A
+        # test's devotional is rolled back with its transaction, but what the
+        # view cached about it is not, and would answer for the next test.
+        from django.core.cache import cache
+        cache.clear()
+
         self.client = APIClient()
         self.user = make_user()
         self.url = reverse('today')

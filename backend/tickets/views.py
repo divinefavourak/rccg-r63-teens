@@ -565,12 +565,16 @@ class TicketViewSet(viewsets.ModelViewSet):
     
 
     @action(detail=True, methods=['post'])
+    @transaction.atomic
     def check_in(self, request, pk=None):
         """
         Check in a ticket (mark as used/attended)
         Requires authentication - for event staff
         """
         ticket = self.get_object()
+        # Held until the response: two doors scanning the same ticket queue
+        # here, and the second finds the first one's record below.
+        Ticket.objects.select_for_update().get(pk=ticket.pk)
         
         # Check if ticket is approved
         if ticket.status != Ticket.Status.APPROVED:

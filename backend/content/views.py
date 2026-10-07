@@ -7,6 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
 from django.db.models import Count, Q
+from django.db.models.functions import Greatest
 from datetime import date, timedelta
 
 from common.dates import app_today
@@ -104,13 +105,18 @@ class DevotionalViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
         #
         # content/services/daily.py already prefetches this chain correctly for
         # the single-devotional path; this mirrors it for the viewset.
-        queryset = self.queryset.prefetch_related(
-            'memory_verses__translation',
-            'memory_verses__start_verse__chapter__book__translation',
-            'memory_verses__end_verse',
-            'scripture_references',
-            'discussion_questions',
-        )
+        #
+        # Not for the list, nor for the actions that only need the row to act
+        # on: neither reads any of it, and each prefetch is a round trip.
+        queryset = self.queryset
+        if self.action not in ('list', 'mark_read', 'toggle_like', 'record_share'):
+            queryset = queryset.prefetch_related(
+                'memory_verses__translation',
+                'memory_verses__start_verse__chapter__book__translation',
+                'memory_verses__end_verse',
+                'scripture_references',
+                'discussion_questions',
+            )
 
         # Non-admins only see published content
         if not can_manage_content(self.request.user):
@@ -346,21 +352,24 @@ class DevotionalViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
     def toggle_like(self, request, pk=None):
         """Like or unlike a devotional. Returns current liked state and total count."""
         devotional = self.get_object()
-        existing = UserLikeLog.objects.filter(user=request.user, devotional=devotional).first()
-        if existing:
-            existing.delete()
-            Devotional.objects.filter(pk=devotional.pk).update(
-                likes_count=models.F('likes_count') - 1
-            )
-            devotional.refresh_from_db(fields=['likes_count'])
-            return Response({'liked': False, 'likes_count': devotional.likes_count})
+        # The counter moves only by what the database says actually happened,
+        # so two taps arriving together cannot both subtract for one like, or
+        # fail on the second insert.
+        removed, _ = UserLikeLog.objects.filter(
+            user=request.user, devotional=devotional).delete()
+        if removed:
+            liked, step = False, -1
         else:
-            UserLikeLog.objects.create(user=request.user, devotional=devotional)
+            _, created = UserLikeLog.objects.get_or_create(
+                user=request.user, devotional=devotional)
+            liked, step = True, 1 if created else 0
+
+        if step:
             Devotional.objects.filter(pk=devotional.pk).update(
-                likes_count=models.F('likes_count') + 1
+                likes_count=Greatest(models.F('likes_count') + step, 0)
             )
-            devotional.refresh_from_db(fields=['likes_count'])
-            return Response({'liked': True, 'likes_count': devotional.likes_count})
+        devotional.refresh_from_db(fields=['likes_count'])
+        return Response({'liked': liked, 'likes_count': devotional.likes_count})
 
     @action(detail=True, methods=['post'])
     def record_share(self, request, pk=None):
@@ -517,7 +526,7 @@ class ManualViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def current(self, request):
         """Get the current week's manual (Sunday to Saturday)."""
-        today = date.today()
+        today = app_today()
         
         # Find Sunday of current week
         days_since_sunday = (today.weekday() + 1) % 7

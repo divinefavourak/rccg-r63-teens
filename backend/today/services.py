@@ -21,6 +21,8 @@ Guests get the public half (devotional, verse, challenge) and null personal
 sections. Today is the first screen a curious teen sees, and requiring an account
 to see it would waste the moment (`docs/06-user-flows.md`).
 """
+from django.db import transaction
+
 from bible import services as bible_services
 from common.dates import app_today
 from content.models import UserReadLog
@@ -110,16 +112,20 @@ def complete_challenge(user, challenge):
     tiles count actions, and a double-tap should not inflate them.
     """
     on = app_today()
-    if challenge_completed(user, challenge, on=on):
-        return None, False
+    with transaction.atomic():
+        # Before the check, not after: two taps arriving together would both
+        # find nothing recorded and both record it.
+        progress_services.lock_progress(user)
+        if challenge_completed(user, challenge, on=on):
+            return None, False
 
-    action = progress_services.record_action(
-        user,
-        ActionType.CHALLENGE_COMPLETED,
-        occurred_on=on,
-        source_reference=challenge_source_reference(challenge),
-        metadata={'title': challenge.title},
-    )
+        action = progress_services.record_action(
+            user,
+            ActionType.CHALLENGE_COMPLETED,
+            occurred_on=on,
+            source_reference=challenge_source_reference(challenge),
+            metadata={'title': challenge.title},
+        )
     return action, True
 
 

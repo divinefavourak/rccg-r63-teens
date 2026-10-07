@@ -88,7 +88,9 @@ class MyProfileView(generics.RetrieveUpdateAPIView):
         return TeenProfileSerializer
     
     def get_object(self):
-        return get_object_or_404(TeenProfile, user=self.request.user)
+        # select_related: the serializer reads the user's email off the profile.
+        return get_object_or_404(
+            TeenProfile.objects.select_related('user'), user=self.request.user)
 
 
 class CreateProfileView(generics.CreateAPIView):
