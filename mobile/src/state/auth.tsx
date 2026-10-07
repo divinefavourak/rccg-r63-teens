@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { api, ApiError, forgetResponses, onSessionExpired } from '../api/client';
 import { forgetQueries } from '../api/persist';
-import { clearTokens, loadTokens, saveTokens } from '../api/tokens';
+import { clearTokens, getRefreshToken, loadTokens, saveTokens } from '../api/tokens';
 import { unregisterPushDevice } from './push';
 import type { AuthUser, LoginResponse } from '../api/types';
 
@@ -175,7 +175,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // cleared the tokens and announced it if the refresh was refused. No
         // signal, or a server that is down, says nothing about the session:
         // the teen stays signed in and the next request tries again.
-        const refused = err instanceof ApiError && !err.isTransient;
+        // A 429 or a 403 is the server being busy or strict, not a refusal of
+        // who this is.
+        const refused = err instanceof ApiError && err.status === 401;
         if (refused) {
           await clearTokens();
           if (!cancelled) setUser(null);
@@ -320,7 +322,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Best-effort blacklist; the local session is cleared either way, because a
     // teen tapping "sign out" on a dead connection must still be signed out.
     try {
-      await api.post('/auth/logout/', {});
+      // The server can only blacklist a token it is given. The web app sends
+      // it in a cookie; this app has to put it in the body.
+      const refresh = await getRefreshToken();
+      await api.post('/auth/logout/', refresh ? { refresh } : {});
     } catch {
       // Ignored on purpose.
     }
