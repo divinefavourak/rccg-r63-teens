@@ -71,6 +71,8 @@ def notify_registration_received(registration):
         deep_link=_ticket_link(registration),
         data={**_base_data(registration), 'payment_status': registration.payment_status},
         dedupe_key=f'event:registration_received:{registration.id}',
+        # Called from a request: the teen, or the door, must not wait on it.
+        defer_push=True,
     )
 
 
@@ -88,6 +90,8 @@ def notify_registration_confirmed(registration):
         deep_link=_ticket_link(registration),
         data=_base_data(registration),
         dedupe_key=f'event:registration_confirmed:{registration.id}',
+        # Called from a request: the teen, or the door, must not wait on it.
+        defer_push=True,
     )
 
 
@@ -133,6 +137,8 @@ def notify_status_changed(registration, old_status, new_status):
         # Keyed on the transition, not just the registration: a teen who is
         # waitlisted, promoted, and later cancelled must hear about each move.
         dedupe_key=f'event:status:{registration.id}:{old_status}:{new_status}',
+        # Called from a request: the teen, or the door, must not wait on it.
+        defer_push=True,
     )
 
 
@@ -158,6 +164,8 @@ def notify_checked_in(registration):
         deep_link=_ticket_link(registration),
         data=_base_data(registration),
         dedupe_key=f'event:checked_in:{registration.id}',
+        # Called from a request: the teen, or the door, must not wait on it.
+        defer_push=True,
     )
 
 

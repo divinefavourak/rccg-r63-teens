@@ -1,12 +1,24 @@
-import requests
+import hashlib
+import hmac
 import json
+import logging
+
+import requests
 from django.conf import settings
+from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.utils import timezone
 from decimal import Decimal
 import uuid
 from django.db.models import Count
 from .models import Payment, TransactionLog
 from tickets.models import Ticket
+
+logger = logging.getLogger(__name__)
+
+
+class PaymentAmountMismatch(Exception):
+    """Paystack reported a successful charge for a different amount than was due."""
 
 
 class PaystackService:
@@ -321,105 +333,156 @@ class PaymentService:
         """
         Verify payment with Paystack and complete the process (Handles both Single and Bulk)
         """
-        try:
-            # Get payment
-            payment = Payment.objects.get(reference=reference)
-            
-            # Verify with Paystack
-            verification = self.paystack.verify_payment(reference)
-            
-            if verification.get('status'):
-                data = verification['data']
-                
-                if data['status'] == 'success':
-                    # Mark payment as successful
-                    payment.mark_as_successful(data)
-                    
-                    # --- LOGIC FOR SINGLE TICKET ---
-                    if payment.ticket:
-                        payment.ticket.approve(payment.ticket.registered_by)
-                    
-                    # --- LOGIC FOR BULK TICKETS ---
-                    elif payment.metadata and payment.metadata.get('is_bulk'):
-                        ticket_ids = payment.metadata.get('ticket_ids', [])
-                        if ticket_ids:
-                            # Bulk approve all linked tickets
-                            # We use system auto-approval (None) or the payment user
-                            # Using update() for efficiency
-                            Ticket.objects.filter(id__in=ticket_ids).update(
-                                status=Ticket.Status.APPROVED,
-                                approved_at=timezone.now(),
-                                approved_by=None 
-                            )
-                    
-                    # Send payment confirmation email
-                    try:
-                        from tickets.services import EmailService
-                        EmailService.send_payment_confirmation(payment)
-                    except Exception as e:
-                        # Log email error but don't fail the payment
-                        print(f"Failed to send payment confirmation email: {e}")
-                    
-                    return payment
-                else:
-                    # Payment failed or abandoned
-                    payment.mark_as_failed(data)
-                    raise Exception(f"Payment not successful: {data['status']}")
-            else:
-                raise Exception(f"Verification failed: {verification.get('message')}")
-                
-        except Payment.DoesNotExist:
+        if not Payment.objects.filter(reference=reference).exists():
             raise Exception(f"Payment not found: {reference}")
-        except Exception as e:
-            raise
-    
-    def handle_webhook(self, payload, signature):
+
+        # Ask Paystack before taking the row lock: a slow answer from them must
+        # not hold a database row.
+        verification = self.paystack.verify_payment(reference)
+
+        if not verification.get('status'):
+            raise Exception(f"Verification failed: {verification.get('message')}")
+
+        data = verification['data']
+
+        if data['status'] == 'success':
+            payment, _ = self._complete(reference, data)
+            return payment
+
+        # Payment failed or abandoned. Only a pending payment may be failed:
+        # a late "abandoned" answer must not undo one the webhook completed.
+        with transaction.atomic():
+            payment = Payment.objects.select_for_update().get(reference=reference)
+            if payment.status == Payment.Status.PENDING:
+                payment.mark_as_failed(data)
+        raise Exception(f"Payment not successful: {data['status']}")
+
+    def verify_webhook_signature(self, raw_body, signature):
         """
-        Handle Paystack webhook
+        True when `signature` is Paystack's HMAC-SHA512 of the raw request body,
+        keyed with our secret key. The webhook is unauthenticated, so this is the
+        only thing that says the event came from Paystack.
         """
+        if not signature:
+            return False
+        expected = hmac.new(
+            self.paystack.secret_key.encode('utf-8'), raw_body, hashlib.sha512,
+        ).hexdigest()
+        return hmac.compare_digest(expected, signature)
+
+    def handle_webhook(self, raw_body, signature):
+        """
+        Handle Paystack webhook. `raw_body` is the request body as bytes, exactly
+        as received: the signature is over those bytes, not over re-serialised
+        JSON.
+
+        Raises PermissionDenied on a bad signature. Returns True when the event
+        completed a payment, False when there was nothing to do.
+        """
+        if not self.verify_webhook_signature(raw_body, signature):
+            raise PermissionDenied('Invalid Paystack signature.')
+
+        try:
+            payload = json.loads(raw_body)
+        except ValueError:
+            return False
+        if not isinstance(payload, dict):
+            return False
+
         event = payload.get('event')
-        data = payload.get('data', {})
-        
-        # Log webhook
+        data = payload.get('data') or {}
+
+        # Log webhook. No ip_address: the column is an inet, and the 'webhook'
+        # placeholder that stood here is not one, so Postgres refused the row.
         TransactionLog.objects.create(
             transaction_type=TransactionLog.TransactionType.WEBHOOK,
             request_data=payload,
             is_successful=True,
-            ip_address='webhook',
             user_agent='paystack_webhook'
         )
-        
-        if event == 'charge.success':
-            reference = data.get('reference')
-            if reference:
-                try:
-                    payment = Payment.objects.get(reference=reference)
-                    payment.mark_as_successful(data)
-                    
-                    # Handle ticket approval same as verify
-                    if payment.ticket:
-                        payment.ticket.approve(payment.ticket.registered_by)
-                    elif payment.metadata and payment.metadata.get('is_bulk'):
-                        ticket_ids = payment.metadata.get('ticket_ids', [])
-                        if ticket_ids:
-                            Ticket.objects.filter(id__in=ticket_ids).update(
-                                status=Ticket.Status.APPROVED,
-                                approved_at=timezone.now()
-                            )
-                    
-                    # Send payment confirmation email
-                    try:
-                        from tickets.services import EmailService
-                        EmailService.send_payment_confirmation(payment)
-                    except Exception as e:
-                        print(f"Failed to send payment confirmation email: {e}")
-                    
-                    return True
-                except Payment.DoesNotExist:
-                    pass
-        
-        return False
-    
+
+        if event != 'charge.success':
+            return False
+
+        reference = data.get('reference')
+        if not reference:
+            return False
+
+        try:
+            _, completed = self._complete(reference, data)
+        except Payment.DoesNotExist:
+            return False
+        except PaymentAmountMismatch:
+            # Already logged. Paystack retrying will not change the amount.
+            return False
+        return completed
+
+    def _complete(self, reference, data):
+        """
+        Mark a payment successful and approve what it paid for, exactly once.
+
+        Client verify and the webhook both land here, often within the same
+        second, and Paystack retries webhooks. The row lock makes "is it already
+        successful?" a question with one answer, so the second caller approves
+        nothing and sends no second email.
+
+        Returns `(payment, completed)`; `completed` is False when there was
+        nothing left to do.
+        """
+        with transaction.atomic():
+            payment = Payment.objects.select_for_update().get(reference=reference)
+
+            if payment.status == Payment.Status.SUCCESS:
+                return payment, False
+
+            if payment.status in (Payment.Status.REFUNDED, Payment.Status.CANCELLED):
+                # A replayed charge.success must not revive a refunded payment.
+                logger.warning(
+                    'Ignoring success for %s payment %s', payment.status, reference)
+                return payment, False
+
+            # Paystack reports the amount in kobo. A success for a different
+            # amount than was asked is not a payment for this ticket.
+            expected = int(payment.amount * 100)
+            paid = data.get('amount')
+            if paid != expected:
+                logger.error(
+                    'Payment %s: Paystack reports %r kobo, expected %s',
+                    reference, paid, expected)
+                raise PaymentAmountMismatch(
+                    'Amount paid does not match the amount due.')
+
+            payment.mark_as_successful(data)
+
+            # --- LOGIC FOR SINGLE TICKET ---
+            if payment.ticket:
+                payment.ticket.approve(payment.ticket.registered_by)
+
+            # --- LOGIC FOR BULK TICKETS ---
+            elif payment.metadata and payment.metadata.get('is_bulk'):
+                ticket_ids = payment.metadata.get('ticket_ids', [])
+                if ticket_ids:
+                    # Bulk approve all linked tickets (system auto-approval)
+                    Ticket.objects.filter(id__in=ticket_ids).update(
+                        status=Ticket.Status.APPROVED,
+                        approved_at=timezone.now(),
+                        approved_by=None
+                    )
+
+            # Only once the payment is safely stored, and never under the lock.
+            transaction.on_commit(lambda: self._send_confirmation(payment))
+            return payment, True
+
+    @staticmethod
+    def _send_confirmation(payment):
+        """Send the confirmation email. A failure here must not fail the payment."""
+        try:
+            from tickets.services import EmailService
+            EmailService.send_payment_confirmation(payment)
+        except Exception:
+            logger.exception(
+                'Failed to send payment confirmation email for %s', payment.reference)
+
     def _get_client_ip(self, request):
         """Extract client IP from request"""
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')

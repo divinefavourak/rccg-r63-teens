@@ -318,7 +318,9 @@ export function useProfile(enabled = true) {
 export function useFavorites(enabled = true) {
   return useQuery({
     queryKey: keys.favorites,
-    queryFn: async () => unwrap(await api.get<Paginated<Favorite>>('/profiles/favorites/')),
+    // Every page, not the first twenty: an item on a later page showed as
+    // unsaved, and tapping it saved it a second time.
+    queryFn: () => fetchAllPages<Favorite>('/profiles/favorites/?page_size=200'),
     enabled,
     staleTime: STALE.mine,
     retry: retryTransient,
@@ -437,7 +439,9 @@ export function useBooks() {
       const saved = await readList<BibleBook[]>('books');
       if (saved?.length) return saved;
 
-      const rows = await fetchAllPages<BibleBook>('/bible/books/');
+      // `page_size` turns seven requests into one on a server that honours
+      // it; an older one ignores it and the pages are walked as before.
+      const rows = await fetchAllPages<BibleBook>('/bible/books/?page_size=200');
 
       const byOsis = new Map<string, BibleBook>();
       for (const book of rows) {
@@ -674,8 +678,10 @@ export function useDraftDevotionals(enabled = true) {
     queryKey: keys.drafts,
     queryFn: async () => {
       const [drafts, review] = await Promise.all([
-        fetchAllPages<DevotionalListItem>('/content/devotionals/?status=draft'),
-        fetchAllPages<DevotionalListItem>('/content/devotionals/?status=in_review').catch(
+        fetchAllPages<DevotionalListItem>('/content/devotionals/?status=draft&page_size=200'),
+        fetchAllPages<DevotionalListItem>(
+          '/content/devotionals/?status=in_review&page_size=200',
+        ).catch(
           () => [] as DevotionalListItem[],
         ),
       ]);
@@ -862,7 +868,7 @@ export function useScriptureSearch(text: string, translation?: string) {
 export function useBookmarks(enabled = true) {
   return useQuery({
     queryKey: keys.bookmarks,
-    queryFn: () => fetchAllPages<Bookmark>('/bible/bookmarks/'),
+    queryFn: () => fetchAllPages<Bookmark>('/bible/bookmarks/?page_size=200'),
     enabled,
     staleTime: STALE.mine,
     retry: retryTransient,

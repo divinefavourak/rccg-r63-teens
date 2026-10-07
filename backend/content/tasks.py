@@ -107,9 +107,12 @@ def daily_devotional_scrape(self):
     """
     from content.services.devotional_scraper import scrape_and_save_devotional
     from content.models import Devotional
-    
-    today = date.today()
-    
+    from common.dates import app_today
+
+    # The Lagos day, not date.today(): this runs at 00:10 Lagos, which is still
+    # 23:10 the day before in UTC, so the server's own date is yesterday's.
+    today = app_today()
+
     logger.info(f"Starting daily devotional scrape for {today}")
     
     # Check if already exists

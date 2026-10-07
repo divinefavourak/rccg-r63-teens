@@ -44,8 +44,8 @@ WAITLISTED = 'waitlisted'
 Status = EventRegistration.Status
 
 # A place that counts towards "184 of 240".
-_HOLDS_A_PLACE = [Status.PENDING, Status.CONFIRMED, Status.CHECKED_IN, Status.ATTENDED]
-_ARRIVED = [Status.CHECKED_IN, Status.ATTENDED]
+_HOLDS_A_PLACE = EventRegistration.HOLDS_A_PLACE
+_ARRIVED = EventRegistration.ARRIVED
 
 
 def checkable_events(user):
@@ -111,7 +111,7 @@ def _result(outcome, registration=None, **extra):
     }
 
 
-def scan(event, code, user, method='qr_scan'):
+def scan(event, code, user, method='qr_scan', notes=''):
     """
     Resolve a ticket code against `event` and, if it is good, check it in.
 
@@ -164,7 +164,7 @@ def scan(event, code, user, method='qr_scan'):
         if not event.is_free and not registration.is_paid:
             return _result(NOT_PAID, registration, amount_due=registration.amount_due)
 
-        registration.check_in(user=user, method=method)
+        registration.check_in(user=user, method=method, notes=notes)
         RegistrationAuditLog.objects.create(
             registration=registration,
             user=user,

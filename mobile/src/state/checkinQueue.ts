@@ -51,6 +51,38 @@ export function isOffline(error: unknown): boolean {
   return error instanceof ApiError && error.status === 0;
 }
 
+/**
+ * A failure that says nothing about the ticket: no signal, a server that is
+ * down or busy, or a session that needs signing in again. The scan is kept and
+ * tried later. Only a plain "no" from the server (another 4xx) is final.
+ */
+function worthRetrying(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return true;
+  return error.isTransient || error.status === 401 || error.status === 429;
+}
+
+/**
+ * One change to the saved queue at a time.
+ *
+ * Reading, changing and writing the queue is three steps with waits between
+ * them. A scan saved while another change was mid-way was overwritten by that
+ * change's older copy, and the teen was never checked in.
+ */
+let lastChange: Promise<unknown> = Promise.resolve();
+
+function change(update: (queue: QueuedScan[]) => QueuedScan[]): Promise<QueuedScan[]> {
+  const next = lastChange.then(async () => {
+    const updated = update(await read());
+    await write(updated);
+    return updated;
+  });
+  lastChange = next.catch(() => undefined);
+  return next;
+}
+
+const sameScan = (a: QueuedScan, b: QueuedScan) =>
+  a.event === b.event && a.code.toLowerCase() === b.code.toLowerCase();
+
 export interface CheckInQueue {
   /** Scans for this event still waiting to be sent. */
   waiting: number;
@@ -92,15 +124,10 @@ export function useCheckInQueue(
     let bad = 0;
 
     try {
-      const queue = await read();
-      const remaining: QueuedScan[] = [];
+      const mine = (await read()).filter((scan) => scan.event === event);
+      const settled: QueuedScan[] = [];
 
-      for (let i = 0; i < queue.length; i++) {
-        const scan = queue[i];
-        if (scan.event !== event) {
-          remaining.push(scan);
-          continue;
-        }
+      for (const scan of mine) {
         try {
           const result = await scanTicket(scan.event, scan.code, scan.method);
           counts = result.counts;
@@ -108,18 +135,20 @@ export function useCheckInQueue(
           // another door while this phone was offline.
           if (result.outcome !== 'checked_in' && result.outcome !== 'already_checked_in') bad++;
         } catch (error) {
-          if (isOffline(error)) {
-            // Still no signal. Keep this one and everything after it.
-            remaining.push(...queue.slice(i));
-            break;
-          }
+          // Keep this one and everything after it for the next try.
+          if (worthRetrying(error)) break;
           // The server refused the request itself (the event ended, or this
           // person can no longer check in). Retrying would never succeed.
           bad++;
         }
+        settled.push(scan);
       }
 
-      await write(remaining);
+      // Take out only what was dealt with, from the queue as it is now: a scan
+      // saved while these were being sent is still in it.
+      const remaining = await change((queue) =>
+        queue.filter((scan) => !settled.some((done) => sameScan(done, scan))),
+      );
       setWaiting(remaining.filter((scan) => scan.event === event).length);
       if (bad) setRefused((n) => n + bad);
       if (counts) onCountsRef.current(counts);
@@ -132,15 +161,11 @@ export function useCheckInQueue(
   const add = useCallback(
     async (code: string, method: 'qr_scan' | 'manual') => {
       if (!event) return;
-      const queue = await read();
-      const known = queue.some(
-        (scan) => scan.event === event && scan.code.toLowerCase() === code.toLowerCase(),
+      const scan: QueuedScan = { event, code, method, at: new Date().toISOString() };
+      const queue = await change((saved) =>
+        saved.some((known) => sameScan(known, scan)) ? saved : [...saved, scan],
       );
-      if (!known) {
-        queue.push({ event, code, method, at: new Date().toISOString() });
-        await write(queue);
-      }
-      setWaiting(queue.filter((scan) => scan.event === event).length);
+      setWaiting(queue.filter((saved) => saved.event === event).length);
     },
     [event],
   );

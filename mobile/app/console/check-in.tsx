@@ -218,12 +218,16 @@ export default function CheckInScreen() {
 
       {/* ── Viewfinder ─────────────────────────────────────────────────── */}
       <View className="flex-1 overflow-hidden" onLayout={onFinderLayout}>
-        {permission?.granted && Platform.OS !== 'web' && !result && (
+        {/* Kept open under the result. Closing it for each answer meant
+            starting the camera again for every ticket, which on a cheap phone
+            is most of a second of black screen with a queue waiting. While a
+            result is up it simply stops listening for codes. */}
+        {permission?.granted && Platform.OS !== 'web' && (
           <CameraView
             style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
             facing="back"
             barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-            onBarcodeScanned={onCode}
+            onBarcodeScanned={result ? undefined : onCode}
           />
         )}
         {finder.width > 0 && (

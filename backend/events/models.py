@@ -2,7 +2,8 @@
 Events models for the RCCG R63 Teens platform.
 Handles general events (campouts, conferences, hangouts) and registrations.
 """
-from django.db import models
+from django.db import IntegrityError, models, transaction
+from django.db.models.functions import Greatest
 from django.conf import settings
 from django.utils import timezone
 from django.utils.text import slugify
@@ -184,17 +185,33 @@ class Event(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
         return self.end_datetime < timezone.now()
     
     @property
+    def places_taken(self):
+        """
+        How many registrations hold a place: pending, confirmed and arrived.
+
+        Counted, not read from `registration_count`: that counter only rises
+        when a registration is confirmed, so it let any number of pending
+        registrations in past the limit. A queryset may annotate
+        `live_places_taken` to save the query.
+        """
+        annotated = getattr(self, 'live_places_taken', None)
+        if annotated is not None:
+            return annotated
+        return self.registrations.filter(
+            status__in=EventRegistration.HOLDS_A_PLACE).count()
+
+    @property
     def spots_remaining(self):
         if self.max_attendees:
-            return max(0, self.max_attendees - self.registration_count)
+            return max(0, self.max_attendees - self.places_taken)
         return None
-    
+
     @property
     def is_full(self):
         if self.max_attendees:
-            return self.registration_count >= self.max_attendees
+            return self.places_taken >= self.max_attendees
         return False
-    
+
     @property
     def current_price(self):
         """Get current applicable price (handles early bird)."""
@@ -246,7 +263,18 @@ class EventRegistration(UUIDMixin, TimestampMixin):
         COORDINATOR = 'coordinator', 'Coordinator Registration'
         ADMIN = 'admin', 'Admin Registration'
         BULK = 'bulk', 'Bulk Upload'
-    
+
+    # A place that counts towards the event's capacity.
+    HOLDS_A_PLACE = (Status.PENDING, Status.CONFIRMED, Status.CHECKED_IN, Status.ATTENDED)
+    # What `Event.registration_count` counts.
+    COUNTED = (Status.CONFIRMED, Status.CHECKED_IN, Status.ATTENDED)
+    # What `Event.checked_in_count` counts.
+    ARRIVED = (Status.CHECKED_IN, Status.ATTENDED)
+
+    # Two registrations saved at once read the same last number. The unique
+    # constraint refuses the second; this is how many times it tries again.
+    ID_ATTEMPTS = 5
+
     # Unique registration identifier
     registration_id = models.CharField(max_length=30, unique=True, editable=False, db_index=True)
     
@@ -425,36 +453,51 @@ class EventRegistration(UUIDMixin, TimestampMixin):
     def __str__(self):
         return f"{self.registration_id} - {self.attendee_name}"
     
-    def save(self, *args, **kwargs):
-        if not self.registration_id:
-            # Build a short readable prefix from the event's first word (e.g. CAMP, CONF, RCCG)
-            event_prefix = 'EVT'
-            if self.event_id:
-                try:
-                    import re
-                    title = Event.objects.filter(pk=self.event_id).values_list('title', flat=True).first() or 'EVT'
-                    first_word = re.sub(r'[^A-Z0-9]', '', title.split()[0].upper()[:6]) or 'EVT'
-                    event_prefix = first_word
-                except Exception:
-                    event_prefix = 'EVT'
+    def _id_prefix(self):
+        """`CAMP-20261006-`: the event's first word (e.g. CAMP, CONF, RCCG) and the day."""
+        event_prefix = 'EVT'
+        if self.event_id:
+            try:
+                import re
+                title = self.event.title or 'EVT'
+                event_prefix = re.sub(r'[^A-Z0-9]', '', title.split()[0].upper()[:6]) or 'EVT'
+            except Exception:
+                event_prefix = 'EVT'
+        return f"{event_prefix}-{timezone.now().strftime('%Y%m%d')}-"
 
-            date_prefix = timezone.now().strftime('%Y%m%d')
-            last_reg = EventRegistration.objects.filter(
-                registration_id__startswith=f'{event_prefix}-{date_prefix}-'
-            ).order_by('registration_id').last()
+    def _next_registration_id(self, prefix):
+        last_reg = EventRegistration.objects.filter(
+            registration_id__startswith=prefix
+        ).order_by('registration_id').last()
 
-            if last_reg:
-                try:
-                    next_num = int(last_reg.registration_id.split('-')[-1]) + 1
-                except (ValueError, IndexError):
-                    next_num = 1
-            else:
+        next_num = 1
+        if last_reg:
+            try:
+                next_num = int(last_reg.registration_id.split('-')[-1]) + 1
+            except (ValueError, IndexError):
                 next_num = 1
+        return f'{prefix}{next_num:05d}'
 
-            self.registration_id = f'{event_prefix}-{date_prefix}-{next_num:05d}'
+    def save(self, *args, **kwargs):
+        if self.registration_id:
+            return super().save(*args, **kwargs)
 
-        super().save(*args, **kwargs)
-    
+        prefix = self._id_prefix()
+        for attempt in range(1, self.ID_ATTEMPTS + 1):
+            self.registration_id = self._next_registration_id(prefix)
+            try:
+                # A savepoint, so a refused insert does not poison the caller's
+                # transaction and the next attempt can run inside it.
+                with transaction.atomic():
+                    return super().save(*args, **kwargs)
+            except IntegrityError:
+                taken = EventRegistration.objects.filter(
+                    registration_id=self.registration_id).exists()
+                self.registration_id = ''
+                # Some other constraint (one email per event), or out of tries.
+                if not taken or attempt == self.ID_ATTEMPTS:
+                    raise
+
     @property
     def is_confirmed(self):
         return self.status == self.Status.CONFIRMED
@@ -467,49 +510,75 @@ class EventRegistration(UUIDMixin, TimestampMixin):
     def is_checked_in(self):
         return self.status == self.Status.CHECKED_IN
     
-    def confirm(self, user=None):
-        """Confirm the registration."""
-        self.status = self.Status.CONFIRMED
-        if user:
-            self.approved_by = user
-        self.approved_at = timezone.now()
-        self.save()
-        
-        # Update event count
-        Event.objects.filter(pk=self.event_id).update(
-            registration_count=models.F('registration_count') + 1
-        )
-    
-    def cancel(self, user=None, reason=''):
-        """Cancel the registration."""
-        was_confirmed = self.is_confirmed
-        self.status = self.Status.CANCELLED
-        if user:
-            self.cancelled_by = user
-        self.cancelled_at = timezone.now()
-        self.cancellation_reason = reason
-        self.save()
-        
-        # Update event count if was confirmed
-        if was_confirmed:
-            Event.objects.filter(pk=self.event_id).update(
-                registration_count=models.F('registration_count') - 1
+    def _move_to(self, new_status, **changes):
+        """
+        Change status and keep the event's counters true, as one step.
+
+        The row is locked and the stored status re-read, so the counters move by
+        the difference between what the status really was and what it becomes.
+        Two requests confirming the same registration produce one confirmation;
+        cancelling a checked-in ticket gives back both the place and the arrival.
+
+        Returns the previous status, or None when the registration was already
+        in `new_status` and nothing was written.
+        """
+        with transaction.atomic():
+            old_status = (
+                EventRegistration.objects.select_for_update()
+                .values_list('status', flat=True).get(pk=self.pk)
             )
-    
-    def check_in(self, user=None, method='manual', notes=''):
-        """Check in the attendee."""
-        self.status = self.Status.CHECKED_IN
-        self.checked_in_at = timezone.now()
+            if old_status == new_status:
+                self.status = old_status
+                return None
+
+            self.status = new_status
+            for field, value in changes.items():
+                setattr(self, field, value)
+            self.save(update_fields=['status', *changes, 'updated_at'])
+
+            counted = (new_status in self.COUNTED) - (old_status in self.COUNTED)
+            arrived = (new_status in self.ARRIVED) - (old_status in self.ARRIVED)
+            counters = {}
+            # Clamped at zero: counters written before this method existed may
+            # be lower than the rows they describe, and the column is unsigned.
+            if counted:
+                counters['registration_count'] = Greatest(
+                    models.F('registration_count') + counted, 0)
+            if arrived:
+                counters['checked_in_count'] = Greatest(
+                    models.F('checked_in_count') + arrived, 0)
+            if counters:
+                Event.objects.filter(pk=self.event_id).update(**counters)
+            return old_status
+
+    def set_status(self, new_status):
+        """Move to any status. Returns the previous status, or None if unchanged."""
+        return self._move_to(new_status)
+
+    def confirm(self, user=None):
+        """Confirm the registration. Returns the previous status, or None if already confirmed."""
+        changes = {'approved_at': timezone.now()}
         if user:
-            self.checked_in_by = user
-        self.check_in_method = method
-        self.check_in_notes = notes
-        self.save()
-        
-        # Update event check-in count
-        Event.objects.filter(pk=self.event_id).update(
-            checked_in_count=models.F('checked_in_count') + 1
-        )
+            changes['approved_by'] = user
+        return self._move_to(self.Status.CONFIRMED, **changes)
+
+    def cancel(self, user=None, reason=''):
+        """Cancel the registration. Returns the previous status, or None if already cancelled."""
+        changes = {'cancelled_at': timezone.now(), 'cancellation_reason': reason}
+        if user:
+            changes['cancelled_by'] = user
+        return self._move_to(self.Status.CANCELLED, **changes)
+
+    def check_in(self, user=None, method='manual', notes=''):
+        """Check in the attendee. Returns the previous status, or None if already checked in."""
+        changes = {
+            'checked_in_at': timezone.now(),
+            'check_in_method': method,
+            'check_in_notes': notes,
+        }
+        if user:
+            changes['checked_in_by'] = user
+        return self._move_to(self.Status.CHECKED_IN, **changes)
 
 
 class BulkUpload(UUIDMixin, TimestampMixin):

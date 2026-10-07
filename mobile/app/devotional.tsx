@@ -229,7 +229,9 @@ export default function DevotionalScreen() {
                 <Button
                   label="Mark as done"
                   onPress={onDone}
-                  loading={markRead.isPending}
+                  // With no signal the send is held, not running: a spinner
+                  // that never ends tells the teen nothing.
+                  loading={markRead.isPending && !markRead.isPaused}
                   className="h-12 w-full"
                 />
               )}

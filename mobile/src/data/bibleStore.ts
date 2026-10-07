@@ -143,11 +143,18 @@ export async function readPack(file: File): Promise<TranslationPack | null> {
  * A reference is put together here ("John 3:16") in the same way the server's
  * models do it, since the pack leaves them out to save a megabyte of download.
  */
-export function savePackBook(pack: TranslationPack, book: TranslationPack['books'][number]): void {
+export async function savePackBook(
+  pack: TranslationPack,
+  book: TranslationPack['books'][number],
+  /** Called every few chapters so the screen can draw; Psalms alone is 150 files. */
+  pause?: () => Promise<void>,
+): Promise<void> {
   const code = pack.translation.code;
   const dir = folder(safe(code));
+  let written = 0;
   for (const chapter of book.chapters) {
     if (chapter.verses.length === 0) continue;
+    if (pause && ++written % 10 === 0) await pause();
     const lookup: ScriptureLookup = {
       translation: pack.translation,
       book: book.osis,

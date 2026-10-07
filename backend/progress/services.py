@@ -187,6 +187,17 @@ def grace_balance(user):
         total=Sum('delta'))['total'] or 0
 
 
+def lock_progress(user):
+    """
+    Hold this user's progress for the rest of the transaction.
+
+    For a feature that must check the action stream and then add to it: taken
+    first, it makes the check and the write one step, so a double tap cannot
+    pass the check twice. It is the lock `record_action` takes anyway.
+    """
+    _lock_user_grace(user)
+
+
 def _lock_user_grace(user):
     """
     Per-user mutex for Grace mutations. Locking the user's `StreakState` row

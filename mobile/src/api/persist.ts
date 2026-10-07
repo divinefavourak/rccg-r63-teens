@@ -26,8 +26,12 @@ const AVAILABLE = Platform.OS === 'ios' || Platform.OS === 'android';
 const VERSION = 1;
 /** A phone unused for longer than this starts clean instead of from old news. */
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-/** How long after the last change the file is written. */
-const WRITE_AFTER_MS = 1500;
+/**
+ * How long after the last change the file is written. Each write turns the
+ * whole cache into text on the thread that also draws the screen, so it waits
+ * for a quiet moment. Going to the background writes at once regardless.
+ */
+const WRITE_AFTER_MS = 5000;
 
 interface Saved {
   version: number;

@@ -124,6 +124,8 @@ class TeenProfile(UUIDMixin, TimestampMixin):
     def age(self):
         """Calculate current age."""
         from datetime import date
+        if not self.date_of_birth:
+            return None
         today = date.today()
         return today.year - self.date_of_birth.year - (
             (today.month, today.day) < 

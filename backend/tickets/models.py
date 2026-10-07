@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import IntegrityError, models, transaction
 from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator
 from django.utils import timezone
 import uuid
@@ -142,23 +142,42 @@ class Ticket(models.Model):
     def __str__(self):
         return f"{self.ticket_id} - {self.full_name}"
     
+    # Two tickets saved at once read the same last number. The unique
+    # constraint refuses the second; this is how many times it tries again.
+    ID_ATTEMPTS = 5
+
+    def _next_ticket_id(self):
+        date_prefix = timezone.now().strftime('%Y%m')
+        last_ticket = Ticket.objects.filter(
+            ticket_id__startswith=f'TKT-{date_prefix}-'
+        ).order_by('ticket_id').last()
+
+        if last_ticket:
+            last_num = int(last_ticket.ticket_id.split('-')[-1])
+            new_num = last_num + 1
+        else:
+            new_num = 1
+
+        return f'TKT-{date_prefix}-{new_num:05d}'
+
     def save(self, *args, **kwargs):
         """Generate ticket ID on first save"""
-        if not self.ticket_id:
-            date_prefix = timezone.now().strftime('%Y%m')
-            last_ticket = Ticket.objects.filter(
-                ticket_id__startswith=f'TKT-{date_prefix}-'
-            ).order_by('ticket_id').last()
-            
-            if last_ticket:
-                last_num = int(last_ticket.ticket_id.split('-')[-1])
-                new_num = last_num + 1
-            else:
-                new_num = 1
-            
-            self.ticket_id = f'TKT-{date_prefix}-{new_num:05d}'
-        
-        super().save(*args, **kwargs)
+        if self.ticket_id:
+            return super().save(*args, **kwargs)
+
+        for attempt in range(1, self.ID_ATTEMPTS + 1):
+            self.ticket_id = self._next_ticket_id()
+            try:
+                # A savepoint, so a refused insert does not poison the caller's
+                # transaction (a bulk upload saves many tickets inside one).
+                with transaction.atomic():
+                    return super().save(*args, **kwargs)
+            except IntegrityError:
+                taken = Ticket.objects.filter(ticket_id=self.ticket_id).exists()
+                self.ticket_id = ''
+                # Some other constraint, or out of tries.
+                if not taken or attempt == self.ID_ATTEMPTS:
+                    raise
     
     @property
     def is_approved(self):

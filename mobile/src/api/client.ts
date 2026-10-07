@@ -41,6 +41,49 @@ function announceSessionExpired() {
 }
 
 /**
+ * How long to wait for the server to start answering.
+ *
+ * `fetch` has no limit of its own. On a connection that stalls without
+ * dropping, a request would wait for ever: the screen stays on its loading
+ * state, and the retry that would have rescued it never starts because nothing
+ * has failed yet. An upload gets longer, since the wait includes sending it.
+ */
+const REQUEST_TIMEOUT_MS = 20_000;
+const UPLOAD_TIMEOUT_MS = 90_000;
+
+/**
+ * `fetch`, given up on after `timeoutMs`. A timeout is reported as status 0,
+ * the same as no signal, so callers retry it. `signal` is the caller's own
+ * cancellation and still surfaces as an AbortError.
+ */
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  const cancel = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  signal?.addEventListener('abort', cancel);
+
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    if (timedOut) throw new ApiError(0, 'The connection timed out');
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', cancel);
+  }
+}
+
+/**
  * The in-flight refresh, shared by every request that 401s at once.
  *
  * Opening the app fires several requests together. When the access token has
@@ -60,13 +103,31 @@ function refreshAccessToken(): Promise<string> {
 
     // Deliberately not routed through `request()`: a failed refresh would
     // recurse back into this same handler.
-    const res = await fetch(`${API_URL}/auth/refresh/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh }),
-    });
+    let res: Response;
+    try {
+      res = await fetchWithTimeout(
+        `${API_URL}/auth/refresh/`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh }),
+        },
+        REQUEST_TIMEOUT_MS,
+      );
+    } catch {
+      throw new ApiError(0, 'Network unavailable');
+    }
 
-    if (!res.ok) throw new ApiError(res.status, 'Session expired');
+    if (!res.ok) {
+      // Only the server refusing the token ends a session: it answers 401 for
+      // one that is expired or revoked and 400 for one it cannot read. A
+      // server that is down or busy (5xx, 429) has said nothing about the
+      // session, so that is reported as a failure to retry, not as signed out.
+      const refused = res.status === 401 || res.status === 400;
+      throw refused
+        ? new ApiError(401, 'Session expired')
+        : new ApiError(res.status >= 500 ? res.status : 0, 'Could not refresh the session');
+    }
 
     const data = (await res.json()) as { access: string; refresh?: string };
     // SimpleJWT returns a new refresh token when ROTATE_REFRESH_TOKENS is on.
@@ -87,6 +148,33 @@ function refreshAccessToken(): Promise<string> {
   refreshPromise.then(unlock, unlock);
 
   return refreshPromise;
+}
+
+/** Sign the teen out: the server has refused the session itself. */
+async function endSession(): Promise<never> {
+  await clearTokens();
+  announceSessionExpired();
+  throw new ApiError(401, 'Your session has expired. Please sign in again.');
+}
+
+/**
+ * Whether an access token has run out, or is about to.
+ *
+ * The expiry is written inside the token. Reading it saves a round trip that
+ * is certain to fail: without this, every request made after the hour is up is
+ * sent, refused, and sent again once the token is renewed, which doubles the
+ * requests of most cold starts. Anything unreadable counts as "not expired",
+ * and the server's 401 remains the fallback.
+ */
+function expiresSoon(token: string): boolean {
+  try {
+    const body = token.split('.')[1];
+    if (!body || typeof globalThis.atob !== 'function') return false;
+    const claims = JSON.parse(globalThis.atob(body.replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof claims.exp === 'number' && claims.exp * 1000 - Date.now() < 30_000;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -146,12 +234,16 @@ async function send(path: string, options: RequestOptions, token: string | null)
     if (known) headers['If-None-Match'] = known.etag;
   }
 
-  return fetch(`${baseUrl}${path}`, {
-    method,
-    headers,
-    body: body === undefined ? undefined : isMultipart ? (body as FormData) : JSON.stringify(body),
+  return fetchWithTimeout(
+    `${baseUrl}${path}`,
+    {
+      method,
+      headers,
+      body: body === undefined ? undefined : isMultipart ? (body as FormData) : JSON.stringify(body),
+    },
+    isMultipart ? UPLOAD_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
     signal,
-  });
+  );
 }
 
 /**
@@ -159,14 +251,27 @@ async function send(path: string, options: RequestOptions, token: string | null)
  */
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   let res: Response;
+  let token = getAccessTokenSync();
+
+  if (token && !options.anonymous && expiresSoon(token)) {
+    try {
+      token = await refreshAccessToken();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) return endSession();
+      // No signal, or a busy server. Carry on with the token in hand: the
+      // request below will report the connection for what it is.
+    }
+  }
 
   try {
-    res = await send(path, options, getAccessTokenSync());
+    res = await send(path, options, token);
   } catch (err) {
     // fetch rejects on network failure with no status. Status 0 marks it as
     // transient so React Query will retry rather than surface a hard error —
     // this app is used on intermittent mobile data.
     if ((err as Error)?.name === 'AbortError') throw err;
+    // A timeout: already described, and not a sign of an unreachable server.
+    if (err instanceof ApiError) throw err;
 
     // In development the overwhelmingly common cause is not a flaky network
     // but an unreachable dev server: `manage.py runserver` binds 127.0.0.1 by
@@ -191,13 +296,25 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
 
   if (res.status === 401 && !options.anonymous) {
+    let access: string;
     try {
-      const access = await refreshAccessToken();
+      access = await refreshAccessToken();
+    } catch (err) {
+      // No signal during the refresh is not a lost session. Signing the teen
+      // out here also threw away everything saved for reading offline, on
+      // exactly the connection that feature exists for.
+      if (!(err instanceof ApiError) || err.status !== 401) {
+        throw err instanceof ApiError ? err : new ApiError(0, 'Network unavailable');
+      }
+      return endSession();
+    }
+
+    try {
       res = await send(path, options, access);
-    } catch {
-      await clearTokens();
-      announceSessionExpired();
-      throw new ApiError(401, 'Your session has expired. Please sign in again.');
+    } catch (err) {
+      // The session is fine: the refresh just succeeded. Only the replay failed.
+      if ((err as Error)?.name === 'AbortError' || err instanceof ApiError) throw err;
+      throw new ApiError(0, 'Network unavailable');
     }
   }
 

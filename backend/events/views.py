@@ -14,6 +14,7 @@ from identity.authorization import HasPermission, HasPermissionOrReadOnly, has_a
 from identity.permissions_registry import Perm
 from content.views import get_age_group_filter
 from common.view_counts import count_view
+from . import checkin
 from . import notifications as event_notifications
 from . import scoping
 from .email_service import EventEmailService
@@ -56,12 +57,20 @@ class EventViewSet(viewsets.ModelViewSet):
         queryset = self.queryset
 
         # Annotate with live registration counts so the stored counter is never stale
+        # ...and with the places taken, which is what capacity is decided on
+        # (`Event.places_taken`): without it `is_full` and `spots_remaining`
+        # would each count per event.
         queryset = queryset.annotate(
             live_registration_count=Count(
                 'registrations',
-                filter=Q(registrations__status__in=['confirmed', 'checked_in']),
+                filter=Q(registrations__status__in=EventRegistration.COUNTED),
                 distinct=True
-            )
+            ),
+            live_places_taken=Count(
+                'registrations',
+                filter=Q(registrations__status__in=EventRegistration.HOLDS_A_PLACE),
+                distinct=True
+            ),
         )
 
         is_manager = has_any_permission(self.request.user, Perm.EVENTS_MANAGE)
@@ -256,6 +265,15 @@ def own_registrations(user):
     return EventRegistration.objects.filter(match)
 
 
+# What the older check-in route says when `checkin.scan` refuses a ticket.
+_CHECK_IN_REFUSALS = {
+    checkin.ALREADY_CHECKED_IN: 'This ticket has already been checked in.',
+    checkin.CANCELLED: 'This registration was cancelled.',
+    checkin.WAITLISTED: 'This registration is on the waitlist.',
+    checkin.NOT_PAID: 'This ticket has not been paid for.',
+}
+
+
 class EventRegistrationViewSet(viewsets.ModelViewSet):
     """ViewSet for event registrations."""
     
@@ -313,17 +331,20 @@ class EventRegistrationViewSet(viewsets.ModelViewSet):
         serializer = EventRegistrationStatusUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
-        old_status = registration.status
         new_status = serializer.validated_data['status']
         notes = serializer.validated_data.get('notes', '')
-        
+
         if new_status == 'confirmed':
-            registration.confirm(request.user)
+            old_status = registration.confirm(request.user)
         elif new_status == 'cancelled':
-            registration.cancel(request.user, notes)
+            old_status = registration.cancel(request.user, notes)
         else:
-            registration.status = new_status
-            registration.save()
+            old_status = registration.set_status(new_status)
+
+        if old_status is None:
+            # Already there: a double tap, or two leaders at once. Nothing
+            # changed, so there is nothing to log and nobody to tell again.
+            return Response(EventRegistrationDetailSerializer(registration).data)
 
         # Create audit log
         RegistrationAuditLog.objects.create(
@@ -357,25 +378,31 @@ class EventRegistrationViewSet(viewsets.ModelViewSet):
         serializer = EventRegistrationCheckInSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
-        registration.check_in(
-            user=request.user,
+        # Through the same door as the scanner, so both apply one set of rules
+        # under one row lock: a ticket cannot be checked in twice, and a
+        # cancelled, waitlisted or unpaid one is refused. `scan` also writes the
+        # audit row and tells the teen.
+        result = checkin.scan(
+            registration.event,
+            registration.registration_id,
+            request.user,
             method=serializer.validated_data.get('method', 'manual'),
-            notes=serializer.validated_data.get('notes', '')
+            notes=serializer.validated_data.get('notes', ''),
         )
-        
-        # Create audit log
-        RegistrationAuditLog.objects.create(
-            registration=registration,
-            user=request.user,
-            action='check_in',
-            new_values={
-                'checked_in_at': str(registration.checked_in_at),
-                'method': registration.check_in_method
-            },
-        )
-        
+
+        if result['outcome'] != checkin.CHECKED_IN:
+            return Response(
+                {
+                    'detail': _CHECK_IN_REFUSALS.get(
+                        result['outcome'], 'This ticket cannot be checked in.'),
+                    'outcome': result['outcome'],
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        registration.refresh_from_db()
         return Response(EventRegistrationDetailSerializer(registration).data)
-    
+
     @action(detail=True, methods=['get'])
     def qr_code(self, request, pk=None):
         """Get QR code for registration."""

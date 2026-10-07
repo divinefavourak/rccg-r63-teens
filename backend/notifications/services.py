@@ -21,8 +21,9 @@ app at 22:00 never learns their event was moved. The only thing quiet hours and
 caps take away is the right to *interrupt*.
 """
 import logging
+import threading
 
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.utils import timezone
 
 from common.dates import app_today, day_bounds
@@ -113,7 +114,7 @@ def may_push(user, notification_type, preference=None, at=None, today=None):
 
 
 def send(user, notification_type, title, body, *, deep_link='', data=None,
-         rung='', dedupe_key='', at=None):
+         rung='', dedupe_key='', at=None, defer_push=False):
     """
     The one way a notification reaches a teen.
 
@@ -125,6 +126,12 @@ def send(user, notification_type, title, body, *, deep_link='', data=None,
     know it should pass it — the ladder does, because it dispatches for a specific
     local moment, which is not necessarily the moment the worker happens to run.
     Omitted, it is derived from the clock.
+
+    `defer_push` is for callers inside a web request. The inbox row is written
+    here and now; the push, which is a call to another company's server with a
+    ten-second timeout per device, goes out after the response. `pushed_at` is
+    then set a moment later, so a caller that reads it straight away, or relies
+    on the announcement cap, must not defer.
     """
     if not user or not getattr(user, 'is_authenticated', False):
         return None
@@ -152,9 +159,35 @@ def send(user, notification_type, title, body, *, deep_link='', data=None,
         return None
 
     if allowed:
-        _push(notification)
+        if defer_push:
+            # After the caller's transaction commits: the background thread
+            # reads the row on its own connection and must be able to see it.
+            transaction.on_commit(lambda: _push_in_background(notification.pk))
+        else:
+            _push(notification)
 
     return notification
+
+
+def _push_in_background(notification_id):
+    """
+    Deliver one notification's push off the request thread.
+
+    A thread, as the event emails already use, so it works whether or not a
+    Celery worker is running. If the process dies mid-send the push is lost and
+    the inbox row is not: the inbox is the durable record.
+    """
+    def work():
+        try:
+            _push(Notification.objects.select_related('user').get(pk=notification_id))
+        except Exception:
+            logger.exception('Background push failed for notification %s', notification_id)
+        finally:
+            # The thread opened its own database connection; nothing else will
+            # close it.
+            connection.close()
+
+    threading.Thread(target=work, daemon=True, name='notification-push').start()
 
 
 def _push(notification):

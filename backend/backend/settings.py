@@ -85,7 +85,7 @@ INSTALLED_APPS = [
     # Third party apps
     'rest_framework',
     'rest_framework_simplejwt',
-    'rest_framework_simplejwt.token_blacklist',  # refresh-token revocation on logout/rotation
+    'rest_framework_simplejwt.token_blacklist',  # refresh-token revocation on logout
     'corsheaders',
     'drf_yasg',
     'drf_spectacular',
@@ -179,6 +179,11 @@ CACHES = {
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
             'IGNORE_EXCEPTIONS': True,
+            # Failing open only helps once the call fails. Without these a Redis
+            # that accepts no connections holds every cache read, and so every
+            # request, until the operating system gives up.
+            'SOCKET_CONNECT_TIMEOUT': 2,
+            'SOCKET_TIMEOUT': 2,
         }
     }
 }
@@ -440,7 +445,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'DEFAULT_PAGINATION_CLASS': 'common.pagination.DefaultPagination',
     'PAGE_SIZE': 20,
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
@@ -492,7 +497,11 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
+    # Off on purpose. With it on, a refresh whose answer is lost on a bad
+    # connection leaves the phone holding a token the server has just
+    # blacklisted, and the teen is signed out for having poor signal. Logout
+    # still blacklists the token it is given.
+    'BLACKLIST_AFTER_ROTATION': False,
     'UPDATE_LAST_LOGIN': True,
     'ALGORITHM': 'HS256',
     'SIGNING_KEY': SECRET_KEY,
