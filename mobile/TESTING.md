@@ -22,6 +22,7 @@ Last updated 6 October 2026, on branch `feat/mobile-teacher-tools`.
 | Keeping a whole translation | Built, **passed** |
 | Backend automated tests | **48 passed**; 4 newer ones not yet run |
 | Website deep links (production) | **Passed** after the fix |
+| The web app for iPhones | **13 of 13 passed** in headless Chrome; not yet run on an iPhone |
 
 ## What you need
 
@@ -331,3 +332,41 @@ device` traceback is a test that forces a push to fail on purpose.
 | 5 October 2026, after PR #45 deployed | The same, plus `/admin` | **All 200** |
 | | The API address in the new build | `…onrender.com/api/v1`, as intended |
 | | Sign in and open the Console at `/admin` | Not yet run |
+
+---
+
+## 8. The web app (for iPhones)
+
+Checked on 7 October 2026 by a script driving headless Chrome against a real
+web build (`npx expo export --platform web`), at an iPhone's screen size and
+with an iPhone's browser name. Sign-in was answered from fixtures; Today and
+the Bible were read from the local API. **Nothing here has been run on an
+iPhone yet.**
+
+| Test | Result |
+|---|---|
+| Today opens for a guest | Pass |
+| The page links its manifest and Home Screen icon; the manifest loads | Pass |
+| The "Add to Home Screen" card shows in a browser tab | Pass |
+| The service worker registers and takes the page | Pass |
+| Log in, then reload: still signed in | Pass |
+| Open `/bible` directly (a deep link) | Pass |
+| A chapter that was read is saved (IndexedDB) | Pass |
+| The cache of loaded screens is saved | Pass |
+| Keep a whole translation: one request, 1,189 chapters saved, about 10 MB in all | Pass |
+| Web server stopped and network off: the app opens, signed in, Today shows | Pass |
+| Same, opening `/bible` directly: John 1 reads from the phone | Pass |
+| A tapped notification's link (`/?open=…`) lands on its screen | Pass |
+| On a laptop the app keeps to a phone's width | Pass (by eye) |
+
+Found while testing: when the browser's cache storage refused to open, the
+service worker answered nothing and the app was a blank page. It now treats
+that as "nothing kept" and fetches from the network.
+
+Not yet run, and needing a real iPhone with the site on HTTPS:
+
+- Add to Home Screen from Safari, and opening from the icon.
+- The reminder question and a real notification arriving (needs the VAPID keys
+  on both sides and iOS 16.4 or later).
+- The notch and home-bar spacing in full-screen mode.
+- Whether saved data survives a week without opening the app.

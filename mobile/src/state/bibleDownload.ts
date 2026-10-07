@@ -1,15 +1,7 @@
 import { useSyncExternalStore } from 'react';
-import { File } from 'expo-file-system';
 
-import { API_URL } from '../api/config';
-import {
-  ensureFolder,
-  markTranslationSaved,
-  packFile,
-  readPack,
-  savePackBook,
-  translationSaved,
-} from '../data/bibleStore';
+import { markTranslationSaved, savePackBook, translationSaved } from '../data/bibleStore';
+import { fetchPack } from '../data/packFetch';
 
 /**
  * Keeping a whole translation on the phone.
@@ -18,9 +10,8 @@ import {
  * one go, so a teen with data today can read anything tomorrow with none.
  *
  * **One download.** The server keeps each translation ready as a single file
- * and this fetches it with the phone's own downloader, which writes straight to
- * storage. Nothing that size passes through the app's memory on the way, and
- * the app's request timeouts do not apply to it.
+ * and `fetchPack` fetches it in one request: with the phone's own downloader in
+ * the app, with an ordinary request in the browser.
  *
  * **Then filed away, a book at a time.** The download is one big file; the
  * reader wants one small file per chapter. Splitting it is done in steps with a
@@ -84,18 +75,8 @@ export async function downloadTranslation(code: string): Promise<void> {
   running.add(code);
   set(code, { status: 'fetching' });
 
-  const target = packFile(code);
   try {
-    ensureFolder();
-    await File.downloadFileAsync(
-      `${API_URL}/bible/pack/?translation=${encodeURIComponent(code)}`,
-      target,
-      // A file left by an attempt that was cut off is replaced, not tripped over.
-      { idempotent: true },
-    );
-
-    const pack = await readPack(target);
-    if (!pack) throw new Error('not a pack');
+    const pack = await fetchPack(code);
 
     const total = pack.books.length;
     for (let i = 0; i < total; i++) {
@@ -116,10 +97,5 @@ export async function downloadTranslation(code: string): Promise<void> {
     });
   } finally {
     running.delete(code);
-    try {
-      if (target.exists) target.delete();
-    } catch {
-      // Left behind; the next attempt overwrites it.
-    }
   }
 }

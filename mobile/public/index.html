@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="%LANG_ISO_CODE%">
+  <head>
+    <meta charset="utf-8" />
+    <!-- viewport-fit=cover lets the app draw under the iPhone's notch and home
+         bar; the app then pads itself by the safe-area insets, as it does
+         natively. Zoom is left alone: pinching to enlarge text is an
+         accessibility need. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
+    />
+    <title>%WEB_TITLE%</title>
+
+    <!-- What "Add to Home Screen" reads. iOS takes the name and icon from the
+         apple-* tags, Android from the manifest. -->
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Faith Tribe" />
+    <!-- The status bar shows over the app's own background, in the app's colours. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="theme-color" content="#F9F6F1" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1C1916" media="(prefers-color-scheme: dark)" />
+    <!-- A phone number in a devotional is not a link. -->
+    <meta name="format-detection" content="telephone=no" />
+
+    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <style id="expo-reset">
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        overflow: hidden;
+        /* Shown for the moment before the app draws, and behind the notch. */
+        background-color: #f9f6f1;
+        /* No rubber-banding of the whole page behind the app's own scrolling. */
+        overscroll-behavior: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background-color: #1c1916;
+        }
+      }
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript>Faith Tribe needs JavaScript turned on.</noscript>
+    <div id="root"></div>
+  </body>
+</html>

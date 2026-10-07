@@ -42,8 +42,12 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/favicon.png"
+      "output": "single",
+      "favicon": "./assets/favicon.png",
+      "name": "Faith Tribe",
+      "shortName": "Faith Tribe",
+      "lang": "en",
+      "description": "One day. One verse. One message."
     },
     "plugins": [
       "expo-router",
