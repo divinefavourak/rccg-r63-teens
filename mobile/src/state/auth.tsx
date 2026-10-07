@@ -324,8 +324,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       // The server can only blacklist a token it is given. The web app sends
       // it in a cookie; this app has to put it in the body.
+      //
+      // Sent without the session: an access token near its end would be
+      // renewed first, which hands out a new refresh token and leaves the one
+      // in this body, the one about to be blacklisted, as the old one.
       const refresh = await getRefreshToken();
-      await api.post('/auth/logout/', refresh ? { refresh } : {});
+      await api.post('/auth/logout/', refresh ? { refresh } : {}, { anonymous: true });
     } catch {
       // Ignored on purpose.
     }

@@ -1,7 +1,7 @@
 """
 Views for the content app (devotionals, manuals, articles).
 """
-from django.db import models
+from django.db import models, transaction
 from rest_framework import viewsets, generics, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -352,22 +352,25 @@ class DevotionalViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
     def toggle_like(self, request, pk=None):
         """Like or unlike a devotional. Returns current liked state and total count."""
         devotional = self.get_object()
-        # The counter moves only by what the database says actually happened,
-        # so two taps arriving together cannot both subtract for one like, or
-        # fail on the second insert.
-        removed, _ = UserLikeLog.objects.filter(
-            user=request.user, devotional=devotional).delete()
-        if removed:
-            liked, step = False, -1
-        else:
-            _, created = UserLikeLog.objects.get_or_create(
-                user=request.user, devotional=devotional)
-            liked, step = True, 1 if created else 0
+        # One step, holding the devotional's row. The counter moves only by
+        # what the database says actually happened, and two taps arriving
+        # together take turns: without the lock one could add its like between
+        # the other's delete and decrement, leaving the count off by one.
+        with transaction.atomic():
+            Devotional.objects.select_for_update().only('pk').get(pk=devotional.pk)
+            removed, _ = UserLikeLog.objects.filter(
+                user=request.user, devotional=devotional).delete()
+            if removed:
+                liked, step = False, -1
+            else:
+                _, created = UserLikeLog.objects.get_or_create(
+                    user=request.user, devotional=devotional)
+                liked, step = True, 1 if created else 0
 
-        if step:
-            Devotional.objects.filter(pk=devotional.pk).update(
-                likes_count=Greatest(models.F('likes_count') + step, 0)
-            )
+            if step:
+                Devotional.objects.filter(pk=devotional.pk).update(
+                    likes_count=Greatest(models.F('likes_count') + step, 0)
+                )
         devotional.refresh_from_db(fields=['likes_count'])
         return Response({'liked': liked, 'likes_count': devotional.likes_count})
 

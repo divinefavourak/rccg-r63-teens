@@ -574,7 +574,9 @@ class TicketViewSet(viewsets.ModelViewSet):
         ticket = self.get_object()
         # Held until the response: two doors scanning the same ticket queue
         # here, and the second finds the first one's record below.
-        Ticket.objects.select_for_update().get(pk=ticket.pk)
+        # Re-read, not just locked: a ticket rejected while this request waited
+        # must be seen as rejected by the check below.
+        ticket = Ticket.objects.select_for_update().get(pk=ticket.pk)
         
         # Check if ticket is approved
         if ticket.status != Ticket.Status.APPROVED:

@@ -40,10 +40,18 @@ def close_out_reminder_day():
     # twice (a duplicated beat, a retried worker) steps a teen down early.
     # `add` only succeeds for the first caller of the day.
     day = app_today()
-    if not cache.add(f'notifications:closed_out:{day.isoformat()}', 1, 36 * 60 * 60):
+    key = f'notifications:closed_out:{day.isoformat()}'
+    if not cache.add(key, 1, 36 * 60 * 60):
         logger.info('Reminder day %s was already closed; nothing done.', day)
         return None
 
-    result = ladder.close_out_day(on=day)
+    try:
+        result = ladder.close_out_day(on=day)
+    except Exception:
+        # Not closed after all: let a retry in. Teens counted before the
+        # failure are counted again by that retry, which is the smaller harm
+        # next to the rest never being counted.
+        cache.delete(key)
+        raise
     logger.info('Reminder day closed: %s', result)
     return result

@@ -51,17 +51,29 @@ function announceSessionExpired() {
 const REQUEST_TIMEOUT_MS = 20_000;
 const UPLOAD_TIMEOUT_MS = 90_000;
 
+/** A whole answer: the status line and the body, both already received. */
+interface Answer {
+  status: number;
+  ok: boolean;
+  etag: string | null;
+  text: string;
+}
+
 /**
  * `fetch`, given up on after `timeoutMs`. A timeout is reported as status 0,
  * the same as no signal, so callers retry it. `signal` is the caller's own
  * cancellation and still surfaces as an AbortError.
+ *
+ * The body is read in here, under the same clock. `fetch` hands back as soon
+ * as the headers arrive, and a connection can stall after that just as well as
+ * before it: a limit that stopped at the headers would leave that wait open.
  */
 async function fetchWithTimeout(
   url: string,
   init: RequestInit,
   timeoutMs: number,
   signal?: AbortSignal,
-): Promise<Response> {
+): Promise<Answer> {
   const controller = new AbortController();
   let timedOut = false;
   const timer = setTimeout(() => {
@@ -73,7 +85,14 @@ async function fetchWithTimeout(
   signal?.addEventListener('abort', cancel);
 
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    const res = await fetch(url, { ...init, signal: controller.signal });
+    const empty = res.status === 204 || res.status === 304;
+    return {
+      status: res.status,
+      ok: res.ok,
+      etag: res.headers.get('ETag'),
+      text: empty ? '' : await res.text(),
+    };
   } catch (err) {
     if (timedOut) throw new ApiError(0, 'The connection timed out');
     throw err;
@@ -103,7 +122,7 @@ function refreshAccessToken(): Promise<string> {
 
     // Deliberately not routed through `request()`: a failed refresh would
     // recurse back into this same handler.
-    let res: Response;
+    let res: Answer;
     try {
       res = await fetchWithTimeout(
         `${API_URL}/auth/refresh/`,
@@ -129,7 +148,7 @@ function refreshAccessToken(): Promise<string> {
         : new ApiError(res.status >= 500 ? res.status : 0, 'Could not refresh the session');
     }
 
-    const data = (await res.json()) as { access: string; refresh?: string };
+    const data = JSON.parse(res.text) as { access: string; refresh?: string };
     // SimpleJWT returns a new refresh token when ROTATE_REFRESH_TOKENS is on.
     await saveTokens(data.access, data.refresh);
     return data.access;
@@ -217,7 +236,7 @@ export interface RequestOptions {
   baseUrl?: string;
 }
 
-async function send(path: string, options: RequestOptions, token: string | null): Promise<Response> {
+async function send(path: string, options: RequestOptions, token: string | null): Promise<Answer> {
   const { method = 'GET', body, signal, baseUrl = API_URL } = options;
 
   // FormData carries its own multipart boundary. Setting Content-Type by hand
@@ -250,7 +269,7 @@ async function send(path: string, options: RequestOptions, token: string | null)
  * Perform a request, refreshing once and replaying on a 401.
  */
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  let res: Response;
+  let res: Answer;
   let token = getAccessTokenSync();
 
   if (token && !options.anonymous && expiresSoon(token)) {
@@ -332,7 +351,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     throw new ApiError(0, 'Network unavailable');
   }
 
-  const text = await res.text();
+  const text = res.text;
   const payload = text ? safeJson(text) : null;
 
   if (!res.ok) {
@@ -340,7 +359,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
 
   if (isGet) {
-    const etag = res.headers.get('ETag');
+    const etag = res.etag;
     if (etag) remember(url, etag, payload);
   }
 
