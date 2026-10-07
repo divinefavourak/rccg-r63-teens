@@ -17,3 +17,20 @@ export const SITE_CONTACT = {
 
 /** Shown on the privacy notice and the terms. Update it whenever either changes. */
 export const LEGAL_UPDATED = '1 October 2026';
+
+/**
+ * Where a teen gets the app.
+ *
+ * The app is not in the stores yet. Android phones install a build directly;
+ * iPhones use the web app, added to the Home Screen from Safari. Both can be
+ * set from the environment, because the Android address changes with every
+ * build and the site should not need a code change to follow it.
+ */
+export const APP_LINKS = {
+  /** The Android build (an .apk file). */
+  android:
+    import.meta.env.VITE_ANDROID_APP_URL ||
+    'https://expo.dev/artifacts/eas/dgqcJhGrpMqA8y0ng33Kr0PPH9Cpxake87I0W90e_Ac.apk',
+  /** The web app, for iPhones. */
+  web: import.meta.env.VITE_WEB_APP_URL || 'https://app.thefaithtribe.live',
+} as const;

@@ -2,20 +2,22 @@ import { m } from 'framer-motion';
 import { OBJECTS } from '../../assets/site';
 import FloatingObject from '../../components/site/FloatingObject';
 import SiteButton from '../../components/site/SiteButton';
+import { APP_LINKS } from '../../constants/site';
 import { IN_VIEW, fadeUp, pop, stagger } from '../../components/site/motion';
 import { CONTAINER, H2, Swap } from './shared';
 
 const STEPS = [
   {
-    title: 'Open this page on your phone',
-    mobile: 'Chrome on Android or Safari on iPhone.',
-    desktop: 'Chrome on Android or Safari on iPhone.',
+    title: 'Pick your phone below',
+    mobile: 'Android downloads the app. iPhone opens it in Safari.',
+    desktop: 'Android downloads the app. iPhone opens it in Safari.',
     object: OBJECTS.mobile,
   },
   {
-    title: 'Tap “Add to Home screen”',
-    mobile: 'It’s in the browser menu.',
-    desktop: 'It’s in the browser menu. It takes seconds.',
+    title: 'Put it on your Home screen',
+    mobile: 'Android: open the download and tap Install. iPhone: tap Share, then Add to Home Screen.',
+    desktop:
+      'Android: open the download and tap Install. iPhone: tap Share, then Add to Home Screen.',
     object: OBJECTS.thumbUp,
   },
   {
@@ -69,9 +71,18 @@ const Install = () => (
           </m.li>
         ))}
       </m.ol>
-      <m.div {...IN_VIEW} variants={fadeUp} className="w-full lg:w-auto">
-        <SiteButton to="/register" className="w-full lg:w-auto">
-          Get the app
+      {/* The app is not in the stores yet, so these go straight to the builds:
+          a file to install on Android, the web app on iPhone. */}
+      <m.div
+        {...IN_VIEW}
+        variants={fadeUp}
+        className="flex w-full flex-col gap-4 lg:w-auto lg:flex-row lg:gap-3"
+      >
+        <SiteButton to={APP_LINKS.android} className="w-full lg:w-auto">
+          Get it for Android
+        </SiteButton>
+        <SiteButton to={APP_LINKS.web} variant="secondary" className="w-full lg:w-auto">
+          Open on iPhone
         </SiteButton>
       </m.div>
     </div>
