@@ -595,15 +595,29 @@ class DevotionalScraper:
         return None
 
 
+def _title_case(text: str) -> str:
+    """Capitalise each word of an ALL-CAPS heading.
+
+    Not ``str.title()``: that treats an apostrophe as a word break, which is how
+    "THERE'S A TIME FOR EVERYTHING" was being stored as "There'S A Time…".
+    """
+    return re.sub(r"[A-Za-z][A-Za-z'’]*", lambda m: m.group(0).capitalize(), text)
+
+
 class RCCGOnlineScraper:
     """
     Scraper for Teen Open Heaven devotionals from rccgonline.org.
 
     URL format: https://rccgonline.org/open-heavens-for-teens-{day}-{month}-{year}/
-    Labels are prefixed with "OPEN HEAVENS FOR TEENS D MONTH YYYY ".
+
+    Every section opens with a label that carries the date as a prefix —
+    "OPEN HEAVENS FOR TEENS 2 OCTOBER 2026 MESSAGE:" — and runs until the next
+    label. The page is parsed as exactly that: one pass that splits the article
+    into labelled sections, then one step that maps sections onto model fields.
     """
 
     BASE_URL = "https://rccgonline.org/open-heavens-for-teens-{day}-{month}-{year}/"
+    API_URL = "https://rccgonline.org/wp-json/wp/v2/posts"
 
     MONTH_NAMES = {
         1: 'january', 2: 'february', 3: 'march', 4: 'april',
@@ -617,10 +631,51 @@ class RCCGOnlineScraper:
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     }
 
-    # Regex to strip "OPEN HEAVENS FOR TEENS D MONTH YYYY [WEEKDAY:] " prefix from any label
-    _DATE_PREFIX = re.compile(
-        r'^open\s+heavens?\s+for\s+teens?\s+\d{1,2}\s+\w+\s+\d{4}\s*(?:\w+:)?\s*',
+    _BLOCK_TAGS = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li']
+
+    # Section labels as the site writes them, mapped to the section they open.
+    # Longer labels first: "BIBLE READING" must win over "READ".
+    _LABELS = [
+        ('BIBLE IN ONE YEAR', 'bible_in_one_year'),
+        ('BIBLE READING', 'reading'),
+        ('PRAYER POINT', 'prayer'),
+        ('ACTION POINT', 'action_point'),
+        ('KEY POINT', 'key_point'),
+        ('MEMORISE', 'memorise'),
+        ('MEMORIZE', 'memorise'),
+        ('MESSAGE', 'message'),
+        ('HYMN', 'hymn'),
+        ('READ', 'reading'),
+    ]
+    _SECTION_FOR = dict(_LABELS)
+
+    # Case-sensitive on purpose. Labels are always upper-case on the page, and a
+    # message paragraph that opens "Read your Bible every day" is not a label.
+    _LABEL = re.compile(
+        r'^(?P<prefix>OPEN\s+HEAVENS?\s+FOR\s+TEENS?\s+\d{1,2}\s+[A-Z]+\s+\d{4}\s*)?'
+        r'(?P<label>BIBLE\s+IN\s+ONE\s+YEAR|BIBLE\s+READING|PRAYER\s+POINT|ACTION\s+POINT'
+        r'|KEY\s+POINT|MEMORISE|MEMORIZE|MESSAGE|HYMN|READ)'
+        r'(?P<rest>(?![A-Za-z]).*)$',
+        re.DOTALL,
+    )
+
+    _TITLE = re.compile(
+        r'^open\s+heavens?\s+for\s+teens?\s+\d{1,2}\s+\w+\s+\d{4}(?:\s+\w+)?\s*[:\-–—]\s*(.+)$',
         re.IGNORECASE,
+    )
+
+    # The link to the adult devotional that the site drops between sections.
+    _CROSS_LINK = re.compile(r'^open\s+heavens?\s+\d{1,2}\s+\w+\s+\d{4}$', re.IGNORECASE)
+
+    _REFERENCE = (
+        r'(?:[1-3]\s*)?[A-Za-z]+(?:\s+of\s+[A-Za-z]+)?\.?\s+'
+        r'\d+:\d+[a-z]?(?:\s*[-–]\s*\d+[a-z]?)?'
+    )
+    _VERSION = r'\(?(?:KJV|NKJV|NIV|NLT|ESV|AMP|MSG|TLB)\)?'
+    # A whole line that is only a passage: "2 KINGS 4:18-26", "PHILIPPIANS 4:6-7 KJV".
+    _PASSAGE_LINE = re.compile(
+        r'^(?:[1-3]\s*)?[A-Za-z][A-Za-z ]*\s+\d+(?::\d+)?[\d\s,:;\-–]*'
+        r'(?:\s+' + _VERSION + r')?$'
     )
 
     def build_url(self, target_date: date) -> str:
@@ -642,9 +697,42 @@ class RCCGOnlineScraper:
             logger.error(f"[RCCGOnline] Fetch error {url}: {e}")
             return None
 
-    def _strip_prefix(self, text: str) -> str:
-        """Remove the date prefix from a section label."""
-        return self._DATE_PREFIX.sub('', text).strip(' :\t')
+    def discover_url(self, target_date: date) -> Optional[str]:
+        """
+        Find the day's post through the site's search API.
+
+        The slug is typed by hand each day, so it drifts ("open-heaven-for-teens",
+        a trailing "-2"). The post title is far more stable than the slug, so
+        when the usual URL 404s this asks WordPress for the post by title.
+        """
+        month = self.MONTH_NAMES[target_date.month]
+        wanted = re.compile(
+            rf'teens?\s+0?{target_date.day}\s+{month}\s+{target_date.year}\b',
+            re.IGNORECASE,
+        )
+        try:
+            r = requests.get(
+                self.API_URL,
+                headers=self.HEADERS,
+                timeout=20,
+                params={
+                    'search': f'open heavens for teens {target_date.day} {month} {target_date.year}',
+                    'per_page': 10,
+                    '_fields': 'link,title',
+                },
+            )
+            r.raise_for_status()
+            posts = r.json()
+        except (requests.exceptions.RequestException, ValueError) as e:
+            logger.error(f"[RCCGOnline] Search failed for {target_date}: {e}")
+            return None
+
+        for post in posts if isinstance(posts, list) else []:
+            title = (post.get('title') or {}).get('rendered', '')
+            if wanted.search(title) and post.get('link'):
+                logger.info(f"[RCCGOnline] Discovered {post['link']} for {target_date}")
+                return post['link']
+        return None
 
     def _get_article(self, soup: BeautifulSoup):
         return (
@@ -654,21 +742,84 @@ class RCCGOnlineScraper:
             soup.find('main')
         )
 
-    def _get_content_lines(self, article) -> list:
+    def _blocks(self, article) -> List[str]:
         """
-        Return text from <p>, <h2>, <h3>, <h4> tags in document order.
-        Including heading tags is necessary because section labels like MESSAGE
-        appear in <h2> on this site, not <p>.
-        Deduplicates by full text to skip <strong> mirror tags.
+        The article's text, one entry per *innermost* block, in document order.
+
+        Innermost matters. The site's markup nests blocks inside a stray outer
+        <p>, so that one <p> contains the MESSAGE heading, the whole message, the
+        hymn and everything after it. Read as a single line, that wrapper matched
+        "MESSAGE" as if it were the label and swallowed the body — which is how
+        devotionals were being saved with no content at all. Skipping any block
+        that contains another block leaves only real paragraphs and headings.
         """
-        seen = set()
-        texts = []
-        for tag in article.find_all(['p', 'h2', 'h3', 'h4']):
-            t = tag.get_text().strip()
-            if t and t not in seen:
-                seen.add(t)
-                texts.append(t)
-        return texts
+        blocks = []
+        for tag in article.find_all(self._BLOCK_TAGS):
+            if tag.find(self._BLOCK_TAGS + ['div']):
+                continue
+            text = re.sub(r'\s+', ' ', tag.get_text().replace('\xa0', ' ')).strip()
+            if text:
+                blocks.append(text)
+        return blocks
+
+    def _match_label(self, text: str):
+        """Return ``(section, rest_of_line)`` if ``text`` opens a section."""
+        match = self._LABEL.match(text)
+        if not match:
+            return None
+        rest = match.group('rest')
+        # Without the date prefix, require label punctuation ("HYMN 7:",
+        # "MESSAGE:") so an upper-case word opening a sentence is not a label.
+        if not match.group('prefix') and not re.match(r'\s*\d*\s*([:\-–—]|$)', rest):
+            return None
+        label = re.sub(r'\s+', ' ', match.group('label'))
+        return self._SECTION_FOR[label], rest
+
+    def _split_sections(self, blocks: List[str]) -> Dict[str, List[str]]:
+        sections: Dict[str, List[str]] = {}
+        current = None
+        for text in blocks:
+            if self._CROSS_LINK.match(text):
+                continue
+            hit = self._match_label(text)
+            if hit:
+                section, rest = hit
+                if section == 'hymn':
+                    # "HYMN 7:", "HYMN : 78-", "HYMN 55 –" — drop the number.
+                    rest = re.sub(r'^[\s:]*\d*[\s:\-–—]*', '', rest)
+                else:
+                    rest = rest.lstrip(' :-–—')
+                current = sections.setdefault(section, [])
+                if rest.strip():
+                    current.append(rest.strip())
+            elif current is not None:
+                current.append(text)
+        return sections
+
+    def _extract_title(self, article, soup) -> str:
+        """The topic, from the heading that carries it after the date."""
+        fallback = ''
+        for scope in (article, soup):
+            for heading in scope.find_all(['h1', 'h2']):
+                raw = re.sub(r'\s+', ' ', heading.get_text()).strip()
+                match = self._TITLE.match(raw)
+                if match and match.group(1).strip():
+                    return _title_case(match.group(1).strip())
+                if heading.name == 'h1' and scope is article and not fallback:
+                    fallback = raw
+        # An <h1> with no date prefix is still the best title available; the
+        # page-chrome heading ("…2 OCTOBER 2026 FRIDAY", no topic) is not.
+        if fallback and not re.match(r'^open\s+heavens?\s+for\s+teens?\b', fallback, re.IGNORECASE):
+            return _title_case(fallback)
+        return ''
+
+    def _split_memory_verse(self, lines: List[str]):
+        """``(text, reference)`` — the reference trails the verse."""
+        text = re.sub(r'\s+([.,;:])', r'\1', ' '.join(lines)).strip()
+        match = re.search(rf'({self._REFERENCE})\s*(?:{self._VERSION})?\s*$', text)
+        if not match:
+            return text.strip('"\'“”‘’ '), ''
+        return text[:match.start()].strip('"\'“”‘’ '), match.group(1).strip()
 
     def parse_html(self, html: str, target_date: date, source_url: str) -> Optional[Dict[str, Any]]:
         soup = BeautifulSoup(html, 'html.parser')
@@ -677,150 +828,57 @@ class RCCGOnlineScraper:
             logger.warning(f"[RCCGOnline] No article container found for {source_url}")
             return None
 
+        title = self._extract_title(article, soup)
+        sections = self._split_sections(self._blocks(article))
+
+        memory_text, memory_reference = self._split_memory_verse(sections.get('memorise', []))
+
+        # The reading's first line is its reference ("2 KINGS 4:18-26"); the
+        # verses follow. Matched as a reference rather than as "not a verse",
+        # because a numbered book and a verse both open with a digit.
+        reading = sections.get('reading', [])
+        passage = ''
+        if reading and self._PASSAGE_LINE.match(reading[0]):
+            passage = re.sub(rf'\s+{self._VERSION}\s*$', '', reading[0])
+            passage = _title_case(passage)
+            reading = reading[1:]
+
+        # The hymn's first line is its title, shouted ("WHAT A FRIEND WE HAVE…").
+        hymn = list(sections.get('hymn', []))
+        if hymn and sum(c.isupper() for c in hymn[0]) > sum(c.islower() for c in hymn[0]):
+            hymn[0] = _title_case(hymn[0])
+
+        # Only the label's own line: anything the site appends below the last
+        # section would otherwise be read as part of it.
+        bible_in_one_year = (sections.get('bible_in_one_year') or [''])[0]
+        if bible_in_one_year.isupper():
+            bible_in_one_year = _title_case(bible_in_one_year)
+
         data: Dict[str, Any] = {
             'date': target_date,
             'source_url': source_url,
             'status': 'published',
             'author': 'Pastor E.A. Adeboye',
+            'title': title,
+            'slug': slugify(f"{target_date}-{title}")[:300],
+            'memory_verse_content': memory_text,
+            'memory_verse_passage': memory_reference,
+            'scripture_text': memory_text,
+            'anchor_scripture': memory_reference,
+            'bible_text_passage': passage,
+            'bible_text_content': '\n'.join(reading),
+            'content': '\n\n'.join(sections.get('message', [])),
+            'key_point': ' '.join(sections.get('key_point', [])),
+            'action_point': ' '.join(sections.get('action_point', [])),
+            'prayer': ' '.join(sections.get('prayer', [])),
+            'bible_in_one_year': bible_in_one_year,
+            'hymn': '\n'.join(hymn),
         }
 
-        # ── Title ──────────────────────────────────────────────────────────────
-        h1 = article.find('h1')
-        if h1:
-            raw = h1.get_text().strip()
-            # Strip full prefix including weekday: "OPEN HEAVENS FOR TEENS 4 MARCH 2026 WEDNESDAY: "
-            title = re.sub(
-                r'^open\s+heavens?\s+for\s+teens?\s+\d{1,2}\s+\w+\s+\d{4}\s+\w+:\s*',
-                '', raw, flags=re.IGNORECASE,
-            ).strip().title()
-        else:
-            title = f"Open Heaven for Teens - {target_date.strftime('%B %d, %Y')}"
-        data['title'] = title
-        data['slug'] = slugify(f"{target_date}-{title}")[:300]
-
-        # Work with deduplicated content lines (p + headings)
-        lines = self._get_content_lines(article)
-
-        # ── Memory verse ───────────────────────────────────────────────────────
-        mem_content = ''
-        mem_passage = ''
-        for i, line in enumerate(lines):
-            if re.search(r'MEMORISE', line, re.IGNORECASE):
-                raw_verse = self._strip_prefix(line)
-                # Reference is often in the next <strong> after the <p>
-                # But we can also try to split it from the text
-                ref_match = re.search(
-                    r'([1-3]?\s*[A-Za-z]+\.?\s+\d+:\d+[a-z]?(?:[–\-]\d+[a-z]?)?)\s*$',
-                    raw_verse,
-                )
-                if ref_match:
-                    mem_passage = ref_match.group(1).strip()
-                    mem_content = raw_verse[:ref_match.start()].strip().strip('"\'')
-                else:
-                    mem_content = raw_verse
-                    # Try next line for just the reference
-                    if i + 1 < len(lines):
-                        next_line = lines[i + 1].strip()
-                        if re.match(r'^[1-3]?\s*[A-Za-z]+\.?\s+\d+:\d+', next_line):
-                            mem_passage = next_line
-                break
-        data['memory_verse_content'] = mem_content
-        data['memory_verse_passage'] = mem_passage
-        data['scripture_text'] = mem_content
-        data['anchor_scripture'] = mem_passage
-
-        # ── Bible reading ──────────────────────────────────────────────────────
-        bible_passage = ''
-        bible_content_lines = []
-        in_bible = False
-        for line in lines:
-            if re.search(r'BIBLE READING', line, re.IGNORECASE) and not in_bible:
-                raw = self._strip_prefix(line)
-                # Passage is what's left after stripping prefix (e.g. "1 CORINTHIANS 6:16-18")
-                bible_passage = raw.strip().title()
-                in_bible = True
-                continue
-            if in_bible:
-                if re.search(r'MESSAGE|KEY POINT|HYMN|BIBLE IN ONE YEAR', line, re.IGNORECASE):
-                    break
-                # Skip cross-ref lines like "Open Heaven 4 March 2026"
-                if re.search(r'open heaven', line, re.IGNORECASE):
-                    continue
-                bible_content_lines.append(line.strip())
-        data['bible_text_passage'] = bible_passage
-        data['bible_text_content'] = ' '.join(bible_content_lines)
-
-        # ── Message ────────────────────────────────────────────────────────────
-        message_lines = []
-        in_message = False
-        for line in lines:
-            if re.search(r'\bMESSAGE\b', line, re.IGNORECASE) and not in_message:
-                in_message = True
-                continue
-            if in_message:
-                if re.search(r'KEY POINT|HYMN|BIBLE IN ONE YEAR', line, re.IGNORECASE):
-                    break
-                # Skip cross-ref ads
-                if re.search(r'^open heaven\b', line, re.IGNORECASE):
-                    continue
-                message_lines.append(line.strip())
-        data['content'] = '\n\n'.join(message_lines)
-
-        # ── Key point ──────────────────────────────────────────────────────────
-        # Some <p> tags contain "KEY POINT: ... \n\n HYMN: ..." all in one block.
-        # We strip the label then take only the first non-empty line.
-        key_point = ''
-        for i, line in enumerate(lines):
-            if re.search(r'KEY POINT', line, re.IGNORECASE):
-                after = self._strip_prefix(line)
-                # Strip remaining "KEY POINT:" label that _strip_prefix may leave
-                after = re.sub(r'^key\s*point\s*:?\s*', '', after, flags=re.IGNORECASE)
-                # Take only the first non-empty line (avoid bleeding into HYMN section)
-                first_line = next((l.strip() for l in after.splitlines() if l.strip()), '')
-                if first_line:
-                    key_point = first_line
-                elif i + 1 < len(lines):
-                    candidate = lines[i + 1]
-                    if not re.search(r'HYMN|BIBLE IN ONE YEAR', candidate, re.IGNORECASE):
-                        key_point = candidate.strip()
-                break
-        data['key_point'] = key_point
-
-        # ── Bible in one year ──────────────────────────────────────────────────
-        # Some lines embed BIBLE IN ONE YEAR mid-text (inside a big <p> that also
-        # contains KEY POINT and HYMN). Extract only the inline reference value
-        # (up to the next newline) rather than taking the whole line.
-        bioy = ''
-        for line in lines:
-            if re.search(r'BIBLE IN ONE YEAR', line, re.IGNORECASE):
-                m = re.search(r'BIBLE\s+IN\s+ONE\s+YEAR\s*:\s*([^\n]+)', line, re.IGNORECASE)
-                if m:
-                    bioy = m.group(1).strip().title()
-                break
-        data['bible_in_one_year'] = bioy
-
-        # ── Hymn ───────────────────────────────────────────────────────────────
-        hymn_lines = []
-        in_hymn = False
-        seen_hymn = set()
-        for line in lines:
-            if re.search(r'\bHYMN\b', line, re.IGNORECASE) and not in_hymn:
-                # Title line: strip prefix and hymn number
-                title_part = re.sub(r'.*HYMN\s*\d*:\s*', '', line, flags=re.IGNORECASE).strip()
-                if title_part and title_part not in seen_hymn:
-                    hymn_lines.append(title_part.title())
-                    seen_hymn.add(title_part)
-                in_hymn = True
-                continue
-            if in_hymn:
-                if re.search(r'BIBLE IN ONE YEAR|OPEN HEAVENS FOR TEENS', line, re.IGNORECASE):
-                    break
-                if line and line not in seen_hymn:
-                    hymn_lines.append(line)
-                    seen_hymn.add(line)
-        data['hymn'] = '\n'.join(hymn_lines)
-
-        logger.info(f"[RCCGOnline] Parsed {target_date}: title='{title}', passage='{mem_passage}'")
+        logger.info(
+            f"[RCCGOnline] Parsed {target_date}: title='{title}', "
+            f"passage='{memory_reference}', sections={sorted(sections)}"
+        )
         return data
 
     def scrape(self, target_date: date, require_content: bool = True) -> Optional[Dict[str, Any]]:
@@ -833,6 +891,9 @@ class RCCGOnlineScraper:
         url = self.build_url(target_date)
         logger.info(f"[RCCGOnline] Scraping {target_date} from {url}")
         html = self.fetch_page(url)
+        if not html:
+            url = self.discover_url(target_date)
+            html = self.fetch_page(url) if url else None
         if not html:
             return None
         data = self.parse_html(html, target_date, url)
@@ -848,7 +909,7 @@ class RCCGOnlineScraper:
 def scrape_and_save_devotional(target_date: date = None, force: bool = False) -> Optional[dict]:
     """
     Scrape a devotional and save it to the database.
-    If force=True, replaces an existing record only after a successful scrape.
+    If force=True, updates an existing record in place after a successful scrape.
 
     Scraping strategy (single rccgonline.org HTTP request):
     1. Fetch rccgonline.org with require_content=False to get title + memory verse.
@@ -905,12 +966,26 @@ def scrape_and_save_devotional(target_date: date = None, force: bool = False) ->
             data[field] = data[field][:max_len]
 
     try:
-        if force:
-            deleted, _ = Devotional.objects.filter(date=target_date).delete()
-            if deleted:
-                logger.info(f"Replaced existing devotional for {target_date}")
-
-        devotional = Devotional.objects.create(**data)
+        existing = Devotional.objects.filter(date=target_date).first() if force else None
+        if existing:
+            # Updated in place, never deleted and recreated. Read logs, likes and
+            # memory verses all cascade from the devotional, so a delete would
+            # erase the record of who read that day along with the text.
+            if existing.content and not data.get('content'):
+                logger.warning(
+                    f"Re-scrape of {target_date} found no message; keeping the existing one."
+                )
+                return None
+            # A row someone has already moved through review keeps its status.
+            if existing.status != Devotional.Status.DRAFT:
+                data.pop('status', None)
+            for field, value in data.items():
+                setattr(existing, field, value)
+            existing.save()
+            devotional = existing
+            logger.info(f"Updated existing devotional for {target_date}")
+        else:
+            devotional = Devotional.objects.create(**data)
         logger.info(f"Successfully saved devotional for {target_date}: {devotional.title}")
 
         return {
