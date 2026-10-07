@@ -58,6 +58,7 @@ export default function TodayScreen() {
   }, [router, data]);
 
   const signUp = useCallback(() => router.push('/sign-up'), [router]);
+  const openInbox = useCallback(() => router.push('/notifications'), [router]);
 
   // A refetch that fails while there is still something to show is "offline",
   // not "broken": keep the saved screen and say so. With nothing saved there
@@ -73,7 +74,7 @@ export default function TodayScreen() {
         date={data?.date}
         streak={isGuest ? null : (data?.streak?.current_length ?? null)}
         hasUnread={(unread.data?.unread_count ?? 0) > 0}
-        onBell={() => router.push('/notifications')}
+        onBell={openInbox}
       />
       {offline && <OfflineBar />}
 

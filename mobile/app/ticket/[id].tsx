@@ -16,8 +16,12 @@ import { BackHeader, EmptyState, Skeleton } from '../../src/ui/screen';
 import { useTokens } from '../../src/theme/ThemeProvider';
 import { ELEVATION } from '../../src/theme/tokens';
 
-/** How often an open ticket asks whether it has been scanned yet. */
-const POLL_MS = 5000;
+/**
+ * How often an open ticket asks whether it has been scanned yet. Every teen in
+ * the queue at a door has this screen open at once, and each ask returns all of
+ * their registrations, so the interval is what the server feels.
+ */
+const POLL_MS = 15000;
 /**
  * How long it keeps asking. Long enough for any queue at a door; short enough
  * that a ticket left open on a table does not ask 700 times an hour all day.

@@ -75,7 +75,7 @@ export function useDownloadState(code: string | undefined): DownloadState {
   return state;
 }
 
-/** Let the screen draw between books. */
+/** Let the screen draw: between books, and every few chapters within one. */
 const breathe = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 /** Fetch all of `code` and file it away. Safe to call again after a failure. */
@@ -99,7 +99,7 @@ export async function downloadTranslation(code: string): Promise<void> {
 
     const total = pack.books.length;
     for (let i = 0; i < total; i++) {
-      savePackBook(pack, pack.books[i]);
+      await savePackBook(pack, pack.books[i], breathe);
       set(code, { status: 'saving', done: i + 1, total });
       await breathe();
     }
