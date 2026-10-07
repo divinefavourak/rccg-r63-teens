@@ -820,3 +820,138 @@ class TransactionLogTests(TestCase):
         self.assertTrue(log.is_successful)
         self.assertEqual(log.ip_address, '127.0.0.1')
         
+
+
+def paystack_signature(raw_body, secret='sk_test_dummy'):
+    """The signature Paystack would send for `raw_body`."""
+    import hashlib
+    import hmac
+    return hmac.new(secret.encode('utf-8'), raw_body, hashlib.sha512).hexdigest()
+
+
+@paystack_test_keys
+class PaystackWebhookTests(APITestCase):
+    """The webhook is unauthenticated: the signature is its only guard."""
+
+    url = '/api/v1/payments/webhook'
+
+    def setUp(self):
+        self.payment = Payment.objects.create(
+            reference='WEBHOOK_TEST_001',
+            amount=Decimal('3000.00'),
+            currency='NGN',
+            description='Webhook test',
+            payer_email='payer@rccg.com',
+            status=Payment.Status.PENDING,
+        )
+
+    def body(self, amount=300000, event='charge.success'):
+        return json.dumps({
+            'event': event,
+            'data': {
+                'reference': self.payment.reference,
+                'status': 'success',
+                'amount': amount,
+                'channel': 'card',
+                'authorization': {'authorization_code': 'AUTH_hook', 'channel': 'card'},
+            },
+        }).encode('utf-8')
+
+    def post(self, raw_body, signature=None):
+        headers = {}
+        if signature is not None:
+            headers['HTTP_X_PAYSTACK_SIGNATURE'] = signature
+        return self.client.post(
+            self.url, data=raw_body, content_type='application/json', **headers)
+
+    def status_now(self):
+        self.payment.refresh_from_db()
+        return self.payment.status
+
+    def test_missing_signature_is_refused(self):
+        response = self.post(self.body())
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(self.status_now(), Payment.Status.PENDING)
+
+    def test_forged_signature_is_refused_and_not_logged(self):
+        response = self.post(self.body(), signature='anything')
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(self.status_now(), Payment.Status.PENDING)
+        self.assertFalse(TransactionLog.objects.exists())
+
+    def test_signature_for_a_different_body_is_refused(self):
+        signature = paystack_signature(self.body(amount=100))
+
+        response = self.post(self.body(), signature=signature)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(self.status_now(), Payment.Status.PENDING)
+
+    def test_genuine_event_completes_the_payment(self):
+        raw = self.body()
+
+        response = self.post(raw, signature=paystack_signature(raw))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.status_now(), Payment.Status.SUCCESS)
+
+    @patch('tickets.services.EmailService.send_payment_confirmation')
+    def test_a_retried_event_sends_one_email(self, mock_email):
+        raw = self.body()
+        signature = paystack_signature(raw)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            first = self.post(raw, signature=signature)
+        with self.captureOnCommitCallbacks(execute=True):
+            second = self.post(raw, signature=signature)
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.status_now(), Payment.Status.SUCCESS)
+        mock_email.assert_called_once()
+
+    def test_wrong_amount_does_not_complete_the_payment(self):
+        raw = self.body(amount=100)
+
+        response = self.post(raw, signature=paystack_signature(raw))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.status_now(), Payment.Status.PENDING)
+
+    def test_a_replayed_success_does_not_revive_a_refund(self):
+        Payment.objects.filter(pk=self.payment.pk).update(status=Payment.Status.REFUNDED)
+        raw = self.body()
+
+        self.post(raw, signature=paystack_signature(raw))
+
+        self.assertEqual(self.status_now(), Payment.Status.REFUNDED)
+
+    @patch('tickets.services.EmailService.send_payment_confirmation')
+    @patch.object(PaystackService, 'verify_payment')
+    def test_verify_after_the_webhook_changes_nothing(self, mock_verify, mock_email):
+        raw = self.body()
+        with self.captureOnCommitCallbacks(execute=True):
+            self.post(raw, signature=paystack_signature(raw))
+        mock_verify.return_value = {'status': True, 'data': json.loads(raw)['data']}
+
+        with self.captureOnCommitCallbacks(execute=True):
+            payment = PaymentService().verify_and_complete_payment(self.payment.reference)
+
+        self.assertEqual(payment.status, Payment.Status.SUCCESS)
+        mock_email.assert_called_once()
+
+    @patch.object(PaystackService, 'verify_payment')
+    def test_a_late_abandoned_answer_does_not_undo_a_success(self, mock_verify):
+        raw = self.body()
+        self.post(raw, signature=paystack_signature(raw))
+        mock_verify.return_value = {
+            'status': True,
+            'data': {'reference': self.payment.reference, 'status': 'abandoned'},
+        }
+
+        with self.assertRaises(Exception):
+            PaymentService().verify_and_complete_payment(self.payment.reference)
+
+        self.assertEqual(self.status_now(), Payment.Status.SUCCESS)

@@ -8,6 +8,7 @@ from decimal import Decimal
 from django.db.models import Count, Sum, Q
 from django.db.models.functions import Coalesce
 from django.conf import settings
+from django.core.exceptions import PermissionDenied
 
 from .models import Payment, PaymentPlan, TransactionLog
 from .serializers import (
@@ -256,26 +257,22 @@ class PaystackWebhookView(APIView):
     permission_classes = []  # No authentication for webhooks
     
     def post(self, request):
-        # Get signature from header
-        signature = request.headers.get('X-Paystack-Signature')
-        
-        if not signature:
+        # The signature is over the raw bytes, so read request.body and never
+        # request.data: DRF would parse the body and the bytes would be gone.
+        signature = request.headers.get('X-Paystack-Signature', '')
+
+        try:
+            PaymentService().handle_webhook(request.body, signature)
+        except PermissionDenied:
             return Response(
-                {'error': 'Missing signature'},
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': 'Invalid signature'},
+                status=status.HTTP_401_UNAUTHORIZED
             )
-        
-        # Verify signature (implement proper verification)
-        payment_service = PaymentService()
-        success = payment_service.handle_webhook(request.data, signature)
-        
-        if success:
-            return Response({'status': 'success'})
-        else:
-            return Response(
-                {'error': 'Webhook processing failed'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+
+        # A genuine event is acknowledged whether or not it changed anything.
+        # Paystack retries on any other answer, and a retry cannot help with an
+        # event we do not handle or a payment already completed.
+        return Response({'status': 'success'})
 
 
 class PaymentCallbackView(APIView):
