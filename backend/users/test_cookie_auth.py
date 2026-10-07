@@ -76,3 +76,40 @@ class CookieAuthTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.cookies['access_token'].value, '')
         self.assertEqual(res.cookies['refresh_token'].value, '')
+
+
+@override_settings(CACHES=_LOCMEM, AUTH_COOKIE_SECURE=False)
+class RefreshTokenTests(APITestCase):
+    """The phone's side of the session: tokens in the body, no cookies."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()  # reset throttle counters between tests
+        self.user = make_user(username='phoneuser')
+        login = self.client.post(
+            '/api/v1/auth/login/',
+            {'username': self.user.username, 'password': 'secret-12345'}, format='json')
+        self.refresh = login.data['refresh']
+        self.client.cookies.clear()  # a phone holds no cookies
+
+    def refresh_with(self, token):
+        response = self.client.post('/api/v1/auth/refresh/', {'refresh': token}, format='json')
+        self.client.cookies.clear()
+        return response
+
+    def test_a_refresh_whose_answer_was_lost_can_be_tried_again(self):
+        """The phone never saw the first answer, so it still holds the old token."""
+        lost = self.refresh_with(self.refresh)
+        again = self.refresh_with(self.refresh)
+
+        self.assertEqual(lost.status_code, status.HTTP_200_OK)
+        self.assertEqual(again.status_code, status.HTTP_200_OK)
+        self.assertIn('access', again.data)
+
+    def test_signing_out_ends_the_token_it_was_given(self):
+        self.client.post('/api/v1/auth/logout/', {'refresh': self.refresh}, format='json')
+        self.client.cookies.clear()
+
+        response = self.refresh_with(self.refresh)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)

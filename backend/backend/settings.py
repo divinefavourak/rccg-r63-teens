@@ -85,7 +85,7 @@ INSTALLED_APPS = [
     # Third party apps
     'rest_framework',
     'rest_framework_simplejwt',
-    'rest_framework_simplejwt.token_blacklist',  # refresh-token revocation on logout/rotation
+    'rest_framework_simplejwt.token_blacklist',  # refresh-token revocation on logout
     'corsheaders',
     'drf_yasg',
     'drf_spectacular',
@@ -492,7 +492,11 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
+    # Off on purpose. With it on, a refresh whose answer is lost on a bad
+    # connection leaves the phone holding a token the server has just
+    # blacklisted, and the teen is signed out for having poor signal. Logout
+    # still blacklists the token it is given.
+    'BLACKLIST_AFTER_ROTATION': False,
     'UPDATE_LAST_LOGIN': True,
     'ALGORITHM': 'HS256',
     'SIGNING_KEY': SECRET_KEY,
