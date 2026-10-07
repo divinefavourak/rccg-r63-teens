@@ -177,6 +177,84 @@ class TestDevotionalScraper:
         assert result is None
 
 
+# rccgonline.org as it is actually served: every label carries the date, and the
+# message, hymn and everything after them sit inside a stray outer <p>.
+RCCG_HTML = """
+<html><body>
+<h1>OPEN HEAVENS FOR TEENS 2 OCTOBER 2026 FRIDAY</h1>
+<div class="entry-content">
+<h1>OPEN HEAVENS FOR TEENS 2 OCTOBER 2026 FRIDAY: THERE’S A TIME</h1>
+<p><strong>OPEN HEAVENS FOR TEENS 2 OCTOBER 2026 MEMORISE:</strong><em> A naughty person
+walketh with a froward mouth</em><strong>. Proverbs 6:12</strong></p>
+<p><strong>OPEN HEAVENS FOR TEENS 2 OCTOBER 2026 BIBLE READING: 2 KINGS 4:18-19</strong></p>
+<p>18 And when the child was grown, it fell on a day.</p>
+<p>19 And he said unto his father, My head, my head.</p>
+<p>
+  <p><a href="#">Open Heaven 2 October 2026</a></p>
+  <p>
+    <h2>OPEN HEAVENS FOR TEENS 2 OCTOBER 2026 MESSAGE:</h2>
+    <p>Read your Bible and be mindful of what you say.</p>
+    <p>My dear child, what are you confessing?</p>
+    <p>
+      <p><strong>OPEN HEAVENS FOR TEENS 2 OCTOBER 2026 ACTION POINT:</strong></p>
+      <p>Confess positive things into your life.</p>
+      <p>
+        <p><strong>OPEN HEAVENS FOR TEENS 2 OCTOBER 2026 HYMN : 78- </strong></p>
+        <p>GREAT IS THY FAITHFULNESS</p>
+        <p>O God my father!</p>
+        <p>
+          <p><strong>OPEN HEAVENS FOR TEENS 2 OCTOBER 2026 BIBLE IN ONE YEAR: Mark 10:1-31</strong></p>
+        </p>
+      </p>
+    </p>
+  </p>
+</p>
+</div>
+</body></html>
+"""
+
+
+class TestRCCGOnlineScraper:
+    """Tests for the rccgonline.org parser."""
+
+    def parse(self):
+        from content.services.devotional_scraper import RCCGOnlineScraper
+        return RCCGOnlineScraper().parse_html(RCCG_HTML, date(2026, 10, 2), 'https://example.com')
+
+    def test_message_survives_nested_wrappers(self):
+        """The wrapper <p> must not be read as the MESSAGE label."""
+        content = self.parse()['content']
+
+        assert content == (
+            'Read your Bible and be mindful of what you say.\n\n'
+            'My dear child, what are you confessing?'
+        )
+
+    def test_title_keeps_apostrophe_case(self):
+        assert self.parse()['title'] == 'There’s A Time'
+
+    def test_memory_verse_split_from_reference(self):
+        result = self.parse()
+
+        assert result['memory_verse_passage'] == 'Proverbs 6:12'
+        assert result['memory_verse_content'] == 'A naughty person walketh with a froward mouth.'
+
+    def test_numbered_book_is_the_passage_not_a_verse(self):
+        result = self.parse()
+
+        assert result['bible_text_passage'] == '2 Kings 4:18-19'
+        assert result['bible_text_content'].startswith('18 And when the child')
+
+    def test_sections_do_not_bleed(self):
+        result = self.parse()
+
+        assert result['action_point'] == 'Confess positive things into your life.'
+        assert result['hymn'] == 'Great Is Thy Faithfulness\nO God my father!'
+        assert result['bible_in_one_year'] == 'Mark 10:1-31'
+        for value in result.values():
+            assert 'OPEN HEAVENS FOR TEENS' not in str(value)
+
+
 @pytest.mark.django_db
 class TestScrapeAndSave:
     """Tests for the scrape_and_save_devotional function."""
