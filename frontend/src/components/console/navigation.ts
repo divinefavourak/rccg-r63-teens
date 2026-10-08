@@ -23,6 +23,11 @@ export interface NavItem {
   label: string;
   /** lucide-react icon name, resolved by the Sidebar. */
   icon: string;
+  /**
+   * Narrows where the item is *listed*, never who may open it. Absent means
+   * listed for everyone `access` admits.
+   */
+  inSidebar?: (p: Set<Permission>) => boolean;
   /** Renders a separator above this item. */
   divider?: boolean;
   /** Decides presence and read/write state from the permission set. */
@@ -41,7 +46,7 @@ const readWrite =
     !has(p, view) ? false : has(p, manage) ? true : 'readonly';
 
 export const NAV_ITEMS: NavItem[] = [
-  { id: '', label: 'Overview', icon: 'LayoutDashboard', access: () => true },
+  { id: '', label: 'Overview', icon: 'Sun', access: () => true },
 
   {
     id: 'people',
@@ -52,7 +57,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     id: 'hierarchy',
     label: 'Hierarchy',
-    icon: 'Network',
+    icon: 'GitBranch',
     access: readWrite('hierarchy.view', 'hierarchy.manage'),
   },
   {
@@ -67,7 +72,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     id: 'content',
     label: 'Content',
-    icon: 'BookOpen',
+    icon: 'FileText',
     divider: true,
     // content.view without content.manage is a real, intended state: a Province
     // Coordinator reads the devotional calendar as a forecast of what their
@@ -85,13 +90,13 @@ export const NAV_ITEMS: NavItem[] = [
   {
     id: 'manuals',
     label: 'Manuals',
-    icon: 'FileText',
+    icon: 'BookOpen',
     access: readWrite('content.view', 'content.manage'),
   },
   {
     id: 'media',
     label: 'Library & Media',
-    icon: 'PlayCircle',
+    icon: 'Headphones',
     access: (p) => (has(p, 'media.manage') ? true : false),
   },
   {
@@ -114,12 +119,14 @@ export const NAV_ITEMS: NavItem[] = [
     id: 'check-in',
     label: 'Check in',
     icon: 'ScanLine',
-    // Someone who can browse events reaches check-in *through* an event, so a
-    // top-level entry would be redundant for them. This item exists for the
-    // holder who can see events but not manage them — a Parish Leader running
-    // the door. See `my-class` for the Teacher case.
-    access: (p) =>
-      has(p, 'events.checkin') && has(p, 'events.view') && !has(p, 'events.manage'),
+    // Anyone who may work a door may open the screen: the endpoints behind it
+    // need `events.checkin` and nothing else.
+    access: (p) => has(p, 'events.checkin'),
+    // In the sidebar only for the holder who can see events but not manage
+    // them — a Parish Leader running the door. An event manager reaches it
+    // from Events and a Teacher from My class, so an entry of its own would be
+    // redundant for them.
+    inSidebar: (p) => has(p, 'events.view') && !has(p, 'events.manage'),
   },
   {
     id: 'my-class',
@@ -151,7 +158,7 @@ export const NAV_ITEMS: NavItem[] = [
     access: (p) => (has(p, 'payments.view') ? true : false),
   },
 
-  { id: 'settings', label: 'Settings', icon: 'Settings', divider: true, access: () => true },
+  { id: 'settings', label: 'Settings', icon: 'SlidersHorizontal', divider: true, access: () => true },
   {
     id: 'audit-log',
     label: 'Audit log',

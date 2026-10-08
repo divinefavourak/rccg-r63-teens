@@ -63,13 +63,13 @@ export const Settings = () => {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <span className="text-[13px] font-semibold text-console-text">
+            <span className="text-[14px] font-semibold text-console-text">
               Your profile
             </span>
           </CardHeader>
           <div className="space-y-3 p-4">
             <div>
-              <label className="block text-[11px] font-medium text-console-body">
+              <label className="block text-[12px] font-medium text-console-body">
                 Display name
               </label>
               <input
@@ -78,22 +78,22 @@ export const Settings = () => {
                   setDisplayName(e.target.value);
                   setSaved(false);
                 }}
-                className="mt-1 w-full rounded-console-md border border-console-border bg-console-surface px-2.5 py-2 text-[13px] text-console-text outline-none focus:border-console-action"
+                className="mt-1 w-full rounded-console-md border-2 border-transparent bg-console-tinted px-3.5 py-2.5 text-[16px] leading-6 text-console-text outline-none transition-colors focus:border-console-text"
               />
-              <p className="mt-1 text-[11px] text-console-subtle">
+              <p className="mt-1 text-[12px] text-console-subtle">
                 How you appear in People, the audit log, and to anyone you appoint.
               </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3 text-[12px]">
               <div>
-                <span className="block text-[10px] font-semibold uppercase tracking-wider text-console-subtle">
+                <span className="block text-[12px] font-medium uppercase tracking-[0.06em] text-console-muted">
                   Username
                 </span>
                 <span className="text-console-body">{me?.username}</span>
               </div>
               <div>
-                <span className="block text-[10px] font-semibold uppercase tracking-wider text-console-subtle">
+                <span className="block text-[12px] font-medium uppercase tracking-[0.06em] text-console-muted">
                   Email
                 </span>
                 <span className="truncate text-console-body">{me?.email}</span>
@@ -119,7 +119,7 @@ export const Settings = () => {
 
         <Card>
           <CardHeader>
-            <span className="text-[13px] font-semibold text-console-text">
+            <span className="text-[14px] font-semibold text-console-text">
               Appearance
             </span>
           </CardHeader>
@@ -128,7 +128,7 @@ export const Settings = () => {
               {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
               Switch to {theme === 'dark' ? 'light' : 'dark'} mode
             </Btn>
-            <p className="mt-2 text-[11px] text-console-subtle">
+            <p className="mt-2 text-[12px] text-console-subtle">
               Shared with the teen app — changing it here changes it there too.
             </p>
           </div>
@@ -137,7 +137,7 @@ export const Settings = () => {
 
       <Card className="mt-4">
         <CardHeader>
-          <span className="text-[13px] font-semibold text-console-text">
+          <span className="text-[14px] font-semibold text-console-text">
             Your authority
           </span>
           <Badge tone="neutral">
@@ -147,7 +147,7 @@ export const Settings = () => {
 
         <div className="p-4">
           {assignments.length === 0 ? (
-            <p className="text-[13px] text-console-muted">
+            <p className="text-[14px] text-console-muted">
               {me?.is_superuser
                 ? 'You are a Django superuser, which grants every permission everywhere regardless of role assignments.'
                 : 'You hold no role. Whoever appointed you can grant one.'}
@@ -155,7 +155,7 @@ export const Settings = () => {
           ) : (
             <ul className="mb-4 space-y-1.5">
               {assignments.map((a) => (
-                <li key={a.id} className="text-[13px] text-console-body">
+                <li key={a.id} className="text-[14px] text-console-body">
                   <span className="font-medium text-console-text">
                     {a.role_detail?.label}
                   </span>
@@ -178,7 +178,7 @@ export const Settings = () => {
             </ul>
           )}
 
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-console-subtle">
+          <p className="mb-2 text-[12px] font-medium uppercase tracking-[0.06em] text-console-muted">
             What that lets you do
           </p>
           <div className="grid gap-1.5 sm:grid-cols-2">

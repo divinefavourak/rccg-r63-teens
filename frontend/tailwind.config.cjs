@@ -46,6 +46,12 @@ module.exports = {
           'action-hover': 'var(--console-action-hover)',
           'action-light': 'var(--console-action-light)',
           'action-muted': 'var(--console-action-muted)',
+          'on-action': 'var(--console-on-action)',
+          ink: 'var(--console-ink)',
+          'on-ink': 'var(--console-on-ink)',
+          go: 'var(--console-go)',
+          'on-go': 'var(--console-on-go)',
+          skeleton: 'var(--console-skeleton)',
           'data-1': 'var(--console-data-1)',
           'data-2': 'var(--console-data-2)',
           'data-3': 'var(--console-data-3)',
@@ -119,6 +125,8 @@ module.exports = {
       boxShadow: {
         'elevation-1': '0 1px 2px 0 rgba(28, 25, 22, 0.07)',
         'elevation-3': '0 -4px 32px 0 rgba(28, 25, 22, 0.12)',
+        'console-card': 'var(--console-shadow-card)',
+        'console-dialog': 'var(--console-shadow-dialog)',
       },
       borderRadius: {
         'console-sm': 'var(--console-radius-sm)',

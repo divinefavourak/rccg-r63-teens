@@ -16,6 +16,8 @@ import { NODE_TYPE_LABELS } from '../../types/console';
 
 interface ScreenShellProps {
   title: string;
+  /** The section's name for the breadcrumb, when the title is not it. */
+  crumb?: string;
   subtitle?: string;
   /** Right-aligned controls. Gate these with PermissionGate, not `disabled`. */
   actions?: ReactNode;
@@ -28,6 +30,7 @@ interface ScreenShellProps {
 
 export const ScreenShell = ({
   title,
+  crumb,
   subtitle,
   actions,
   readOnly,
@@ -37,31 +40,34 @@ export const ScreenShell = ({
   const { scopeNode } = useConsoleAuth();
 
   return (
-    <div className="mx-auto w-full max-w-[1200px] px-5 py-5">
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+    <div className="w-full pb-6">
+      <p className="mb-5 text-[12px] font-medium uppercase leading-4 tracking-[0.04em] text-console-muted">
+        Console&nbsp;&nbsp;/&nbsp;&nbsp;{crumb ?? title}
+      </p>
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h1 className="text-[19px] font-semibold tracking-tight text-console-text">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-[32px] font-extrabold leading-10 tracking-[-0.02em] text-console-text">
               {title}
             </h1>
             {readOnly && (
               <span
-                className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-console-subtle ring-1 ring-console-border"
+                className="inline-flex h-[26px] items-center rounded-full bg-console-tinted px-2.5 text-[12px] font-semibold leading-4 text-console-muted"
                 title="Your role can open this, but not change it"
               >
-                View only
+                Read-only for your role
               </span>
             )}
           </div>
 
           {subtitle && (
-            <p className="mt-1 text-[13px] leading-relaxed text-console-muted">
+            <p className="mt-1 max-w-3xl text-[16px] leading-6 text-console-body">
               {subtitle}
             </p>
           )}
 
           {!hideScope && scopeNode && (
-            <p className="mt-1.5 text-[11px] text-console-subtle">
+            <p className="mt-1.5 text-[12px] font-medium leading-4 text-console-muted">
               {NODE_TYPE_LABELS[scopeNode.node_type]} · {scopeNode.name}
             </p>
           )}

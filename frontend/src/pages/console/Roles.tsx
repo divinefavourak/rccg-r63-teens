@@ -84,7 +84,8 @@ export const Roles = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const { data } = await api.get('/identity/roles/');
+      // Every role in one page; the default page would stop at 20.
+      const { data } = await api.get('/identity/roles/', { params: { page_size: 200 } });
       setRoles(unwrap<ConsoleRole>(data));
     } catch {
       setError('Could not load the role catalogue.');
@@ -158,7 +159,7 @@ export const Roles = () => {
       hideScope
     >
       {error && (
-        <div className="mb-3 rounded-console-md bg-console-danger-bg px-3 py-2 text-[13px] text-console-danger">
+        <div className="mb-3 rounded-console-md bg-console-danger-bg px-3 py-2 text-[14px] text-console-danger">
           {error}
         </div>
       )}
@@ -175,10 +176,10 @@ export const Roles = () => {
           />
         ) : (
           <div className="console-scroll overflow-x-auto">
-            <table className="w-full border-collapse text-[13px]">
+            <table className="w-full border-collapse text-[14px]">
               <thead className="sticky top-0 bg-console-surface">
                 <tr>
-                  <th className="sticky left-0 z-10 min-w-[260px] border-b border-console-border bg-console-surface px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-console-subtle">
+                  <th className="sticky left-0 z-10 min-w-[260px] border-b border-console-border bg-console-surface px-3 py-2 text-left text-[12px] font-medium uppercase tracking-[0.06em] text-console-muted">
                     Permission
                   </th>
                   {ordered.map((r) => (
@@ -186,15 +187,15 @@ export const Roles = () => {
                       key={r.id}
                       className="min-w-[92px] border-b border-console-border px-2 py-2 text-center align-bottom"
                     >
-                      <span className="block text-[11px] font-semibold leading-tight text-console-text">
+                      <span className="block text-[12px] font-semibold leading-tight text-console-text">
                         {r.label}
                       </span>
-                      <span className="mt-0.5 block text-[10px] tabular-nums text-console-subtle">
+                      <span className="mt-0.5 block text-[12px] tabular-nums text-console-subtle">
                         {r.permissions?.length ?? 0}/21
                       </span>
                       {!isGrantableAnywhere(r) && (
                         <span
-                          className="mt-1 inline-block text-[9px] uppercase tracking-wide text-console-subtle"
+                          className="mt-1 inline-block text-[12px] uppercase tracking-[0.06em] text-console-subtle"
                           title="No allowed node types, so this role cannot be assigned anywhere — by anyone, including a superuser."
                         >
                           not assignable
@@ -212,7 +213,7 @@ export const Roles = () => {
                     <tr>
                       <td
                         colSpan={ordered.length + 1}
-                        className="sticky left-0 border-b border-console-border bg-console-tinted px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-console-muted"
+                        className="sticky left-0 border-b border-console-border bg-console-tinted px-3 py-1.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-console-muted"
                       >
                         {domain.label}
                       </td>
@@ -223,7 +224,7 @@ export const Roles = () => {
                           <span className="block font-medium text-console-text">
                             {PERMISSION_LABELS[code]}
                           </span>
-                          <code className="block font-mono text-[10px] text-console-subtle">
+                          <code className="block font-mono text-[12px] text-console-subtle">
                             {code}
                           </code>
                         </td>
@@ -287,7 +288,7 @@ export const Roles = () => {
       })()}
 
       {canEdit && (
-        <p className="mt-3 text-[12px] leading-relaxed text-console-caution">
+        <p className="mt-3 text-[12px] leading-5 text-console-caution">
           Every cell is a toggle. Changing one changes what that role means for
           <strong> everyone who holds it</strong>, immediately and everywhere —
           with no audit row per affected person, because none of their
@@ -300,7 +301,7 @@ export const Roles = () => {
         <Badge tone="neutral">
           {ordered.length} roles · 21 permissions
         </Badge>
-        <span className="text-[11px] text-console-subtle">
+        <span className="text-[12px] text-console-subtle">
           Permission codes are defined in code; which role holds which is stored
           in the database and editable without a deploy.
         </span>

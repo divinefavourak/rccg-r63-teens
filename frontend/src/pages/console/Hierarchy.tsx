@@ -134,34 +134,34 @@ const NodeEditor = ({
       }
     >
       {error && (
-        <div className="mb-3 rounded-console-md bg-console-danger-bg px-3 py-2 text-[13px] text-console-danger">
+        <div className="mb-3 rounded-console-md bg-console-danger-bg px-3 py-2 text-[14px] text-console-danger">
           {error}
         </div>
       )}
 
-      <label className="block text-[11px] font-medium text-console-body">
+      <label className="block text-[12px] font-medium text-console-body">
         Name
       </label>
       <input
         autoFocus
         value={name}
         onChange={(e) => setName(e.target.value)}
-        className="mt-1 w-full rounded-console-md border border-console-border bg-console-surface px-2.5 py-2 text-[13px] text-console-text outline-none focus:border-console-action"
+        className="mt-1 w-full rounded-console-md border-2 border-transparent bg-console-tinted px-3.5 py-2.5 text-[16px] leading-6 text-console-text outline-none transition-colors focus:border-console-text"
       />
 
-      <label className="mt-3 block text-[11px] font-medium text-console-body">
+      <label className="mt-3 block text-[12px] font-medium text-console-body">
         Church code <span className="text-console-subtle">(optional)</span>
       </label>
       <input
         value={code}
         onChange={(e) => setCode(e.target.value)}
         placeholder="Used to match rows during CSV reconciliation"
-        className="mt-1 w-full rounded-console-md border border-console-border bg-console-surface px-2.5 py-2 text-[13px] text-console-text outline-none placeholder:text-console-subtle focus:border-console-action"
+        className="mt-1 w-full rounded-console-md border-2 border-transparent bg-console-tinted px-3.5 py-2.5 text-[16px] leading-6 text-console-text outline-none transition-colors placeholder:text-console-subtle focus:border-console-text"
       />
 
       {mode === 'edit' && (
         <>
-          <label className="mt-3 flex items-center gap-2 text-[13px] text-console-body">
+          <label className="mt-3 flex items-center gap-2 text-[14px] text-console-body">
             <input
               type="checkbox"
               checked={active}
@@ -169,7 +169,7 @@ const NodeEditor = ({
             />
             Active
           </label>
-          <p className="mt-1 text-[11px] leading-relaxed text-console-subtle">
+          <p className="mt-1 text-[12px] leading-5 text-console-subtle">
             Nodes are deactivated, never deleted — memberships and role
             assignments reference them, so removing one would erase the record of
             who belonged where.
@@ -261,7 +261,7 @@ export const Hierarchy = () => {
 
           <span
             className={[
-              'flex-1 truncate text-[13px]',
+              'flex-1 truncate text-[14px]',
               node.selectable
                 ? 'font-medium text-console-text'
                 : 'text-console-disabled',
@@ -269,13 +269,13 @@ export const Hierarchy = () => {
           >
             {node.name}
             {!node.is_active && (
-              <span className="ml-1.5 text-[11px] text-console-subtle">
+              <span className="ml-1.5 text-[12px] text-console-subtle">
                 inactive
               </span>
             )}
           </span>
 
-          <span className="shrink-0 text-[10px] uppercase tracking-wide text-console-subtle">
+          <span className="shrink-0 text-[12px] uppercase tracking-[0.06em] text-console-subtle">
             {NODE_TYPE_LABELS[node.node_type]}
           </span>
 
@@ -352,7 +352,7 @@ export const Hierarchy = () => {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Find a node…"
-            className="w-52 bg-transparent text-[13px] text-console-text outline-none placeholder:text-console-subtle"
+            className="w-52 bg-transparent text-[14px] text-console-text outline-none placeholder:text-console-subtle"
           />
         </div>
       }

@@ -1,0 +1,22 @@
+{
+  "GET /identity/me/": {
+    "id": "u-ngozi", "username": "ngozi", "email": "ngozi.okafor@gmail.com",
+    "first_name": "Ngozi", "last_name": "Okafor", "is_superuser": false,
+    "profile": {"id": "pf2", "display_name": "Ngozi Okafor"},
+    "memberships": [{"id": "m2", "user": "u-ngozi", "user_detail": null, "organization_node": "pr1", "organization_node_detail": {"id": "pr1", "name": "RCCG Rehoboth Parish", "node_type": "parish"}, "is_primary": true, "is_active": true, "joined_at": "2024-01-14"}],
+    "role_assignments": [{"id": "ra-ngozi", "user": "u-ngozi", "user_detail": null, "role": "role-t", "role_detail": {"id": "role-t", "code": "teacher", "label": "Teacher", "description": "", "allowed_node_types": ["parish", "area"], "permissions": ["users.view", "profiles.view", "content.view", "events.checkin"], "is_system": true, "is_active": true}, "node": "pr1", "node_detail": {"id": "pr1", "name": "RCCG Rehoboth Parish", "node_type": "parish"}, "start_date": "2025-03-03", "end_date": null, "is_active": true, "appointed_by": null, "appointed_by_detail": null, "created_at": "2025-03-03T09:00:00Z"}],
+    "permissions": ["users.view", "profiles.view", "content.view", "events.checkin"]
+  },
+  "GET /hierarchy/nodes/": {"count": 0, "results": []},
+  "GET /identity/class/": {
+    "today": "2026-10-08", "week_start": "2026-10-05", "total": 8, "read_today": 3,
+    "members": [
+      {"id": "u-amaka", "name": "Amaka Eze", "age": 14, "photo": null, "parish": "RCCG Rehoboth Parish", "week": [true, true, true, true, false, false, false], "days_this_week": 4, "read_today": true, "last_read_on": "2026-10-08"},
+      {"id": "u-chidi", "name": "Chidi Nwosu", "age": 16, "photo": null, "parish": "RCCG Rehoboth Parish", "week": [true, true, false, false, false, false, false], "days_this_week": 2, "read_today": false, "last_read_on": "2026-10-06"},
+      {"id": "u-dayo", "name": "Dayo Ojo", "age": 17, "photo": null, "parish": "RCCG Rehoboth Parish", "week": [false, false, false, false, false, false, false], "days_this_week": 0, "read_today": false, "last_read_on": null},
+      {"id": "u-tolu", "name": "Tolu Adeyemi", "age": 15, "photo": null, "parish": "RCCG Rehoboth Parish", "week": [true, true, true, true, false, false, false], "days_this_week": 4, "read_today": true, "last_read_on": "2026-10-08"},
+      {"id": "u-zainab", "name": "Zainab Bello", "age": null, "photo": null, "parish": "RCCG Rehoboth Parish", "week": [true, false, true, true, false, false, false], "days_this_week": 3, "read_today": true, "last_read_on": "2026-10-08"}
+    ]
+  },
+  "GET /content/manuals/current/": {"id": "mn41", "series": null, "series_detail": null, "week_number": 41, "week_start_date": "2026-10-04", "week_end_date": "2026-10-10", "title": "Courage", "slug": "courage", "theme": "Standing when it costs", "memory_verse": "Joshua 1:9", "memory_verse_text": "", "has_teacher_edition": true, "teacher_notes": "Discussion guide with answers, and three activity ideas for a small room.", "teacher_resources": "", "discussion_guide": ""}
+}

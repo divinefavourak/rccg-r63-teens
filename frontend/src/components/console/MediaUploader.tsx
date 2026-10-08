@@ -26,7 +26,7 @@ interface SeriesOption {
 }
 
 const inputCls =
-  'mt-1 w-full rounded-console-md border border-console-border bg-console-surface px-2.5 py-2 text-[13px] text-console-text outline-none transition-colors focus:border-console-action';
+  'mt-1 w-full rounded-console-md border-2 border-transparent bg-console-tinted px-3.5 py-2.5 text-[16px] leading-6 text-console-text outline-none transition-colors focus:border-console-text';
 
 export const MediaUploader = ({
   series,
@@ -125,14 +125,14 @@ export const MediaUploader = ({
       }
     >
       {error && (
-        <div className="mb-3 rounded-console-md bg-console-danger-bg px-3 py-2 text-[13px] text-console-danger">
+        <div className="mb-3 rounded-console-md bg-console-danger-bg px-3 py-2 text-[14px] text-console-danger">
           {error}
         </div>
       )}
 
       <div className="space-y-3">
         <label className="block">
-          <span className="block text-[11px] font-medium text-console-body">
+          <span className="block text-[12px] font-medium uppercase leading-4 tracking-[0.06em] text-console-muted">
             Title <span className="text-console-danger">*</span>
           </span>
           <input
@@ -146,7 +146,7 @@ export const MediaUploader = ({
 
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block">
-            <span className="block text-[11px] font-medium text-console-body">
+            <span className="block text-[12px] font-medium uppercase leading-4 tracking-[0.06em] text-console-muted">
               Type
             </span>
             <select
@@ -166,7 +166,7 @@ export const MediaUploader = ({
           </label>
 
           <label className="block">
-            <span className="block text-[11px] font-medium text-console-body">
+            <span className="block text-[12px] font-medium uppercase leading-4 tracking-[0.06em] text-console-muted">
               Series <span className="text-console-subtle">(optional)</span>
             </span>
             <select
@@ -186,7 +186,7 @@ export const MediaUploader = ({
 
         {/* The file */}
         <div>
-          <span className="block text-[11px] font-medium text-console-body">
+          <span className="block text-[12px] font-medium uppercase leading-4 tracking-[0.06em] text-console-muted">
             File <span className="text-console-danger">*</span>
           </span>
           <input
@@ -204,15 +204,15 @@ export const MediaUploader = ({
             <FileIcon size={18} className="shrink-0 text-console-subtle" />
             {file ? (
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] text-console-text">
+                <span className="block truncate text-[14px] text-console-text">
                   {file.name}
                 </span>
-                <span className="block text-[11px] text-console-subtle">
+                <span className="block text-[12px] text-console-subtle">
                   {formatBytes(file.size)}
                 </span>
               </span>
             ) : (
-              <span className="text-[13px] text-console-muted">
+              <span className="text-[14px] text-console-muted">
                 Choose {mediaType === 'audio' ? 'an audio' : 'a video'} file
               </span>
             )}
@@ -231,7 +231,7 @@ export const MediaUploader = ({
 
         {/* Thumbnail, with a preview */}
         <div>
-          <span className="block text-[11px] font-medium text-console-body">
+          <span className="block text-[12px] font-medium uppercase leading-4 tracking-[0.06em] text-console-muted">
             Thumbnail <span className="text-console-subtle">(optional)</span>
           </span>
           <input
@@ -267,7 +267,7 @@ export const MediaUploader = ({
                 <button
                   type="button"
                   onClick={() => setThumbnail(null)}
-                  className="mt-0.5 text-[11px] text-console-danger hover:underline"
+                  className="mt-0.5 text-[12px] text-console-danger hover:underline"
                 >
                   Remove
                 </button>
@@ -277,7 +277,7 @@ export const MediaUploader = ({
         </div>
 
         <label className="block">
-          <span className="block text-[11px] font-medium text-console-body">
+          <span className="block text-[12px] font-medium uppercase leading-4 tracking-[0.06em] text-console-muted">
             Description <span className="text-console-subtle">(optional)</span>
           </span>
           <textarea
@@ -289,7 +289,7 @@ export const MediaUploader = ({
         </label>
 
         <label className="block">
-          <span className="block text-[11px] font-medium text-console-body">
+          <span className="block text-[12px] font-medium uppercase leading-4 tracking-[0.06em] text-console-muted">
             Status
           </span>
           <select
@@ -310,7 +310,7 @@ export const MediaUploader = ({
                 style={{ width: `${progress}%` }}
               />
             </div>
-            <p className="mt-1 flex items-center gap-1.5 text-[11px] text-console-muted">
+            <p className="mt-1 flex items-center gap-1.5 text-[12px] text-console-muted">
               <Upload size={11} />
               {progress < 100
                 ? 'Uploading — keep this tab open.'

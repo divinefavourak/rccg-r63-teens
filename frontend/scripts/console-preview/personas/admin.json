@@ -1,0 +1,10 @@
+{
+  "GET /identity/me/": {
+    "id": "u-tunde", "username": "tunde", "email": "tunde.adeyemi@gmail.com",
+    "first_name": "Tunde", "last_name": "Adeyemi", "is_superuser": false,
+    "profile": {"id": "pf1", "display_name": "Tunde Adeyemi"},
+    "memberships": [{"id": "m1", "user": "u-tunde", "user_detail": null, "organization_node": "pr1", "organization_node_detail": {"id": "pr1", "name": "RCCG Rehoboth Parish", "node_type": "parish"}, "is_primary": true, "is_active": true, "joined_at": "2024-01-14"}],
+    "role_assignments": [{"id": "ra0", "user": "u-tunde", "user_detail": null, "role": "role-sa", "role_detail": {"id": "role-sa", "code": "national_coordinator", "label": "National Coordinator", "description": "", "allowed_node_types": ["national"], "permissions": [], "is_system": true, "is_active": true}, "node": "n0", "node_detail": {"id": "n0", "name": "RCCG Nigeria", "node_type": "national"}, "start_date": "2025-03-03", "end_date": null, "is_active": true, "appointed_by": null, "appointed_by_detail": null, "created_at": "2025-03-03T09:00:00Z"}],
+    "permissions": ["users.view", "users.manage", "profiles.view", "profiles.manage", "memberships.view", "memberships.manage", "roles.view", "roles.assign", "roles.manage", "hierarchy.view", "hierarchy.manage", "content.view", "content.publish", "content.manage", "bible.manage", "media.manage", "events.view", "events.manage", "events.checkin", "payments.view", "payments.manage"]
+  }
+}

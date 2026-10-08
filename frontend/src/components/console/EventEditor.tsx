@@ -18,18 +18,40 @@ import { Btn, Modal } from './primitives';
 import { useConsoleAuth } from '../../context/ConsoleAuthContext';
 
 /** `Event.EventType` choices. */
+// `Event.EventType` in events/models.py. The backend refuses anything else,
+// so this list is that list and nothing more.
 const EVENT_TYPES = [
   ['service', 'Service'],
+  ['hangout', 'Hangout'],
+  ['campout', 'Camp out'],
   ['conference', 'Conference'],
-  ['camp', 'Camp'],
   ['retreat', 'Retreat'],
   ['workshop', 'Workshop'],
   ['outreach', 'Outreach'],
   ['concert', 'Concert'],
-  ['competition', 'Competition'],
-  ['training', 'Training'],
+  ['webinar', 'Webinar'],
   ['other', 'Other'],
 ] as const;
+
+/** What each field is called on the form, for an error that names it. */
+const FIELD_NAMES: Record<string, string> = {
+  event_type: 'Type',
+  description: 'Description',
+  short_description: 'Short description',
+  start_datetime: 'Starts',
+  end_datetime: 'Ends',
+  venue: 'Venue',
+  address: 'Address',
+  city: 'City',
+  state: 'State',
+  price: 'Price',
+  max_attendees: 'Capacity',
+  registration_status: 'Registration',
+  status: 'Status',
+  scope_node: 'Scope',
+  cover_image: 'Cover image',
+  slug: 'Title',
+};
 
 export interface EventDraft {
   id?: string;
@@ -44,6 +66,7 @@ export interface EventDraft {
   city?: string;
   state?: string;
   is_free?: boolean;
+  bedspaces_enabled?: boolean;
   price?: string | number | null;
   max_attendees?: number | null;
   registration_status?: string;
@@ -65,13 +88,13 @@ const Field = ({
   required?: boolean;
 }) => (
   <label className="block">
-    <span className="block text-[11px] font-medium text-console-body">
+    <span className="block text-[12px] font-medium uppercase leading-4 tracking-[0.06em] text-console-muted">
       {label}
       {required && <span className="ml-0.5 text-console-danger">*</span>}
     </span>
     {children}
     {hint && (
-      <span className="mt-0.5 block text-[11px] leading-snug text-console-subtle">
+      <span className="mt-0.5 block text-[12px] leading-4 text-console-subtle">
         {hint}
       </span>
     )}
@@ -79,7 +102,7 @@ const Field = ({
 );
 
 const inputCls =
-  'mt-1 w-full rounded-console-md border border-console-border bg-console-surface px-2.5 py-2 text-[13px] text-console-text outline-none transition-colors focus:border-console-action';
+  'mt-1 w-full rounded-console-md border-2 border-transparent bg-console-tinted px-3.5 py-2.5 text-[16px] leading-6 text-console-text outline-none transition-colors focus:border-console-text';
 
 export const EventEditor = ({
   event,
@@ -105,6 +128,7 @@ export const EventEditor = ({
     city: event?.city ?? '',
     state: event?.state ?? '',
     is_free: event?.is_free ?? true,
+    bedspaces_enabled: event?.bedspaces_enabled ?? false,
     price: event?.price ?? '',
     max_attendees: event?.max_attendees ?? null,
     registration_status: event?.registration_status ?? 'open',
@@ -184,7 +208,7 @@ export const EventEditor = ({
       setErrors(
         Object.keys(mapped).length
           ? mapped
-          : { __all__: 'Could not save this event.' },
+          : { __all__: "We couldn't reach the server. Check your connection and try again." },
       );
     } finally {
       setBusy(false);
@@ -212,9 +236,23 @@ export const EventEditor = ({
         </>
       }
     >
-      {errors.__all__ && (
-        <div className="mb-3 rounded-console-md bg-console-danger-bg px-3 py-2 text-[13px] text-console-danger">
-          {errors.__all__}
+      {/* Every refusal the server sent, by the field's name on this form.
+          Only the title's is repeated beside its field. */}
+      {Object.keys(errors).length > 0 && (
+        <div
+          role="alert"
+          className="mb-3 rounded-console-lg bg-console-danger-bg px-3.5 py-3 text-[14px] leading-5 text-console-text"
+        >
+          <p className="font-semibold">This event wasn't saved.</p>
+          <ul className="mt-1 list-disc pl-5">
+            {Object.entries(errors).map(([field, message]) => (
+              <li key={field}>
+                {field === '__all__' || field === 'detail' || field === 'non_field_errors'
+                  ? message
+                  : `${FIELD_NAMES[field] ?? field.replace(/_/g, ' ')}: ${message}`}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -228,7 +266,7 @@ export const EventEditor = ({
             placeholder="Teens Camp 2026"
           />
           {errors.title && (
-            <span className="mt-0.5 block text-[11px] text-console-danger">
+            <span className="mt-0.5 block text-[12px] text-console-danger">
               {errors.title}
             </span>
           )}
@@ -276,7 +314,7 @@ export const EventEditor = ({
               className={inputCls}
             />
             {endsBeforeStart && (
-              <span className="mt-0.5 block text-[11px] text-console-danger">
+              <span className="mt-0.5 block text-[12px] text-console-danger">
                 The end has to come after the start.
               </span>
             )}
@@ -296,8 +334,28 @@ export const EventEditor = ({
           />
         </Field>
 
+        {/* Off unless the organiser turns it on. The hostels themselves are
+            set up from the event's Registrations screen once it is saved. */}
         <div className="rounded-console-md border border-console-border p-3">
-          <label className="flex items-center gap-2 text-[13px] text-console-body">
+          <label className="flex items-center gap-2 text-[14px] text-console-body">
+            <input
+              type="checkbox"
+              checked={Boolean(form.bedspaces_enabled)}
+              onChange={(e) => set('bedspaces_enabled', e.target.checked)}
+            />
+            People sleep over, and need a bedspace
+          </label>
+          {form.bedspaces_enabled && (
+            <p className="mt-1 text-[12px] font-medium leading-4 text-console-muted">
+              Beds are given out automatically as people register. Add the
+              hostels under Registrations after you save. Running out of beds
+              does not close registration.
+            </p>
+          )}
+        </div>
+
+        <div className="rounded-console-md border border-console-border p-3">
+          <label className="flex items-center gap-2 text-[14px] text-console-body">
             <input
               type="checkbox"
               checked={form.is_free}
@@ -427,7 +485,7 @@ export const EventEditor = ({
         )}
 
         {missing.length > 0 && (
-          <p className="text-[11px] text-console-subtle">
+          <p className="text-[12px] text-console-subtle">
             Still needed: {missing.join(', ').replace(/_/g, ' ')}.
           </p>
         )}

@@ -33,21 +33,31 @@ interface Props {
   onAssigned: () => void;
   /** Pre-selected person, when opened from a member row. */
   initialUserId?: string;
+  /** Seeds the people search, so that person is in the first results. */
+  initialQuery?: string;
 }
 
-export const AssignRoleModal = ({ onClose, onAssigned, initialUserId }: Props) => {
+export const AssignRoleModal = ({
+  onClose,
+  onAssigned,
+  initialUserId,
+  initialQuery = '',
+}: Props) => {
   const { permissions, me } = useConsoleAuth();
   const hierarchy = useHierarchy();
 
   const [userId, setUserId] = useState<string | undefined>(initialUserId);
   const [nodeId, setNodeId] = useState<string | undefined>();
   const [roleId, setRoleId] = useState<string | undefined>();
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [roleQuery, setRoleQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Searched on the server. The list is paged, so filtering the first page in
+  // the browser would only ever find the 20 most recent joiners.
   const members = useConsoleList<ConsoleMembership>('/identity/memberships/', {
+    params: { search: query.trim() || undefined, is_active: 'true' },
     errorMessage: 'Could not load people.',
   });
   const roles = useConsoleList<ConsoleRole>('/identity/roles/', {
@@ -157,13 +167,13 @@ export const AssignRoleModal = ({ onClose, onAssigned, initialUserId }: Props) =
       }
     >
       {error && (
-        <div className="mb-3 rounded-console-md bg-console-danger-bg px-3 py-2 text-[13px] text-console-danger">
+        <div className="mb-3 rounded-console-md bg-console-danger-bg px-3 py-2 text-[14px] text-console-danger">
           {error}
         </div>
       )}
 
       {/* 1 — who */}
-      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-console-subtle">
+      <p className="mb-1.5 text-[12px] font-medium uppercase tracking-[0.06em] text-console-muted">
         1 · Who
       </p>
       <div className="mb-2 flex items-center gap-2 rounded-console-md border border-console-border px-2.5 py-1.5">
@@ -172,7 +182,7 @@ export const AssignRoleModal = ({ onClose, onAssigned, initialUserId }: Props) =
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search by name or email…"
-          className="w-full bg-transparent text-[13px] text-console-text outline-none placeholder:text-console-subtle"
+          className="w-full bg-transparent text-[14px] text-console-text outline-none placeholder:text-console-subtle"
         />
       </div>
       <div className="console-scroll mb-4 max-h-40 overflow-y-auto rounded-console-md border border-console-border">
@@ -194,10 +204,10 @@ export const AssignRoleModal = ({ onClose, onAssigned, initialUserId }: Props) =
             >
               <Avatar name={m.user_detail?.display_name ?? '?'} size={24} />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] text-console-text">
+                <span className="block truncate text-[14px] text-console-text">
                   {m.user_detail?.display_name ?? m.user_detail?.username}
                 </span>
-                <span className="block truncate text-[11px] text-console-subtle">
+                <span className="block truncate text-[12px] text-console-subtle">
                   {m.organization_node_detail?.name}
                 </span>
               </span>
@@ -210,7 +220,7 @@ export const AssignRoleModal = ({ onClose, onAssigned, initialUserId }: Props) =
       </div>
 
       {/* 2 — where */}
-      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-console-subtle">
+      <p className="mb-1.5 text-[12px] font-medium uppercase tracking-[0.06em] text-console-muted">
         2 · Where
       </p>
       <select
@@ -219,7 +229,7 @@ export const AssignRoleModal = ({ onClose, onAssigned, initialUserId }: Props) =
           setNodeId(e.target.value);
           setRoleId(undefined); // node changes which roles are legal
         }}
-        className="mb-4 w-full rounded-console-md border border-console-border bg-console-surface px-2.5 py-2 text-[13px] text-console-text outline-none focus:border-console-action"
+        className="mb-4 w-full rounded-console-md border-2 border-transparent bg-console-tinted px-3.5 py-2.5 text-[16px] leading-6 text-console-text outline-none transition-colors focus:border-console-text"
       >
         {selectableNodes.map((n) => (
           <option key={n.id} value={n.id}>
@@ -230,7 +240,7 @@ export const AssignRoleModal = ({ onClose, onAssigned, initialUserId }: Props) =
       </select>
 
       {/* 3 — what */}
-      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-console-subtle">
+      <p className="mb-1.5 text-[12px] font-medium uppercase tracking-[0.06em] text-console-muted">
         3 · What
       </p>
       <div className="mb-2 flex items-center gap-2 rounded-console-md border border-console-border px-2.5 py-1.5">
@@ -239,7 +249,7 @@ export const AssignRoleModal = ({ onClose, onAssigned, initialUserId }: Props) =
           value={roleQuery}
           onChange={(e) => setRoleQuery(e.target.value)}
           placeholder="Filter roles…"
-          className="w-full bg-transparent text-[13px] text-console-text outline-none placeholder:text-console-subtle"
+          className="w-full bg-transparent text-[14px] text-console-text outline-none placeholder:text-console-subtle"
         />
       </div>
 
@@ -271,12 +281,12 @@ export const AssignRoleModal = ({ onClose, onAssigned, initialUserId }: Props) =
               ].join(' ')}
             >
               <span className="flex items-center justify-between gap-2">
-                <span className="text-[13px] font-medium text-console-text">
+                <span className="text-[14px] font-medium text-console-text">
                   {role.label}
                 </span>
                 <Badge tone="neutral">{role.permissions?.length ?? 0}/21</Badge>
               </span>
-              <span className="mt-0.5 block text-[11px] leading-snug text-console-subtle">
+              <span className="mt-0.5 block text-[12px] leading-4 text-console-subtle">
                 {reason ?? role.description ?? ' '}
               </span>
             </button>

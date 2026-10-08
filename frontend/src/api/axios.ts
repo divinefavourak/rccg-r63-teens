@@ -44,10 +44,18 @@ function refreshAccessToken(): Promise<string> {
 
         // Plain axios, not `api`: routing this through the instance would send it
         // back through this same interceptor and recurse on a failed refresh.
-        const { data } = await axios.post(`${API_URL}/auth/token/refresh/`, {
+        // `/auth/refresh/` is the route (users/urls.py). The old path here,
+        // `/auth/token/refresh/`, does not exist, so every expired session
+        // ended in a 404 and a failed request instead of a quiet refresh.
+        const { data } = await axios.post(`${API_URL}/auth/refresh/`, {
             refresh: refreshToken,
         });
-        localStorage.setItem('rccg_user', JSON.stringify({ ...user, token: data.access }));
+        // The backend may rotate the refresh token; keep the new one when it does.
+        localStorage.setItem('rccg_user', JSON.stringify({
+            ...user,
+            token: data.access,
+            refreshToken: data.refresh ?? refreshToken,
+        }));
         return data.access as string;
     })();
 

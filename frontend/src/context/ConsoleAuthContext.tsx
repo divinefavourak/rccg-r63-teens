@@ -222,7 +222,10 @@ export const ConsoleAuthProvider = ({ children }: { children: ReactNode }) => {
     canAll,
     canAny,
     permissionsAt,
-    scopeNode: scopeNode ?? homeNode,
+    // With nothing chosen yet, start where the holder's authority is: a
+    // Regional Coordinator opens on their region, not on the parish they
+    // happen to worship in. Someone with no role starts at their home node.
+    scopeNode: scopeNode ?? assignments[0]?.node_detail ?? homeNode,
     setScopeNode,
     homeNode,
     assignments,

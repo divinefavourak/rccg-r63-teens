@@ -16,18 +16,18 @@ import {
   Film,
   Headphones,
   Layers,
-  Pencil,
   Play,
   Upload,
   X,
 } from 'lucide-react';
 import ScreenShell from '../../components/console/ScreenShell';
 import {
-  Badge,
   Btn,
   Card,
   EmptyState,
   ErrorState,
+  Pager,
+  PublishPill,
   Skeleton,
   Table,
   TableSkeleton,
@@ -38,7 +38,7 @@ import {
 import { PermissionGate } from '../../components/console/PermissionGate';
 import MediaUploader from '../../components/console/MediaUploader';
 import { useConsoleAuth } from '../../context/ConsoleAuthContext';
-import { useConsoleList } from '../../hooks/useConsoleList';
+import { useConsoleList, useConsolePage } from '../../hooks/useConsoleList';
 
 interface Episode {
   id: string;
@@ -63,13 +63,15 @@ interface Episode {
 interface Series {
   id: string;
   title: string;
-  description?: string;
+  short_description?: string;
   cover_image?: string | null;
   episode_count?: number;
   status?: string;
 }
 
 type Tab = 'episodes' | 'series';
+
+const PAGE_SIZE = 18;
 
 /** The playable URL, whichever field it landed in. */
 function sourceOf(e: Episode): string | null {
@@ -88,28 +90,41 @@ export const Media = () => {
   const [playing, setPlaying] = useState<Episode | null>(null);
   const enabled = can('media.manage');
 
-  const episodes = useConsoleList<Episode>('/media/episodes/', {
+  const [episodePage, setEpisodePage] = useState(1);
+  const [seriesPage, setSeriesPage] = useState(1);
+
+  // Newest upload first. The endpoint's own default orders by publish date,
+  // which leaves drafts (no publish date) in no useful order.
+  const episodes = useConsolePage<Episode>('/media/episodes/', {
     enabled,
-    errorMessage: 'Could not load episodes.',
+    params: { ordering: '-created_at', page: episodePage, page_size: PAGE_SIZE },
+    errorMessage: "We couldn't load the episodes. Try again.",
   });
-  const series = useConsoleList<Series>('/media/series/', {
+  const series = useConsolePage<Series>('/media/series/', {
     enabled,
-    errorMessage: 'Could not load series.',
+    params: { page: seriesPage, page_size: PAGE_SIZE },
+    errorMessage: "We couldn't load the series. Try again.",
   });
 
+  // Every series, for the uploader's picker: a page of 18 would hide the rest.
+  const allSeries = useConsoleList<Series>('/media/series/', {
+    enabled,
+    params: { page_size: 200, ordering: '-created_at' },
+  });
   const seriesOptions = useMemo(
-    () => series.items.map((s) => ({ id: s.id, title: s.title })),
-    [series.items],
+    () => allSeries.items.map((s) => ({ id: s.id, title: s.title })),
+    [allSeries.items],
   );
 
   return (
     <ScreenShell
       title="Library & Media"
       subtitle="Podcasts, videos and the series they belong to."
+      hideScope
       actions={
         <PermissionGate permission="media.manage">
-          <Btn variant="primary" size="sm" onClick={() => setUploading(true)}>
-            <Upload size={14} /> Upload
+          <Btn variant="primary" size="md" onClick={() => setUploading(true)}>
+            <Upload size={16} /> Upload
           </Btn>
         </PermissionGate>
       }
@@ -127,8 +142,8 @@ export const Media = () => {
 
       <Tabs
         tabs={[
-          { id: 'episodes', label: 'Episodes', count: episodes.items.length },
-          { id: 'series', label: 'Series', count: series.items.length },
+          { id: 'episodes', label: 'Episodes', count: episodes.isLoading ? undefined : episodes.count },
+          { id: 'series', label: 'Series', count: series.isLoading ? undefined : series.count },
         ]}
         active={tab}
         onChange={setTab}
@@ -140,11 +155,11 @@ export const Media = () => {
         <Card className="mb-4 overflow-hidden">
           <div className="flex items-start justify-between gap-3 border-b border-console-border px-4 py-2.5">
             <div className="min-w-0">
-              <p className="truncate text-[13px] font-semibold text-console-text">
+              <p className="truncate text-[14px] font-semibold text-console-text">
                 {playing.title}
               </p>
               {playing.series_title && (
-                <p className="text-[11px] text-console-subtle">
+                <p className="text-[12px] font-medium text-console-muted">
                   {playing.series_title}
                 </p>
               )}
@@ -178,7 +193,7 @@ export const Media = () => {
                 />
               )
             ) : (
-              <p className="py-6 text-center text-[13px] text-console-subtle">
+              <p className="py-6 text-center text-[14px] text-console-subtle">
                 This episode has no file or URL attached, so there is nothing to
                 play.
               </p>
@@ -205,8 +220,8 @@ export const Media = () => {
               message="Podcasts and videos you upload appear here, and in the teen app once published."
               action={
                 <PermissionGate permission="media.manage">
-                  <Btn variant="primary" onClick={() => setUploading(true)}>
-                    <Upload size={14} /> Upload the first one
+                  <Btn variant="primary" size="md" onClick={() => setUploading(true)}>
+                    <Upload size={16} /> Upload the first one
                   </Btn>
                 </PermissionGate>
               }
@@ -251,42 +266,38 @@ export const Media = () => {
                     )}
 
                     {e.duration_formatted && (
-                      <span className="absolute bottom-1.5 right-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white">
+                      <span className="absolute bottom-1.5 right-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[12px] font-medium tabular-nums text-white">
                         {e.duration_formatted}
                       </span>
                     )}
                   </button>
 
-                  <div className="p-3">
-                    <p className="line-clamp-2 text-[13px] font-medium leading-snug text-console-text">
+                  <div className="p-4">
+                    <p className="line-clamp-2 text-[14px] font-semibold leading-5 text-console-text">
                       {e.title}
                     </p>
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                      <Badge
-                        tone={e.status === 'published' ? 'success' : 'neutral'}
-                      >
-                        {(e.status ?? 'draft').replace('_', ' ')}
-                      </Badge>
+                      <PublishPill status={e.status ?? 'draft'} />
                       {e.series_title && (
-                        <span className="truncate text-[11px] text-console-subtle">
+                        <span className="truncate text-[12px] font-medium text-console-muted">
                           {e.series_title}
                         </span>
                       )}
                     </div>
-                    <div className="mt-1.5 flex items-center gap-3 text-[11px] text-console-subtle">
+                    <div className="mt-1.5 flex items-center gap-3 text-[12px] font-medium text-console-muted">
                       <span className="flex items-center gap-1">
-                        <Play size={10} /> {e.view_count ?? 0}
+                        <Play size={12} /> {e.view_count ?? 0}
                       </span>
                       {e.duration_seconds ? (
                         <span className="flex items-center gap-1">
-                          <Clock size={10} />
+                          <Clock size={12} />
                           {e.duration_formatted ??
                             `${Math.round(e.duration_seconds / 60)} min`}
                         </span>
                       ) : null}
                     </div>
                     {!playable && (
-                      <p className="mt-1.5 text-[11px] text-console-caution">
+                      <p className="mt-1.5 text-[12px] text-console-caution">
                         No file attached
                       </p>
                     )}
@@ -294,6 +305,20 @@ export const Media = () => {
                 </Card>
               );
             })}
+            {episodes.count > PAGE_SIZE && (
+              <Card className="sm:col-span-2 lg:col-span-3">
+                <div className="[&>div]:border-t-0">
+                  <Pager
+                    page={episodePage}
+                    pageSize={PAGE_SIZE}
+                    count={episodes.count}
+                    shown={episodes.items.length}
+                    noun="episodes"
+                    onPage={setEpisodePage}
+                  />
+                </div>
+              </Card>
+            )}
           </div>
         )
       ) : (
@@ -314,7 +339,6 @@ export const Media = () => {
                   <Th>Series</Th>
                   <Th>Episodes</Th>
                   <Th>Status</Th>
-                  <Th className="w-10" />
                 </tr>
               </thead>
               <tbody>
@@ -338,9 +362,9 @@ export const Media = () => {
                           <span className="block font-medium text-console-text">
                             {s.title}
                           </span>
-                          {s.description && (
-                            <span className="line-clamp-1 text-[11px] text-console-subtle">
-                              {s.description}
+                          {s.short_description && (
+                            <span className="line-clamp-1 text-[12px] font-medium text-console-muted">
+                              {s.short_description}
                             </span>
                           )}
                         </div>
@@ -350,23 +374,22 @@ export const Media = () => {
                       {s.episode_count ?? 0}
                     </Td>
                     <Td>
-                      <Badge
-                        tone={s.status === 'published' ? 'success' : 'neutral'}
-                      >
-                        {(s.status ?? 'draft').replace('_', ' ')}
-                      </Badge>
-                    </Td>
-                    <Td>
-                      <PermissionGate permission="media.manage">
-                        <Btn variant="ghost" size="sm" title="Edit series">
-                          <Pencil size={13} />
-                        </Btn>
-                      </PermissionGate>
+                      <PublishPill status={s.status ?? 'draft'} />
                     </Td>
                   </tr>
                 ))}
               </tbody>
             </Table>
+          )}
+          {series.count > PAGE_SIZE && (
+            <Pager
+              page={seriesPage}
+              pageSize={PAGE_SIZE}
+              count={series.count}
+              shown={series.items.length}
+              noun="series"
+              onPage={setSeriesPage}
+            />
           )}
         </Card>
       )}
