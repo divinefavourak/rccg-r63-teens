@@ -15,7 +15,7 @@
  * the browser only ever holds one page.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, Plus, Search, X } from 'lucide-react';
+import { Check, Pencil, Plus, Search, X } from 'lucide-react';
 import api from '../../api/axios';
 import ScreenShell from '../../components/console/ScreenShell';
 import {
@@ -35,6 +35,7 @@ import {
 } from '../../components/console/primitives';
 import { PermissionGate } from '../../components/console/PermissionGate';
 import AssignRoleModal from '../../components/console/AssignRoleModal';
+import EditMemberModal from '../../components/console/EditMemberModal';
 import { useConsoleAuth } from '../../context/ConsoleAuthContext';
 import { useConsoleList, useConsolePage } from '../../hooks/useConsoleList';
 import { NODE_TYPE_LABELS } from '../../types/console';
@@ -122,6 +123,8 @@ const PeopleScreen = () => {
   const [selected, setSelected] = useState<ConsoleMembership | null>(null);
   const [assigning, setAssigning] = useState<ConsoleMembership | 'anyone' | null>(null);
   const [revoking, setRevoking] = useState<ConsoleRoleAssignment | null>(null);
+  const [editing, setEditing] = useState<ConsoleMembership | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -248,6 +251,34 @@ const PeopleScreen = () => {
         >
           {actionError}
         </AlertBanner>
+      )}
+
+      {saved && (
+        <AlertBanner
+          kind="success"
+          className="mb-4"
+          action={
+            <Btn variant="soft" size="md" onClick={() => setSaved(null)}>
+              Dismiss
+            </Btn>
+          }
+        >
+          {saved}
+        </AlertBanner>
+      )}
+
+      {editing && (
+        <EditMemberModal
+          userId={editing.user}
+          name={nameOf(editing.user_detail)}
+          onClose={() => setEditing(null)}
+          onSaved={(name) => {
+            setEditing(null);
+            setSelected(null);
+            setSaved(`${name}'s details are saved.`);
+            reloadAll();
+          }}
+        />
       )}
 
       {assigning && (
@@ -558,13 +589,20 @@ const PeopleScreen = () => {
               </>
             )}
 
-            <PermissionGate permission="roles.assign">
-              <div className="flex flex-wrap gap-2">
+            {/* Each is absent for someone who cannot do it. Editing an account
+                needs users.manage; granting authority needs roles.assign. */}
+            <div className="flex flex-wrap gap-2">
+              <PermissionGate permission="roles.assign">
                 <Btn variant="primary" size="md" onClick={() => setAssigning(selected)}>
                   <Plus size={16} /> Assign role
                 </Btn>
-              </div>
-            </PermissionGate>
+              </PermissionGate>
+              <PermissionGate permission="users.manage">
+                <Btn size="md" onClick={() => setEditing(selected)}>
+                  <Pencil size={16} /> Edit details
+                </Btn>
+              </PermissionGate>
+            </div>
           </Card>
         )}
       </div>

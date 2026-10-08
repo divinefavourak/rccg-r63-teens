@@ -210,6 +210,7 @@ The foundation. Full spec: `08-bible-experience.md`. Summary AC for V1: reader w
 - Lists are searched and paged on the server. People and Roles are narrowed to the scope switcher's node with `?node=`, which can narrow within the caller's authority and never widen it.
 - Check in and My class use the endpoints a Teacher is allowed to call (`/events/checkin/…`, `/identity/class/`, `/content/manuals/current/`). The general registrations list sends a non-manager only their own tickets, so no screen for the door reads it.
 - The Console starts scoped to the node where the holder's highest role is held.
+- People: a holder of `users.manage` can edit a member's name, email, phone and gender, and deactivate the account (`PATCH /auth/users/<id>/`). The legacy `role` field is not offered there: setting it to admin makes an account a superuser, and authority is granted with Assign a role. Known gap: the endpoint is not scoped to the caller's part of the tree, so anyone with `users.manage` can edit any account.
 
 Built: Overview, People, Events with per-event Registrations and bedspaces, Check in, Content calendar, Review queue, My class, Manuals, Library & Media, Bible, Roles, Hierarchy, Analytics, Audit log, Settings. Not built: CSV import and export, bulk upload, the health and guardian block on a registration, notification compose and delivery, a manual editor, moving a hierarchy node, and search across the Console.
 **Metrics:** Coordinator weekly active rate; time-to-publish; % events created without support tickets.
