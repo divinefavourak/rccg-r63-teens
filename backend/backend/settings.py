@@ -44,7 +44,13 @@ OTP_PROVIDER = os.getenv('OTP_PROVIDER', 'users.otp_providers.ConsoleOTPProvider
 # With OTP_PROVIDER=users.otp_providers.EmailAndSmsOTPProvider, email codes go
 # out through the normal mailer. SMS stays off until this names a callable
 # `(phone, message) -> None`; sign-up still completes on the email copy.
+# For Termii: OTP_SMS_BACKEND=backend.sms_backend.send_termii_sms, with the
+# API key and base URL from the Termii dashboard and a sender ID it has approved.
 OTP_SMS_BACKEND = os.getenv('OTP_SMS_BACKEND', '')
+TERMII_API_KEY = os.getenv('TERMII_API_KEY', '')
+TERMII_BASE_URL = os.getenv('TERMII_BASE_URL', '')
+TERMII_SENDER_ID = os.getenv('TERMII_SENDER_ID', 'FaithTribe')
+TERMII_SMS_CHANNEL = os.getenv('TERMII_SMS_CHANNEL', 'dnd')
 # How many sign-up codes one email address or phone number may be sent inside
 # SIGNUP_CODE_WINDOW_SECONDS. This, not the per-IP throttle, is what stops the
 # endpoint being used to flood somebody else's inbox or phone.

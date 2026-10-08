@@ -33,6 +33,33 @@ Never commit secret values. Set them in the deployment platform's secret store.
 | `BREVO_SMTP_USER` | SMTP user. |
 | `DEFAULT_FROM_EMAIL` | From address on outbound mail. |
 
+## SMS codes (Termii) — required before sign-up codes go out by SMS
+
+| Variable | Notes |
+|---|---|
+| `OTP_SMS_BACKEND` | Set to `backend.sms_backend.send_termii_sms` to turn SMS on. Unset ⇒ codes go by email only; sign-up still completes. Only read when `OTP_PROVIDER` is `users.otp_providers.EmailAndSmsOTPProvider`. |
+| `TERMII_API_KEY` | Keep secret. From the Termii dashboard. |
+| `TERMII_BASE_URL` | Each Termii account has its own; copy it from the dashboard. No default — SMS will not send without it. |
+| `TERMII_SENDER_ID` | The name the SMS comes from, 3–11 characters. Defaults to `FaithTribe`. Must be one Termii has approved. |
+| `TERMII_SMS_CHANNEL` | Defaults to `dnd`, which reaches numbers with Do Not Disturb on. Termii warns that codes sent on `generic` fail and can get the sender ID blocked. |
+
+A failed SMS never fails the request: it is logged (`[OTP] SMS send failed`) and the
+email copy of the code still goes out. An empty wallet therefore shows up only in
+the logs.
+
+Brevo's SMS was tried first and dropped on price (about $49 per 100 credits for
+Nigeria). Brevo stays for email only.
+
+### Before SMS can be switched on
+
+- [ ] Collect a business verification document (for Termii's account verification
+      and sender ID approval).
+- [ ] Create the Termii account; copy the API key and base URL.
+- [ ] Request the sender ID `FaithTribe` and wait for approval.
+- [ ] Ask Termii to activate the DND route on the account.
+- [ ] Fund the wallet.
+- [ ] Send one test SMS to a real phone, then set the variables above on Render.
+
 ## Push notifications — required for the habit loop
 
 | Variable | Notes |
@@ -54,7 +81,7 @@ Never commit secret values. Set them in the deployment platform's secret store.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `OTP_PROVIDER` | `users.otp_providers.ConsoleOTPProvider` | **A no-op/console backend.** In production with DEBUG off, OTP requests fail or drop. Point at a real SMS backend (Termii / Africa's Talking) before enabling phone auth. Django's system check already warns on this. |
+| `OTP_PROVIDER` | `users.otp_providers.ConsoleOTPProvider` | **A no-op/console backend.** In production with DEBUG off, OTP requests fail or drop. Set to `users.otp_providers.EmailAndSmsOTPProvider` for real delivery: email through the mailer, SMS through Termii (see above). Django's system check already warns on this. |
 | `OTP_CODE_LENGTH` / `OTP_TTL_SECONDS` / `OTP_MAX_ATTEMPTS` | 6 / 600 / 5 | OTP behaviour. |
 | `ENFORCE_EMAIL_VERIFICATION` | `False` | Turn on once the verification flow is live. |
 | `AUTH_COOKIE_ACCESS` / `_REFRESH` | token names | JWT cookie names. |
