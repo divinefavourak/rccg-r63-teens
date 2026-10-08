@@ -18,7 +18,9 @@ The CSV needs a header row with these columns (extra columns are ignored):
   same file creates nothing new. Fix a spelling in the file *before* importing:
   "COFB" and "Church of the First Born" would become two parishes.
 - The province must already exist under the region. A typo there is reported
-  and the row skipped, rather than quietly creating an eighth province.
+  and the row skipped, rather than quietly creating an eighth province. On a
+  database with no provinces yet, pass `--create-provinces` to add the ones the
+  file names.
 - Nothing is ever deleted or moved, and no memberships are touched.
 """
 import csv
@@ -46,6 +48,11 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('csv_path')
         parser.add_argument('--region-name', default='Region 63')
+        parser.add_argument(
+            '--create-provinces', action='store_true',
+            help='Create a province named in the file when the region has none '
+                 'by that name. Off by default, so a typo is reported and not '
+                 'turned into a new province.')
         parser.add_argument('--dry-run', action='store_true',
                             help='Build, report, then roll everything back.')
 
@@ -71,6 +78,7 @@ class Command(BaseCommand):
 
         created = {'zone': 0, 'area': 0, 'parish': 0}
         skipped = []
+        created_provinces = []
 
         with handle, transaction.atomic():
             reader = csv.DictReader(handle)
@@ -83,9 +91,15 @@ class Command(BaseCommand):
                 if not any(row.values()):
                     continue
 
-                parent = provinces.get(row.get('province', '').casefold())
+                province_name = row.get('province', '')
+                parent = provinces.get(province_name.casefold())
+                if parent is None and province_name and options['create_provinces']:
+                    parent, _ = services.get_or_create_child(
+                        region, NodeType.PROVINCE, province_name)
+                    provinces[province_name.casefold()] = parent
+                    created_provinces.append(province_name)
                 if parent is None:
-                    skipped.append((line, f'unknown province "{row.get("province", "")}"'))
+                    skipped.append((line, f'unknown province "{province_name}"'))
                     continue
 
                 # Each level hangs off the one before it, so a gap ends the row:
@@ -106,6 +120,13 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING('DRY RUN: nothing was saved.'))
                 transaction.set_rollback(True)
 
+        if created_provinces:
+            self.stdout.write('provinces created: ' + ', '.join(created_provinces))
+        elif skipped and not options['create_provinces']:
+            existing = ', '.join(sorted(node.name for node in provinces.values())) or 'none'
+            self.stdout.write(self.style.WARNING(
+                f'Provinces under {region.name}: {existing}. '
+                f'Pass --create-provinces to add the ones in the file.'))
         for line, reason in skipped:
             self.stdout.write(self.style.WARNING(f'  line {line}: {reason}'))
         self.stdout.write(self.style.SUCCESS(
