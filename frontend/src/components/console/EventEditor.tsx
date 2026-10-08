@@ -205,6 +205,11 @@ export const EventEditor = ({
           mapped[k] = Array.isArray(v) ? String(v[0]) : String(v);
         }
       }
+      // Kept in the console too, so a refusal can be read back afterwards.
+      console.error('The server refused this event:', data ?? err);
+      if (mapped.scope_node) {
+        mapped.scope_node = `${scopeNode?.name ?? 'The part of the church you are looking at'} can't own an event. Choose another scope at the top of the page and try again.`;
+      }
       setErrors(
         Object.keys(mapped).length
           ? mapped

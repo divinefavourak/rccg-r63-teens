@@ -39,7 +39,21 @@ export const ConsoleLayout = () => {
   useEffect(() => {
     // Wait for both requests. Deciding on whichever answered first made the
     // starting scope depend on network timing.
-    if (isLoading || scopeNode || hierarchy.isLoading) return;
+    if (isLoading || hierarchy.isLoading) return;
+
+    // A scope remembered from another session can name a node this person can
+    // no longer choose, or one that does not exist in this database at all.
+    // Everything scoped would then be sent a node the server refuses, so drop
+    // it and start again from where their authority is.
+    if (
+      scopeNode &&
+      hierarchy.nodes.length > 0 &&
+      !hierarchy.nodes.some((n) => n.id === scopeNode.id && n.selectable)
+    ) {
+      setScopeNode(null);
+      return;
+    }
+    if (scopeNode) return;
     // The context already starts at the holder's authority or home node. This
     // is for someone with neither (a superuser, typically): fall back to the
     // topmost node they can actually select.
