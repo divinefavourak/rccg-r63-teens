@@ -92,6 +92,9 @@ class Event(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     max_attendees = models.PositiveIntegerField(null=True, blank=True)
     waitlist_enabled = models.BooleanField(default=True)
     max_waitlist = models.PositiveIntegerField(null=True, blank=True)
+    # Sleeping places (a camp). Off unless the organiser turns it on; the
+    # hostels and the rules are in `events/bedspaces.py`.
+    bedspaces_enabled = models.BooleanField(default=False)
     
     # Pricing
     is_free = models.BooleanField(default=False)
@@ -309,6 +312,9 @@ class EventRegistration(UUIDMixin, TimestampMixin):
     attendee_gender = models.CharField(max_length=20, blank=True)
     attendee_date_of_birth = models.DateField(null=True, blank=True)
     attendee_category = models.CharField(max_length=50, blank=True)  # Age group category
+    # A leader sleeps in a bed reserved for leaders, never an attendee's.
+    # Decided at registration by `bedspaces.attends_as_leader`.
+    attending_as_leader = models.BooleanField(default=False)
     
     # Church hierarchy
     attendee_province = models.CharField(max_length=100, choices=Province.choices)
@@ -551,6 +557,12 @@ class EventRegistration(UUIDMixin, TimestampMixin):
                     models.F('checked_in_count') + arrived, 0)
             if counters:
                 Event.objects.filter(pk=self.event_id).update(**counters)
+
+            # A bed follows the place: kept while the registration holds one,
+            # given back when it is cancelled. Inside this transaction, so a
+            # status never commits with the wrong bed.
+            from . import bedspaces
+            bedspaces.sync(self)
             return old_status
 
     def set_status(self, new_status):
@@ -665,3 +677,65 @@ class RegistrationAuditLog(UUIDMixin):
     
     def __str__(self):
         return f"{self.registration.registration_id} - {self.action}"
+
+
+class Hostel(UUIDMixin, TimestampMixin):
+    """
+    Somewhere to sleep at an event. Single-gender, with beds numbered from 1 to
+    `capacity`; `reserved_for_leaders` of them are for leaders and the rest for
+    attendees. See `events/bedspaces.py` for how they are given out.
+    """
+
+    class Gender(models.TextChoices):
+        MALE = 'male', 'Male'
+        FEMALE = 'female', 'Female'
+
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='hostels')
+    name = models.CharField(max_length=100)
+    # The prefix of every bed in it: "HA" gives HA-001, HA-002, ...
+    code = models.CharField(max_length=10)
+    gender = models.CharField(max_length=10, choices=Gender.choices)
+    capacity = models.PositiveIntegerField()
+    reserved_for_leaders = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['code']
+        constraints = [
+            models.UniqueConstraint(fields=['event', 'code'], name='uniq_hostel_code_per_event'),
+            models.CheckConstraint(
+                condition=models.Q(reserved_for_leaders__lte=models.F('capacity')),
+                name='hostel_reserved_within_capacity',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.name} ({self.code})'
+
+
+class BedAssignment(UUIDMixin, TimestampMixin):
+    """One registration's bed: a hostel and a serial number within it."""
+
+    registration = models.OneToOneField(
+        EventRegistration, on_delete=models.CASCADE, related_name='bed')
+    # PROTECT: a hostel with people in it is emptied on purpose, not by deleting it.
+    hostel = models.ForeignKey(Hostel, on_delete=models.PROTECT, related_name='beds')
+    serial = models.PositiveIntegerField()
+    for_leader = models.BooleanField(default=False)
+    # Set when an organiser placed or moved this person by hand.
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='bed_assignments_made',
+    )
+
+    class Meta:
+        ordering = ['hostel__code', 'serial']
+        constraints = [
+            models.UniqueConstraint(fields=['hostel', 'serial'], name='uniq_bed_per_hostel'),
+        ]
+
+    @property
+    def code(self):
+        return f'{self.hostel.code}-{self.serial:03d}'
+
+    def __str__(self):
+        return self.code

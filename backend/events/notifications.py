@@ -62,6 +62,10 @@ def notify_registration_received(registration):
         f'Your place at {registration.event.title} is held. '
         f'Complete payment within 24 hours to confirm it.'
     )
+    # Where they will sleep, or that there is no bed left: said at the moment
+    # they register, not discovered on arrival.
+    from . import bedspaces
+    body += bedspaces.describe(registration)
 
     return send(
         registration.user,

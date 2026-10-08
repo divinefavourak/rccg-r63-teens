@@ -5,6 +5,8 @@ Every endpoint delegates authorization to `identity.authorization` — no
 permission logic is implemented inline. List endpoints are scoped with
 ``scope_queryset``; object/collection access is gated by ``HasPermission``.
 """
+import uuid
+
 from django.shortcuts import get_object_or_404
 from rest_framework import mixins, status, viewsets
 from rest_framework.permissions import IsAuthenticated
@@ -62,11 +64,46 @@ class PermissionListView(APIView):
         return Response(PermissionSerializer(Permission.objects.all(), many=True).data)
 
 
+def _as_uuid(value):
+    try:
+        return uuid.UUID(str(value))
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
+def _narrow_to_node(queryset, request, node_field):
+    """`?node=<id>` narrows a list to that node and everything beneath it.
+
+    It can only narrow. The queryset is already restricted by `scope_queryset`
+    to subtrees where the caller holds the permission, so naming a node outside
+    them returns nothing rather than that node's rows. A value that is not a
+    node id returns nothing too, not the unfiltered list.
+    """
+    raw = request.query_params.get('node')
+    if not raw:
+        return queryset
+    node_id = _as_uuid(raw)
+    node = HierarchyNode.objects.filter(pk=node_id).first() if node_id else None
+    if node is None:
+        return queryset.none()
+    return queryset.filter(**{f'{node_field}__path__startswith': node.path})
+
+
+# What "search for a person" means on both lists below.
+_PERSON_SEARCH = [
+    'user__first_name', 'user__last_name', 'user__username', 'user__email',
+    'user__profile__display_name',
+]
+
+
 class MembershipViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
                         mixins.CreateModelMixin, viewsets.GenericViewSet):
     """List/inspect memberships within the caller's scope; create with
     memberships.manage at the target node."""
     serializer_class = MembershipSerializer
+    # `?is_active=true`, `?search=`, `?node=` and `?page_size=` (up to 200).
+    filterset_fields = ['is_active', 'is_primary']
+    search_fields = _PERSON_SEARCH + ['organization_node__name']
 
     def get_permissions(self):
         code = Perm.MEMBERSHIPS_MANAGE if self.action == 'create' else Perm.MEMBERSHIPS_VIEW
@@ -82,8 +119,9 @@ class MembershipViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
         qs = (Membership.objects
               .select_related('organization_node', 'user', 'user__profile')
               .order_by('-joined_at'))
-        return authz.scope_queryset(qs, self.request.user, Perm.MEMBERSHIPS_VIEW,
-                                    node_field='organization_node')
+        qs = authz.scope_queryset(qs, self.request.user, Perm.MEMBERSHIPS_VIEW,
+                                  node_field='organization_node')
+        return _narrow_to_node(qs, self.request, 'organization_node')
 
     def perform_create(self, serializer):
         # Route through the service so single-primary demotion and the active
@@ -101,6 +139,10 @@ class RoleAssignmentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
     """Grant/revoke authority. Creation goes through the authorization service
     (validates node level and blocks privilege escalation)."""
     serializer_class = RoleAssignmentSerializer
+    # `?is_active=true`, `?search=`, `?node=`, and `?users=<id>,<id>` for the
+    # roles held by the people on one page of a member list.
+    filterset_fields = ['is_active', 'role']
+    search_fields = _PERSON_SEARCH + ['role__label', 'node__name']
 
     def get_permissions(self):
         code = Perm.ROLES_ASSIGN if self.action in ('create', 'destroy') else Perm.ROLES_VIEW
@@ -116,7 +158,13 @@ class RoleAssignmentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
                               'appointed_by', 'appointed_by__profile')
               .prefetch_related('role__permissions')
               .order_by('-created_at'))
-        return authz.scope_queryset(qs, self.request.user, Perm.ROLES_VIEW, node_field='node')
+        qs = authz.scope_queryset(qs, self.request.user, Perm.ROLES_VIEW, node_field='node')
+        qs = _narrow_to_node(qs, self.request, 'node')
+        users = self.request.query_params.get('users')
+        if users is not None:
+            ids = [u for u in (_as_uuid(part) for part in users.split(',')) if u]
+            qs = qs.filter(user_id__in=ids)
+        return qs
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)

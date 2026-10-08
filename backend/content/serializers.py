@@ -196,6 +196,9 @@ class DevotionalCreateUpdateSerializer(serializers.ModelSerializer):
             # required CharField simply saved as '' — every devotional created or
             # edited through the API got an empty title, including the ones the
             # admin panel was faithfully submitting one for.
+            # Read-only, so whoever creates one can act on it next (submit it
+            # for review) without looking it up again by date.
+            'id',
             'title',
             'date',
             'slug',

@@ -10,6 +10,7 @@ router.register(r'events', views.EventViewSet, basename='event')
 router.register(r'registrations', views.EventRegistrationViewSet, basename='registration')
 router.register(r'bulk-uploads', views.EventBulkUploadViewSet, basename='event-bulk-upload')
 router.register(r'audit-logs', views.RegistrationAuditLogViewSet, basename='audit-log')
+router.register(r'hostels', views.HostelViewSet, basename='hostel')
 
 urlpatterns = [
     # Check-in at the door: `events.checkin` only, so a Teacher can use it.

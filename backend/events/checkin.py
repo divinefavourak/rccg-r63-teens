@@ -91,6 +91,13 @@ def _photo(registration):
     return picture.url if picture else None
 
 
+def _bed_code(registration):
+    from .models import BedAssignment
+    bed = BedAssignment.objects.select_related('hostel').filter(
+        registration=registration).first()
+    return bed.code if bed else None
+
+
 def attendee(registration):
     """The little card under every result: who this ticket belongs to."""
     return {
@@ -100,6 +107,8 @@ def attendee(registration):
         'photo': _photo(registration),
         'status': registration.status,
         'payment_status': registration.payment_status,
+        # Shown on the check-in success screen, so the volunteer can point.
+        'bed': _bed_code(registration),
     }
 
 
