@@ -207,8 +207,10 @@ export const EventEditor = ({
       }
       // Kept in the console too, so a refusal can be read back afterwards.
       console.error('The server refused this event:', data ?? err);
+      // The server's own words, with what was sent. An earlier version of this
+      // replaced the reason with a guess, which hid the one fact needed.
       if (mapped.scope_node) {
-        mapped.scope_node = `${scopeNode?.name ?? 'The part of the church you are looking at'} can't own an event. Choose another scope at the top of the page and try again.`;
+        mapped.scope_node = `${mapped.scope_node} (sent ${scopeNode?.name ?? 'no scope'}, id ${scopeNode?.id ?? 'none'})`;
       }
       setErrors(
         Object.keys(mapped).length
