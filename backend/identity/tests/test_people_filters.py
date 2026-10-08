@@ -71,3 +71,44 @@ class PeopleListFilterTests(APITestCase):
     def test_role_assignments_with_no_named_users_returns_nothing(self):
         users = self._users(self.client.get(f'{BASE}/role-assignments/', {'users': ''}))
         self.assertEqual(users, set())
+
+
+@override_settings(CACHES=_LOCMEM)
+class MembershipTransferTests(APITestCase):
+
+    def setUp(self):
+        seed_rbac()
+        self.t = build_tree()
+        self.coord = make_user('chinedu')
+        RoleAssignment.objects.create(
+            user=self.coord, role=Role.objects.get(code='regional_coordinator'),
+            node=self.t['r1'])
+        self.teen = make_user('tolu')
+        self.home = Membership.objects.create(
+            user=self.teen, organization_node=self.t['parish_a'], is_primary=True)
+        self.client.force_authenticate(self.coord)
+
+    def transfer(self, node):
+        return self.client.post(
+            f'{BASE}/memberships/{self.home.id}/transfer/', {'to_node': str(node.id)},
+            format='json')
+
+    def test_moving_makes_the_new_node_home_and_ends_the_old_membership(self):
+        res = self.transfer(self.t['area_b'])
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(str(res.data['organization_node']), str(self.t['area_b'].id))
+        self.assertTrue(res.data['is_primary'])
+        self.home.refresh_from_db()
+        self.assertFalse(self.home.is_active)
+        active = Membership.objects.filter(user=self.teen, is_active=True)
+        self.assertEqual(active.count(), 1)
+
+    def test_it_cannot_move_someone_out_of_the_callers_part_of_the_church(self):
+        res = self.transfer(self.t['r2'])
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.home.refresh_from_db()
+        self.assertTrue(self.home.is_active)
+
+    def test_moving_to_where_they_already_are_is_refused(self):
+        self.assertEqual(self.transfer(self.t['parish_a']).status_code,
+                         status.HTTP_400_BAD_REQUEST)

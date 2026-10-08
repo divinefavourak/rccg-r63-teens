@@ -15,7 +15,7 @@
  * the browser only ever holds one page.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, Pencil, Plus, Search, X } from 'lucide-react';
+import { ArrowRightLeft, Check, Pencil, Plus, Search, X } from 'lucide-react';
 import api from '../../api/axios';
 import ScreenShell from '../../components/console/ScreenShell';
 import {
@@ -27,6 +27,8 @@ import {
   EmptyState,
   ErrorState,
   Modal,
+  PaymentPill,
+  RegistrationPill,
   Table,
   TableSkeleton,
   Tabs,
@@ -36,6 +38,7 @@ import {
 import { PermissionGate } from '../../components/console/PermissionGate';
 import AssignRoleModal from '../../components/console/AssignRoleModal';
 import EditMemberModal from '../../components/console/EditMemberModal';
+import MoveMemberModal from '../../components/console/MoveMemberModal';
 import { useConsoleAuth } from '../../context/ConsoleAuthContext';
 import { useConsoleList, useConsolePage } from '../../hooks/useConsoleList';
 import { NODE_TYPE_LABELS } from '../../types/console';
@@ -45,6 +48,17 @@ import type {
 } from '../../types/console';
 
 type Tab = 'members' | 'roles';
+
+/** `EventRegistrationListSerializer`, the fields the member panel shows. */
+interface PersonRegistration {
+  id: string;
+  registration_id: string;
+  event_title: string;
+  status: string;
+  payment_status: string;
+  created_at: string;
+  bed?: { code: string } | null;
+}
 
 const PAGE_SIZE = 20;
 
@@ -124,6 +138,7 @@ const PeopleScreen = () => {
   const [assigning, setAssigning] = useState<ConsoleMembership | 'anyone' | null>(null);
   const [revoking, setRevoking] = useState<ConsoleRoleAssignment | null>(null);
   const [editing, setEditing] = useState<ConsoleMembership | null>(null);
+  const [moving, setMoving] = useState<ConsoleMembership | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -213,6 +228,13 @@ const PeopleScreen = () => {
 
   const selectedRoles = selected ? (rolesByUser.get(selected.user) ?? []) : [];
 
+  // What the open member registered for. Only an event manager is sent other
+  // people's registrations, so only they are asked.
+  const registrations = useConsolePage<PersonRegistration>('/events/registrations/', {
+    enabled: Boolean(selected) && can('events.manage'),
+    params: { person: selected?.user, page_size: 5 },
+  });
+
   return (
     <ScreenShell
       title="People"
@@ -265,6 +287,20 @@ const PeopleScreen = () => {
         >
           {saved}
         </AlertBanner>
+      )}
+
+      {moving && (
+        <MoveMemberModal
+          membership={moving}
+          name={nameOf(moving.user_detail)}
+          onClose={() => setMoving(null)}
+          onMoved={(message) => {
+            setMoving(null);
+            setSelected(null);
+            setSaved(message);
+            reloadAll();
+          }}
+        />
       )}
 
       {editing && (
@@ -602,7 +638,59 @@ const PeopleScreen = () => {
                   <Pencil size={16} /> Edit details
                 </Btn>
               </PermissionGate>
+              <PermissionGate permission="memberships.manage">
+                <Btn size="md" onClick={() => setMoving(selected)}>
+                  <ArrowRightLeft size={16} /> Move
+                </Btn>
+              </PermissionGate>
             </div>
+
+            {can('events.manage') && (
+              <>
+                <p className="text-[12px] font-medium uppercase leading-4 tracking-[0.06em] text-console-muted">
+                  Registered for
+                </p>
+                {registrations.isLoading ? (
+                  <p className="text-[14px] leading-5 text-console-muted">Loading…</p>
+                ) : registrations.error ? (
+                  <p className="text-[14px] leading-5 text-console-body">
+                    We couldn't load their registrations.
+                  </p>
+                ) : registrations.items.length === 0 ? (
+                  <p className="text-[14px] leading-5 text-console-body">
+                    Nothing yet.
+                  </p>
+                ) : (
+                  <ul className="flex flex-col">
+                    {registrations.items.map((r) => (
+                      <li
+                        key={r.id}
+                        className="flex flex-col gap-1.5 border-t border-console-border py-2.5 first:border-t-0 first:pt-0"
+                      >
+                        <p className="text-[14px] font-semibold leading-5 text-console-text">
+                          {r.event_title}
+                        </p>
+                        <p className="text-[12px] font-medium leading-4 tabular-nums text-console-muted">
+                          {r.registration_id} · {formatDate(r.created_at)}
+                          {r.bed ? ` · bed ${r.bed.code}` : ''}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          <RegistrationPill status={r.status} />
+                          {r.payment_status !== 'not_required' && (
+                            <PaymentPill status={r.payment_status} />
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                    {registrations.count > registrations.items.length && (
+                      <li className="border-t border-console-border pt-2.5 text-[14px] leading-5 text-console-body">
+                        and {(registrations.count - registrations.items.length).toLocaleString()} more
+                      </li>
+                    )}
+                  </ul>
+                )}
+              </>
+            )}
           </Card>
         )}
       </div>

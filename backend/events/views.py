@@ -99,7 +99,19 @@ class EventViewSet(viewsets.ModelViewSet):
         # their position (docs/07 §3). Applied to everyone, managers included —
         # a manager browsing the events list is browsing as a member of their own
         # part of the church.
-        queryset = scoping.visible_to(queryset, self.request.user)
+        #
+        # A manager also oversees: they see the events owned inside the subtree
+        # they manage, wherever they personally belong. Without this a Regional
+        # Coordinator who worships in one province could not open another
+        # province's events, which is the job.
+        if is_manager:
+            user = self.request.user
+            queryset = queryset.filter(
+                Q(pk__in=scoping.visible_to(Event.objects.all(), user).values('pk'))
+                | Q(pk__in=scoping.manageable_by(Event.objects.all(), user).values('pk'))
+            )
+        else:
+            queryset = scoping.visible_to(queryset, self.request.user)
 
         # Non-leaders are additionally filtered to their age group.
         if not has_any_permission(self.request.user, Perm.EVENTS_VIEW):
@@ -121,7 +133,16 @@ class EventViewSet(viewsets.ModelViewSet):
         # whose data to read).
         node_id = self.request.query_params.get('node')
         if node_id:
-            queryset = queryset.filter(scope_node__id=node_id)
+            from hierarchy.models import HierarchyNode
+            try:
+                node = HierarchyNode.objects.filter(pk=node_id).first()
+            except (ValueError, DjangoValidationError):
+                node = None
+            if node is None:
+                return queryset.none()
+            # The node and everything beneath it, as the comment above says.
+            # It used to match the one node only.
+            queryset = queryset.filter(scope_node__path__startswith=node.path)
 
         return queryset
 
@@ -341,7 +362,20 @@ class EventRegistrationViewSet(viewsets.ModelViewSet):
         # (Finer node-scoped visibility follows when EventRegistration carries an
         # organization_node — see phase1-completion notes.)
         if has_any_permission(user, Perm.EVENTS_MANAGE):
-            return self.queryset
+            queryset = self.queryset
+            # `?person=<user id>`: everything one person registered for, or was
+            # registered for under their email. For the Console's member panel.
+            person = self.request.query_params.get('person')
+            if person:
+                from django.contrib.auth import get_user_model
+                try:
+                    owner = get_user_model().objects.filter(pk=person).first()
+                except (ValueError, DjangoValidationError):
+                    owner = None
+                if owner is None:
+                    return queryset.none()
+                queryset = queryset.filter(pk__in=own_registrations(owner).values('pk'))
+            return queryset
         return self.queryset.filter(pk__in=own_registrations(user).values('pk'))
 
     @action(detail=False, methods=['get'])

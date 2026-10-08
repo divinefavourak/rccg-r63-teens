@@ -80,8 +80,11 @@ Engineering changes that altered behaviour these documents describe. Pull reques
 - **Check in on the web** has no camera. It finds a ticket by number or name; scanning a QR code remains the phone app's job.
 - **Session refresh on the website** calls `/auth/refresh/`. It had been calling a path that does not exist, so an expired session failed instead of renewing.
 
+- **Event managers see the events of the subtree they manage**, not only those at or above their own parish. `?node=` on the events list now means that node and everything beneath it; it matched the one node only.
+- **Moving a member** ends the membership they left. Before, the old membership stayed active and the person was listed in two places.
+
 ## Document-by-document changes
 
-**07-feature-specifications.md** — #5 gains the review queue and the import window; #9 gains bedspaces; #18 gains an "As built" note with the Console's data rules and what is still unbuilt.
+**07-feature-specifications.md** — #5 gains the review queue and the import window; #9 gains bedspaces and the rule for who sees an event; #18 gains an "As built" note with the Console's data rules, what People and Hierarchy can do, and what is still unbuilt.
 
 **ops/05-hierarchy-bootstrap.md** — section C documents `--create-provinces` and the sample tree.

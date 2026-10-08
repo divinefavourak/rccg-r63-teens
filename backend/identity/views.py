@@ -8,7 +8,9 @@ permission logic is implemented inline. List endpoints are scoped with
 import uuid
 
 from django.shortcuts import get_object_or_404
+from django.db import transaction
 from rest_framework import mixins, status, viewsets
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -131,6 +133,49 @@ class MembershipViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
             data['user'], data['organization_node'],
             is_primary=data.get('is_primary', False),
         )
+
+    @action(detail=True, methods=['post'])
+    @transaction.atomic
+    def transfer(self, request, pk=None):
+        """
+        Move this person's home to another node.
+
+        `POST /identity/memberships/<id>/transfer/` with `{to_node, reason?}`.
+
+        The caller needs `memberships.manage` at both ends: over where the
+        person is leaving and over where they are going. The move is recorded
+        (`MembershipTransfer`), the new membership becomes their home, and the
+        one they left is ended so they are not listed in two places.
+        """
+        membership = self.get_object()
+        target = HierarchyNode.objects.filter(pk=_as_uuid(request.data.get('to_node'))).first()
+        if target is None:
+            return Response({'to_node': ['Choose where to move them to.']},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if not target.is_active:
+            return Response({'to_node': [f'{target.name} is not active.']},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if target.pk == membership.organization_node_id:
+            return Response({'to_node': [f'They already belong to {target.name}.']},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        user = request.user
+        if not (authz.has_permission(user, Perm.MEMBERSHIPS_MANAGE, membership.organization_node)
+                and authz.has_permission(user, Perm.MEMBERSHIPS_MANAGE, target)):
+            return Response(
+                {'detail': 'You can only move someone between parts of the church you manage members in.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        moved = authz.transfer_primary_membership(
+            membership.user, target, transferred_by=user,
+            reason=(request.data.get('reason') or '').strip(),
+        )
+        Membership.objects.filter(pk=membership.pk).exclude(pk=moved.pk).update(
+            is_active=False, is_primary=False)
+        moved = Membership.objects.select_related(
+            'organization_node', 'user', 'user__profile').get(pk=moved.pk)
+        return Response(MembershipSerializer(moved).data)
 
 
 class RoleAssignmentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
