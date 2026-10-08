@@ -75,7 +75,7 @@ Format per feature: **Purpose · Problem solved · Acceptance criteria (AC) · D
 - Workflow states: draft → in-review → approved → scheduled → published → archived; two-person rule for region-wide+ publishing.
 - Every item: hierarchy scope, tags/topics, optional series, anchor Scripture references (validated, rendered as live Bible links). **Devotionals additionally require a memory verse** (validated reference + translation) — the publish workflow blocks a devotional without one, because that verse powers the entire day (#4).
 - Devotional calendar view with gap detection and alerts (no-devotional-scheduled-within-48h pages the admin).
-- Review queue (`GET /content/<devotionals|manuals|articles>/review_queue/`, `content.view`): what is in review, who submitted it, and whether the caller may approve it. Submitting goes through `submit_for_review`, which records the submitter; the status is never set to in-review directly, or the two-person rule has nobody to compare against.
+- Review queue (`GET /content/<devotionals|manuals|articles>/review_queue/`, `content.view`): what is in review, who submitted it, and whether the caller may approve it. It sends the true `count` and at most the 200 that have waited longest of each kind; the Console shows the count and says when the list is cut short. Submitting goes through `submit_for_review`, which records the submitter; the status is never set to in-review directly, or the two-person rule has nobody to compare against.
 - Import from the web (`content.manage`): fills days from the published source around a chosen day, a number of days before and after it, 31 days at most per run. A day that already has a devotional is left alone; a day the source has not published is skipped. Imported devotionals arrive as drafts.
 - Rich text with safe subset (no arbitrary embeds); images auto-compressed to data-light variants.
 **Dependencies:** Storage/CDN, hierarchy (#3).
@@ -133,9 +133,12 @@ The foundation. Full spec: `08-bible-experience.md`. Summary AC for V1: reader w
   - The organiser adds hostels to the event. Each hostel is for boys or for girls, has a number of beds, and reserves some of them for leaders. Beds are named by hostel and numbered serially (`HA-001`).
   - A bed is given automatically when someone registers, oldest registration first. On a free event it is firm at once; on a paid event it is held and becomes firm when the registration is paid.
   - A bed follows the registration's place: cancelling gives it back, and a waitlisted registration gets one when it is confirmed.
-  - Running out of beds does **not** close registration. The person registers without a bed and is told so in the notification.
+  - Running out of beds does **not** close registration. The person registers without a bed and is told so in the notification. Someone on the waitlist is told nothing about beds, because they have no place yet; someone with no gender recorded is told the organiser will give them one.
   - Leaders take only beds reserved for leaders and attendees never take those. The organiser releases unused reserved beds to attendees. Who counts as a leader is decided by the server from the person's roles: nobody without a leader role; always an adult who holds one; a teenager who holds one chooses on the registration form.
   - A registration with no gender recorded is never placed automatically; the organiser places it by hand. The organiser can also move one person to another hostel or take a bed back.
+  - Only someone who manages the event may see its bedspace summary or change who sleeps where: `events.manage` over the event's own part of the hierarchy (or over any part, for an old event with no scope). Holding the permission elsewhere is refused with a 403, even though the event itself is visible.
+  - A hostel with people in it cannot be deleted; move them or take the beds back first. Deleting the whole event removes its hostels and beds with it.
+  - At the door, checking someone in shows their bed, so the volunteer can point them to it.
   - Not built yet: rooms inside a hostel, grouping children by parish, the bed on the phone ticket and in the confirmation e-mail, and the leader choice on the phone's registration form.
 **Dependencies:** Paystack merchant account (start early — legal lead time), hierarchy (#3), notifications (#10).
 **Future:** Multi-session events/workshop selection (V2); recurring programs (V2); group/family registration (V2).

@@ -131,8 +131,16 @@ def allocate(registration, hostel=None, assigned_by=None):
             raise ValidationError(
                 f'{hostel.name} is not a {gender} hostel for this event.')
 
+    # Evaluating takes the locks. Look again now that we hold them: another
+    # request for this same registration (a confirm racing "place people
+    # waiting") may have given it a bed while we waited.
+    candidates = list(hostels)
+    existing = bed_of(registration)
+    if existing is not None:
+        return existing
+
     leader = registration.attending_as_leader
-    for candidate in hostels:
+    for candidate in candidates:
         beds = list(candidate.beds.values_list('serial', 'for_leader'))
         if _room_for(candidate, beds, leader) <= 0:
             continue
@@ -153,6 +161,9 @@ def allocate(registration, hostel=None, assigned_by=None):
 def release(registration):
     """Give the bed back. Returns True when there was one."""
     deleted, _ = BedAssignment.objects.filter(registration=registration).delete()
+    # The instance may have its bed cached (`select_related('bed')`); without
+    # this it would go on reporting the bed that was just given back.
+    registration._state.fields_cache.pop('bed', None)
     return bool(deleted)
 
 
@@ -233,8 +244,15 @@ def describe(registration):
     """One sentence about the bed, for a notification. '' when beds are off."""
     if not registration.event.bedspaces_enabled:
         return ''
+    # Someone on the waitlist has no place yet, so no bed either; that is not
+    # the same as the beds having run out, and saying so would send them off
+    # to arrange somewhere to sleep for nothing.
+    if registration.status not in EventRegistration.HOLDS_A_PLACE:
+        return ''
     bed = bed_of(registration)
     if bed is None:
+        if gender_of(registration) is None:
+            return ' The organiser will give you a bedspace.'
         return (' No bedspace is left for this event, so you will need to '
                 'arrange where to sleep.')
     if is_firm(registration):

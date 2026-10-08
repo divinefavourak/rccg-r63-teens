@@ -233,7 +233,13 @@ export const Manuals = () => {
             }
             action={
               search ? (
-                <Btn size="md" onClick={() => setQuery('')}>
+                <Btn
+                  size="md"
+                  onClick={() => {
+                    setQuery('');
+                    setPage(1);
+                  }}
+                >
                   Clear search
                 </Btn>
               ) : undefined

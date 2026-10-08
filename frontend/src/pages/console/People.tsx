@@ -183,6 +183,14 @@ const PeopleScreen = () => {
     return map;
   }, [held.items]);
 
+  // Ending the last role on the last page leaves that page empty while
+  // earlier ones are not. Step back to the last page that has something.
+  useEffect(() => {
+    if (grants.isLoading) return;
+    const last = Math.max(1, Math.ceil(grants.count / PAGE_SIZE));
+    if (rolePage > last) setRolePage(last);
+  }, [grants.isLoading, grants.count, rolePage]);
+
   const reloadAll = useCallback(() => {
     members.reload();
     grants.reload();

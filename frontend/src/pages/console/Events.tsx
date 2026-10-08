@@ -69,6 +69,8 @@ interface EventRow {
   /** Confirmed and arrived, counted live. */
   registration_count: number;
   max_attendees: number | null;
+  /** Places not yet taken, pending registrations included. Null with no limit. */
+  spots_remaining?: number | null;
   registration_status: 'not_open' | 'open' | 'closed' | 'full';
   current_price?: string | number | null;
   is_free?: boolean;
@@ -163,7 +165,13 @@ const REGISTRATION_STATE: Record<
 
 const Registered = ({ event }: { event: EventRow }) => {
   const max = event.max_attendees;
-  const share = max ? Math.min(100, (event.registration_count / max) * 100) : 0;
+  // The bar is places *taken*, which includes people still pending: that is
+  // what the server decides "Full" from, and the two must not disagree.
+  const taken =
+    max && event.spots_remaining != null
+      ? max - event.spots_remaining
+      : event.registration_count;
+  const share = max ? Math.max(0, Math.min(100, (taken / max) * 100)) : 0;
   return (
     <div className="w-40 max-w-full">
       <p className="text-[12px] font-semibold leading-4 tabular-nums text-console-text">

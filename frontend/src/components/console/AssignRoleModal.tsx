@@ -88,18 +88,12 @@ export const AssignRoleModal = ({
     [roles.items, permissions, me, node],
   );
 
-  const people = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const list = members.items.filter((m) => m.is_active);
-    if (!q) return list.slice(0, 40);
-    return list
-      .filter(
-        (m) =>
-          m.user_detail?.display_name?.toLowerCase().includes(q) ||
-          m.user_detail?.email?.toLowerCase().includes(q),
-      )
-      .slice(0, 40);
-  }, [members.items, query]);
+  // The server has already searched (name, username, e-mail, phone).
+  // Filtering again here on fewer fields would hide people it found.
+  const people = useMemo(
+    () => members.items.filter((m) => m.is_active).slice(0, 40),
+    [members.items],
+  );
 
   /**
    * A leader searching for a role they cannot grant gets one calm line naming

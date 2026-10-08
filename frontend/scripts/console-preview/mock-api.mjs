@@ -74,6 +74,8 @@ function routes() {
   const all = { ...ROUTES };
   if (fs.existsSync(dir)) {
     for (const f of fs.readdirSync(dir)) {
+      // Editors leave swap and backup files here; only fixtures are JSON.
+      if (!f.endsWith('.json')) continue;
       Object.assign(all, JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')));
     }
   }

@@ -134,18 +134,35 @@ export const Review = () => {
     enabled: can('content.view'),
     queryFn: async () => {
       const kinds = Object.keys(COLLECTIONS) as Kind[];
-      const pages = await Promise.all(
+      // Settled, not all-or-nothing: one collection failing must not hide the
+      // devotionals someone is waiting on.
+      const pages = await Promise.allSettled(
         kinds.map((kind) =>
-          api.get<{ results: QueueItem[] }>(`/content/${COLLECTIONS[kind]}/review_queue/`),
+          api.get<{ count: number; results: QueueItem[] }>(
+            `/content/${COLLECTIONS[kind]}/review_queue/`,
+          ),
         ),
       );
-      return pages
-        .flatMap((page) => page.data.results)
-        .sort((a, b) => (a.submitted_at ?? '').localeCompare(b.submitted_at ?? ''));
+      const failed = kinds.filter((_, i) => pages[i].status === 'rejected');
+      if (failed.length === kinds.length) {
+        throw (pages[0] as PromiseRejectedResult).reason;
+      }
+      const loaded = pages.flatMap((page) => (page.status === 'fulfilled' ? [page.value.data] : []));
+      return {
+        items: loaded
+          .flatMap((page) => page.results)
+          .sort((a, b) => (a.submitted_at ?? '').localeCompare(b.submitted_at ?? '')),
+        // The server sends at most 200 rows of each kind and the true count
+        // beside them; the count is the number that is waiting.
+        total: loaded.reduce((sum, page) => sum + (page.count ?? page.results.length), 0),
+        failed,
+      };
     },
   });
 
-  const items = queue.data ?? [];
+  const items = queue.data?.items ?? [];
+  const total = Math.max(queue.data?.total ?? 0, items.length);
+  const failed = queue.data?.failed ?? [];
   const selected = items.find((item) => keyOf(item) === selectedKey) ?? items[0] ?? null;
 
   const select = (item: QueueItem) => {
@@ -195,7 +212,7 @@ export const Review = () => {
       actions={
         items.length > 0 ? (
           <span className="inline-flex h-[26px] items-center gap-1 rounded-full bg-pop-amber pl-1.5 pr-2.5 text-[12px] font-semibold leading-4 text-pop-on">
-            <AlertCircle size={14} strokeWidth={2.5} /> {items.length} waiting
+            <AlertCircle size={14} strokeWidth={2.5} /> {total.toLocaleString()} waiting
           </span>
         ) : undefined
       }
@@ -208,6 +225,27 @@ export const Review = () => {
           onChanged={() => queue.refetch()}
           onEdit={() => setPreviewing(null)}
         />
+      )}
+
+      {failed.length > 0 && (
+        <AlertBanner
+          kind="error"
+          action={
+            <Btn variant="soft" size="md" onClick={() => queue.refetch()}>
+              Try again
+            </Btn>
+          }
+        >
+          We couldn't load the {failed.map((kind) => COLLECTIONS[kind]).join(' or ')} waiting
+          for review, so this list is incomplete.
+        </AlertBanner>
+      )}
+
+      {total > items.length && (
+        <AlertBanner kind="info">
+          Showing the {items.length.toLocaleString()} that have waited longest, of{' '}
+          {total.toLocaleString()}. The rest appear as these are dealt with.
+        </AlertBanner>
       )}
 
       {notice && (

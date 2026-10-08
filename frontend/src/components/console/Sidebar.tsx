@@ -107,6 +107,9 @@ export const Sidebar = ({
               // while a child route is open.
               end={item.id === ''}
               title={collapsed ? item.label : undefined}
+              // Collapsed, the link is an icon alone; `title` is not a name a
+              // screen reader can rely on.
+              aria-label={collapsed ? item.label : undefined}
               className={({ isActive }) =>
                 [
                   'flex h-11 shrink-0 items-center gap-3 rounded-full text-[14px] font-semibold leading-5 transition-[background-color,opacity]',
@@ -118,7 +121,7 @@ export const Sidebar = ({
                 ].join(' ')
               }
             >
-              <Icon size={20} className="shrink-0" strokeWidth={2} />
+              <Icon size={20} className="shrink-0" strokeWidth={2} aria-hidden="true" />
               {!collapsed && (
                 <>
                   <span className="min-w-0 flex-1 truncate">{item.label}</span>

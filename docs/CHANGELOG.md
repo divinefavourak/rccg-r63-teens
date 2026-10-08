@@ -83,6 +83,16 @@ Engineering changes that altered behaviour these documents describe. Pull reques
 - **Event managers see the events of the subtree they manage**, not only those at or above their own parish. `?node=` on the events list now means that node and everything beneath it; it matched the one node only.
 - **Moving a member** ends the membership they left. Before, the old membership stayed active and the person was listed in two places.
 
+## Fixed after review
+
+- **Bedspace actions check the event, not only the permission.** The summary, "place people waiting", placing someone and taking a bed back now refuse (403) an event outside the part of the hierarchy the caller manages.
+- **An event with people placed in hostels can be deleted.** The bed-to-hostel link was `PROTECT`, which blocked it; it is `RESTRICT`. A hostel with people in it still cannot be deleted on its own.
+- **Bed wording in notifications.** A waitlisted registration is no longer told "No bedspace is left"; one with no gender recorded is told the organiser will place it.
+- **A bad hostel id** when placing someone is a 400, not a 500.
+- **Review queue** shows the server's count, and one collection failing no longer hides the others.
+- **The website's session refresh** no longer writes an old session back over a newer one.
+- **Upcoming events in the website's notifications** are filtered on the server before the page is cut, so past events no longer crowd them out.
+
 ## Document-by-document changes
 
 **07-feature-specifications.md** — #5 gains the review queue and the import window; #9 gains bedspaces and the rule for who sees an event; #18 gains an "As built" note with the Console's data rules, what People and Hierarchy can do, and what is still unbuilt.

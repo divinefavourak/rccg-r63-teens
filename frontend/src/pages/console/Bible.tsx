@@ -60,6 +60,7 @@ export const Bible = () => {
   const bookCounts = useQueries({
     queries: translations.items.map((t) => ({
       queryKey: ['bible-book-count', t.id],
+      enabled,
       queryFn: async () => {
         const { data } = await api.get<{ count: number }>('/bible/books/', {
           params: { translation: t.id, page_size: 1 },

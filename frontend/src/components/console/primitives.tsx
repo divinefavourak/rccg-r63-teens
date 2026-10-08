@@ -622,7 +622,10 @@ export const Pager = ({
   return (
     <div className="flex min-h-[52px] flex-wrap items-center gap-2 border-t border-console-border px-5 py-1.5">
       <p className="min-w-0 flex-1 text-[14px] leading-5 text-console-muted">
-        Showing {first.toLocaleString()}–{(first + shown - 1).toLocaleString()} of{' '}
+        {/* Nothing on this page reads as "1–0" without this. */}
+        {shown > 0
+          ? `Showing ${first.toLocaleString()}–${(first + shown - 1).toLocaleString()} of `
+          : 'Showing none of '}
         {count.toLocaleString()} {noun}
         {where ? ` in ${where}` : ''}
       </p>

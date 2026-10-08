@@ -54,6 +54,8 @@ interface Attendee {
   photo?: string | null;
   status: string;
   payment_status: string;
+  /** Bed code, when the event has bedspaces and this person has one. */
+  bed?: string | null;
 }
 
 type Outcome =
@@ -146,9 +148,14 @@ export const CheckIn = () => {
           method: 'manual',
         });
         const outcome = OUTCOMES[data.outcome] ?? OUTCOMES.not_found;
+        // So the volunteer can point them to where they sleep.
+        const bed =
+          data.outcome === 'checked_in' && data.attendee?.bed
+            ? ` Their bed is ${data.attendee.bed}.`
+            : '';
         setResult({
           kind: outcome.kind,
-          text: outcome.say(data.attendee?.name ?? 'This person'),
+          text: outcome.say(data.attendee?.name ?? 'This person') + bed,
         });
         setCounts((prev) => ({ ...prev, [event.id]: data.counts }));
         matches.refetch();

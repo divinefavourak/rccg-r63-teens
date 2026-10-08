@@ -50,9 +50,18 @@ function refreshAccessToken(): Promise<string> {
         const { data } = await axios.post(`${API_URL}/auth/refresh/`, {
             refresh: refreshToken,
         });
+        // The request took a moment. If someone signed out, or signed in as
+        // somebody else, while it was away, the session in storage is no longer
+        // the one this answer belongs to: writing it back would resurrect the
+        // old account. Leave storage alone and use whatever is there now.
+        const nowStr = localStorage.getItem('rccg_user');
+        const current = nowStr ? JSON.parse(nowStr) : null;
+        if (!current) throw new Error('Signed out while refreshing');
+        if (current.refreshToken !== refreshToken) return current.token as string;
+
         // The backend may rotate the refresh token; keep the new one when it does.
         localStorage.setItem('rccg_user', JSON.stringify({
-            ...user,
+            ...current,
             token: data.access,
             refreshToken: data.refresh ?? refreshToken,
         }));

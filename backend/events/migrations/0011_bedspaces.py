@@ -94,7 +94,7 @@ class Migration(migrations.Migration):
                 (
                     "hostel",
                     models.ForeignKey(
-                        on_delete=django.db.models.deletion.PROTECT,
+                        on_delete=django.db.models.deletion.RESTRICT,
                         related_name="beds",
                         to="events.hostel",
                     ),

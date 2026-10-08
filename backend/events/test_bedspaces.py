@@ -150,3 +150,39 @@ class ManualPlacementTests(TestCase):
             bedspaces.move(registration, self.girls)
         # The refused move is undone with the rest of its transaction.
         self.assertEqual(BedAssignment.objects.get(registration=registration).hostel, self.boys)
+
+
+class ReviewFindingsTests(TestCase):
+    """Cases raised in review of the first version."""
+
+    def setUp(self):
+        self.event = make_event(bedspaces_enabled=True)
+        self.hostel = hostel(self.event, capacity=2)
+
+    def test_an_event_with_people_placed_can_still_be_deleted(self):
+        bedspaces.sync(boy(self.event, 1))
+        self.event.delete()
+        self.assertEqual(BedAssignment.objects.count(), 0)
+
+    def test_a_hostel_with_people_placed_cannot_be_deleted_directly(self):
+        from django.db.models import RestrictedError
+        bedspaces.sync(boy(self.event, 1))
+        with self.assertRaises(RestrictedError):
+            self.hostel.delete()
+
+    def test_releasing_forgets_the_bed_on_the_same_instance(self):
+        registration = boy(self.event, 1)
+        bedspaces.sync(registration)
+        loaded = EventRegistration.objects.select_related('bed').get(pk=registration.pk)
+        self.assertEqual(loaded.bed.code, 'HA-001')
+        loaded.cancel()
+        self.assertFalse(hasattr(loaded, 'bed'))
+
+    def test_someone_on_the_waitlist_is_not_told_the_beds_ran_out(self):
+        waiting = boy(self.event, 1, status=Status.WAITLISTED)
+        self.assertEqual(bedspaces.describe(waiting), '')
+
+    def test_no_gender_is_told_the_organiser_will_place_them(self):
+        unknown = make_registration(self.event, email='x@example.com')
+        bedspaces.sync(unknown)
+        self.assertIn('organiser will give you a bedspace', bedspaces.describe(unknown))

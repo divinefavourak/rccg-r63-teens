@@ -92,6 +92,9 @@ def _photo(registration):
 
 
 def _bed_code(registration):
+    # Most events have no beds: do not spend a query per ticket finding that out.
+    if not registration.event.bedspaces_enabled:
+        return None
     from .models import BedAssignment
     bed = BedAssignment.objects.select_related('hostel').filter(
         registration=registration).first()

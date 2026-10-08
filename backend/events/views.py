@@ -15,7 +15,7 @@ from identity.permissions_registry import Perm
 from content.views import get_age_group_filter
 from common.view_counts import count_view
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db.models import ProtectedError
+from django.db.models import ProtectedError, RestrictedError
 
 from . import bedspaces
 from . import checkin
@@ -38,6 +38,33 @@ from .serializers import (
     EventDashboardStatsSerializer,
     HostelSerializer,
 )
+
+
+def can_manage_event(user, event):
+    """
+    May this person change `event`? The row-level half of `events.manage`.
+
+    Holding the permission somewhere is not holding it over this event: a
+    manager is sent published events from outside their own subtree, and must
+    not be able to move people's beds there. An unscoped (legacy) event belongs
+    to nobody's subtree, so anyone who manages events may run it, as they may
+    edit it.
+    """
+    if user.is_superuser:
+        return True
+    if not has_any_permission(user, Perm.EVENTS_MANAGE):
+        return False
+    if event.scope_node_id is None:
+        return True
+    return scoping.manageable_by(Event.objects.filter(pk=event.pk), user).exists()
+
+
+
+def _not_your_event():
+    return Response(
+        {'detail': 'You do not manage this event, so you cannot change its bedspaces.'},
+        status=status.HTTP_403_FORBIDDEN,
+    )
 
 
 class EventViewSet(viewsets.ModelViewSet):
@@ -253,7 +280,10 @@ class EventViewSet(viewsets.ModelViewSet):
     )
     def bedspaces(self, request, pk=None):
         """Hostels, how full each is, and how many people have no bed."""
-        return Response(bedspaces.summary(self.get_object()))
+        event = self.get_object()
+        if not can_manage_event(request.user, event):
+            return _not_your_event()
+        return Response(bedspaces.summary(event))
 
     @action(
         detail=True,
@@ -266,6 +296,8 @@ class EventViewSet(viewsets.ModelViewSet):
         the organiser runs after adding a hostel or releasing reserved beds.
         """
         event = self.get_object()
+        if not can_manage_event(request.user, event):
+            return _not_your_event()
         placed = bedspaces.place_waiting(event)
         return Response({'placed': placed, **bedspaces.summary(event)})
 
@@ -479,8 +511,14 @@ class EventRegistrationViewSet(viewsets.ModelViewSet):
     def assign_bed(self, request, pk=None):
         """Place this person in a named hostel, giving up any bed they had."""
         registration = self.get_object()
-        hostel = Hostel.objects.filter(
-            pk=request.data.get('hostel'), event_id=registration.event_id).first()
+        if not can_manage_event(request.user, registration.event):
+            return _not_your_event()
+        try:
+            hostel = Hostel.objects.filter(
+                pk=request.data.get('hostel'), event_id=registration.event_id).first()
+        except (ValueError, DjangoValidationError):
+            # Not an id at all.
+            hostel = None
         if hostel is None:
             return Response({'hostel': ['Choose one of this event\'s hostels.']},
                             status=status.HTTP_400_BAD_REQUEST)
@@ -503,6 +541,8 @@ class EventRegistrationViewSet(viewsets.ModelViewSet):
     def release_bed(self, request, pk=None):
         """Take this person's bed back. They keep their place at the event."""
         registration = self.get_object()
+        if not can_manage_event(request.user, registration.event):
+            return _not_your_event()
         bedspaces.release(registration)
         registration = self.get_queryset().get(pk=registration.pk)
         return Response(EventRegistrationDetailSerializer(registration).data)
@@ -611,7 +651,7 @@ class HostelViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         try:
             return super().destroy(request, *args, **kwargs)
-        except ProtectedError:
+        except (ProtectedError, RestrictedError):
             return Response(
                 {'detail': 'People are placed in this hostel. Move them out before removing it.'},
                 status=status.HTTP_409_CONFLICT,

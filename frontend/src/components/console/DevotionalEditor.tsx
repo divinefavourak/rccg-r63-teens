@@ -92,6 +92,11 @@ export const DevotionalEditor = ({
   onSaved: () => void;
 }) => {
   const editing = Boolean(devotional?.id);
+  // Set once a new devotional has been created. "Submit" is two requests, and
+  // if the second fails the first has still happened: trying again must update
+  // that devotional, not create another for the same day (which the server
+  // refuses, leaving the author stuck).
+  const [createdId, setCreatedId] = useState<string | undefined>();
 
   const [form, setForm] = useState({
     title: devotional?.title ?? '',
@@ -218,7 +223,8 @@ export const DevotionalEditor = ({
       // The status is never written from here on an edit: saving a published
       // devotional must not quietly turn it back into a draft. A new one starts
       // as a draft, and "submit" goes through the review endpoint below.
-      const payload: Record<string, unknown> = editing ? {} : { status: 'draft' };
+      const existingId = devotional?.id ?? createdId;
+      const payload: Record<string, unknown> = existingId ? {} : { status: 'draft' };
       for (const [k, v] of Object.entries(form)) {
         if (typeof v === 'string' && v.trim() === '' && editing) continue;
         payload[k] = v;
@@ -240,16 +246,17 @@ export const DevotionalEditor = ({
         config = { headers: { 'Content-Type': 'multipart/form-data' } };
       }
 
-      const saved = editing
-        ? await api.patch<{ id?: string }>(`/content/devotionals/${devotional!.id}/`, body, config)
+      const saved = existingId
+        ? await api.patch<{ id?: string }>(`/content/devotionals/${existingId}/`, body, config)
         : await api.post<{ id?: string }>('/content/devotionals/', body, config);
+      const id = existingId ?? saved.data?.id;
+      if (!existingId) setCreatedId(id);
 
       // Submitting is its own step on the server. It records who submitted,
       // which is the fact the two-person rule turns on; writing
       // `status: in_review` directly would leave that blank and let the author
       // approve their own work.
       if (status === 'in_review') {
-        const id = devotional?.id ?? saved.data?.id;
         await api.post(`/content/devotionals/${id}/submit_for_review/`);
       }
 

@@ -7,7 +7,8 @@ const [url, out, ...flags] = process.argv.slice(2);
 const dark = flags.includes('--dark');
 const size = (flags.find((f) => f.startsWith('--size=')) ?? '--size=1440x1000').slice(7).split('x').map(Number);
 const PORT = 9333;
-const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+// Set CHROME_PATH anywhere Chrome is not installed in the Windows default place.
+const CHROME = process.env.CHROME_PATH ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 
 const chrome = spawn(CHROME, [
   '--headless=new', '--disable-gpu', '--hide-scrollbars',
