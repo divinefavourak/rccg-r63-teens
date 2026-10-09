@@ -61,6 +61,10 @@ def _registration_context():
         'registration_url': f'{FRONTEND}/events/teens-camp-2026/registration/CAMP-20261218-00001',
         'avatar_url': AVATAR,
         'frontend_url': FRONTEND,
+        'parish': 'Grace Parish',
+        'amount_due': Decimal('15000'),
+        'bed_note': '',
+        'waitlisted': False,
         **LOGOS,
     }
 
@@ -150,6 +154,26 @@ class EmailTemplateRenderTests(SimpleTestCase):
     def test_event_times_are_shown_in_lagos_time(self):
         html = render_to_string('emails/ticket_confirmation.html', _registration_context())
         self.assertIn('10:00 AM', html)
+
+    def test_registration_received_carries_the_details(self):
+        context = {
+            **_registration_context(),
+            'parish': 'Grace Parish', 'amount_due': Decimal('15000'),
+            'bed_note': 'Bedspace HA-004 in Hostel A is held for you until payment is confirmed.',
+            'waitlisted': False,
+        }
+        html = render_to_string('emails/ticket_confirmation.html', context)
+        self.assertIn('Grace Parish', html)
+        self.assertIn('15,000.00', html)
+        self.assertIn('HA-004', html)
+        self.assertIn('Waiting for approval', html)
+
+    def test_a_waitlisted_registration_is_told_so_and_asked_for_no_money(self):
+        context = {**_registration_context(), 'amount_due': Decimal('15000'), 'waitlisted': True}
+        html = render_to_string('emails/ticket_confirmation.html', context)
+        self.assertIn('On the waitlist', html)
+        self.assertNotIn('Waiting for approval', html)
+        self.assertNotIn('Amount due', html)
 
     def test_status_codes_read_as_words(self):
         context = {**_registration_context(), 'old_status': 'checked_in', 'new_status': 'no_show'}

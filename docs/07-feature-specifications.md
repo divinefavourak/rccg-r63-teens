@@ -125,6 +125,7 @@ The foundation. Full spec: `08-bible-experience.md`. Summary AC for V1: reader w
 - Registration pre-fills profile data; guest hitting Register gets signup-then-resume.
 - Payments via Paystack (card/bank/USSD/transfer); webhook-driven confirmation; **shareable payment link for parent payment**; automatic receipt.
 - Pending unpaid registrations expire after 24h, releasing capacity; waitlist with auto-promotion.
+- **On registering**, the person gets a push and inbox notification (if they have an account) and an email to the attendee and guardian addresses. Both give the event's date, time and venue, the registration ID, and the bedspace if the event has them; the email adds the parish and, on a paid event, the amount due. Someone placed on the waitlist is told that instead, and is not asked to pay.
 - **Paying for a registration, as built** (`backend/payments/registrations.py`):
   - The payer is charged the registration's own `amount_due`, which is the event's price on the day they registered. Paystack's fee comes out of what the church receives; nothing is added at checkout.
   - `POST /payments/registrations/<id>/checkout/` opens Paystack's checkout and returns its address. The owner of the registration may call it, and so may a holder of `events.manage`. A second call within 30 minutes returns the checkout that is already open, so a double tap cannot start two charges.
@@ -149,9 +150,9 @@ The foundation. Full spec: `08-bible-experience.md`. Summary AC for V1: reader w
   - Only someone who manages the event may see its bedspace summary or change who sleeps where: `events.manage` over the event's own part of the hierarchy (or over any part, for an old event with no scope). Holding the permission elsewhere is refused with a 403, even though the event itself is visible.
   - A hostel with people in it cannot be deleted; move them or take the beds back first. Deleting the whole event removes its hostels and beds with it.
   - At the door, checking someone in shows their bed, so the volunteer can point them to it.
-  - The bed is shown on the phone ticket and on the page a parent pays from, marked as held while a paid event is still owed for.
+  - The bed is shown on the phone ticket, on the page a parent pays from and in the confirmation e-mail, marked as held while a paid event is still owed for.
   - Deleting a person's account (#18) cancels a pending or confirmed place they hold, which gives the bed back.
-  - Not built yet: rooms inside a hostel, grouping children by parish, the bed in the confirmation e-mail, and the leader choice on the phone's registration form.
+  - Not built yet: rooms inside a hostel, grouping children by parish, and the leader choice on the phone's registration form.
 **Dependencies:** Paystack merchant account (start early — legal lead time), hierarchy (#3), notifications (#10).
 **Future:** Multi-session events/workshop selection (V2); recurring programs (V2); group/family registration (V2).
 **Metrics:** Registration conversion from event view; payment success rate ≥90%; check-in throughput (target ≥6/scanner/min); % regional events on-platform.

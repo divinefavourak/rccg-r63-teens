@@ -1,8 +1,8 @@
 """Tests for event lifecycle notifications routed through the central service."""
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from events import notifications as event_notifications
@@ -78,6 +78,24 @@ class RegistrationNotificationTests(TestCase):
         self.assertEqual(notification.notification_type, NotificationType.TRANSACTIONAL)
         self.assertIn('24 hours', notification.body)   # unpaid holds expire
 
+    @override_settings(UNPAID_REGISTRATION_HOLD_HOURS=6)
+    def test_the_deadline_is_the_configured_one(self):
+        event_notifications.notify_registration_received(
+            make_registration(self.event, self.user))
+
+        body = notifications_for(self.user).get().body
+        self.assertIn('within 6 hours', body)
+        self.assertNotIn('24 hours', body)
+
+    @override_settings(UNPAID_REGISTRATION_HOLD_HOURS=0)
+    def test_no_deadline_is_given_when_places_are_never_released(self):
+        event_notifications.notify_registration_received(
+            make_registration(self.event, self.user))
+
+        body = notifications_for(self.user).get().body
+        self.assertIn('Complete payment to confirm it.', body)
+        self.assertNotIn('hours', body)
+
     def test_a_paid_registration_does_not_mention_the_payment_deadline(self):
         registration = make_registration(
             self.event, self.user,
@@ -87,6 +105,32 @@ class RegistrationNotificationTests(TestCase):
         event_notifications.notify_registration_received(registration)
 
         self.assertNotIn('24 hours', notifications_for(self.user).get().body)
+
+    def test_registration_received_carries_the_details(self):
+        event = make_event(
+            title='Teens Camp', venue='Redemption Camp',
+            # 09:00 UTC is 10:00 in Lagos, which is what the teen should read.
+            start_datetime=datetime(2026, 12, 18, 9, 0, tzinfo=dt_timezone.utc),
+            end_datetime=datetime(2026, 12, 20, 15, 0, tzinfo=dt_timezone.utc),
+        )
+        registration = make_registration(event, self.user)
+
+        event_notifications.notify_registration_received(registration)
+
+        body = notifications_for(self.user).get().body
+        self.assertIn('Friday 18 December at 10:00, Redemption Camp', body)
+        self.assertIn(registration.registration_id, body)
+
+    def test_a_waitlisted_registration_is_not_told_its_place_is_held(self):
+        registration = make_registration(
+            self.event, self.user, status=EventRegistration.Status.WAITLISTED)
+
+        event_notifications.notify_registration_received(registration)
+
+        body = notifications_for(self.user).get().body
+        self.assertIn('waitlist', body)
+        self.assertNotIn('held', body)
+        self.assertNotIn('24 hours', body)
 
     def test_registration_confirmed_links_to_the_ticket(self):
         registration = make_registration(self.event, self.user)
