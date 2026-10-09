@@ -51,6 +51,7 @@ image. Colours are the ones the emails use.
       <div><dt>For</dt><dd>{{ registration.attendee_name }}</dd></div>
       {% if amount %}<div><dt>Amount</dt><dd>₦{{ amount|floatformat:"-2g" }}</dd></div>{% endif %}
       {% if pay_by %}<div><dt>Pay by</dt><dd>{{ pay_by|date:"D j M, g:i a" }}</dd></div>{% endif %}
+      {% if bed %}<div><dt>Bedspace</dt><dd>{{ bed.code }}, {{ bed.hostel.name }}{% if not bed_firm %} (held until paid){% endif %}</dd></div>{% endif %}
     </dl>
     {% endif %}
 

@@ -439,6 +439,13 @@ class RegistrationPaymentCheckView(APIView):
 
 
 def _page(request, heading, message, status_code=200, **context):
+    # Where they will sleep, on an event with bedspaces: the parent paying is
+    # the person most likely to ask.
+    registration = context.get('registration')
+    if registration is not None and registration.event.bedspaces_enabled:
+        from events import bedspaces
+        context['bed'] = bedspaces.bed_of(registration)
+        context['bed_firm'] = bedspaces.is_firm(registration)
     return render(
         request, 'payments/page.html',
         {'heading': heading, 'message': message, **context}, status=status_code)
