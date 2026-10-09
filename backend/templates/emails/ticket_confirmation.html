@@ -1,13 +1,13 @@
 {% extends "emails/_base.html" %}
 {% block title %}Registration received{% endblock %}
-{% block preheader %}{% if event %}You&rsquo;ve registered for {{ event.title }}. {% endif %}We&rsquo;ll email you again once you&rsquo;re confirmed.{% endblock %}
+{% block preheader %}{% if event %}You&rsquo;ve registered for {{ event.title }}. {% endif %}{% if waitlisted %}You&rsquo;re on the waitlist.{% else %}We&rsquo;ll email you again once you&rsquo;re confirmed.{% endif %}{% endblock %}
 {% block accent %}#FFC857{% endblock %}
 {% block eyebrow %}Registration received{% endblock %}
 {% block heading %}We&rsquo;ve got your name down{% endblock %}
-{% block lead %}Thanks for registering{% if event %} for {{ event.title }}{% endif %}, {{ full_name }}. Your place is waiting to be confirmed.{% endblock %}
+{% block lead %}Thanks for registering{% if event %} for {{ event.title }}{% endif %}, {{ full_name }}. {% if waitlisted %}The event is full, so you are on the waitlist.{% else %}Your place is waiting to be confirmed.{% endif %}{% endblock %}
 
 {% block content %}
-<span style="display:inline-block;padding:6px 12px;border-radius:999px;background-color:#FEF3C7;color:#92400E;font-size:13px;line-height:16px;font-weight:700;">Waiting for approval</span>
+<span style="display:inline-block;padding:6px 12px;border-radius:999px;background-color:#FEF3C7;color:#92400E;font-size:13px;line-height:16px;font-weight:700;">{% if waitlisted %}On the waitlist{% else %}Waiting for approval{% endif %}</span>
 
 {% if event %}{% include "emails/_event.html" %}{% endif %}
 
@@ -18,14 +18,25 @@
         {% include "emails/_row.html" with label="Registration ID" value=ticket_id mono=True first=True %}
         {% include "emails/_row.html" with label="Name" value=full_name %}
         {% if category %}{% include "emails/_row.html" with label="Category" value=category %}{% endif %}
+        {% if parish %}{% include "emails/_row.html" with label="Parish" value=parish %}{% endif %}
+        {% if amount_due and not waitlisted %}<tr>
+          <td valign="top" style="padding:12px 12px 12px 0;border-top:1px solid #E2D8CC;font-size:14px;line-height:20px;color:#6F6862;">Amount due</td>
+          <td valign="top" align="right" style="padding:12px 0;border-top:1px solid #E2D8CC;font-size:15px;line-height:20px;font-weight:700;color:#1C1916;">&#8358;{{ amount_due|floatformat:"2g" }}</td>
+        </tr>{% endif %}
         {% if registered_at %}{% include "emails/_row.html" with label="Registered" value=registered_at|date:"j M Y, g:i A" %}{% endif %}
       </table>
     </td>
   </tr>
 </table>
 
+{% if bed_note %}<p style="margin:16px 0 0;">{{ bed_note }}</p>{% endif %}
+
 <p style="margin:28px 0 6px;font-size:18px;line-height:24px;font-weight:800;color:#1C1916;">What happens next</p>
+{% if waitlisted %}
+<p style="margin:0;">If a place opens up we&rsquo;ll tell you straight away. You don&rsquo;t need to do anything for now. Keep your Registration ID handy in case anyone asks for it.</p>
+{% else %}
 <p style="margin:0;">A coordinator will look over your registration. Once you&rsquo;re confirmed we&rsquo;ll email you again with your ticket. Keep your Registration ID handy in case anyone asks for it.</p>
+{% endif %}
 
 {% if registration_url %}{% include "emails/_button.html" with href=registration_url label="View my registration" %}{% endif %}
 {% endblock %}

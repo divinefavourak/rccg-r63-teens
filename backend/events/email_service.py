@@ -79,7 +79,15 @@ def _base_context(registration):
         f"{frontend_url}/events/{event.slug}/registration/{registration.registration_id}"
         if event and event.slug else None
     )
+    from . import bedspaces
+    owes = registration.payment_status == registration.PaymentStatus.PENDING
     return {
+        # The registration's own details. The templates are shared with the
+        # legacy Ticket sender, which passes none of these, so each is optional.
+        'parish': registration.attendee_parish,
+        'amount_due': registration.amount_due if owes else None,
+        'bed_note': bedspaces.describe(registration).strip(),
+        'waitlisted': registration.status == registration.Status.WAITLISTED,
         'registration': registration,
         'event': event,
         # Aliases expected by existing templates

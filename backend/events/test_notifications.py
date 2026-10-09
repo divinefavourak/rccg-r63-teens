@@ -1,5 +1,5 @@
 """Tests for event lifecycle notifications routed through the central service."""
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -87,6 +87,32 @@ class RegistrationNotificationTests(TestCase):
         event_notifications.notify_registration_received(registration)
 
         self.assertNotIn('24 hours', notifications_for(self.user).get().body)
+
+    def test_registration_received_carries_the_details(self):
+        event = make_event(
+            title='Teens Camp', venue='Redemption Camp',
+            # 09:00 UTC is 10:00 in Lagos, which is what the teen should read.
+            start_datetime=datetime(2026, 12, 18, 9, 0, tzinfo=dt_timezone.utc),
+            end_datetime=datetime(2026, 12, 20, 15, 0, tzinfo=dt_timezone.utc),
+        )
+        registration = make_registration(event, self.user)
+
+        event_notifications.notify_registration_received(registration)
+
+        body = notifications_for(self.user).get().body
+        self.assertIn('Friday 18 December at 10:00, Redemption Camp', body)
+        self.assertIn(registration.registration_id, body)
+
+    def test_a_waitlisted_registration_is_not_told_its_place_is_held(self):
+        registration = make_registration(
+            self.event, self.user, status=EventRegistration.Status.WAITLISTED)
+
+        event_notifications.notify_registration_received(registration)
+
+        body = notifications_for(self.user).get().body
+        self.assertIn('waitlist', body)
+        self.assertNotIn('held', body)
+        self.assertNotIn('24 hours', body)
 
     def test_registration_confirmed_links_to_the_ticket(self):
         registration = make_registration(self.event, self.user)

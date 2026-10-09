@@ -22,6 +22,7 @@ notification failure must never break a registration.
 """
 import logging
 
+from common.dates import app_timezone
 from notifications.models import NotificationType
 from notifications.services import send
 
@@ -44,6 +45,15 @@ def _base_data(registration):
     }
 
 
+def _when_and_where(event):
+    """'Friday 18 December at 10:00, Redemption Camp', in the app timezone."""
+    # Not `timezone.localtime`: that is settings.TIME_ZONE, which is UTC, and
+    # would send the teen an hour early.
+    starts_at = event.start_datetime.astimezone(app_timezone())
+    when = f'{starts_at:%A} {starts_at.day} {starts_at:%B} at {starts_at:%H:%M}'
+    return f'{when}, {event.venue}' if event.venue else when
+
+
 def notify_registration_received(registration):
     """
     Registration created, payment (if any) still outstanding.
@@ -55,17 +65,22 @@ def notify_registration_received(registration):
     if registration.user_id is None:
         return None
 
-    paid_already = registration.is_paid
-    body = (
-        f'You are registered for {registration.event.title}.'
-        if paid_already else
-        f'Your place at {registration.event.title} is held. '
-        f'Complete payment within 24 hours to confirm it.'
-    )
+    event = registration.event
+    if registration.status == registration.Status.WAITLISTED:
+        # No place yet, so nothing is held and there is nothing to pay for.
+        body = (f'{event.title} is full, so you are on the waitlist. '
+                f'We will tell you if a place opens up.')
+    elif registration.is_paid:
+        body = f'You are registered for {event.title}.'
+    else:
+        body = (f'Your place at {event.title} is held. '
+                f'Complete payment within 24 hours to confirm it.')
+    body += f' It is on {_when_and_where(event)}.'
     # Where they will sleep, or that there is no bed left: said at the moment
     # they register, not discovered on arrival.
     from . import bedspaces
     body += bedspaces.describe(registration)
+    body += f' Your registration ID is {registration.registration_id}.'
 
     return send(
         registration.user,
@@ -290,8 +305,6 @@ def notify_event_reminder(event):
     The day-before reminder. Confirmed attendees only — reminding a teen to turn up
     to an event they have not paid for reads as a dunning notice, not a kindness.
     """
-    from django.utils import timezone as dj_timezone
-
     Status = event.registrations.model.Status
     registrations = (
         event.registrations
@@ -302,7 +315,7 @@ def notify_event_reminder(event):
 
     # Rendered in the app timezone, not UTC: "starts Saturday at 09:00" must be the
     # time the teen will actually walk in, not the stored instant.
-    starts_at = dj_timezone.localtime(event.start_datetime)
+    starts_at = event.start_datetime.astimezone(app_timezone())
 
     sent = 0
     for registration in registrations.iterator():
