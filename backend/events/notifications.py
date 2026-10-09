@@ -99,6 +99,65 @@ def notify_registration_confirmed(registration):
     )
 
 
+def notify_payment_received(registration, place_gone=False):
+    """
+    Paystack confirmed the payment. Quiet-hours exempt: whoever just paid is
+    looking at the ticket, waiting for it to change.
+
+    `place_gone` is the rare case of a place that was released for not being
+    paid, then paid for after someone else took it.
+    """
+    if registration.user_id is None:
+        return None
+
+    title = registration.event.title
+    if place_gone:
+        heading = 'Payment received, but the event is full'
+        body = (f'We received your payment for {title}, but your place had '
+                f'already been released and the event is now full. '
+                f'An organiser will contact you about a refund.')
+    else:
+        from . import bedspaces
+        heading = 'Payment received'
+        body = (f'We received your payment for {title}. Your place is '
+                f'confirmed and your QR ticket is ready.')
+        body += bedspaces.describe(registration)
+
+    return send(
+        registration.user,
+        NotificationType.TRANSACTIONAL,
+        heading,
+        body,
+        deep_link=_ticket_link(registration),
+        data={**_base_data(registration), 'payment_status': registration.payment_status},
+        dedupe_key=f'event:payment_received:{registration.id}',
+        # Called from the webhook: Paystack must not wait on a push.
+        defer_push=True,
+    )
+
+
+def notify_place_released(registration):
+    """
+    The place was held for payment and given up when the time ran out. Said
+    plainly, with the way back: the ticket can still be paid for while the
+    event has room.
+    """
+    if registration.user_id is None:
+        return None
+
+    return send(
+        registration.user,
+        NotificationType.EVENT,
+        'Your place was released',
+        f'Your place at {registration.event.title} was not paid for in time, '
+        f'so it was released. If there is still room, you can pay from your '
+        f'ticket to get it back.',
+        deep_link=_ticket_link(registration),
+        data=_base_data(registration),
+        dedupe_key=f'event:place_released:{registration.id}',
+    )
+
+
 def notify_status_changed(registration, old_status, new_status):
     """
     A registration's status moved (waitlist promotion, cancellation, ...).

@@ -317,8 +317,8 @@ export default function EventRegisterScreen() {
 
           {paid && (
             <Text className="font-ui text-[14px] leading-5 text-ink-2">
-              This event costs {price}. Registering holds your place, and your teen leader will
-              confirm it once the payment is in.
+              This event costs {price}. Registering holds your place. You pay on the next screen, or
+              send the payment to a parent, and your place is confirmed once it is paid.
             </Text>
           )}
         </ScrollView>

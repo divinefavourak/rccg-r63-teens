@@ -23,6 +23,10 @@ class PaymentAmountMismatch(Exception):
 
 class PaystackService:
     """Service to handle Paystack payments"""
+
+    # Seconds to wait for Paystack. Without one, a request that Paystack never
+    # answers holds a worker until the platform kills it.
+    TIMEOUT = 15
     
     def __init__(self):
         self.secret_key = getattr(settings, 'PAYSTACK_SECRET_KEY', '')
@@ -52,7 +56,8 @@ class PaystackService:
         response = requests.post(
             url,
             headers=self.get_headers(),
-            json=payment_data
+            json=payment_data,
+            timeout=self.TIMEOUT
         )
         
         # Log transaction
@@ -75,7 +80,7 @@ class PaystackService:
         """
         url = f"{self.base_url}/transaction/verify/{reference}"
         
-        response = requests.get(url, headers=self.get_headers())
+        response = requests.get(url, headers=self.get_headers(), timeout=self.TIMEOUT)
         
         # Log transaction
         TransactionLog.objects.create(
@@ -100,7 +105,8 @@ class PaystackService:
         response = requests.post(
             url,
             headers=self.get_headers(),
-            json=payment_data
+            json=payment_data,
+            timeout=self.TIMEOUT
         )
         
         if response.status_code == 200:
@@ -136,7 +142,8 @@ class PaystackService:
         response = requests.post(
             url,
             headers=self.get_headers(),
-            json=refund_data
+            json=refund_data,
+            timeout=self.TIMEOUT
         )
         
         # Log transaction
@@ -161,7 +168,8 @@ class PaystackService:
             'page': page
         }
         
-        response = requests.get(url, headers=self.get_headers(), params=params)
+        response = requests.get(
+            url, headers=self.get_headers(), params=params, timeout=self.TIMEOUT)
         
         if response.status_code == 200:
             return response.json()
@@ -456,6 +464,15 @@ class PaymentService:
                     'Amount paid does not match the amount due.')
 
             payment.mark_as_successful(data)
+
+            # --- AN EVENT REGISTRATION ---
+            # Its own rules, notification and email: see `registrations.py`.
+            if payment.registration_id:
+                from . import registrations
+                after_commit = registrations.settle(payment)
+                if after_commit:
+                    transaction.on_commit(after_commit)
+                return payment, True
 
             # --- LOGIC FOR SINGLE TICKET ---
             if payment.ticket:

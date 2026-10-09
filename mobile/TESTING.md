@@ -23,6 +23,7 @@ Last updated 6 October 2026, on branch `feat/mobile-teacher-tools`.
 | Backend automated tests | **48 passed**; 4 newer ones not yet run |
 | Website deep links (production) | **Passed** after the fix |
 | The web app for iPhones | **13 of 13 passed** in headless Chrome; not yet run on an iPhone |
+| Paying for an event (Paystack) | Built, **not yet run** |
 
 ## What you need
 
@@ -370,3 +371,38 @@ Not yet run, and needing a real iPhone with the site on HTTPS:
   on both sides and iOS 16.4 or later).
 - The notch and home-bar spacing in full-screen mode.
 - Whether saved data survives a week without opening the app.
+
+## 9. Paying for an event
+
+Written on 8 October 2026, on branch `feat/paystack-integration`. **Nothing
+here has been run yet**, on a phone or on the server. The mobile code
+typechecks.
+
+It needs Paystack **test** keys in the local `backend/.env`
+(`PAYSTACK_SECRET_KEY=sk_test_…`, `PAYSTACK_PUBLIC_KEY=pk_test_…`), and a paid
+event to register for. Paystack cannot reach a computer on Wi-Fi, so its
+webhook will not arrive locally; the ticket is confirmed by the "ask Paystack"
+route instead, which is the path these tests exercise. Paystack's test cards
+are listed in its documentation.
+
+The backend tests, from `backend\`:
+
+```powershell
+$env:TEST_DATABASE_URL = 'postgres://faithtribe:faithtribe@localhost:5434/faithtribe'
+.\venv\Scripts\python.exe manage.py test payments.test_registrations --noinput
+```
+
+| Test | Result |
+|---|---|
+| `payments.test_registrations` (37 tests: opening a checkout, the webhook, released places, the pages a parent sees) | Not yet run |
+| `payments events` together, to see nothing older broke | Not yet run |
+| Register for a paid event: the ticket shows the amount, "Pay by …", **Pay now** and **Send to a parent to pay** | Not yet run |
+| **Pay now** opens Paystack in the browser; pay with a test card; the last page says "Payment received" and **Back to the app** returns to the ticket | Not yet run |
+| Back on the ticket: it reads "Confirmed and paid", the pay panel is gone, "Payment received" shows | Not yet run |
+| Tap **Pay now** twice quickly: one checkout, not two | Not yet run |
+| Close the browser without paying: the ticket still offers Pay, and nothing is marked failed | Not yet run |
+| **Send to a parent to pay**: the link opens on another phone with no login, shows the event, name and amount, and pays | Not yet run |
+| A ticket that is paid is accepted at the door (section 2), where before it was refused as unpaid | Not yet run |
+| An event with bedspaces: the bed reads as held before paying and firm after | Not yet run |
+| A place left unpaid for 24 hours is released, the teen is told, and the ticket reads "Place released" with Pay still offered | Not yet run |
+| The web app on an iPhone: Pay now leaves for Paystack in the same tab and comes back to the ticket | Not yet run |
