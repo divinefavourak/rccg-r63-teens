@@ -83,6 +83,10 @@ Engineering changes that altered behaviour these documents describe. Pull reques
 - **Event managers see the events of the subtree they manage**, not only those at or above their own parish. `?node=` on the events list now means that node and everything beneath it; it matched the one node only.
 - **Moving a member** ends the membership they left. Before, the old membership stayed active and the person was listed in two places.
 
+## Added after the merge
+
+- **Deleting an account from People** in the Console, with the server refusing your own account, a superuser, and anyone who has paid. `07-feature-specifications.md` #18.
+
 ## Fixed after review
 
 - **Bedspace actions check the event, not only the permission.** The summary, "place people waiting", placing someone and taking a bed back now refuse (403) an event outside the part of the hierarchy the caller manages.
