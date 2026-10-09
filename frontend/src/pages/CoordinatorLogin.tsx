@@ -165,7 +165,7 @@ const CoordinatorLogin = () => {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-console-md bg-console-action py-3 text-[14px] font-medium text-white transition-colors hover:bg-console-action-hover disabled:opacity-60"
+            className="mt-6 flex w-full items-center justify-center gap-2 rounded-console-md bg-console-action py-3 text-[14px] font-medium text-console-on-action transition-colors hover:bg-console-action-hover disabled:opacity-60"
           >
             {isSubmitting ? (
               <Loader variant="inline" size={16} label="Signing in…" />

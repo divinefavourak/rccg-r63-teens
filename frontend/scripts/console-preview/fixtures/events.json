@@ -1,0 +1,32 @@
+{
+  "GET /events/events/": {
+    "count": 4, "next": null, "previous": null,
+    "results": [
+      {"id": "e1", "title": "Teens Hangout 2026", "slug": "teens-hangout-2026", "event_type": "hangout", "scope_node_detail": {"id": "p69", "name": "Lagos Province 69", "node_type": "province"}, "short_description": "", "start_datetime": "2026-12-12T09:00:00+01:00", "end_datetime": "2026-12-12T16:00:00+01:00", "venue": "Rehoboth Parish", "city": "Ikeja", "cover_image": null, "is_virtual": false, "is_free": false, "price": "2000.00", "current_price": "2000.00", "registration_status": "open", "registration_count": 184, "max_attendees": 240, "spots_remaining": 44, "is_upcoming": true, "is_featured": true, "status": "published"},
+      {"id": "e2", "title": "Youth Praise Night", "slug": "youth-praise-night", "event_type": "worship", "scope_node_detail": {"id": "z1", "name": "Ikeja Zone", "node_type": "zone"}, "short_description": "", "start_datetime": "2026-12-19T18:00:00+01:00", "end_datetime": "2026-12-19T21:00:00+01:00", "venue": "Ikeja Zone Headquarters", "city": "", "cover_image": null, "is_virtual": false, "is_free": true, "price": "0.00", "current_price": "0.00", "registration_status": "open", "registration_count": 312, "max_attendees": 400, "spots_remaining": 88, "is_upcoming": true, "is_featured": false, "status": "published"},
+      {"id": "e3", "title": "Back to School Prayer", "slug": "back-to-school-prayer", "event_type": "prayer", "scope_node_detail": null, "short_description": "", "start_datetime": "2027-01-04T07:00:00+01:00", "end_datetime": "2027-01-04T08:00:00+01:00", "venue": "", "city": "", "cover_image": null, "is_virtual": true, "is_free": true, "price": "0.00", "current_price": "0.00", "registration_status": "full", "registration_count": 500, "max_attendees": 500, "spots_remaining": 0, "is_upcoming": true, "is_featured": false, "status": "published"},
+      {"id": "e4", "title": "NYLR 2026", "slug": "nylr-2026", "event_type": "retreat", "scope_node_detail": {"id": "r63", "name": "Region 63", "node_type": "region"}, "short_description": "", "start_datetime": "2027-08-06T09:00:00+01:00", "end_datetime": "2027-08-09T16:00:00+01:00", "venue": "Redemption City", "city": "", "cover_image": null, "is_virtual": false, "is_free": false, "price": "15000.00", "current_price": "15000.00", "registration_status": "not_open", "registration_count": 0, "max_attendees": null, "spots_remaining": null, "is_upcoming": true, "is_featured": false, "status": "scheduled"}
+    ]
+  },
+  "GET /events/events/e1/dashboard/": {"total_registrations": 184, "confirmed_count": 172, "pending_count": 12, "cancelled_count": 3, "waitlisted_count": 1, "checked_in_count": 0, "paid_count": 142, "unpaid_count": 30, "total_revenue": "284000.00"},
+  "GET /events/events/e1/registrations/": {
+    "count": 184, "next": "x", "previous": null,
+    "stats": {"total": 184, "confirmed": 172, "pending": 12, "cancelled": 3, "checked_in": 0},
+    "results": [
+      {"id": "g1", "registration_id": "FT-2026-0412", "event": "e1", "event_title": "Teens Hangout 2026", "attendee_name": "Tolu Adeyemi", "attendee_email": "tolu.adeyemi@gmail.com", "attendee_phone": "", "attendee_province": "", "attendee_parish": "Rehoboth Parish", "status": "confirmed", "payment_status": "paid", "checked_in_at": null, "created_at": "2026-09-28T10:00:00Z"},
+      {"id": "g2", "registration_id": "FT-2026-0388", "event": "e1", "event_title": "Teens Hangout 2026", "attendee_name": "Amaka Eze", "attendee_email": "amaka.eze@gmail.com", "attendee_phone": "", "attendee_province": "", "attendee_parish": "Rehoboth Parish", "status": "checked_in", "payment_status": "paid", "checked_in_at": null, "created_at": "2026-09-28T10:00:00Z"},
+      {"id": "g3", "registration_id": "FT-2026-0431", "event": "e1", "event_title": "Teens Hangout 2026", "attendee_name": "Chidi Nwosu", "attendee_email": "chidi.n@gmail.com", "attendee_phone": "", "attendee_province": "", "attendee_parish": "Victory House", "status": "pending", "payment_status": "pending", "checked_in_at": null, "created_at": "2026-09-28T10:00:00Z"},
+      {"id": "g4", "registration_id": "FT-2026-0440", "event": "e1", "event_title": "Teens Hangout 2026", "attendee_name": "Zainab Bello", "attendee_email": "zainab.b@gmail.com", "attendee_phone": "", "attendee_province": "", "attendee_parish": "Jesus Embassy", "status": "waitlisted", "payment_status": "not_required", "checked_in_at": null, "created_at": "2026-09-28T10:00:00Z"},
+      {"id": "g5", "registration_id": "FT-2026-0397", "event": "e1", "event_title": "Teens Hangout 2026", "attendee_name": "Dayo Ojo", "attendee_email": "dayo.ojo@gmail.com", "attendee_phone": "", "attendee_province": "", "attendee_parish": "Rehoboth Parish", "status": "cancelled", "payment_status": "refunded", "checked_in_at": null, "created_at": "2026-09-28T10:00:00Z"}
+    ]
+  },
+  "GET /events/checkin/today/": {"events": [
+    {"id": "e1", "title": "Teens Hangout 2026", "start_datetime": "2026-10-08T09:00:00+01:00", "end_datetime": "2026-10-08T16:00:00+01:00", "venue": "Rehoboth Parish", "city": "Ikeja", "is_free": false, "max_attendees": 240, "registered": 184, "checked_in": 61}
+  ]},
+  "GET /events/checkin/search/": {"results": [
+    {"registration_id": "FT-2026-0412", "name": "Tolu Adeyemi", "parish": "Rehoboth Parish", "photo": null, "status": "confirmed", "payment_status": "paid"},
+    {"registration_id": "FT-2026-0433", "name": "Tolu Bakare", "parish": "Victory House", "photo": null, "status": "confirmed", "payment_status": "pending"},
+    {"registration_id": "FT-2026-0388", "name": "Tolulope Eze", "parish": "Rehoboth Parish", "photo": null, "status": "checked_in", "payment_status": "paid"}
+  ]},
+  "POST /events/checkin/scan/": {"outcome": "not_paid", "attendee": {"registration_id": "FT-2026-0433", "name": "Tolu Bakare", "parish": "Victory House", "photo": null, "status": "confirmed", "payment_status": "pending"}, "counts": {"registered": 184, "checked_in": 61}}
+}

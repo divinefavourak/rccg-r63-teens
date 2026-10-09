@@ -1,0 +1,365 @@
+{
+ "GET /identity/stats/": {
+  "days": 30,
+  "scope": {
+   "id": "pr1",
+   "name": "RCCG Rehoboth Parish",
+   "node_type": "parish"
+  },
+  "sections": {
+   "people": {
+    "total": 1842,
+    "by_node": [
+     {
+      "name": "RCCG Rehoboth Parish",
+      "node_type": "parish",
+      "count": 142
+     }
+    ]
+   },
+   "events": {
+    "events_total": 9,
+    "events_upcoming": 4,
+    "registrations": {
+     "total": 318,
+     "checked_in": 121,
+     "pending": 12,
+     "confirmed": 170
+    },
+    "registrations_recent": 86,
+    "check_in_rate": 38
+   },
+   "content": {
+    "total": 240,
+    "published": 201,
+    "in_review": 6,
+    "draft": 9,
+    "approved": 11,
+    "scheduled": 13,
+    "coverage_next_14": {
+     "covered": 12,
+     "gaps": [
+      "2026-10-08",
+      "2026-10-12"
+     ]
+    }
+   }
+  }
+ },
+ "GET /content/devotionals/": {
+  "count": 6,
+  "next": null,
+  "previous": null,
+  "results": [
+   {
+    "id": "d2026-10-05",
+    "date": "2026-10-05",
+    "title": "Rooted",
+    "slug": "rooted",
+    "memory_verse_passage": "",
+    "memory_verse_content": "",
+    "cover_image": null,
+    "has_audio": false,
+    "view_count": 0,
+    "status": "published",
+    "published_at": null
+   },
+   {
+    "id": "d2026-10-06",
+    "date": "2026-10-06",
+    "title": "Small Yes",
+    "slug": "small-yes",
+    "memory_verse_passage": "",
+    "memory_verse_content": "",
+    "cover_image": null,
+    "has_audio": false,
+    "view_count": 0,
+    "status": "published",
+    "published_at": null
+   },
+   {
+    "id": "d2026-10-07",
+    "date": "2026-10-07",
+    "title": "Whose Voice?",
+    "slug": "whose-voice?",
+    "memory_verse_passage": "",
+    "memory_verse_content": "",
+    "cover_image": null,
+    "has_audio": false,
+    "view_count": 0,
+    "status": "published",
+    "published_at": null
+   },
+   {
+    "id": "d2026-10-09",
+    "date": "2026-10-09",
+    "title": "Open Hands",
+    "slug": "open-hands",
+    "memory_verse_passage": "",
+    "memory_verse_content": "",
+    "cover_image": null,
+    "has_audio": false,
+    "view_count": 0,
+    "status": "scheduled",
+    "published_at": null
+   },
+   {
+    "id": "d2026-10-10",
+    "date": "2026-10-10",
+    "title": "Rest",
+    "slug": "rest",
+    "memory_verse_passage": "",
+    "memory_verse_content": "",
+    "cover_image": null,
+    "has_audio": false,
+    "view_count": 0,
+    "status": "approved",
+    "published_at": null
+   },
+   {
+    "id": "d2026-10-11",
+    "date": "2026-10-11",
+    "title": "Sent",
+    "slug": "sent",
+    "memory_verse_passage": "",
+    "memory_verse_content": "",
+    "cover_image": null,
+    "has_audio": false,
+    "view_count": 0,
+    "status": "in_review",
+    "published_at": null
+   }
+  ]
+ },
+ "GET /identity/memberships/": {
+  "count": 1842,
+  "next": "x",
+  "previous": null,
+  "results": [
+   {
+    "id": "m-u-amaka",
+    "user": "u-amaka",
+    "user_detail": {
+     "id": "u-amaka",
+     "username": "amaka.eze",
+     "display_name": "Amaka Eze",
+     "email": "amaka.eze@gmail.com",
+     "is_active": true
+    },
+    "organization_node": "pr1",
+    "organization_node_detail": {
+     "id": "pr1",
+     "name": "RCCG Rehoboth Parish",
+     "node_type": "parish"
+    },
+    "is_primary": true,
+    "is_active": true,
+    "joined_at": "2024-01-14T10:00:00Z"
+   },
+   {
+    "id": "m-u-ngozi",
+    "user": "u-ngozi",
+    "user_detail": {
+     "id": "u-ngozi",
+     "username": "ngozi.okafor",
+     "display_name": "Ngozi Okafor",
+     "email": "ngozi.okafor@gmail.com",
+     "is_active": true
+    },
+    "organization_node": "pr1",
+    "organization_node_detail": {
+     "id": "pr1",
+     "name": "RCCG Rehoboth Parish",
+     "node_type": "parish"
+    },
+    "is_primary": true,
+    "is_active": true,
+    "joined_at": "2024-01-14T10:00:00Z"
+   },
+   {
+    "id": "m-u-chidi",
+    "user": "u-chidi",
+    "user_detail": {
+     "id": "u-chidi",
+     "username": "chidi.n",
+     "display_name": "Chidi Nwosu",
+     "email": "chidi.n@gmail.com",
+     "is_active": true
+    },
+    "organization_node": "pr2",
+    "organization_node_detail": {
+     "id": "pr2",
+     "name": "RCCG Victory House",
+     "node_type": "parish"
+    },
+    "is_primary": true,
+    "is_active": true,
+    "joined_at": "2024-01-14T10:00:00Z"
+   },
+   {
+    "id": "m-u-tunde",
+    "user": "u-tunde",
+    "user_detail": {
+     "id": "u-tunde",
+     "username": "tunde.adeyemi",
+     "display_name": "Tunde Adeyemi",
+     "email": "tunde.adeyemi@gmail.com",
+     "is_active": true
+    },
+    "organization_node": "pr1",
+    "organization_node_detail": {
+     "id": "pr1",
+     "name": "RCCG Rehoboth Parish",
+     "node_type": "parish"
+    },
+    "is_primary": true,
+    "is_active": true,
+    "joined_at": "2024-01-14T10:00:00Z"
+   },
+   {
+    "id": "m-u-zainab",
+    "user": "u-zainab",
+    "user_detail": {
+     "id": "u-zainab",
+     "username": "zainab.b",
+     "display_name": "Zainab Bello",
+     "email": "zainab.b@gmail.com",
+     "is_active": false
+    },
+    "organization_node": "pr2",
+    "organization_node_detail": {
+     "id": "pr2",
+     "name": "RCCG Victory House",
+     "node_type": "parish"
+    },
+    "is_primary": true,
+    "is_active": true,
+    "joined_at": "2024-01-14T10:00:00Z"
+   },
+   {
+    "id": "m-u-tolu",
+    "user": "u-tolu",
+    "user_detail": {
+     "id": "u-tolu",
+     "username": "tolu.adeyemi",
+     "display_name": "Tolu Adeyemi",
+     "email": "tolu.adeyemi@gmail.com",
+     "is_active": true
+    },
+    "organization_node": "pr1",
+    "organization_node_detail": {
+     "id": "pr1",
+     "name": "RCCG Rehoboth Parish",
+     "node_type": "parish"
+    },
+    "is_primary": true,
+    "is_active": true,
+    "joined_at": "2024-01-14T10:00:00Z"
+   }
+  ]
+ },
+ "GET /identity/role-assignments/": {
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+   {
+    "id": "ra-ngozi",
+    "user": "u-ngozi",
+    "user_detail": {
+     "id": "u-ngozi",
+     "username": "ngozi.okafor",
+     "display_name": "Ngozi Okafor",
+     "email": "ngozi.okafor@gmail.com",
+     "is_active": true
+    },
+    "role": "role-t",
+    "role_detail": {
+     "id": "role-t",
+     "code": "teacher",
+     "label": "Teacher",
+     "description": "",
+     "allowed_node_types": [],
+     "permissions": [
+      "p",
+      "p",
+      "p",
+      "p"
+     ],
+     "is_system": true,
+     "is_active": true
+    },
+    "node": "pr1",
+    "node_detail": {
+     "id": "pr1",
+     "name": "RCCG Rehoboth Parish",
+     "node_type": "parish"
+    },
+    "start_date": "2025-03-03",
+    "end_date": null,
+    "is_active": true,
+    "appointed_by": "u-tunde",
+    "appointed_by_detail": {
+     "id": "u-tunde",
+     "username": "tunde.adeyemi",
+     "display_name": "Tunde Adeyemi",
+     "email": "tunde.adeyemi@gmail.com",
+     "is_active": true
+    },
+    "created_at": "2025-03-03T09:00:00Z"
+   },
+   {
+    "id": "ra1",
+    "user": "u-tunde",
+    "user_detail": {
+     "id": "u-tunde",
+     "username": "tunde.adeyemi",
+     "display_name": "Tunde Adeyemi",
+     "email": "tunde.adeyemi@gmail.com",
+     "is_active": true
+    },
+    "role": "role-rc",
+    "role_detail": {
+     "id": "role-rc",
+     "code": "regional_coordinator",
+     "label": "Regional Coordinator",
+     "description": "",
+     "allowed_node_types": [],
+     "permissions": [
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p"
+     ],
+     "is_system": true,
+     "is_active": true
+    },
+    "node": "r63",
+    "node_detail": {
+     "id": "r63",
+     "name": "Region 63",
+     "node_type": "region"
+    },
+    "start_date": "2025-03-03",
+    "end_date": null,
+    "is_active": true,
+    "appointed_by": null,
+    "appointed_by_detail": null,
+    "created_at": "2025-03-03T09:00:00Z"
+   }
+  ]
+ }
+}

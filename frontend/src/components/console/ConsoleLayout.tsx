@@ -11,8 +11,8 @@
  * click. Authority is not a progressive enhancement.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
-import { AlertTriangle, ScanLine } from 'lucide-react';
+import { Outlet } from 'react-router-dom';
+import { AlertTriangle } from 'lucide-react';
 import { useConsoleAuth } from '../../context/ConsoleAuthContext';
 import Loader from '../Loader';
 import { useTheme } from '../../hooks/useTheme';
@@ -22,25 +22,41 @@ import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 
 export const ConsoleLayout = () => {
-  const { permissions, isLoading, error, me, scopeNode, setScopeNode, homeNode } =
+  const { permissions, isLoading, error, me, scopeNode, setScopeNode } =
     useConsoleAuth();
   const { theme, toggleTheme } = useTheme();
   const hierarchy = useHierarchy();
-  const navigate = useNavigate();
-  const [collapsed, setCollapsed] = useState(false);
+  // Icons only below the `lg` breakpoint, where a 236px column would crowd the
+  // screen; the top row's menu button opens it.
+  const [collapsed, setCollapsed] = useState(
+    () => window.matchMedia('(max-width: 1023px)').matches,
+  );
 
   const nav = useMemo(() => computeNav(permissions), [permissions]);
 
   // Default the scope to the user's home node once both have loaded. Doing this
   // here rather than in the context keeps the context free of tree knowledge.
   useEffect(() => {
-    if (scopeNode || hierarchy.isLoading) return;
-    if (homeNode) {
-      setScopeNode(homeNode);
+    // Wait for both requests. Deciding on whichever answered first made the
+    // starting scope depend on network timing.
+    if (isLoading || hierarchy.isLoading) return;
+
+    // A scope remembered from another session can name a node this person can
+    // no longer choose, or one that does not exist in this database at all.
+    // Everything scoped would then be sent a node the server refuses, so drop
+    // it and start again from where their authority is.
+    if (
+      scopeNode &&
+      hierarchy.nodes.length > 0 &&
+      !hierarchy.nodes.some((n) => n.id === scopeNode.id && n.selectable)
+    ) {
+      setScopeNode(null);
       return;
     }
-    // No membership (a superuser, typically) — fall back to the topmost node
-    // they can actually select.
+    if (scopeNode) return;
+    // The context already starts at the holder's authority or home node. This
+    // is for someone with neither (a superuser, typically): fall back to the
+    // topmost node they can actually select.
     const firstSelectable = hierarchy.nodes.find((n) => n.selectable);
     if (firstSelectable) {
       setScopeNode({
@@ -49,15 +65,15 @@ export const ConsoleLayout = () => {
         node_type: firstSelectable.node_type,
       });
     }
-  }, [scopeNode, homeNode, hierarchy.isLoading, hierarchy.nodes, setScopeNode]);
+  }, [isLoading, scopeNode, hierarchy.isLoading, hierarchy.nodes, setScopeNode]);
 
   /**
    * A Teacher holds `events.checkin` but not `events.view`, so check-in cannot
    * be reached by drilling into an event list they cannot open. It needs a
    * standing entry point of its own — this is that entry point.
    *
-   * Rendered as a floating action rather than a nav item because for a Teacher
-   * it is not a section of the Console, it is the thing they came to do.
+   * Drawn as the green entry at the foot of the sidebar's list, apart from the
+   * sections: for a Teacher it is not a section, it is the thing they came to do.
    */
   const needsCheckinShortcut =
     permissions.has('events.checkin') && !permissions.has('events.view');
@@ -73,16 +89,16 @@ export const ConsoleLayout = () => {
           <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-console-danger-bg">
             <AlertTriangle size={20} className="text-console-danger" />
           </div>
-          <h1 className="text-[15px] font-semibold text-console-text">
+          <h1 className="text-[20px] font-bold leading-7 tracking-[-0.01em] text-console-text">
             The Console could not start
           </h1>
-          <p className="mt-1.5 text-[13px] leading-relaxed text-console-muted">
+          <p className="mt-1.5 text-[14px] leading-5 text-console-body">
             {error}
           </p>
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="mt-4 rounded-console-md bg-console-action px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-console-action-hover"
+            className="mt-4 inline-flex h-10 items-center rounded-full bg-console-action px-4 text-[14px] font-semibold text-console-on-action transition-colors hover:bg-console-action-hover"
           >
             Try again
           </button>
@@ -103,10 +119,10 @@ export const ConsoleLayout = () => {
     return (
       <div className="flex min-h-screen items-center justify-center bg-console-canvas px-6">
         <div className="max-w-md text-center">
-          <h1 className="text-[15px] font-semibold text-console-text">
+          <h1 className="text-[20px] font-bold leading-7 tracking-[-0.01em] text-console-text">
             You don’t hold a role yet
           </h1>
-          <p className="mt-1.5 text-[13px] leading-relaxed text-console-muted">
+          <p className="mt-1.5 text-[14px] leading-5 text-console-body">
             The Console shows you what your role allows, and yours has not been
             assigned. Whoever appointed you can grant it — until then there is
             nothing here for you to manage.
@@ -117,30 +133,26 @@ export const ConsoleLayout = () => {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-console-canvas text-console-body">
-      <TopBar
-        roots={hierarchy.roots}
-        hierarchyLoading={hierarchy.isLoading}
-        onToggleSidebar={() => setCollapsed((v) => !v)}
-        dark={theme === 'dark'}
-        onToggleDark={toggleTheme}
+    <div className="flex h-screen gap-4 bg-console-canvas p-4 text-console-body">
+      <Sidebar
+        items={nav.filter((item) => item.inSidebar?.(permissions) ?? true)}
+        collapsed={collapsed}
+        showCheckIn={needsCheckinShortcut}
       />
 
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar items={nav} collapsed={collapsed} />
+      <div className="flex min-w-0 flex-1 flex-col gap-5 px-2 pt-1">
+        <TopBar
+          roots={hierarchy.roots}
+          hierarchyLoading={hierarchy.isLoading}
+          onToggleSidebar={() => setCollapsed((v) => !v)}
+          showNotifications={nav.some((item) => item.id === 'notifications')}
+          dark={theme === 'dark'}
+          onToggleDark={toggleTheme}
+        />
 
-        <main className="console-scroll relative flex-1 overflow-y-auto">
+        <main className="console-scroll relative min-h-0 flex-1 overflow-y-auto">
           <Outlet />
 
-          {needsCheckinShortcut && (
-            <button
-              type="button"
-              onClick={() => navigate('/admin/my-class')}
-              className="fixed bottom-6 right-6 z-30 flex items-center gap-2 rounded-console-xl bg-console-action px-4 py-3 text-[13px] font-semibold text-white shadow-lg transition-colors hover:bg-console-action-hover"
-            >
-              <ScanLine size={16} /> Check in
-            </button>
-          )}
         </main>
       </div>
     </div>

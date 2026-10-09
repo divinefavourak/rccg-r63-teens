@@ -17,7 +17,7 @@ class Event(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     """
     General event (campouts, conferences, hangouts, retreats, workshops, etc.)
     """
-    
+
     class EventType(models.TextChoices):
         CAMPOUT = 'campout', 'Camp Out'
         CONFERENCE = 'conference', 'Conference'
@@ -29,32 +29,32 @@ class Event(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
         CONCERT = 'concert', 'Concert'
         WEBINAR = 'webinar', 'Webinar'
         OTHER = 'other', 'Other'
-    
+
     class RegistrationStatus(models.TextChoices):
         NOT_OPEN = 'not_open', 'Not Yet Open'
         OPEN = 'open', 'Open'
         CLOSED = 'closed', 'Closed'
         FULL = 'full', 'Full'
-    
+
     class TargetAgeGroup(models.TextChoices):
         ALL       = 'all',       'All Ages'
         CHILDREN  = 'children',  'Children (6-8)'
         PRE_TEEN  = 'pre_teen',  'Pre-Teens (9-12)'
         TEEN      = 'teen',      'Teens (13-19)'
         SUPERTEEN = 'superteen', 'Superteens (19+)'
-    
+
     # Event Details
     title = models.CharField(max_length=255)
     slug = models.SlugField(max_length=300, unique=True, db_index=True)
     event_type = models.CharField(max_length=20, choices=EventType.choices)
     description = models.TextField()
     short_description = models.CharField(max_length=500, blank=True)
-    
+
     # Dates & Times
     start_datetime = models.DateTimeField()
     end_datetime = models.DateTimeField()
     timezone_name = models.CharField(max_length=50, default='Africa/Lagos')
-    
+
     # Location
     venue = models.CharField(max_length=500)
     address = models.TextField(blank=True)
@@ -62,13 +62,13 @@ class Event(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     state = models.CharField(max_length=100, blank=True)
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
-    
+
     # Virtual event settings
     is_virtual = models.BooleanField(default=False)
     is_hybrid = models.BooleanField(default=False)
     virtual_link = models.URLField(blank=True)
     virtual_platform = models.CharField(max_length=100, blank=True)  # Zoom, Google Meet, etc.
-    
+
     # Visuals
     #
     # Optional. This was a plain ImageField with neither blank nor null, which
@@ -80,7 +80,7 @@ class Event(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     cover_image = models.ImageField(upload_to='events/', blank=True, null=True)
     gallery_images = models.JSONField(default=list, blank=True)  # List of image URLs
     promotional_video_url = models.URLField(blank=True)
-    
+
     # Registration Settings
     registration_status = models.CharField(
         max_length=20,
@@ -92,7 +92,10 @@ class Event(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     max_attendees = models.PositiveIntegerField(null=True, blank=True)
     waitlist_enabled = models.BooleanField(default=True)
     max_waitlist = models.PositiveIntegerField(null=True, blank=True)
-    
+    # Sleeping places (a camp). Off unless the organiser turns it on; the
+    # hostels and the rules are in `events/bedspaces.py`.
+    bedspaces_enabled = models.BooleanField(default=False)
+
     # Pricing
     is_free = models.BooleanField(default=False)
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
@@ -100,7 +103,7 @@ class Event(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     early_bird_deadline = models.DateTimeField(null=True, blank=True)
     group_discount_threshold = models.PositiveIntegerField(null=True, blank=True)
     group_discount_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    
+
     # Eligibility
     #
     # `scope_node` is the event's place in the church tree: the node that owns it,
@@ -131,26 +134,26 @@ class Event(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     min_age = models.PositiveIntegerField(null=True, blank=True)
     max_age = models.PositiveIntegerField(null=True, blank=True)
     requires_guardian_consent = models.BooleanField(default=True)
-    
+
     # Organizer
     organizer_name = models.CharField(max_length=255, blank=True)
     organizer_email = models.EmailField(blank=True)
     organizer_phone = models.CharField(max_length=20, blank=True)
     organizer_website = models.URLField(blank=True)
-    
+
     # Additional Info
     what_to_bring = models.JSONField(default=list, blank=True)  # List of items
     schedule = models.JSONField(default=list, blank=True)  # Event schedule/itinerary
     faqs = models.JSONField(default=list, blank=True)  # FAQ list
-    
+
     # Stats
     registration_count = models.PositiveIntegerField(default=0)
     waitlist_count = models.PositiveIntegerField(default=0)
     checked_in_count = models.PositiveIntegerField(default=0)
-    
+
     # Featured
     is_featured = models.BooleanField(default=False, db_index=True)
-    
+
     class Meta:
         ordering = ['-start_datetime']
         verbose_name = 'Event'
@@ -162,28 +165,28 @@ class Event(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
             models.Index(fields=['status', 'start_datetime']),
             models.Index(fields=['is_featured', 'status']),
         ]
-    
+
     def __str__(self):
         return self.title
-    
+
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugify(self.title)[:300]
         super().save(*args, **kwargs)
-    
+
     @property
     def is_upcoming(self):
         return self.start_datetime > timezone.now()
-    
+
     @property
     def is_ongoing(self):
         now = timezone.now()
         return self.start_datetime <= now <= self.end_datetime
-    
+
     @property
     def is_past(self):
         return self.end_datetime < timezone.now()
-    
+
     @property
     def places_taken(self):
         """
@@ -221,18 +224,18 @@ class Event(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
             if timezone.now() < self.early_bird_deadline:
                 return self.early_bird_price
         return self.price
-    
+
     def update_registration_status(self):
         """Auto-update registration status based on capacity and dates."""
         now = timezone.now()
-        
+
         if self.is_full:
             self.registration_status = self.RegistrationStatus.FULL
         elif self.registration_closes and now > self.registration_closes:
             self.registration_status = self.RegistrationStatus.CLOSED
         elif self.registration_opens and now >= self.registration_opens:
             self.registration_status = self.RegistrationStatus.OPEN
-        
+
         self.save()
 
 
@@ -241,7 +244,7 @@ class EventRegistration(UUIDMixin, TimestampMixin):
     Registration for an event.
     Replaces the old Ticket concept with a more general approach.
     """
-    
+
     class Status(models.TextChoices):
         PENDING = 'pending', 'Pending'
         CONFIRMED = 'confirmed', 'Confirmed'
@@ -250,14 +253,14 @@ class EventRegistration(UUIDMixin, TimestampMixin):
         CHECKED_IN = 'checked_in', 'Checked In'
         ATTENDED = 'attended', 'Attended'
         NO_SHOW = 'no_show', 'No Show'
-    
+
     class PaymentStatus(models.TextChoices):
         NOT_REQUIRED = 'not_required', 'Not Required'
         PENDING = 'pending', 'Pending'
         PAID = 'paid', 'Paid'
         REFUNDED = 'refunded', 'Refunded'
         FAILED = 'failed', 'Failed'
-    
+
     class RegistrationType(models.TextChoices):
         SELF = 'self', 'Self Registration'
         COORDINATOR = 'coordinator', 'Coordinator Registration'
@@ -277,7 +280,7 @@ class EventRegistration(UUIDMixin, TimestampMixin):
 
     # Unique registration identifier
     registration_id = models.CharField(max_length=30, unique=True, editable=False, db_index=True)
-    
+
     # Relationships
     event = models.ForeignKey(
         Event,
@@ -298,7 +301,7 @@ class EventRegistration(UUIDMixin, TimestampMixin):
         blank=True,
         related_name='profile_registrations'
     )
-    
+
     # =====================
     # Attendee Snapshot (preserved even if profile changes)
     # =====================
@@ -309,14 +312,17 @@ class EventRegistration(UUIDMixin, TimestampMixin):
     attendee_gender = models.CharField(max_length=20, blank=True)
     attendee_date_of_birth = models.DateField(null=True, blank=True)
     attendee_category = models.CharField(max_length=50, blank=True)  # Age group category
-    
+    # A leader sleeps in a bed reserved for leaders, never an attendee's.
+    # Decided at registration by `bedspaces.attends_as_leader`.
+    attending_as_leader = models.BooleanField(default=False)
+
     # Church hierarchy
     attendee_province = models.CharField(max_length=100, choices=Province.choices)
     attendee_zone = models.CharField(max_length=100, blank=True)
     attendee_area = models.CharField(max_length=100, blank=True)
     attendee_parish = models.CharField(max_length=255)
     attendee_department = models.CharField(max_length=255, blank=True)
-    
+
     # =====================
     # Guardian Information
     # =====================
@@ -326,14 +332,14 @@ class EventRegistration(UUIDMixin, TimestampMixin):
     guardian_relationship = models.CharField(max_length=100)
     guardian_consent = models.BooleanField(default=False)
     consent_timestamp = models.DateTimeField(null=True, blank=True)
-    
+
     # =====================
     # Emergency Contact
     # =====================
     emergency_contact_name = models.CharField(max_length=255, blank=True)
     emergency_contact_phone = models.CharField(max_length=20, blank=True)
     emergency_contact_relationship = models.CharField(max_length=100, blank=True)
-    
+
     # =====================
     # Medical Information
     # =====================
@@ -342,7 +348,7 @@ class EventRegistration(UUIDMixin, TimestampMixin):
     medications = models.TextField(blank=True)
     dietary_restrictions = models.TextField(blank=True)
     special_needs = models.TextField(blank=True)
-    
+
     # =====================
     # Status & Payment
     # =====================
@@ -361,7 +367,7 @@ class EventRegistration(UUIDMixin, TimestampMixin):
         choices=RegistrationType.choices,
         default=RegistrationType.SELF
     )
-    
+
     # =====================
     # Payment Details
     # =====================
@@ -375,10 +381,10 @@ class EventRegistration(UUIDMixin, TimestampMixin):
         related_name='registrations'
     )
     payment_reference = models.CharField(max_length=100, blank=True)
-    
+
     # Legacy payment proof (for manual verification)
     proof_of_payment = models.FileField(upload_to='payment_proofs/', null=True, blank=True)
-    
+
     # =====================
     # Check-in
     # =====================
@@ -392,12 +398,12 @@ class EventRegistration(UUIDMixin, TimestampMixin):
     )
     check_in_method = models.CharField(max_length=20, blank=True)  # qr_scan, manual, etc.
     check_in_notes = models.TextField(blank=True)
-    
+
     # =====================
     # QR Code
     # =====================
     qr_code = models.ImageField(upload_to='registration_qr/', null=True, blank=True)
-    
+
     # =====================
     # Registration metadata
     # =====================
@@ -424,15 +430,15 @@ class EventRegistration(UUIDMixin, TimestampMixin):
     )
     cancelled_at = models.DateTimeField(null=True, blank=True)
     cancellation_reason = models.TextField(blank=True)
-    
+
     # Notes
     notes = models.TextField(blank=True)
     internal_notes = models.TextField(blank=True)  # For coordinators/admins only
-    
+
     # IP/Device tracking
     registration_ip = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(blank=True)
-    
+
     class Meta:
         ordering = ['-created_at']
         verbose_name = 'Event Registration'
@@ -449,10 +455,10 @@ class EventRegistration(UUIDMixin, TimestampMixin):
             # project, so an unindexed sort over it is the most expensive one.
             models.Index(fields=['-created_at'], name='evreg_created_desc_idx'),
         ]
-    
+
     def __str__(self):
         return f"{self.registration_id} - {self.attendee_name}"
-    
+
     def _id_prefix(self):
         """`CAMP-20261006-`: the event's first word (e.g. CAMP, CONF, RCCG) and the day."""
         event_prefix = 'EVT'
@@ -501,15 +507,15 @@ class EventRegistration(UUIDMixin, TimestampMixin):
     @property
     def is_confirmed(self):
         return self.status == self.Status.CONFIRMED
-    
+
     @property
     def is_paid(self):
         return self.payment_status in [self.PaymentStatus.PAID, self.PaymentStatus.NOT_REQUIRED]
-    
+
     @property
     def is_checked_in(self):
         return self.status == self.Status.CHECKED_IN
-    
+
     def _move_to(self, new_status, **changes):
         """
         Change status and keep the event's counters true, as one step.
@@ -551,6 +557,12 @@ class EventRegistration(UUIDMixin, TimestampMixin):
                     models.F('checked_in_count') + arrived, 0)
             if counters:
                 Event.objects.filter(pk=self.event_id).update(**counters)
+
+            # A bed follows the place: kept while the registration holds one,
+            # given back when it is cancelled. Inside this transaction, so a
+            # status never commits with the wrong bed.
+            from . import bedspaces
+            bedspaces.sync(self)
             return old_status
 
     def set_status(self, new_status):
@@ -585,14 +597,14 @@ class EventRegistration(UUIDMixin, TimestampMixin):
 
 class BulkUpload(UUIDMixin, TimestampMixin):
     """Model for tracking bulk registration uploads."""
-    
+
     class Status(models.TextChoices):
         PENDING = 'pending', 'Pending'
         PROCESSING = 'processing', 'Processing'
         COMPLETED = 'completed', 'Completed'
         FAILED = 'failed', 'Failed'
         PARTIAL = 'partial', 'Partial Success'
-    
+
     event = models.ForeignKey(
         Event,
         on_delete=models.CASCADE,
@@ -603,32 +615,32 @@ class BulkUpload(UUIDMixin, TimestampMixin):
         on_delete=models.CASCADE,
         related_name='event_bulk_uploads'
     )
-    
+
     filename = models.CharField(max_length=255)
     file = models.FileField(upload_to='bulk_uploads/')
-    
+
     total_records = models.IntegerField(default=0)
     successful_records = models.IntegerField(default=0)
     failed_records = models.IntegerField(default=0)
-    
+
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     error_log = models.TextField(blank=True)
     error_details = models.JSONField(default=list, blank=True)  # Detailed errors per row
-    
+
     processed_at = models.DateTimeField(null=True, blank=True)
-    
+
     class Meta:
         ordering = ['-created_at']
         verbose_name = 'Bulk Upload'
         verbose_name_plural = 'Bulk Uploads'
-    
+
     def __str__(self):
         return f"{self.filename} - {self.get_status_display()}"
 
 
 class RegistrationAuditLog(UUIDMixin):
     """Audit log for registration changes."""
-    
+
     class ActionType(models.TextChoices):
         CREATE = 'create', 'Create'
         UPDATE = 'update', 'Update'
@@ -636,7 +648,7 @@ class RegistrationAuditLog(UUIDMixin):
         PAYMENT_UPDATE = 'payment_update', 'Payment Update'
         CHECK_IN = 'check_in', 'Check In'
         CANCEL = 'cancel', 'Cancel'
-    
+
     registration = models.ForeignKey(
         EventRegistration,
         on_delete=models.CASCADE,
@@ -648,20 +660,85 @@ class RegistrationAuditLog(UUIDMixin):
         null=True,
         blank=True
     )
-    
+
     action = models.CharField(max_length=50, choices=ActionType.choices)
     old_values = models.JSONField(null=True, blank=True)
     new_values = models.JSONField(null=True, blank=True)
-    
+
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         ordering = ['-timestamp']
         indexes = [
             models.Index(fields=['registration', 'timestamp']),
         ]
-    
+
     def __str__(self):
         return f"{self.registration.registration_id} - {self.action}"
+
+
+class Hostel(UUIDMixin, TimestampMixin):
+    """
+    Somewhere to sleep at an event. Single-gender, with beds numbered from 1 to
+    `capacity`; `reserved_for_leaders` of them are for leaders and the rest for
+    attendees. See `events/bedspaces.py` for how they are given out.
+    """
+
+    class Gender(models.TextChoices):
+        MALE = 'male', 'Male'
+        FEMALE = 'female', 'Female'
+
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='hostels')
+    name = models.CharField(max_length=100)
+    # The prefix of every bed in it: "HA" gives HA-001, HA-002, ...
+    code = models.CharField(max_length=10)
+    gender = models.CharField(max_length=10, choices=Gender.choices)
+    capacity = models.PositiveIntegerField()
+    reserved_for_leaders = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['code']
+        constraints = [
+            models.UniqueConstraint(fields=['event', 'code'], name='uniq_hostel_code_per_event'),
+            models.CheckConstraint(
+                condition=models.Q(reserved_for_leaders__lte=models.F('capacity')),
+                name='hostel_reserved_within_capacity',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.name} ({self.code})'
+
+
+class BedAssignment(UUIDMixin, TimestampMixin):
+    """One registration's bed: a hostel and a serial number within it."""
+
+    registration = models.OneToOneField(
+        EventRegistration, on_delete=models.CASCADE, related_name='bed')
+    # RESTRICT: a hostel with people in it is emptied on purpose, not by
+    # deleting it. Not PROTECT, which would also refuse to delete the *event*:
+    # the event cascades to both the hostel and (through the registration) this
+    # row, and RESTRICT allows exactly that.
+    hostel = models.ForeignKey(Hostel, on_delete=models.RESTRICT, related_name='beds')
+    serial = models.PositiveIntegerField()
+    for_leader = models.BooleanField(default=False)
+    # Set when an organiser placed or moved this person by hand.
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='bed_assignments_made',
+    )
+
+    class Meta:
+        ordering = ['hostel__code', 'serial']
+        constraints = [
+            models.UniqueConstraint(fields=['hostel', 'serial'], name='uniq_bed_per_hostel'),
+        ]
+
+    @property
+    def code(self):
+        return f'{self.hostel.code}-{self.serial:03d}'
+
+    def __str__(self):
+        return self.code

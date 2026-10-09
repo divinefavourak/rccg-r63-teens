@@ -42,10 +42,10 @@ export const Notifications = () => (
     <div className="mb-4 flex items-start gap-3 rounded-console-lg border border-console-border bg-console-info-bg p-4">
       <Lock size={17} className="mt-0.5 shrink-0 text-console-info" />
       <div>
-        <p className="text-[13px] font-semibold text-console-info">
+        <p className="text-[14px] font-semibold text-console-info">
           No management API exists for this yet
         </p>
-        <p className="mt-1 text-[13px] leading-relaxed text-console-body">
+        <p className="mt-1 text-[14px] leading-5 text-console-body">
           Every notifications route is owner-scoped — a teen reads their own
           inbox and sets their own preferences. Sending an announcement, reading
           delivery stats and viewing ladder health would each need an endpoint
@@ -58,7 +58,7 @@ export const Notifications = () => (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card>
         <CardHeader>
-          <span className="flex items-center gap-2 text-[13px] font-semibold text-console-text">
+          <span className="flex items-center gap-2 text-[14px] font-semibold text-console-text">
             <Bell size={15} className="text-console-subtle" />
             The four rungs
           </span>
@@ -69,8 +69,8 @@ export const Notifications = () => (
               key={r.label}
               className="flex items-center justify-between px-4 py-2.5"
             >
-              <span className="text-[13px] text-console-body">
-                <span className="mr-2 text-[11px] tabular-nums text-console-subtle">
+              <span className="text-[14px] text-console-body">
+                <span className="mr-2 text-[12px] tabular-nums text-console-subtle">
                   {i + 1}
                 </span>
                 {r.label}
@@ -81,14 +81,14 @@ export const Notifications = () => (
             </li>
           ))}
         </ul>
-        <p className="px-4 py-3 text-[11px] leading-relaxed text-console-subtle">
+        <p className="px-4 py-3 text-[12px] leading-5 text-console-subtle">
           Gentle uses rung 1. Standard uses 1 and 3. Committed uses all four.
         </p>
       </Card>
 
       <Card>
         <CardHeader>
-          <span className="text-[13px] font-semibold text-console-text">
+          <span className="text-[14px] font-semibold text-console-text">
             Rules that must hold
           </span>
         </CardHeader>
@@ -96,7 +96,7 @@ export const Notifications = () => (
           {RULES.map((rule) => (
             <li
               key={rule}
-              className="text-[13px] leading-relaxed text-console-body"
+              className="text-[14px] leading-5 text-console-body"
             >
               — {rule}
             </li>

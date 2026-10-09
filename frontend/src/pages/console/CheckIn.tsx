@@ -1,180 +1,350 @@
 /**
- * Check in — run the door.
+ * Check in — the person in front of you, and whether to let them in.
  *
- * Reachable directly because `events.checkin` does not imply `events.view`: a
- * Teacher holds the former and not the latter, so check-in cannot be reached by
- * drilling into an event list they cannot open. This screen is that entry point,
- * and it is also what the floating action in `ConsoleLayout` opens.
+ * Built on the door endpoints (`/events/checkin/…`), which need
+ * `events.checkin` and nothing else. That matters: a Teacher holds check-in
+ * without `events.view` or `events.manage`, and the general registrations list
+ * answers them with only their own tickets. Those endpoints are scoped to one
+ * event and to today, which is all a door needs.
  *
- * Search-first rather than list-first. At the door you are looking for one named
- * person who is standing in front of you, not browsing a roster.
+ * Every scan answers with an outcome, not an error. "Already checked in" and
+ * "not paid" are things to tell the teen, so each gets its own sentence.
+ *
+ * There is no camera here. Scanning a QR code is the phone app's job; on the
+ * web this is the fallback for a dead phone: type the ticket number or a name.
  */
-import { useCallback, useMemo, useState } from 'react';
-import { Check, ScanLine, Search } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { ScanLine } from 'lucide-react';
 import api from '../../api/axios';
 import ScreenShell from '../../components/console/ScreenShell';
 import {
+  AlertBanner,
   Avatar,
-  Badge,
   Btn,
   Card,
   EmptyState,
   ErrorState,
+  PaymentPill,
+  RegistrationPill,
+  SearchField,
+  Skeleton,
   TableSkeleton,
+  Tabs,
 } from '../../components/console/primitives';
-import { useConsoleAuth } from '../../context/ConsoleAuthContext';
-import { useConsoleList } from '../../hooks/useConsoleList';
+import { useDebounced } from '../../hooks/useDebounced';
+import { parseAPIDate } from '../../utils/dates';
 
-interface Registration {
+/** `checkin_views._event_payload`. */
+interface DoorEvent {
   id: string;
-  registration_id?: string;
-  attendee_name?: string;
-  attendee_email?: string;
-  attendee_phone?: string;
-  status?: string;
-  payment_status?: string;
-  event_title?: string;
+  title: string;
+  start_datetime: string;
+  venue?: string;
+  city?: string;
+  registered: number;
+  checked_in: number;
 }
 
+/** `checkin.attendee`. */
+interface Attendee {
+  registration_id: string;
+  name: string;
+  parish?: string;
+  photo?: string | null;
+  status: string;
+  payment_status: string;
+  /** Bed code, when the event has bedspaces and this person has one. */
+  bed?: string | null;
+}
+
+type Outcome =
+  | 'checked_in'
+  | 'already_checked_in'
+  | 'not_found'
+  | 'wrong_event'
+  | 'not_paid'
+  | 'cancelled'
+  | 'waitlisted';
+
+interface ScanResult {
+  outcome: Outcome;
+  attendee: Attendee | null;
+  counts: { registered: number; checked_in: number };
+}
+
+type Notice = { kind: 'success' | 'caution' | 'error'; text: string };
+
+const OUTCOMES: Record<Outcome, { kind: Notice['kind']; say: (name: string) => string }> = {
+  checked_in: { kind: 'success', say: (n) => `${n} is checked in. Let them in.` },
+  already_checked_in: {
+    kind: 'caution',
+    say: (n) => `${n} was already checked in. Check it is the same person.`,
+  },
+  not_paid: {
+    kind: 'caution',
+    say: (n) =>
+      `${n} has not paid. An event manager has to mark the payment before they can come in.`,
+  },
+  waitlisted: {
+    kind: 'caution',
+    say: (n) => `${n} is on the waitlist and does not have a place yet.`,
+  },
+  cancelled: { kind: 'error', say: (n) => `${n}'s registration was cancelled.` },
+  wrong_event: { kind: 'error', say: () => 'That ticket is for a different event.' },
+  not_found: {
+    kind: 'error',
+    say: () => 'No ticket matches that. Check the number and try again.',
+  },
+};
+
+const timeOf = (value: string) =>
+  parseAPIDate(value)?.toLocaleTimeString('en-GB', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }) ?? '';
+
 export const CheckIn = () => {
-  const { can } = useConsoleAuth();
+  const [eventId, setEventId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<Notice | null>(null);
+  const [counts, setCounts] = useState<Record<string, ScanResult['counts']>>({});
+  const term = useDebounced(query.trim());
 
-  const registrations = useConsoleList<Registration>('/events/registrations/', {
-    enabled: can('events.checkin'),
-    errorMessage: 'Could not load the attendee list.',
+  const today = useQuery({
+    queryKey: ['checkin-today'],
+    queryFn: async () => {
+      const { data } = await api.get<{ events: DoorEvent[] }>('/events/checkin/today/');
+      return data.events;
+    },
+  });
+
+  const events = today.data ?? [];
+  const event = events.find((e) => e.id === eventId) ?? events[0];
+
+  // The door searches from two characters; fewer would list half the event.
+  const canSearch = !!event && term.length >= 2;
+  const matches = useQuery({
+    queryKey: ['checkin-search', event?.id, term],
+    enabled: canSearch,
+    queryFn: async () => {
+      const { data } = await api.get<{ results: Attendee[] }>('/events/checkin/search/', {
+        params: { event: event!.id, q: term },
+      });
+      return data.results;
+    },
   });
 
   const checkIn = useCallback(
-    async (id: string) => {
-      setBusy(id);
-      setError(null);
+    async (code: string) => {
+      if (!event) return;
+      setBusy(code);
       try {
-        await api.post(`/events/registrations/${id}/check_in/`, {
+        const { data } = await api.post<ScanResult>('/events/checkin/scan/', {
+          event: event.id,
+          code,
           method: 'manual',
         });
-        await registrations.reload();
-      } catch (err: unknown) {
-        const detail = (err as { response?: { data?: { detail?: string } } })
-          ?.response?.data?.detail;
-        setError(detail ?? 'Could not check that person in.');
+        const outcome = OUTCOMES[data.outcome] ?? OUTCOMES.not_found;
+        // So the volunteer can point them to where they sleep.
+        const bed =
+          data.outcome === 'checked_in' && data.attendee?.bed
+            ? ` Their bed is ${data.attendee.bed}.`
+            : '';
+        setResult({
+          kind: outcome.kind,
+          text: outcome.say(data.attendee?.name ?? 'This person') + bed,
+        });
+        setCounts((prev) => ({ ...prev, [event.id]: data.counts }));
+        matches.refetch();
+      } catch {
+        setResult({
+          kind: 'error',
+          text: "We couldn't reach the server, so nobody was checked in. Try again.",
+        });
       } finally {
         setBusy(null);
       }
     },
-    [registrations],
+    [event, matches],
   );
 
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    // Nothing until they type. Showing every registration by default invites
-    // scrolling for a name, which is slower than typing it.
-    if (!q) return [];
-    return registrations.items
-      .filter(
-        (r) =>
-          r.attendee_name?.toLowerCase().includes(q) ||
-          r.attendee_email?.toLowerCase().includes(q) ||
-          r.registration_id?.toLowerCase().includes(q),
-      )
-      .slice(0, 25);
-  }, [registrations.items, query]);
-
-  const checkedInCount = useMemo(
-    () => registrations.items.filter((r) => r.status === 'checked_in').length,
-    [registrations.items],
-  );
+  const tally = event ? (counts[event.id] ?? event) : null;
 
   return (
     <ScreenShell
       title="Check in"
-      subtitle="Find the person in front of you and let them in."
-      actions={
-        <Badge tone="neutral">
-          {checkedInCount} of {registrations.items.length} in
-        </Badge>
+      subtitle={
+        event
+          ? `${event.title} · ${timeOf(event.start_datetime)}${event.venue ? ` · ${event.venue}` : ''}`
+          : 'Find the person in front of you and let them in.'
       }
+      hideScope
     >
-      {error && (
-        <div className="mb-3 rounded-console-md bg-console-danger-bg px-3 py-2 text-[13px] text-console-danger">
-          {error}
+      {today.isPending ? (
+        <Card>
+          <TableSkeleton rows={3} />
+        </Card>
+      ) : today.isError ? (
+        <Card>
+          <ErrorState
+            message="We couldn't load today's events. Try again."
+            onRetry={() => today.refetch()}
+          />
+        </Card>
+      ) : !event || !tally ? (
+        <Card>
+          <EmptyState
+            title="No event today"
+            message="Check-in opens on the day of an event you can work the door for."
+          />
+        </Card>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {events.length > 1 && (
+            <div className="[&>div]:mb-0">
+              <Tabs
+                tabs={events.map((e) => ({ id: e.id, label: e.title }))}
+                active={event.id}
+                onChange={(id) => {
+                  setEventId(id);
+                  setQuery('');
+                  setResult(null);
+                }}
+              />
+            </div>
+          )}
+
+          <div className="grid gap-4 md:grid-cols-[280px_1fr]">
+            <div className="flex flex-col gap-1 self-start rounded-console-xl bg-pop-lime p-5 text-pop-on">
+              <p className="text-[12px] font-medium uppercase leading-4 tracking-[0.08em]">
+                Checked in
+              </p>
+              <p
+                className="text-[32px] font-extrabold leading-10 tracking-[-0.02em] tabular-nums"
+                aria-live="polite"
+              >
+                {tally.checked_in.toLocaleString()}
+              </p>
+              <p className="text-[14px] leading-5">
+                of {tally.registered.toLocaleString()} with a place
+              </p>
+            </div>
+
+            <Card className="flex flex-col gap-4 p-5">
+              <form
+                className="flex flex-wrap items-center gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  // Enter on a typed ticket number goes straight to the door,
+                  // without waiting for the list.
+                  if (query.trim()) checkIn(query.trim());
+                }}
+              >
+                <div className="min-w-0 flex-1 [&>label]:w-full sm:[&>label]:w-full">
+                  <SearchField
+                    value={query}
+                    onChange={(value) => {
+                      setQuery(value);
+                      // A result belongs to the search that produced it.
+                      setResult(null);
+                    }}
+                    label={`Find a ticket for ${event.title}`}
+                    placeholder="Ticket number or name"
+                  />
+                </div>
+                <Btn
+                  type="submit"
+                  variant="go"
+                  size="md"
+                  disabled={!query.trim() || busy !== null}
+                >
+                  <ScanLine size={16} /> Check in
+                </Btn>
+              </form>
+
+              <div aria-live="assertive">
+                {result && <AlertBanner kind={result.kind}>{result.text}</AlertBanner>}
+              </div>
+
+              {!canSearch ? (
+                <p className="text-[14px] leading-5 text-console-body">
+                  Type a ticket number and press Enter, or at least two letters of a
+                  name to see who matches.
+                </p>
+              ) : matches.isPending ? (
+                <div className="flex flex-col gap-3">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              ) : matches.isError ? (
+                <AlertBanner
+                  kind="error"
+                  action={
+                    <Btn variant="soft" size="md" onClick={() => matches.refetch()}>
+                      Try again
+                    </Btn>
+                  }
+                >
+                  We couldn't search the tickets.
+                </AlertBanner>
+              ) : matches.data.length === 0 ? (
+                <p className="text-[14px] leading-5 text-console-body">
+                  Nobody registered for {event.title} matches “{term}”. Check the
+                  spelling, or ask for their ticket number.
+                </p>
+              ) : (
+                <ul className="flex flex-col">
+                  {matches.data.map((a) => {
+                    const arrived = a.status === 'checked_in' || a.status === 'attended';
+                    return (
+                      <li
+                        key={a.registration_id}
+                        className="flex min-h-16 flex-wrap items-center gap-3 border-t border-console-border py-2 first:border-t-0"
+                      >
+                        {a.photo ? (
+                          <img
+                            src={a.photo}
+                            alt=""
+                            className="h-10 w-10 shrink-0 rounded-full object-cover"
+                          />
+                        ) : (
+                          <Avatar name={a.name} size={40} />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[14px] font-semibold leading-5 text-console-text">
+                            {a.name}
+                          </p>
+                          <p className="truncate text-[12px] font-medium leading-4 text-console-muted">
+                            {a.registration_id}
+                            {a.parish ? ` · ${a.parish}` : ''}
+                          </p>
+                        </div>
+                        <RegistrationPill status={a.status} />
+                        {a.payment_status !== 'not_required' && a.payment_status !== 'paid' && (
+                          <PaymentPill status={a.payment_status} />
+                        )}
+                        {!arrived && (
+                          <Btn
+                            variant="go"
+                            size="md"
+                            disabled={busy !== null}
+                            onClick={() => checkIn(a.registration_id)}
+                          >
+                            {busy === a.registration_id ? 'Checking in…' : 'Check in'}
+                          </Btn>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </Card>
+          </div>
         </div>
       )}
-
-      <div className="mb-3 flex items-center gap-2 rounded-console-lg border border-console-border bg-console-surface px-3 py-2.5">
-        <Search size={17} className="shrink-0 text-console-subtle" />
-        <input
-          autoFocus
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Type a name, email or ticket reference…"
-          className="w-full bg-transparent text-[15px] text-console-text outline-none placeholder:text-console-subtle"
-        />
-      </div>
-
-      <Card>
-        {registrations.isLoading ? (
-          <TableSkeleton rows={3} />
-        ) : registrations.error ? (
-          <ErrorState
-            message={registrations.error}
-            onRetry={registrations.reload}
-          />
-        ) : !query.trim() ? (
-          <EmptyState message="Start typing to find someone. Nothing is listed until you search — at the door you are looking for one person, not browsing." />
-        ) : results.length === 0 ? (
-          <EmptyState
-            title="No match"
-            message={`Nobody registered matches “${query}”. Check the spelling, or try their ticket reference.`}
-          />
-        ) : (
-          <ul className="divide-y divide-console-border">
-            {results.map((r) => {
-              const already = r.status === 'checked_in';
-              const unpaid =
-                r.payment_status && !['paid', 'free'].includes(r.payment_status);
-              return (
-                <li
-                  key={r.id}
-                  className="flex flex-wrap items-center gap-3 px-4 py-3"
-                >
-                  <Avatar name={r.attendee_name ?? '?'} size={34} />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-console-text">
-                      {r.attendee_name ?? 'Unnamed'}
-                    </p>
-                    <p className="truncate text-[12px] text-console-subtle">
-                      {r.event_title} · {r.registration_id}
-                    </p>
-                  </div>
-
-                  {/* Payment state is shown but never blocks the door — that is
-                      a conversation for the desk, not a locked turnstile. */}
-                  {unpaid && <Badge tone="caution">{r.payment_status}</Badge>}
-
-                  {already ? (
-                    <Badge tone="success">
-                      <Check size={11} /> Already in
-                    </Badge>
-                  ) : (
-                    <Btn
-                      variant="primary"
-                      size="md"
-                      disabled={busy === r.id}
-                      onClick={() => checkIn(r.id)}
-                    >
-                      <ScanLine size={15} />
-                      {busy === r.id ? 'Checking in…' : 'Check in'}
-                    </Btn>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </Card>
     </ScreenShell>
   );
 };

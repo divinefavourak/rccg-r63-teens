@@ -74,7 +74,7 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
 
         // 1. Recent devotionals (last 7 days)
         try {
-            const { data } = await api.get('/content/devotionals/?limit=5');
+            const { data } = await api.get('/content/devotionals/?page_size=5');
             const devotionals = Array.isArray(data) ? data : data.results ?? [];
             const cutoff = Date.now() - 7 * 24 * 3600000; // 7 days ago
 
@@ -99,7 +99,10 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
 
         // 2. Upcoming events (next 30 days) — only published events, no auth required
         try {
-            const { data } = await api.get('/events/events/?status=published&ordering=start_datetime&limit=5');
+            // `upcoming=true` before the page is cut: without it the five
+            // earliest events ever published fill the page, all long past,
+            // and nothing upcoming is ever shown.
+            const { data } = await api.get('/events/events/?status=published&upcoming=true&ordering=start_datetime&page_size=5');
             const events = Array.isArray(data) ? data : data.results ?? [];
             const now = Date.now();
             const future = now + 30 * 24 * 3600000;

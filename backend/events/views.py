@@ -14,11 +14,15 @@ from identity.authorization import HasPermission, HasPermissionOrReadOnly, has_a
 from identity.permissions_registry import Perm
 from content.views import get_age_group_filter
 from common.view_counts import count_view
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models import ProtectedError, RestrictedError
+
+from . import bedspaces
 from . import checkin
 from . import notifications as event_notifications
 from . import scoping
 from .email_service import EventEmailService
-from .models import Event, EventRegistration, BulkUpload, RegistrationAuditLog
+from .models import Event, EventRegistration, BulkUpload, Hostel, RegistrationAuditLog
 from .serializers import (
     EventListSerializer,
     EventDetailSerializer,
@@ -32,12 +36,40 @@ from .serializers import (
     EventBulkUploadCreateSerializer,
     RegistrationAuditLogSerializer,
     EventDashboardStatsSerializer,
+    HostelSerializer,
 )
+
+
+def can_manage_event(user, event):
+    """
+    May this person change `event`? The row-level half of `events.manage`.
+
+    Holding the permission somewhere is not holding it over this event: a
+    manager is sent published events from outside their own subtree, and must
+    not be able to move people's beds there. An unscoped (legacy) event belongs
+    to nobody's subtree, so anyone who manages events may run it, as they may
+    edit it.
+    """
+    if user.is_superuser:
+        return True
+    if not has_any_permission(user, Perm.EVENTS_MANAGE):
+        return False
+    if event.scope_node_id is None:
+        return True
+    return scoping.manageable_by(Event.objects.filter(pk=event.pk), user).exists()
+
+
+
+def _not_your_event():
+    return Response(
+        {'detail': 'You do not manage this event, so you cannot change its bedspaces.'},
+        status=status.HTTP_403_FORBIDDEN,
+    )
 
 
 class EventViewSet(viewsets.ModelViewSet):
     """ViewSet for events."""
-    
+
     queryset = Event.objects.all()
     permission_classes = [HasPermissionOrReadOnly(Perm.EVENTS_MANAGE)]
     lookup_field = 'pk'
@@ -45,14 +77,14 @@ class EventViewSet(viewsets.ModelViewSet):
     search_fields = ['title', 'description', 'venue']
     ordering_fields = ['start_datetime', 'created_at', 'registration_count']
     ordering = ['-start_datetime']
-    
+
     def get_serializer_class(self):
         if self.action in ['create', 'update', 'partial_update']:
             return EventCreateUpdateSerializer
         elif self.action == 'list':
             return EventListSerializer
         return EventDetailSerializer
-    
+
     def get_queryset(self):
         queryset = self.queryset
 
@@ -60,7 +92,8 @@ class EventViewSet(viewsets.ModelViewSet):
         # ...and with the places taken, which is what capacity is decided on
         # (`Event.places_taken`): without it `is_full` and `spots_remaining`
         # would each count per event.
-        queryset = queryset.annotate(
+        # EventListSerializer names the owning node on every row.
+        queryset = queryset.select_related('scope_node').annotate(
             live_registration_count=Count(
                 'registrations',
                 filter=Q(registrations__status__in=EventRegistration.COUNTED),
@@ -93,16 +126,32 @@ class EventViewSet(viewsets.ModelViewSet):
         # their position (docs/07 §3). Applied to everyone, managers included —
         # a manager browsing the events list is browsing as a member of their own
         # part of the church.
-        queryset = scoping.visible_to(queryset, self.request.user)
+        #
+        # A manager also oversees: they see the events owned inside the subtree
+        # they manage, wherever they personally belong. Without this a Regional
+        # Coordinator who worships in one province could not open another
+        # province's events, which is the job.
+        if is_manager:
+            user = self.request.user
+            queryset = queryset.filter(
+                Q(pk__in=scoping.visible_to(Event.objects.all(), user).values('pk'))
+                | Q(pk__in=scoping.manageable_by(Event.objects.all(), user).values('pk'))
+            )
+        else:
+            queryset = scoping.visible_to(queryset, self.request.user)
 
         # Non-leaders are additionally filtered to their age group.
         if not has_any_permission(self.request.user, Perm.EVENTS_VIEW):
             queryset = queryset.filter(get_age_group_filter(self.request.user))
 
         # Filter upcoming
+        # `upcoming=true` is everything that has not finished; `upcoming=false`
+        # is everything that has, which is the Console's "Past" tab.
         upcoming = self.request.query_params.get('upcoming')
         if upcoming == 'true':
             queryset = queryset.filter(end_datetime__gt=timezone.now())
+        elif upcoming == 'false':
+            queryset = queryset.filter(end_datetime__lte=timezone.now())
 
         # Narrow to one node's subtree. Note what this *cannot* do: widen access.
         # It filters within what `visible_to` already allowed, so asking for another
@@ -111,26 +160,35 @@ class EventViewSet(viewsets.ModelViewSet):
         # whose data to read).
         node_id = self.request.query_params.get('node')
         if node_id:
-            queryset = queryset.filter(scope_node__id=node_id)
+            from hierarchy.models import HierarchyNode
+            try:
+                node = HierarchyNode.objects.filter(pk=node_id).first()
+            except (ValueError, DjangoValidationError):
+                node = None
+            if node is None:
+                return queryset.none()
+            # The node and everything beneath it, as the comment above says.
+            # It used to match the one node only.
+            queryset = queryset.filter(scope_node__path__startswith=node.path)
 
         return queryset
-    
+
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
         count_view(request, instance)
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
-    
+
     @action(detail=False, methods=['get'])
     def upcoming(self, request):
         """Get upcoming events."""
         events = self.get_queryset().filter(
             end_datetime__gt=timezone.now()
         ).order_by('start_datetime')[:10]
-        
+
         serializer = EventListSerializer(events, many=True)
         return Response(serializer.data)
-    
+
     @action(detail=False, methods=['get'])
     def featured(self, request):
         """Get featured events."""
@@ -138,15 +196,15 @@ class EventViewSet(viewsets.ModelViewSet):
             is_featured=True,
             end_datetime__gt=timezone.now()
         )[:5]
-        
+
         serializer = EventListSerializer(events, many=True)
         return Response(serializer.data)
-    
+
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def register(self, request, pk=None):
         """Register for an event."""
         event = self.get_object()
-        
+
         serializer = EventRegistrationCreateSerializer(
             data={**request.data, 'event': event.id},
             context={'request': request}
@@ -163,26 +221,26 @@ class EventViewSet(viewsets.ModelViewSet):
             EventRegistrationDetailSerializer(registration).data,
             status=status.HTTP_201_CREATED
         )
-    
+
     @action(
-        detail=True, 
-        methods=['get'], 
+        detail=True,
+        methods=['get'],
         permission_classes=[permissions.IsAuthenticated, HasPermission(Perm.EVENTS_MANAGE)]
     )
     def registrations(self, request, pk=None):
         """Get registrations for an event (coordinators/admins only)."""
         event = self.get_object()
-        registrations = event.registrations.all()
-        
+        registrations = event.registrations.select_related('event', 'bed', 'bed__hostel').all()
+
         # Apply filters
         status_filter = request.query_params.get('status')
         if status_filter:
             registrations = registrations.filter(status=status_filter)
-        
+
         payment_status = request.query_params.get('payment_status')
         if payment_status:
             registrations = registrations.filter(payment_status=payment_status)
-        
+
         search = request.query_params.get('search')
         if search:
             registrations = registrations.filter(
@@ -190,7 +248,7 @@ class EventViewSet(viewsets.ModelViewSet):
                 Q(attendee_email__icontains=search) |
                 Q(registration_id__icontains=search)
             )
-        
+
         # Five COUNTs collapsed into one conditional aggregate. This runs
         # alongside the paginator's own COUNT and the page query, so it was six
         # round trips on a screen that shows one table.
@@ -208,13 +266,41 @@ class EventViewSet(viewsets.ModelViewSet):
             response = self.get_paginated_response(serializer.data)
             response.data['stats'] = stats
             return response
-        
+
         serializer = EventRegistrationListSerializer(registrations, many=True)
         return Response({
             'stats': stats,
             'results': serializer.data
         })
-    
+
+    @action(
+        detail=True,
+        methods=['get'],
+        permission_classes=[permissions.IsAuthenticated, HasPermission(Perm.EVENTS_MANAGE)]
+    )
+    def bedspaces(self, request, pk=None):
+        """Hostels, how full each is, and how many people have no bed."""
+        event = self.get_object()
+        if not can_manage_event(request.user, event):
+            return _not_your_event()
+        return Response(bedspaces.summary(event))
+
+    @action(
+        detail=True,
+        methods=['post'],
+        permission_classes=[permissions.IsAuthenticated, HasPermission(Perm.EVENTS_MANAGE)]
+    )
+    def place_waiting(self, request, pk=None):
+        """
+        Try again for everyone without a bed, oldest registration first: what
+        the organiser runs after adding a hostel or releasing reserved beds.
+        """
+        event = self.get_object()
+        if not can_manage_event(request.user, event):
+            return _not_your_event()
+        placed = bedspaces.place_waiting(event)
+        return Response({'placed': placed, **bedspaces.summary(event)})
+
     @action(
         detail=True,
         methods=['get'],
@@ -276,21 +362,22 @@ _CHECK_IN_REFUSALS = {
 
 class EventRegistrationViewSet(viewsets.ModelViewSet):
     """ViewSet for event registrations."""
-    
-    queryset = EventRegistration.objects.select_related('event', 'user', 'profile').all()
+
+    queryset = EventRegistration.objects.select_related(
+        'event', 'event__scope_node', 'user', 'profile', 'bed', 'bed__hostel').all()
     permission_classes = [permissions.IsAuthenticated]
     lookup_field = 'pk'
     filterset_fields = ['status', 'payment_status', 'event']
     search_fields = ['registration_id', 'attendee_name', 'attendee_email']
     ordering = ['-created_at']
-    
+
     def get_serializer_class(self):
         if self.action == 'create':
             return EventRegistrationCreateSerializer
         elif self.action == 'list':
             return EventRegistrationListSerializer
         return EventRegistrationDetailSerializer
-    
+
     def get_permissions(self):
         if self.action in ['update', 'partial_update', 'destroy']:
             return [permissions.IsAuthenticated(), HasPermission(Perm.EVENTS_MANAGE)()]
@@ -300,37 +387,50 @@ class EventRegistrationViewSet(viewsets.ModelViewSet):
         registration = serializer.save()
         EventEmailService.send_registration_confirmation(registration)
         event_notifications.notify_registration_received(registration)
-    
+
     def get_queryset(self):
         user = self.request.user
         # Event managers see all registrations; everyone else only their own.
         # (Finer node-scoped visibility follows when EventRegistration carries an
         # organization_node — see phase1-completion notes.)
         if has_any_permission(user, Perm.EVENTS_MANAGE):
-            return self.queryset
+            queryset = self.queryset
+            # `?person=<user id>`: everything one person registered for, or was
+            # registered for under their email. For the Console's member panel.
+            person = self.request.query_params.get('person')
+            if person:
+                from django.contrib.auth import get_user_model
+                try:
+                    owner = get_user_model().objects.filter(pk=person).first()
+                except (ValueError, DjangoValidationError):
+                    owner = None
+                if owner is None:
+                    return queryset.none()
+                queryset = queryset.filter(pk__in=own_registrations(owner).values('pk'))
+            return queryset
         return self.queryset.filter(pk__in=own_registrations(user).values('pk'))
-    
+
     @action(detail=False, methods=['get'])
     def mine(self, request):
         """Get current user's registrations."""
         registrations = own_registrations(request.user).select_related(
-            'event'
+            'event', 'event__scope_node'
         ).order_by('-created_at')
         serializer = EventRegistrationDetailSerializer(registrations, many=True)
         return Response(serializer.data)
-    
+
     @action(
-        detail=True, 
-        methods=['post'], 
+        detail=True,
+        methods=['post'],
         permission_classes=[permissions.IsAuthenticated, HasPermission(Perm.EVENTS_MANAGE)]
     )
     def update_status(self, request, pk=None):
         """Update registration status."""
         registration = self.get_object()
-        
+
         serializer = EventRegistrationStatusUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         new_status = serializer.validated_data['status']
         notes = serializer.validated_data.get('notes', '')
 
@@ -365,7 +465,7 @@ class EventRegistrationViewSet(viewsets.ModelViewSet):
                 registration, old_status, new_status)
 
         return Response(EventRegistrationDetailSerializer(registration).data)
-    
+
     @action(
         detail=True,
         methods=['post'],
@@ -374,10 +474,10 @@ class EventRegistrationViewSet(viewsets.ModelViewSet):
     def check_in(self, request, pk=None):
         """Check in an attendee."""
         registration = self.get_object()
-        
+
         serializer = EventRegistrationCheckInSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         # Through the same door as the scanner, so both apply one set of rules
         # under one row lock: a ticket cannot be checked in twice, and a
         # cancelled, waitlisted or unpaid one is refused. `scan` also writes the
@@ -403,18 +503,62 @@ class EventRegistrationViewSet(viewsets.ModelViewSet):
         registration.refresh_from_db()
         return Response(EventRegistrationDetailSerializer(registration).data)
 
+    @action(
+        detail=True,
+        methods=['post'],
+        permission_classes=[permissions.IsAuthenticated, HasPermission(Perm.EVENTS_MANAGE)]
+    )
+    def assign_bed(self, request, pk=None):
+        """Place this person in a named hostel, giving up any bed they had."""
+        registration = self.get_object()
+        if not can_manage_event(request.user, registration.event):
+            return _not_your_event()
+        try:
+            hostel = Hostel.objects.filter(
+                pk=request.data.get('hostel'), event_id=registration.event_id).first()
+        except (ValueError, DjangoValidationError):
+            # Not an id at all.
+            hostel = None
+        if hostel is None:
+            return Response({'hostel': ['Choose one of this event\'s hostels.']},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if registration.status not in EventRegistration.HOLDS_A_PLACE:
+            return Response(
+                {'detail': 'Only someone who holds a place at the event can be given a bed.'},
+                status=status.HTTP_400_BAD_REQUEST)
+        try:
+            bedspaces.move(registration, hostel, assigned_by=request.user)
+        except DjangoValidationError as exc:
+            return Response({'detail': exc.messages[0]}, status=status.HTTP_400_BAD_REQUEST)
+        registration = self.get_queryset().get(pk=registration.pk)
+        return Response(EventRegistrationDetailSerializer(registration).data)
+
+    @action(
+        detail=True,
+        methods=['post'],
+        permission_classes=[permissions.IsAuthenticated, HasPermission(Perm.EVENTS_MANAGE)]
+    )
+    def release_bed(self, request, pk=None):
+        """Take this person's bed back. They keep their place at the event."""
+        registration = self.get_object()
+        if not can_manage_event(request.user, registration.event):
+            return _not_your_event()
+        bedspaces.release(registration)
+        registration = self.get_queryset().get(pk=registration.pk)
+        return Response(EventRegistrationDetailSerializer(registration).data)
+
     @action(detail=True, methods=['get'])
     def qr_code(self, request, pk=None):
         """Get QR code for registration."""
         registration = self.get_object()
-        
+
         # TODO: Generate QR code if not exists
-        
+
         if registration.qr_code:
             return Response({
                 'qr_code': request.build_absolute_uri(registration.qr_code.url)
             })
-        
+
         return Response(
             {'detail': 'QR code not generated yet.'},
             status=status.HTTP_404_NOT_FOUND
@@ -423,26 +567,26 @@ class EventRegistrationViewSet(viewsets.ModelViewSet):
 
 class EventBulkUploadViewSet(viewsets.ModelViewSet):
     """ViewSet for event bulk uploads."""
-    
+
     queryset = BulkUpload.objects.select_related('event', 'uploaded_by').all()
     permission_classes = [permissions.IsAuthenticated, HasPermission(Perm.EVENTS_MANAGE)]
     lookup_field = 'pk'
     filterset_fields = ['status', 'event']
     ordering = ['-created_at']
-    
+
     def get_serializer_class(self):
         if self.action == 'create':
             return EventBulkUploadCreateSerializer
         return EventBulkUploadSerializer
-    
+
     def get_queryset(self):
         user = self.request.user
-        
+
         if has_any_permission(user, Perm.EVENTS_MANAGE):
             return self.queryset
         # Non-managers see only their own uploads.
         return self.queryset.filter(uploaded_by=user)
-    
+
     def perform_create(self, serializer):
         upload = serializer.save()
         # TODO: Trigger async processing via Celery
@@ -451,17 +595,64 @@ class EventBulkUploadViewSet(viewsets.ModelViewSet):
 
 class RegistrationAuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for viewing registration audit logs."""
-    
+
     queryset = RegistrationAuditLog.objects.select_related('registration', 'user').all()
     serializer_class = RegistrationAuditLogSerializer
     permission_classes = [permissions.IsAuthenticated, HasPermission(Perm.EVENTS_MANAGE)]
     filterset_fields = ['registration', 'action']
     ordering = ['-timestamp']
-    
+
     def get_queryset(self):
         user = self.request.user
-        
+
         if has_any_permission(user, Perm.EVENTS_MANAGE):
             return self.queryset
         # Audit logs are leader-only.
         return self.queryset.none()
+
+
+class HostelViewSet(viewsets.ModelViewSet):
+    """
+    The hostels of an event, for the people who manage it.
+
+    `GET /events/hostels/?event=<id>`. Only hostels of events the caller may
+    manage are visible, and a new one can only be added to such an event.
+    """
+
+    serializer_class = HostelSerializer
+    permission_classes = [permissions.IsAuthenticated, HasPermission(Perm.EVENTS_MANAGE)]
+    filterset_fields = ['event', 'gender']
+    pagination_class = None
+
+    def _manageable_events(self):
+        user = self.request.user
+        if user.is_superuser:
+            return Event.objects.all()
+        # Unscoped (legacy) events belong to nobody's subtree; whoever manages
+        # events anywhere may set them up, as they may edit them.
+        return Event.objects.filter(
+            Q(pk__in=scoping.manageable_by(Event.objects.all(), user).values('pk'))
+            | Q(scope_node__isnull=True)
+        )
+
+    def get_queryset(self):
+        return (
+            Hostel.objects.filter(event__in=self._manageable_events())
+            .select_related('event').order_by('code')
+        )
+
+    def perform_create(self, serializer):
+        event = serializer.validated_data['event']
+        if not self._manageable_events().filter(pk=event.pk).exists():
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('You cannot set up hostels for this event.')
+        serializer.save()
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except (ProtectedError, RestrictedError):
+            return Response(
+                {'detail': 'People are placed in this hostel. Move them out before removing it.'},
+                status=status.HTTP_409_CONFLICT,
+            )

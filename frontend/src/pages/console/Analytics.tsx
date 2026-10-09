@@ -15,6 +15,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Info } from 'lucide-react';
 import api from '../../api/axios';
 import ScreenShell from '../../components/console/ScreenShell';
+import { useConsoleAuth } from '../../context/ConsoleAuthContext';
 import {
   Badge,
   Card,
@@ -55,6 +56,7 @@ interface Stats {
   };
 }
 
+/** The kit's metric tile; `caution` is the amber one for a figure to act on. */
 const Stat = ({
   label,
   value,
@@ -67,27 +69,32 @@ const Stat = ({
   tone?: 'neutral' | 'caution';
 }) => (
   <div
-    className={`rounded-console-lg border border-console-border p-4 ${
-      tone === 'caution' ? 'bg-console-caution-bg' : 'bg-console-surface'
+    className={`flex flex-col items-start gap-1 rounded-console-xl p-5 ${
+      tone === 'caution'
+        ? 'bg-pop-amber text-pop-on'
+        : 'bg-console-surface text-console-text shadow-console-card'
     }`}
   >
-    <p className="text-[10px] font-semibold uppercase tracking-wider text-console-subtle">
-      {label}
-    </p>
     <p
-      className={`mt-1 text-[24px] font-semibold tabular-nums ${
-        tone === 'caution' ? 'text-console-caution' : 'text-console-text'
+      className={`text-[12px] font-medium uppercase leading-4 tracking-[0.06em] ${
+        tone === 'caution' ? '' : 'text-console-muted'
       }`}
     >
-      {value}
+      {label}
+    </p>
+    <p className="text-[32px] font-extrabold leading-10 tracking-[-0.02em] tabular-nums">
+      {typeof value === 'number' ? value.toLocaleString() : value}
     </p>
     {hint && (
-      <p className="mt-0.5 text-[11px] leading-snug text-console-muted">{hint}</p>
+      <p className={`text-[14px] leading-5 ${tone === 'caution' ? '' : 'text-console-body'}`}>
+        {hint}
+      </p>
     )}
   </div>
 );
 
 export const Analytics = () => {
+  const { assignments } = useConsoleAuth();
   const [stats, setStats] = useState<Stats | null>(null);
   const [days, setDays] = useState(30);
   const [isLoading, setIsLoading] = useState(true);
@@ -115,14 +122,17 @@ export const Analytics = () => {
   const people = stats?.sections.people;
   const events = stats?.sections.events;
   const content = stats?.sections.content;
+  // The figures cover the caller's authority: the node their highest role is
+  // held at. `stats.scope` names their home parish, which is not the same.
+  const coverage = assignments[0]?.node_detail?.name;
   const gaps = content?.coverage_next_14.gaps.length ?? 0;
 
   return (
     <ScreenShell
       title="Analytics"
       subtitle={
-        stats?.scope
-          ? `Everything below is counted across ${stats.scope.name} and everything beneath it.`
+        coverage
+          ? `Everything below is counted across ${coverage} and everything beneath it.`
           : 'Counted across everything you have authority over.'
       }
       actions={
@@ -200,7 +210,7 @@ export const Analytics = () => {
           </div>
 
           {events && events.registrations.pending > 0 && (
-            <div className="mt-3 flex items-center gap-2 rounded-console-md border border-console-border bg-console-caution-bg px-3 py-2 text-[13px] text-console-caution">
+            <div className="mt-3 flex items-center gap-2 rounded-console-md border border-console-border bg-console-caution-bg px-3 py-2 text-[14px] text-console-caution">
               <Info size={15} className="shrink-0" />
               {events.registrations.pending} registration
               {events.registrations.pending === 1 ? '' : 's'} still waiting on a
@@ -213,7 +223,7 @@ export const Analytics = () => {
             {people && people.by_node.length > 0 && (
               <Card>
                 <CardHeader>
-                  <span className="text-[13px] font-semibold text-console-text">
+                  <span className="text-[14px] font-semibold text-console-text">
                     Members by node
                   </span>
                   <Badge tone="neutral">top {people.by_node.length}</Badge>
@@ -226,13 +236,13 @@ export const Analytics = () => {
                     return (
                       <li key={n.name} className="px-4 py-2.5">
                         <div className="flex items-center justify-between gap-3">
-                          <span className="truncate text-[13px] text-console-body">
+                          <span className="truncate text-[14px] text-console-body">
                             {n.name}
-                            <span className="ml-1.5 text-[10px] uppercase tracking-wide text-console-subtle">
+                            <span className="ml-1.5 text-[12px] uppercase tracking-[0.06em] text-console-subtle">
                               {n.node_type}
                             </span>
                           </span>
-                          <span className="shrink-0 tabular-nums text-[13px] text-console-text">
+                          <span className="shrink-0 tabular-nums text-[14px] text-console-text">
                             {n.count}
                           </span>
                         </div>
@@ -254,7 +264,7 @@ export const Analytics = () => {
             {content && (
               <Card>
                 <CardHeader>
-                  <span className="text-[13px] font-semibold text-console-text">
+                  <span className="text-[14px] font-semibold text-console-text">
                     Content pipeline
                   </span>
                   <Badge tone="neutral">{content.total} total</Badge>
@@ -273,10 +283,10 @@ export const Analytics = () => {
                       key={label}
                       className="flex items-center justify-between px-4 py-2.5"
                     >
-                      <span className="text-[13px] text-console-body">
+                      <span className="text-[14px] text-console-body">
                         {label}
                       </span>
-                      <span className="tabular-nums text-[13px] text-console-text">
+                      <span className="tabular-nums text-[14px] text-console-text">
                         {count}
                       </span>
                     </li>
@@ -292,7 +302,7 @@ export const Analytics = () => {
           </div>
 
           {Object.keys(stats?.sections ?? {}).length === 0 && (
-            <p className="mt-4 text-[13px] text-console-muted">
+            <p className="mt-4 text-[14px] text-console-muted">
               There is nothing to report — your role does not include visibility
               of people, events or content.
             </p>

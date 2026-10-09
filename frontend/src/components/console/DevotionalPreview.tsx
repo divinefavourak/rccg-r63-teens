@@ -179,18 +179,18 @@ export const DevotionalPreview = ({
       }
     >
       {error && (
-        <div className="mb-3 rounded-console-md bg-console-danger-bg px-3 py-2 text-[13px] text-console-danger">
+        <div className="mb-3 rounded-console-md bg-console-danger-bg px-3 py-2 text-[14px] text-console-danger">
           {error}
         </div>
       )}
 
       {!id ? (
-        <p className="text-[13px] leading-relaxed text-console-muted">
+        <p className="text-[14px] leading-5 text-console-muted">
           Nothing is scheduled for {pretty}. A day with no approved devotional is
           a day the app has nothing to say — this is the gap the banner counts.
         </p>
       ) : isLoading ? (
-        <p className="text-[13px] text-console-muted">Loading…</p>
+        <p className="text-[14px] text-console-muted">Loading…</p>
       ) : item ? (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -208,22 +208,22 @@ export const DevotionalPreview = ({
           )}
 
           {item.anchor_scripture && (
-            <p className="text-[13px] font-medium text-console-body">
+            <p className="text-[14px] font-medium text-console-body">
               {item.anchor_scripture}
             </p>
           )}
 
           {verses.length > 0 && (
             <div className="rounded-console-md bg-console-tinted p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-console-subtle">
+              <p className="text-[12px] font-medium uppercase tracking-[0.06em] text-console-muted">
                 Memory verse{verses.length > 1 ? 's' : ''}
               </p>
               {verses.map((v, i) => (
                 <div key={v.id ?? i} className="mt-1.5">
-                  <p className="text-[13px] leading-relaxed text-console-body">
+                  <p className="text-[14px] leading-5 text-console-body">
                     {v.text}
                   </p>
-                  <p className="mt-0.5 text-[11px] text-console-subtle">
+                  <p className="mt-0.5 text-[12px] text-console-subtle">
                     {v.reference}
                     {v.is_primary && ' · Verse of the Day'}
                   </p>
@@ -235,17 +235,17 @@ export const DevotionalPreview = ({
           {item.content && (
             // whitespace-pre-wrap: the body is stored as plain text with real
             // paragraph breaks, and collapsing them would run it together.
-            <div className="whitespace-pre-wrap text-[13px] leading-relaxed text-console-body">
+            <div className="whitespace-pre-wrap text-[14px] leading-5 text-console-body">
               {item.content}
             </div>
           )}
 
           {item.reflection && (
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-console-subtle">
+              <p className="text-[12px] font-medium uppercase tracking-[0.06em] text-console-muted">
                 Reflection
               </p>
-              <p className="mt-1 whitespace-pre-wrap text-[13px] leading-relaxed text-console-body">
+              <p className="mt-1 whitespace-pre-wrap text-[14px] leading-5 text-console-body">
                 {item.reflection}
               </p>
             </div>
@@ -253,10 +253,10 @@ export const DevotionalPreview = ({
 
           {item.prayer && (
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-console-subtle">
+              <p className="text-[12px] font-medium uppercase tracking-[0.06em] text-console-muted">
                 Prayer
               </p>
-              <p className="mt-1 whitespace-pre-wrap text-[13px] leading-relaxed text-console-body">
+              <p className="mt-1 whitespace-pre-wrap text-[14px] leading-5 text-console-body">
                 {item.prayer}
               </p>
             </div>

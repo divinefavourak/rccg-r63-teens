@@ -75,6 +75,8 @@ Format per feature: **Purpose · Problem solved · Acceptance criteria (AC) · D
 - Workflow states: draft → in-review → approved → scheduled → published → archived; two-person rule for region-wide+ publishing.
 - Every item: hierarchy scope, tags/topics, optional series, anchor Scripture references (validated, rendered as live Bible links). **Devotionals additionally require a memory verse** (validated reference + translation) — the publish workflow blocks a devotional without one, because that verse powers the entire day (#4).
 - Devotional calendar view with gap detection and alerts (no-devotional-scheduled-within-48h pages the admin).
+- Review queue (`GET /content/<devotionals|manuals|articles>/review_queue/`, `content.view`): what is in review, who submitted it, and whether the caller may approve it. It sends the true `count` and at most the 200 that have waited longest of each kind; the Console shows the count and says when the list is cut short. Submitting goes through `submit_for_review`, which records the submitter; the status is never set to in-review directly, or the two-person rule has nobody to compare against.
+- Import from the web (`content.manage`): fills days from the published source around a chosen day, a number of days before and after it, 31 days at most per run. A day that already has a devotional is left alone; a day the source has not published is skipped. Imported devotionals arrive as drafts.
 - Rich text with safe subset (no arbitrary embeds); images auto-compressed to data-light variants.
 **Dependencies:** Storage/CDN, hierarchy (#3).
 **Future:** National shared-content layer (V2); localization variants (V3).
@@ -126,6 +128,18 @@ The foundation. Full spec: `08-bible-experience.md`. Summary AC for V1: reader w
 - QR ticket: signed payload, offline-renderable, one-time check-in with duplicate detection; check-in works offline with queued sync.
 - Coordinator dashboard: live counts, reconciliation view, CSV export, attendance report.
 - Refund handling: admin-initiated via Paystack, state tracked.
+- **Who sees an event.** A member sees published events owned at or above their own position in the tree. Someone who holds `events.manage` also sees every event owned inside the subtree they manage, wherever they personally belong, so a Regional Coordinator can open any province's events. `?node=<id>` narrows the list to events owned by that node or anything beneath it, and can only narrow.
+- **Bedspaces** (optional, per event; off unless the organiser turns it on, for example for a camp):
+  - The organiser adds hostels to the event. Each hostel is for boys or for girls, has a number of beds, and reserves some of them for leaders. Beds are named by hostel and numbered serially (`HA-001`).
+  - A bed is given automatically when someone registers, oldest registration first. On a free event it is firm at once; on a paid event it is held and becomes firm when the registration is paid.
+  - A bed follows the registration's place: cancelling gives it back, and a waitlisted registration gets one when it is confirmed.
+  - Running out of beds does **not** close registration. The person registers without a bed and is told so in the notification. Someone on the waitlist is told nothing about beds, because they have no place yet; someone with no gender recorded is told the organiser will give them one.
+  - Leaders take only beds reserved for leaders and attendees never take those. The organiser releases unused reserved beds to attendees. Who counts as a leader is decided by the server from the person's roles: nobody without a leader role; always an adult who holds one; a teenager who holds one chooses on the registration form.
+  - A registration with no gender recorded is never placed automatically; the organiser places it by hand. The organiser can also move one person to another hostel or take a bed back.
+  - Only someone who manages the event may see its bedspace summary or change who sleeps where: `events.manage` over the event's own part of the hierarchy (or over any part, for an old event with no scope). Holding the permission elsewhere is refused with a 403, even though the event itself is visible.
+  - A hostel with people in it cannot be deleted; move them or take the beds back first. Deleting the whole event removes its hostels and beds with it.
+  - At the door, checking someone in shows their bed, so the volunteer can point them to it.
+  - Not built yet: rooms inside a hostel, grouping children by parish, the bed on the phone ticket and in the confirmation e-mail, and the leader choice on the phone's registration form.
 **Dependencies:** Paystack merchant account (start early — legal lead time), hierarchy (#3), notifications (#10).
 **Future:** Multi-session events/workshop selection (V2); recurring programs (V2); group/family registration (V2).
 **Metrics:** Registration conversion from event view; payment success rate ≥90%; check-in throughput (target ≥6/scanner/min); % regional events on-platform.
@@ -193,6 +207,18 @@ The foundation. Full spec: `08-bible-experience.md`. Summary AC for V1: reader w
 
 **Purpose:** One leader surface, capability- and scope-gated (`04-information-architecture.md`).
 **AC (V1):** Overview dashboard; People (search, role assignment, parish correction, CSV import); Content (calendar, review queue, publishing); Events (full lifecycle, check-in mode); Manuals; Analytics (scope-aware — `14-analytics.md`); audit log of all privileged actions; desktop-optimized, tablet-capable.
+
+**As built (October 2026).** The Console at `/admin` follows the Faith Tribe design in the Figma file. Rules every screen keeps:
+
+- A total shown to a leader comes from `GET /identity/stats/` or from the `count` the list endpoint reports, never from the number of rows on screen. Every list endpoint answers one page (20 rows by default, `page_size` up to 200).
+- Lists are searched and paged on the server. People and Roles are narrowed to the scope switcher's node with `?node=`, which can narrow within the caller's authority and never widen it.
+- Check in and My class use the endpoints a Teacher is allowed to call (`/events/checkin/…`, `/identity/class/`, `/content/manuals/current/`). The general registrations list sends a non-manager only their own tickets, so no screen for the door reads it.
+- The Console starts scoped to the node where the holder's highest role is held.
+- People: a member's panel shows their home, the roles they hold and, to a holder of `events.manage`, what they registered for (`GET /events/registrations/?person=<user id>`). A holder of `memberships.manage` can move them to another part of the church (`POST /identity/memberships/<id>/transfer/`): it needs that permission over both where they are leaving and where they are going, records the move, makes the new node their home and ends the membership they left. A move does not change their roles.
+- Hierarchy: choosing any node opens its details: how much church sits beneath it, its members, who leads there and its events. A holder of `hierarchy.manage` can rename it, change its code, deactivate it and add beneath it.
+- People: a holder of `users.manage` can edit a member's name, email, phone and gender, and deactivate the account (`PATCH /auth/users/<id>/`). The legacy `role` field is not offered there: setting it to admin makes an account a superuser, and authority is granted with Assign a role. Known gap: the endpoint is not scoped to the caller's part of the tree, so anyone with `users.manage` can edit any account.
+
+Built: Overview, People, Events with per-event Registrations and bedspaces, Check in, Content calendar, Review queue, My class, Manuals, Library & Media, Bible, Roles, Hierarchy, Analytics, Audit log, Settings. Not built: CSV import and export, bulk upload, the health and guardian block on a registration, notification compose and delivery, a manual editor, moving a hierarchy node, and search across the Console.
 **Metrics:** Coordinator weekly active rate; time-to-publish; % events created without support tickets.
 
 ## 19. Community Suite ✧ — P2 (V2) · XL

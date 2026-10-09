@@ -383,6 +383,8 @@ class DevotionalViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
         )
         return Response({'success': True})
 
+    FETCH_LIMIT_DAYS = 31
+
     @action(detail=False, methods=['post'], permission_classes=[HasPermission(Perm.CONTENT_MANAGE)])
     def fetch_from_web(self, request):
         """
@@ -391,42 +393,64 @@ class DevotionalViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
         Body params:
           - date  (str, optional) : specific date in YYYY-MM-DD format
           - days  (int, default 7): number of past days to backfill
+          - days_before / days_after (int): a window around `date` (or today)
+            instead: that many days back and forward, inclusive
           - force (bool, default false): re-scrape even if record exists
+
+        At most FETCH_LIMIT_DAYS days per call: each day is a request to
+        someone else's website, made while the caller waits.
         """
         from .services.devotional_scraper import scrape_and_save_devotional
 
+        def _whole(name, default):
+            try:
+                return max(0, int(request.data.get(name, default)))
+            except (TypeError, ValueError):
+                return default
+
         target_date_str = request.data.get('date')
-        days = int(request.data.get('days', 7))
         force = bool(request.data.get('force', False))
+        ranged = 'days_before' in request.data or 'days_after' in request.data
+
+        # app_today(), not date.today(): the latter is a UTC day, so between
+        # midnight and 01:00 Lagos it names yesterday and the import lands a
+        # day out. Same distinction common/dates.py exists to enforce.
+        centre = app_today()
+        if target_date_str:
+            try:
+                centre = date.fromisoformat(target_date_str)
+            except ValueError:
+                return Response({'error': 'Invalid date format. Use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if ranged:
+            # A window around `date` (today when none is given):
+            # `days_before` days back and `days_after` days forward, inclusive.
+            before = _whole('days_before', 0)
+            after = _whole('days_after', 0)
+        elif target_date_str:
+            # A single specific date.
+            before = after = 0
+        else:
+            # The original call: today and the previous (days - 1) days.
+            before, after = max(0, _whole('days', 7) - 1), 0
+
+        if before + after + 1 > self.FETCH_LIMIT_DAYS:
+            return Response(
+                {'error': f'Import at most {self.FETCH_LIMIT_DAYS} days at a time.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         results = []
         errors = []
-
-        if target_date_str:
-            # Single specific date
-            try:
-                target_date = date.fromisoformat(target_date_str)
-                result = scrape_and_save_devotional(target_date, force=force)
-                if result:
-                    results.append(result)
-                else:
-                    errors.append(f"Could not fetch for {target_date} (already exists or not published yet)")
-            except ValueError:
-                return Response({'error': 'Invalid date format. Use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
-        else:
-            # Backfill: today and the previous (days-1) days, oldest first.
-            #
-            # app_today(), not date.today(): the latter is a UTC day, so between
-            # midnight and 01:00 Lagos it names yesterday and the import lands a
-            # day out. Same distinction common/dates.py exists to enforce.
-            today = app_today()
-            for i in range(days - 1, -1, -1):
-                target_date = today - timedelta(days=i)
-                result = scrape_and_save_devotional(target_date, force=force)
-                if result:
-                    results.append(result)
-                else:
-                    errors.append(str(target_date))
+        # Oldest first.
+        for offset in range(-before, after + 1):
+            target_date = centre + timedelta(days=offset)
+            result = scrape_and_save_devotional(target_date, force=force)
+            if result:
+                results.append(result)
+            else:
+                # Already there, or the source has not published that day yet.
+                errors.append(str(target_date))
 
         return Response({
             'success': True,

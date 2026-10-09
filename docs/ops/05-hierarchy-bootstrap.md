@@ -68,7 +68,25 @@ province,zone,area,parish
 Lagos Province 9,Holiness Zone,Agege Area,RCCG Holiness Assembly
 ```
 
-Provinces must already exist; an unknown one is reported and skipped. Names
+Provinces must already exist; an unknown one is reported and skipped, and the
+command lists the provinces the region does have. On a database whose region has
+no provinces yet, add `--create-provinces` and the ones the file names are
+created:
+
+```bash
+python manage.py import_hierarchy parishes.csv --create-provinces --dry-run
+python manage.py import_hierarchy parishes.csv --create-provinces
+```
+
+Leave the flag off in production once the provinces exist, so a misspelt
+province in a list is reported and not turned into a new one.
+
+For a **test** database there is a made-up tree at
+`backend/hierarchy/sample_data/region63_sample_tree.csv`: 79 zones, 237 areas
+and 474 parishes under the seven provinces. The names are fictional. Never load
+it into production; teens choosing a parish at sign-up would be offered them.
+
+Names
 match ignoring case and spacing, so the file can be re-run safely, but two
 spellings of one church become two parishes. Clean the list first. Do not build
 it from the free text on old event tickets: most of those rows say "Coordinator

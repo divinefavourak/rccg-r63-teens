@@ -82,3 +82,21 @@ class ImportHierarchyTests(TestCase):
     def test_missing_region_is_an_error(self):
         with self.assertRaises(CommandError):
             self._run('Lagos Province 9,Z,A,P\n', '--region-name', 'Region 1')
+
+    def test_an_unknown_province_is_skipped_and_the_real_ones_are_named(self):
+        out = self._run('Lagos Province 28,Bethel Zone,Bethel Area,Parish B\n')
+        self.assertIn('unknown province "Lagos Province 28"', out)
+        self.assertIn('Provinces under Region 63: Lagos Province 9', out)
+        self.assertIn('--create-provinces', out)
+        self.assertEqual(self._count(NodeType.ZONE), 0)
+
+    def test_create_provinces_adds_the_ones_the_file_names(self):
+        out = self._run(
+            'Lagos Province 28,Bethel Zone,Bethel Area,Parish B\n'
+            'Lagos Province 28,Shiloh Zone,Shiloh Area,Parish C\n',
+            '--create-provinces')
+        self.assertIn('provinces created: Lagos Province 28', out)
+        self.assertIn('zones:2 areas:2 parishes:2 skipped:0', out)
+        province = HierarchyNode.objects.get(name='Lagos Province 28')
+        self.assertEqual(province.node_type, NodeType.PROVINCE)
+        self.assertEqual(province.get_parent(), self.region)

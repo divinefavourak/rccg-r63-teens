@@ -172,7 +172,7 @@ const Register = () => {
             <span
               className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
                 i < step
-                  ? 'bg-console-action text-white'
+                  ? 'bg-console-action text-console-on-action'
                   : i === step
                     ? 'bg-console-action-light text-console-action ring-1 ring-console-action'
                     : 'bg-console-tinted text-console-subtle'

@@ -3,67 +3,80 @@
  *
  * Two designs from one component, chosen by permission:
  *
- * * `content.manage` — a workspace. Status filter, and (once the editor is
- *   built) authoring.
+ * * `content.manage` — a workspace. A gap opens the editor.
  * * `content.view` alone — a **forecast**. A Province Coordinator reads what
- *   their teens are about to receive; they get the same calendar with no
- *   toolbar and no add affordance, because they have nothing to add with.
+ *   their teens are about to receive; they get the same calendar with no add
+ *   affordance, because they have nothing to add with.
  *
  * The gap banner is the point of the screen. A day with no approved devotional
- * is a day the whole product has nothing to say, so uncovered days are counted
- * up front rather than discovered by scanning.
+ * is a day the whole product has nothing to say, so uncovered days are named up
+ * front rather than discovered by scanning.
+ *
+ * The days come from `GET /content/devotionals/calendar/`, which answers one
+ * entry per day *including the empty ones* and decides coverage on the server.
+ * The paged list is the wrong source for this: a month is up to 31 rows and a
+ * page is 20, so the last third of the month would read as gaps.
  */
 import { useCallback, useMemo, useState } from 'react';
-import {
-  AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
-  DownloadCloud,
-  Plus,
-} from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { ChevronLeft, ChevronRight, DownloadCloud, Plus } from 'lucide-react';
 import api from '../../api/axios';
 import ScreenShell from '../../components/console/ScreenShell';
 import { PermissionGate } from '../../components/console/PermissionGate';
 import DevotionalPreview from '../../components/console/DevotionalPreview';
 import { DevotionalEditor, type DevotionalDraft } from '../../components/console/DevotionalEditor';
 import {
-  Badge,
+  AlertBanner,
   Btn,
   Card,
-  EmptyState,
   ErrorState,
+  Modal,
+  PublishPill,
   Skeleton,
 } from '../../components/console/primitives';
+import { OBJECTS } from '../../assets/site';
 import { useConsoleAuth } from '../../context/ConsoleAuthContext';
-import { useConsoleList } from '../../hooks/useConsoleList';
-import { toISODate, todayISO } from '../../utils/dates';
+import { parseAPIDate, toISODate, todayISO } from '../../utils/dates';
 
-interface Devotional {
-  id: string;
-  title: string;
+/** One entry of the `calendar` action's `days`. */
+interface CalendarDay {
   date: string;
-  status: string;
+  status: string | null;
+  is_covered: boolean;
+  devotional: { id: string; title: string; status: string } | null;
 }
 
-/** `PublishableMixin.Status`. Only these three mean a day is actually covered. */
-const COVERED = new Set(['approved', 'scheduled', 'published']);
+interface CalendarResponse {
+  days: CalendarDay[];
+  /** Uncovered ISO dates in the next 14 days, whatever month is on screen. */
+  imminent_gaps: string[];
+  /** Consecutive covered days from today. */
+  buffer_days: number;
+}
 
-const STATUS_TONE: Record<
-  string,
-  'neutral' | 'info' | 'caution' | 'success' | 'action'
-> = {
-  draft: 'neutral',
-  in_review: 'info',
-  approved: 'action',
-  scheduled: 'action',
-  published: 'success',
-  archived: 'neutral',
+const NO_DAYS: string[] = [];
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+const ROUND =
+  'flex h-10 w-10 items-center justify-center rounded-full bg-console-tinted text-console-text transition-colors hover:bg-console-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-console-text';
+
+const FIELD_LABEL =
+  'block text-[12px] font-medium uppercase leading-4 tracking-[0.06em] text-console-muted';
+const FIELD_INPUT =
+  'mt-1 w-full rounded-console-md border-2 border-transparent bg-console-tinted px-3.5 py-2.5 text-[16px] leading-6 text-console-text outline-none transition-colors focus:border-console-text';
+
+/** The ISO day `days` away from `iso`, in local calendar terms. */
+const shiftDay = (iso: string, days: number) => {
+  const d = parseAPIDate(iso) ?? new Date();
+  return toISODate(new Date(d.getFullYear(), d.getMonth(), d.getDate() + days));
 };
 
-// Local calendar day. toISOString() would convert local midnight to UTC,
-// which in Lagos (UTC+1) is still the previous day — every cell was keyed
-// one day earlier than its label. See src/utils/dates.ts.
-const iso = toISODate;
+const shortDay = (iso: string) =>
+  parseAPIDate(iso)?.toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  }) ?? iso;
 
 export const Content = () => {
   const { can } = useConsoleAuth();
@@ -71,62 +84,70 @@ export const Content = () => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
+  const [today] = useState(todayISO);
 
   const canManage = can('content.manage');
   /** Open the authoring modal: an existing record to edit, or a bare date. */
   const [editing, setEditing] = useState<
     { devotional?: DevotionalDraft; date: string } | null
   >(null);
-
-  const [preview, setPreview] = useState<{ id?: string; date: string } | null>(
-    null,
-  );
+  const [preview, setPreview] = useState<{ id?: string; date: string } | null>(null);
   const [importing, setImporting] = useState(false);
-  const [importMessage, setImportMessage] = useState<{
-    ok: boolean;
-    text: string;
-  } | null>(null);
+  // The import window: a day, and how far either side of it to reach.
+  const [importOpen, setImportOpen] = useState(false);
+  const [importDate, setImportDate] = useState(today);
+  const [daysBefore, setDaysBefore] = useState(6);
+  const [daysAfter, setDaysAfter] = useState(0);
+  const [importMessage, setImportMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const { from, to } = useMemo(() => {
-    const start = new Date(month.getFullYear(), month.getMonth(), 1);
-    const end = new Date(month.getFullYear(), month.getMonth() + 1, 0);
-    return { from: iso(start), to: iso(end) };
+  // From the Monday of the week the 1st falls in, so the first row is whole.
+  // JS weeks start on Sunday; church weeks do not.
+  const { start, end } = useMemo(() => {
+    const first = new Date(month.getFullYear(), month.getMonth(), 1);
+    const lead = (first.getDay() + 6) % 7;
+    return {
+      start: toISODate(new Date(first.getFullYear(), first.getMonth(), 1 - lead)),
+      end: toISODate(new Date(month.getFullYear(), month.getMonth() + 1, 0)),
+    };
   }, [month]);
 
-  const { items, isLoading, error, reload } = useConsoleList<Devotional>(
-    '/content/devotionals/',
-    {
-      // date_from/date_to are handled in DevotionalViewSet.get_queryset.
-      params: { date_from: from, date_to: to, ordering: 'date' },
-      enabled: can('content.view'),
-      errorMessage: 'Could not load the devotional calendar.',
+  const calendar = useQuery({
+    queryKey: ['content-calendar', start, end],
+    enabled: can('content.view'),
+    queryFn: async () => {
+      const { data } = await api.get<CalendarResponse>('/content/devotionals/calendar/', {
+        params: { start, end },
+      });
+      return data;
     },
-  );
+  });
+  const reload = calendar.refetch;
 
   /**
-   * Backfill the last 7 days from the web scraper.
+   * Fill days from the web scraper: the chosen day, `daysBefore` days back and
+   * `daysAfter` days forward.
    *
    * `force` is not sent: the endpoint skips days that already have a devotional
    * unless forced, and overwriting something a person wrote is not what anyone
-   * means by "import". The response reports created and skipped separately, so
-   * "nothing happened" and "everything was already there" read differently.
+   * means by "import". A day the source has not published yet is skipped too,
+   * so reaching forward only finds what is already online.
    */
   const runImport = useCallback(async () => {
     setImporting(true);
     setImportMessage(null);
     try {
-      const { data } = await api.post<{
-        created?: unknown[];
-        results?: unknown[];
-        errors?: unknown[];
-      }>('/content/devotionals/fetch_from_web/', { days: 7 });
-      const made = (data.results ?? data.created ?? []).length;
+      const { data } = await api.post<{ results?: unknown[]; errors?: unknown[] }>(
+        '/content/devotionals/fetch_from_web/',
+        { date: importDate, days_before: daysBefore, days_after: daysAfter },
+      );
+      setImportOpen(false);
+      const made = (data.results ?? []).length;
       const skipped = (data.errors ?? []).length;
       setImportMessage({
         ok: true,
         text: made
-          ? `Imported ${made} devotional${made === 1 ? '' : 's'}${skipped ? `, skipped ${skipped} already covered` : ''}.`
-          : 'Nothing new to import — every day in the last week already has one.',
+          ? `Imported ${made} ${made === 1 ? 'devotional' : 'devotionals'}${skipped ? `, skipped ${skipped}` : ''}. They are drafts until reviewed.`
+          : 'Nothing new to import. Those days already have a devotional, or the source has not published them yet.',
       });
       await reload();
     } catch (err: unknown) {
@@ -135,128 +156,123 @@ export const Content = () => {
       )?.response?.data;
       setImportMessage({
         ok: false,
-        text: detail?.detail ?? detail?.error ?? 'The import failed.',
+        text: detail?.detail ?? detail?.error ?? "The import didn't run. Try again.",
       });
     } finally {
       setImporting(false);
     }
-  }, []);
+  }, [reload, importDate, daysBefore, daysAfter]);
 
-  const byDate = useMemo(() => {
-    const map = new Map<string, Devotional>();
-    for (const d of items) map.set(d.date?.slice(0, 10), d);
-    return map;
-  }, [items]);
+  const days = calendar.data?.days ?? [];
+  const imminent = calendar.data?.imminent_gaps ?? NO_DAYS;
+  const imminentSet = useMemo(() => new Set(imminent), [imminent]);
 
-  /** Calendar cells, padded so the 1st lands on the right weekday. Monday-first. */
-  const cells = useMemo(() => {
-    const first = new Date(month.getFullYear(), month.getMonth(), 1);
-    const daysInMonth = new Date(
-      month.getFullYear(),
-      month.getMonth() + 1,
-      0,
-    ).getDate();
-    const lead = (first.getDay() + 6) % 7; // JS weeks start Sunday; church weeks don't.
-    const out: (Date | null)[] = Array.from({ length: lead }, () => null);
-    for (let d = 1; d <= daysInMonth; d += 1) {
-      out.push(new Date(month.getFullYear(), month.getMonth(), d));
-    }
-    return out;
-  }, [month]);
+  const monthLabel = month.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const monthPrefix = toISODate(month).slice(0, 7);
 
-  /** Uncovered days from today onward — past gaps cannot be fixed. */
-  const gaps = useMemo(() => {
-    const today = iso(new Date());
-    return cells
-      .filter((d): d is Date => Boolean(d))
-      .map(iso)
-      .filter((day) => day >= today && !COVERED.has(byDate.get(day)?.status ?? ''));
-  }, [cells, byDate]);
-
-  const monthLabel = month.toLocaleDateString('en-GB', {
-    month: 'long',
-    year: 'numeric',
-  });
+  const open = (day: CalendarDay) => {
+    /*
+      An empty day opens the editor; a filled one opens the preview (which
+      itself offers Edit). Tapping a gap and being shown a read-only "nothing
+      here" was the dead end that made the Console unable to author anything.
+    */
+    if (day.devotional) setPreview({ id: day.devotional.id, date: day.date });
+    else if (canManage) setEditing({ date: day.date });
+  };
 
   return (
     <ScreenShell
-      title="Content"
+      crumb="Content  /  Calendar"
+      title="Devotional calendar"
       subtitle={
         canManage
-          ? 'Every day needs an approved devotional. This is where you see which do not have one.'
-          : 'What the teens in your scope will receive, day by day.'
+          ? 'Every day is a slot. A day counts as covered only when its devotional is Approved, Scheduled or Published.'
+          : 'What the teens in your part of the church will receive, day by day.'
       }
       readOnly={!canManage}
+      hideScope
       actions={
-        <>
+        <PermissionGate permission="content.manage">
           {/*
-            Auto-import scrapes published devotionals from the web and fills
-            gaps. Gated on content.manage because it creates content; it never
-            overwrites an existing day unless `force` is set, which this UI
-            deliberately does not offer — silently replacing a devotional
+            Scrapes published devotionals from the web and fills gaps. It
+            never overwrites an existing day: silently replacing a devotional
             someone wrote is not an "import".
           */}
-          <PermissionGate permission="content.manage">
-            <Btn
-              variant="primary"
-              size="sm"
-              onClick={() => setEditing({ date: todayISO() })}
-              title="Write a devotional"
-            >
-              <Plus size={14} />
-              New devotional
-            </Btn>
-          </PermissionGate>
-
-          <PermissionGate permission="content.manage">
-            <Btn
-              variant="secondary"
-              size="sm"
-              disabled={importing}
-              onClick={runImport}
-              title="Fetch the last 7 days of devotionals from the web, skipping days that already have one"
-            >
-              <DownloadCloud size={14} />
-              {importing ? 'Importing…' : 'Auto-import'}
-            </Btn>
-          </PermissionGate>
-
-          <div className="flex items-center gap-1">
-            <Btn
-              variant="ghost"
-              onClick={() =>
-                setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))
-              }
-              aria-label="Previous month"
-            >
-              <ChevronLeft size={15} />
-            </Btn>
-            <span className="min-w-[130px] text-center text-[13px] font-medium text-console-text">
-              {monthLabel}
-            </span>
-            <Btn
-              variant="ghost"
-              onClick={() =>
-                setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))
-              }
-              aria-label="Next month"
-            >
-              <ChevronRight size={15} />
-            </Btn>
-          </div>
-        </>
+          <Btn size="md" onClick={() => setImportOpen(true)}>
+            <DownloadCloud size={16} /> Import from web
+          </Btn>
+          <Btn variant="primary" size="md" onClick={() => setEditing({ date: today })}>
+            <Plus size={16} /> New devotional
+          </Btn>
+        </PermissionGate>
       }
     >
-      {importMessage && (
-        <div
-          className={`mb-3 rounded-console-md px-3 py-2 text-[13px] ${
-            importMessage.ok
-              ? 'bg-console-success-bg text-console-success'
-              : 'bg-console-danger-bg text-console-danger'
-          }`}
+      {importOpen && (
+        <Modal
+          title="Import devotionals from the web"
+          subtitle="Days that already have a devotional are left alone. Imported ones arrive as drafts for review."
+          onClose={() => setImportOpen(false)}
+          width={520}
+          footer={
+            <>
+              <Btn size="md" onClick={() => setImportOpen(false)} disabled={importing}>
+                Cancel
+              </Btn>
+              <Btn
+                variant="primary"
+                size="md"
+                disabled={importing || !importDate || daysBefore + daysAfter + 1 > 31}
+                onClick={runImport}
+              >
+                {importing
+                  ? 'Importing…'
+                  : `Import ${daysBefore + daysAfter + 1} ${daysBefore + daysAfter === 0 ? 'day' : 'days'}`}
+              </Btn>
+            </>
+          }
         >
-          {importMessage.text}
-        </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="block sm:col-span-3">
+              <span className={FIELD_LABEL}>Around this day</span>
+              <input
+                type="date"
+                value={importDate}
+                onChange={(e) => setImportDate(e.target.value)}
+                className={FIELD_INPUT}
+              />
+            </label>
+            <label className="block">
+              <span className={FIELD_LABEL}>Days before</span>
+              <input
+                type="number"
+                min={0}
+                max={30}
+                value={daysBefore}
+                onChange={(e) => setDaysBefore(Math.max(0, Math.min(30, Number(e.target.value) || 0)))}
+                className={FIELD_INPUT}
+              />
+            </label>
+            <label className="block">
+              <span className={FIELD_LABEL}>Days after</span>
+              <input
+                type="number"
+                min={0}
+                max={30}
+                value={daysAfter}
+                onChange={(e) => setDaysAfter(Math.max(0, Math.min(30, Number(e.target.value) || 0)))}
+                className={FIELD_INPUT}
+              />
+            </label>
+          </div>
+          <p className="mt-3 text-[14px] leading-5 text-console-body">
+            {importDate
+              ? `From ${shortDay(shiftDay(importDate, -daysBefore))} to ${shortDay(shiftDay(importDate, daysAfter))}.`
+              : 'Choose a day.'}{' '}
+            {daysBefore + daysAfter + 1 > 31
+              ? 'That is more than 31 days; import in smaller pieces.'
+              : 'A day the source has not published yet is skipped.'}
+          </p>
+        </Modal>
       )}
 
       {editing && (
@@ -284,126 +300,206 @@ export const Content = () => {
         />
       )}
 
-      {gaps.length > 0 && !isLoading && !error && (
-        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-console-md border border-console-border bg-console-caution-bg px-3 py-2">
-          <AlertTriangle size={15} className="shrink-0 text-console-caution" />
-          <span className="text-[13px] text-console-caution">
-            {gaps.length} {gaps.length === 1 ? 'day has' : 'days have'} no
-            approved devotional in {monthLabel}.
-          </span>
-        </div>
-      )}
+      <div className="flex flex-col gap-5">
+        {importMessage && (
+          <AlertBanner
+            kind={importMessage.ok ? 'success' : 'error'}
+            action={
+              <Btn variant="soft" size="md" onClick={() => setImportMessage(null)}>
+                Dismiss
+              </Btn>
+            }
+          >
+            {importMessage.text}
+          </AlertBanner>
+        )}
 
-      <Card className="p-3">
-        {isLoading ? (
-          <div className="grid grid-cols-7 gap-1.5">
-            {Array.from({ length: 35 }).map((_, i) => (
-              <Skeleton key={i} className="h-16" />
-            ))}
-          </div>
-        ) : error ? (
-          <ErrorState message={error} onRetry={reload} />
-        ) : (
-          <>
-            <div className="mb-1.5 grid grid-cols-7 gap-1.5">
-              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
-                <div
-                  key={d}
-                  className="text-center text-[10px] font-semibold uppercase tracking-wider text-console-subtle"
-                >
-                  {d}
-                </div>
-              ))}
+        {imminent.length > 0 && (
+          <div className="flex flex-wrap items-center gap-3 rounded-console-lg bg-pop-amber px-4 py-3 text-pop-on">
+            <img src={OBJECTS.calendar} alt="" aria-hidden="true" className="h-11 w-11 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[17px] font-bold leading-6">
+                {imminent.length} {imminent.length === 1 ? 'day' : 'days'} in the next 14{' '}
+                {imminent.length === 1 ? 'has' : 'have'} no approved devotional
+              </p>
+              <p className="text-[14px] leading-5">
+                Draft and In review do not count as covered.
+              </p>
             </div>
-
-            <div className="grid grid-cols-7 gap-1.5">
-              {cells.map((date, i) => {
-                if (!date) return <div key={`pad-${i}`} />;
-                const day = iso(date);
-                const item = byDate.get(day);
-                const isToday = day === iso(new Date());
-                const uncovered = !COVERED.has(item?.status ?? '');
-                const future = day >= iso(new Date());
-
-                return (
+            <div className="flex flex-wrap gap-2">
+              {imminent.slice(0, 4).map((day) =>
+                canManage ? (
                   <button
                     key={day}
                     type="button"
-                    /*
-                      An empty day opens the editor; a filled one opens the
-                      preview (which itself offers Edit). Tapping a gap and being
-                      shown a read-only "nothing here" was the dead end that made
-                      the Console unable to author anything.
-                    */
-                    onClick={() =>
-                      item
-                        ? setPreview({ id: item.id, date: day })
-                        : canManage
-                          ? setEditing({ date: day })
-                          : setPreview({ date: day })
-                    }
-                    title={
-                      item
-                        ? `Preview “${item.title}”`
-                        : canManage
-                          ? 'Write the devotional for this day'
-                          : 'Nothing scheduled for this day'
-                    }
-                    className={[
-                      'min-h-[64px] rounded-console-md border p-1.5 text-left transition-colors hover:border-console-action-hover',
-                      isToday
-                        ? 'border-console-action'
-                        : 'border-console-border',
-                      uncovered && future
-                        ? 'bg-console-caution-bg'
-                        : 'bg-console-surface',
-                    ].join(' ')}
+                    onClick={() => setEditing({ date: day })}
+                    aria-label={`Write the devotional for ${shortDay(day)}`}
+                    className="inline-flex h-10 items-center rounded-full bg-ink px-4 text-[14px] font-semibold leading-5 text-on-ink transition-opacity hover:opacity-85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
                   >
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`text-[11px] tabular-nums ${isToday ? 'font-bold text-console-action' : 'text-console-subtle'}`}
-                      >
-                        {date.getDate()}
-                      </span>
-                    </div>
-                    {item ? (
-                      <div className="mt-1">
-                        <p className="line-clamp-2 text-[11px] leading-snug text-console-body">
-                          {item.title}
-                        </p>
-                        <div className="mt-1">
-                          <Badge tone={STATUS_TONE[item.status] ?? 'neutral'}>
-                            {item.status.replace('_', ' ')}
-                          </Badge>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="mt-2 text-[10px] text-console-subtle">
-                        {future ? 'No devotional' : '—'}
-                      </p>
-                    )}
+                    {shortDay(day)}
                   </button>
-                );
-              })}
+                ) : (
+                  <span
+                    key={day}
+                    className="inline-flex h-10 items-center rounded-full bg-ink px-4 text-[14px] font-semibold leading-5 text-on-ink"
+                  >
+                    {shortDay(day)}
+                  </span>
+                ),
+              )}
+              {imminent.length > 4 && (
+                <span className="inline-flex h-10 items-center text-[14px] font-semibold">
+                  and {imminent.length - 4} more
+                </span>
+              )}
             </div>
-
-            {items.length === 0 && (
-              <EmptyState
-                message={`Nothing scheduled for ${monthLabel}.`}
-              />
-            )}
-          </>
+          </div>
         )}
-      </Card>
 
-      {canManage && (
-        <p className="mt-3 text-[12px] leading-relaxed text-console-muted">
-          Authoring is not built into the Console yet — creating and editing
-          devotionals still happens in the legacy panel at{' '}
-          <code className="font-mono text-[11px]">/legacy-admin/devotionals</code>.
-          Submitting for review and approving already work from here.
-        </p>
-      )}
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-[20px] font-bold leading-7 tracking-[-0.01em] text-console-text">
+            {monthLabel}
+          </h2>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className={ROUND}
+              aria-label="Previous month"
+              onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <button
+              type="button"
+              className={ROUND}
+              aria-label="Next month"
+              onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        </div>
+
+        <Card className="p-4">
+          {calendar.isPending ? (
+            <div className="grid grid-cols-7 gap-2">
+              {Array.from({ length: 35 }).map((_, i) => (
+                <Skeleton key={i} className="h-[100px] rounded-console-md" />
+              ))}
+            </div>
+          ) : calendar.isError ? (
+            <ErrorState
+              message={`We couldn't load the calendar for ${monthLabel}.`}
+              onRetry={() => reload()}
+            />
+          ) : (
+            <div className="console-scroll overflow-x-auto">
+              <div className="min-w-[760px]">
+                <div className="mb-2 grid grid-cols-7 gap-2 px-2">
+                  {WEEKDAYS.map((d) => (
+                    <div
+                      key={d}
+                      className="text-[12px] font-medium uppercase leading-4 tracking-[0.06em] text-console-muted"
+                    >
+                      {d}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-7 gap-2">
+                  {days.map((day) => {
+                    const item = day.devotional;
+                    const isToday = day.date === today;
+                    const past = day.date < today;
+                    const outside = !day.date.startsWith(monthPrefix);
+                    const gap = !item && imminentSet.has(day.date);
+                    const clickable = Boolean(item) || canManage;
+                    const number = Number(day.date.slice(8));
+
+                    const tone = isToday
+                      ? 'bg-console-action-light outline outline-2 -outline-offset-2 outline-console-text'
+                      : gap
+                        ? 'bg-console-caution-bg outline-dashed outline-[1.5px] -outline-offset-2 outline-console-caution'
+                        : 'bg-console-tinted';
+
+                    const body = (
+                      <>
+                        <span
+                          className={`text-[12px] font-medium leading-4 tabular-nums ${
+                            gap ? 'text-console-caution' : 'text-console-muted'
+                          }`}
+                        >
+                          {number}
+                          {isToday && ' · Today'}
+                        </span>
+                        {item ? (
+                          <>
+                            <span className="line-clamp-2 text-[14px] font-semibold leading-5 text-console-text">
+                              {item.title}
+                            </span>
+                            <span className="mt-auto pt-1.5">
+                              <PublishPill status={item.status} />
+                            </span>
+                          </>
+                        ) : gap ? (
+                          <>
+                            <span className="text-[14px] font-semibold leading-5 text-console-text">
+                              No devotional
+                            </span>
+                            {canManage && (
+                              <span className="mt-auto inline-flex h-[26px] items-center gap-1 self-start rounded-full bg-ink pl-1.5 pr-2.5 text-[12px] font-semibold leading-4 text-on-ink">
+                                <Plus size={14} strokeWidth={2.5} /> Add
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-[12px] font-medium leading-4 text-console-muted">
+                            {past ? 'Nothing was published' : 'Not planned yet'}
+                          </span>
+                        )}
+                      </>
+                    );
+
+                    const className = `flex min-h-[100px] flex-col items-start gap-1.5 rounded-console-md p-2.5 text-left ${tone} ${
+                      (past || outside) && !isToday ? 'opacity-60' : ''
+                    }`;
+
+                    return clickable ? (
+                      <button
+                        key={day.date}
+                        type="button"
+                        onClick={() => open(day)}
+                        aria-label={
+                          item
+                            ? `${shortDay(day.date)}: ${item.title}, ${item.status.replace('_', ' ')}`
+                            : `${shortDay(day.date)}: write the devotional`
+                        }
+                        className={`${className} transition-[filter] hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-console-text`}
+                      >
+                        {body}
+                      </button>
+                    ) : (
+                      <div key={day.date} className={className}>
+                        {body}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+        </Card>
+
+        {calendar.data && (
+          <p className="text-[14px] leading-5 text-console-body">
+            {calendar.data.buffer_days === 0
+              ? 'Today has no approved devotional.'
+              : `The next ${calendar.data.buffer_days} ${
+                  calendar.data.buffer_days === 1 ? 'day is' : 'days are'
+                } covered without a break.`}
+          </p>
+        )}
+      </div>
     </ScreenShell>
   );
 };

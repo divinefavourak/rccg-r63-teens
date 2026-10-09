@@ -79,7 +79,7 @@ export const authInput =
 export const authLabel = 'block text-[12px] font-medium text-console-body';
 
 export const authButton =
-  'mt-6 flex w-full items-center justify-center gap-2 rounded-console-md bg-console-action py-3 text-[14px] font-medium text-white transition-colors hover:bg-console-action-hover disabled:opacity-60';
+  'mt-6 flex w-full items-center justify-center gap-2 rounded-console-md bg-console-action py-3 text-[14px] font-medium text-console-on-action transition-colors hover:bg-console-action-hover disabled:opacity-60';
 
 /** An error the user needs to read and act on — never a toast. */
 export const AuthError = ({ message }: { message: string }) => (

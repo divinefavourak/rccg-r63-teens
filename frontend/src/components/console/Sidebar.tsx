@@ -5,9 +5,9 @@
  * because they hold different permissions. Items the holder cannot reach are
  * absent, not disabled.
  *
- * Read-only areas carry a small "View" marker. That is not a disabled state — the
- * screen genuinely works, it just has no editing affordances — and saying so up
- * front is kinder than letting someone open it and hunt for a button that was
+ * Read-only areas carry a small "read-only" note. That is not a disabled state —
+ * the screen genuinely works, it just has no editing affordances — and saying so
+ * up front is kinder than letting someone open it and hunt for a button that was
  * never going to be there.
  */
 import { NavLink } from 'react-router-dom';
@@ -19,93 +19,169 @@ import {
   CheckSquare,
   Cross,
   FileText,
+  GitBranch,
   GraduationCap,
-  LayoutDashboard,
-  Network,
-  PlayCircle,
+  Headphones,
   ScanLine,
   ScrollText,
-  Settings,
   ShieldCheck,
+  SlidersHorizontal,
+  Sun,
   Users,
   type LucideIcon,
 } from 'lucide-react';
+import LogoLockup from '../site/LogoLockup';
+import { Avatar } from './primitives';
+import { useAccountLabel } from './account';
 import type { ResolvedNavItem } from './navigation';
 
 const ICONS: Record<string, LucideIcon> = {
-  LayoutDashboard,
+  Sun,
   Users,
-  Network,
+  GitBranch,
   ShieldCheck,
-  BookOpen,
-  CheckSquare,
   FileText,
-  PlayCircle,
+  CheckSquare,
+  BookOpen,
+  Headphones,
   Cross,
   Calendar,
   ScanLine,
   GraduationCap,
   Bell,
   BarChart3,
-  Settings,
+  SlidersHorizontal,
   ScrollText,
 };
 
 interface SidebarProps {
   items: ResolvedNavItem[];
   collapsed?: boolean;
+  /**
+   * The green way to the door, for someone who works one but has no Events
+   * section to reach it through (a Teacher).
+   */
+  showCheckIn?: boolean;
 }
 
-export const Sidebar = ({ items, collapsed = false }: SidebarProps) => (
-  <nav
-    aria-label="Console sections"
-    className={[
-      'console-scroll flex shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-console-border bg-console-surface py-3 transition-[width]',
-      collapsed ? 'w-[60px] px-2' : 'w-[212px] px-2.5',
-    ].join(' ')}
-  >
-    {items.map((item) => {
-      const Icon = ICONS[item.icon] ?? LayoutDashboard;
-      return (
-        <div key={item.id || 'overview'}>
-          {item.divider && (
-            <div className="mx-1 my-2 border-t border-console-border" />
-          )}
+export const Sidebar = ({
+  items,
+  collapsed = false,
+  showCheckIn = false,
+}: SidebarProps) => {
+  const { displayName, roleLabel } = useAccountLabel();
+
+  return (
+    <aside
+      className={[
+        'flex shrink-0 flex-col rounded-console-xl bg-console-ink px-3 pb-4 pt-5 text-console-on-ink transition-[width]',
+        collapsed ? 'w-[68px]' : 'w-[236px]',
+      ].join(' ')}
+    >
+      <div
+        className={`flex shrink-0 items-center pb-4 ${collapsed ? 'justify-center' : 'px-2'}`}
+      >
+        {!collapsed && (
+          <span className="origin-left scale-[0.8]">
+            <LogoLockup />
+          </span>
+        )}
+        <span
+          className={`text-[20px] font-bold leading-7 tracking-[-0.01em] ${collapsed ? 'sr-only' : '-ml-1'}`}
+        >
+          Console
+        </span>
+      </div>
+
+      <nav
+        aria-label="Console sections"
+        className="console-scroll flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto"
+      >
+        {items.map((item) => {
+          const Icon = ICONS[item.icon] ?? Sun;
+          return (
+            <NavLink
+              key={item.id || 'overview'}
+              to={item.to}
+              // `end` on the index route only, so /admin does not stay active
+              // while a child route is open.
+              end={item.id === ''}
+              title={collapsed ? item.label : undefined}
+              // Collapsed, the link is an icon alone; `title` is not a name a
+              // screen reader can rely on.
+              aria-label={collapsed ? item.label : undefined}
+              className={({ isActive }) =>
+                [
+                  'flex h-11 shrink-0 items-center gap-3 rounded-full text-[14px] font-semibold leading-5 transition-[background-color,opacity]',
+                  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-console-on-ink',
+                  isActive
+                    ? 'bg-console-on-ink text-console-ink'
+                    : 'opacity-[0.78] hover:opacity-100',
+                  collapsed ? 'justify-center px-0' : 'px-3.5',
+                ].join(' ')
+              }
+            >
+              <Icon size={20} className="shrink-0" strokeWidth={2} aria-hidden="true" />
+              {!collapsed && (
+                <>
+                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  {item.result === 'readonly' && (
+                    <span
+                      className="shrink-0 text-[12px] font-medium leading-4 opacity-70"
+                      title="You can open this, but not change anything in it"
+                    >
+                      read-only
+                    </span>
+                  )}
+                </>
+              )}
+            </NavLink>
+          );
+        })}
+
+        {showCheckIn && (
           <NavLink
-            to={item.to}
-            // `end` on the index route only, so /admin does not stay active
-            // while a child route is open.
-            end={item.id === ''}
-            title={collapsed ? item.label : undefined}
-            className={({ isActive }) =>
-              [
-                'group flex items-center gap-2.5 rounded-console-md px-2.5 py-2 text-[13px] font-medium transition-colors',
-                isActive
-                  ? 'bg-console-action-light text-console-action'
-                  : 'text-console-body hover:bg-console-tinted hover:text-console-text',
-                collapsed ? 'justify-center px-0' : '',
-              ].join(' ')
-            }
+            to="/admin/check-in"
+            title={collapsed ? 'Check in' : undefined}
+            className={[
+              'mt-1 flex h-11 shrink-0 items-center gap-3 rounded-full bg-console-go text-[14px] font-semibold leading-5 text-console-on-go transition-[filter] hover:brightness-95',
+              'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-console-on-ink',
+              collapsed ? 'justify-center px-0' : 'px-3.5',
+            ].join(' ')}
           >
-            <Icon size={16} className="shrink-0" strokeWidth={2} />
-            {!collapsed && (
-              <>
-                <span className="flex-1 truncate">{item.label}</span>
-                {item.result === 'readonly' && (
-                  <span
-                    className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-console-subtle"
-                    title="You can open this, but not change anything in it"
-                  >
-                    View
-                  </span>
-                )}
-              </>
-            )}
+            <ScanLine size={20} className="shrink-0" strokeWidth={2} />
+            {!collapsed && <span>Check in</span>}
           </NavLink>
-        </div>
-      );
-    })}
-  </nav>
-);
+        )}
+      </nav>
+
+      {/* Who you are and in what capacity: the pair that decides what the list
+          above contains. */}
+      <div
+        className={[
+          'mt-3 flex shrink-0 items-center gap-2.5 rounded-console-lg',
+          collapsed ? 'justify-center' : 'border p-2.5',
+        ].join(' ')}
+        style={{
+          borderColor:
+            'color-mix(in srgb, var(--console-on-ink) 22%, transparent)',
+        }}
+        title={collapsed ? `${displayName} · ${roleLabel}` : undefined}
+      >
+        <Avatar name={displayName} size={36} />
+        {!collapsed && (
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[14px] font-semibold leading-5">
+              {displayName}
+            </p>
+            <p className="truncate text-[12px] font-medium leading-4 opacity-70">
+              {roleLabel}
+            </p>
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+};
 
 export default Sidebar;

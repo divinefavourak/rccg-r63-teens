@@ -19,7 +19,7 @@
  * The returned shape is unchanged, so no screen had to be touched.
  */
 import { useCallback } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../api/axios';
 
 /** DRF returns `{count, results}` when paginated and a bare array when not. */
@@ -85,5 +85,55 @@ export function useConsoleList<T>(path: string, options: Options = {}) {
     error: query.isError ? errorMessage : null,
     reload,
     setItems,
+  };
+}
+
+/**
+ * One page of a Console list, with the total the backend reports.
+ *
+ * `useConsoleList` hands back the rows of the first page and nothing else,
+ * which is right for a short list and wrong for anything a person pages
+ * through or counts. This keeps `count` (the size of the whole filtered list)
+ * so a screen can say "20 of 1,842" and offer the next page.
+ *
+ * The previous page stays on screen while the next one loads, so the table
+ * does not collapse to a skeleton on every click.
+ */
+export function useConsolePage<T>(path: string, options: Options = {}) {
+  const {
+    enabled = true,
+    params,
+    errorMessage = 'Could not load this list.',
+  } = options;
+
+  const queryClient = useQueryClient();
+  const serialisedParams = JSON.stringify(params ?? {});
+  const queryKey = ['console-page', path, serialisedParams] as const;
+
+  const query = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const { data } = await api.get(path, { params: JSON.parse(serialisedParams) });
+      const items = unwrapList<T>(data);
+      const count = (data as { count?: number } | null)?.count;
+      return { items, count: typeof count === 'number' ? count : items.length };
+    },
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+
+  const reload = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ['console-page', path] }),
+    [queryClient, path],
+  );
+
+  return {
+    items: query.data?.items ?? (EMPTY as T[]),
+    count: query.data?.count ?? 0,
+    isLoading: enabled && query.isPending,
+    /** True while a different page or search is on its way. */
+    isFetching: query.isFetching,
+    error: query.isError ? errorMessage : null,
+    reload,
   };
 }

@@ -56,18 +56,18 @@ const Field = ({
   required?: boolean;
 }) => (
   <label className="block">
-    <span className="block text-[11px] font-medium text-console-body">
+    <span className="block text-[12px] font-medium uppercase leading-4 tracking-[0.06em] text-console-muted">
       {label}
       {required && <span className="ml-0.5 text-console-danger">*</span>}
     </span>
     {children}
     {error ? (
-      <span className="mt-0.5 block text-[11px] leading-snug text-console-danger">
+      <span className="mt-0.5 block text-[12px] leading-4 text-console-danger">
         {error}
       </span>
     ) : (
       hint && (
-        <span className="mt-0.5 block text-[11px] leading-snug text-console-subtle">
+        <span className="mt-0.5 block text-[12px] leading-4 text-console-subtle">
           {hint}
         </span>
       )
@@ -76,7 +76,7 @@ const Field = ({
 );
 
 const inputCls =
-  'mt-1 w-full rounded-console-md border border-console-border bg-console-surface px-2.5 py-2 text-[13px] text-console-text outline-none transition-colors focus:border-console-action';
+  'mt-1 w-full rounded-console-md border-2 border-transparent bg-console-tinted px-3.5 py-2.5 text-[16px] leading-6 text-console-text outline-none transition-colors focus:border-console-text';
 
 export const DevotionalEditor = ({
   devotional,
@@ -92,6 +92,11 @@ export const DevotionalEditor = ({
   onSaved: () => void;
 }) => {
   const editing = Boolean(devotional?.id);
+  // Set once a new devotional has been created. "Submit" is two requests, and
+  // if the second fails the first has still happened: trying again must update
+  // that devotional, not create another for the same day (which the server
+  // refuses, leaving the author stuck).
+  const [createdId, setCreatedId] = useState<string | undefined>();
 
   const [form, setForm] = useState({
     title: devotional?.title ?? '',
@@ -214,7 +219,12 @@ export const DevotionalEditor = ({
     try {
       // Send only what was filled in. Posting '' for every optional field would
       // overwrite existing content with blanks on an edit.
-      const payload: Record<string, unknown> = { status };
+      //
+      // The status is never written from here on an edit: saving a published
+      // devotional must not quietly turn it back into a draft. A new one starts
+      // as a draft, and "submit" goes through the review endpoint below.
+      const existingId = devotional?.id ?? createdId;
+      const payload: Record<string, unknown> = existingId ? {} : { status: 'draft' };
       for (const [k, v] of Object.entries(form)) {
         if (typeof v === 'string' && v.trim() === '' && editing) continue;
         payload[k] = v;
@@ -236,8 +246,19 @@ export const DevotionalEditor = ({
         config = { headers: { 'Content-Type': 'multipart/form-data' } };
       }
 
-      if (editing) await api.patch(`/content/devotionals/${devotional!.id}/`, body, config);
-      else await api.post('/content/devotionals/', body, config);
+      const saved = existingId
+        ? await api.patch<{ id?: string }>(`/content/devotionals/${existingId}/`, body, config)
+        : await api.post<{ id?: string }>('/content/devotionals/', body, config);
+      const id = existingId ?? saved.data?.id;
+      if (!existingId) setCreatedId(id);
+
+      // Submitting is its own step on the server. It records who submitted,
+      // which is the fact the two-person rule turns on; writing
+      // `status: in_review` directly would leave that blank and let the author
+      // approve their own work.
+      if (status === 'in_review') {
+        await api.post(`/content/devotionals/${id}/submit_for_review/`);
+      }
 
       onSaved();
     } catch (err: unknown) {
@@ -293,11 +314,27 @@ export const DevotionalEditor = ({
       }
     >
       {loading && (
-        <div className="mb-3 text-[13px] text-console-muted">Loading devotional…</div>
+        <div className="mb-3 text-[14px] text-console-muted">Loading devotional…</div>
       )}
 
+      {/* A refusal that belongs to no field on this form, such as the review
+          step declining: shown here so it is never swallowed. */}
+      {Object.entries(errors)
+        .filter(([field]) => field !== '__all__' && !(field in form) && field !== 'cover_image')
+        .map(([field, message]) => (
+          <div
+            key={field}
+            role="alert"
+            className="mb-3 rounded-console-lg bg-console-danger-bg px-3.5 py-3 text-[14px] leading-5 text-console-text"
+          >
+            {field === 'detail' || field === 'non_field_errors'
+              ? message
+              : `${field.replace(/_/g, ' ')}: ${message}`}
+          </div>
+        ))}
+
       {errors.__all__ && (
-        <div className="mb-3 rounded-console-md bg-console-danger-bg px-3 py-2 text-[13px] text-console-danger">
+        <div className="mb-3 rounded-console-md bg-console-danger-bg px-3 py-2 text-[14px] text-console-danger">
           {errors.__all__}
         </div>
       )}
@@ -362,7 +399,7 @@ export const DevotionalEditor = ({
           }
         >
           <textarea
-            className={`${inputCls} min-h-[200px] resize-y leading-relaxed`}
+            className={`${inputCls} min-h-[200px] resize-y leading-5`}
             value={form.content}
             onChange={set('content')}
           />

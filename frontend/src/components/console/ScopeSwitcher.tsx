@@ -16,7 +16,7 @@
  * dropdown — a menu with one choice is a lie about the options available.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Search } from 'lucide-react';
+import { Check, ChevronDown, GitBranch, Search } from 'lucide-react';
 import type { NodeRef, NodeType } from '../../types/console';
 import { NODE_TYPE_LABELS } from '../../types/console';
 import type { TreeNode } from '../../hooks/useHierarchy';
@@ -84,31 +84,48 @@ export const ScopeSwitcher = ({
     return flat.filter((r) => keep.has(r.node.id));
   }, [flat, query]);
 
+  // "National → Region 63": where the scope sits, not just what it is called.
+  // Past two ancestors the start is elided, as the kit's deep-path state does.
+  const path = useMemo(() => {
+    const row = flat.find((r) => r.node.id === current?.id);
+    if (!row || !current) return null;
+    const names = new Map(flat.map((r) => [r.node.id, r.node.name]));
+    const trail = [...row.ancestors.map((id) => names.get(id) ?? ''), current.name];
+    return trail.length > 3
+      ? `… → ${trail.slice(-2).join(' → ')}`
+      : trail.join(' → ');
+  }, [flat, current]);
+
   if (isLoading) {
     return (
-      <div className="h-8 w-52 animate-pulse rounded-console-md bg-console-tinted" />
+      <div className="h-[52px] w-56 animate-pulse rounded-full bg-console-skeleton" />
     );
   }
+
+  const label = (
+    <>
+      <span
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-console-go text-console-on-go"
+        aria-hidden="true"
+      >
+        <GitBranch size={18} />
+      </span>
+      <span className="min-w-0 text-left">
+        <span className="block max-w-[200px] truncate text-[14px] font-semibold leading-5 text-console-text">
+          {current?.name ?? 'Choose a scope'}
+        </span>
+        <span className="block max-w-[200px] truncate text-[12px] font-medium leading-4 text-console-muted">
+          {path ?? (current ? NODE_TYPE_LABELS[current.node_type] : 'No scope')}
+        </span>
+      </span>
+    </>
+  );
 
   // Nothing to switch between — a Teacher is pinned to one parish.
   if (selectableCount <= 1) {
     return (
-      <div className="flex items-center gap-2 rounded-console-md px-2.5 py-1.5">
-        {current && (
-          <span
-            className="h-1.5 w-1.5 shrink-0 rounded-full"
-            style={{ background: LEVEL_DOT[current.node_type] }}
-            aria-hidden="true"
-          />
-        )}
-        <span className="text-[13px] font-medium text-console-text">
-          {current?.name ?? 'No scope'}
-        </span>
-        {current && (
-          <span className="text-[11px] text-console-subtle">
-            {NODE_TYPE_LABELS[current.node_type]}
-          </span>
-        )}
+      <div className="flex h-[52px] items-center gap-2.5 rounded-full bg-console-tinted pl-2 pr-4">
+        {label}
       </div>
     );
   }
@@ -120,40 +137,31 @@ export const ScopeSwitcher = ({
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="flex items-center gap-2 rounded-console-md border border-console-border bg-console-surface px-2.5 py-1.5 text-[13px] font-medium text-console-text transition-colors hover:bg-console-tinted"
+        className="flex h-[52px] items-center gap-2.5 rounded-full border-[1.5px] border-console-border-strong bg-console-surface pl-2 pr-3.5 transition-colors hover:bg-console-tinted"
       >
-        {current && (
-          <span
-            className="h-1.5 w-1.5 shrink-0 rounded-full"
-            style={{ background: LEVEL_DOT[current.node_type] }}
-            aria-hidden="true"
-          />
-        )}
-        <span className="max-w-[180px] truncate">
-          {current?.name ?? 'Choose a scope'}
-        </span>
-        <ChevronDown size={14} className="shrink-0 text-console-muted" />
+        {label}
+        <ChevronDown size={18} className="shrink-0 text-console-text" />
       </button>
 
       {open && (
-        <div className="absolute left-0 z-50 mt-1.5 w-80 overflow-hidden rounded-console-lg border border-console-border bg-console-raised shadow-xl">
-          <div className="flex items-center gap-2 border-b border-console-border px-3 py-2">
-            <Search size={14} className="shrink-0 text-console-subtle" />
+        <div className="absolute left-0 z-50 mt-2 w-[340px] overflow-hidden rounded-console-lg bg-console-raised shadow-console-dialog">
+          <div className="flex items-center gap-2 border-b border-console-border px-4 py-3">
+            <Search size={16} className="shrink-0 text-console-muted" />
             <input
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Find a parish, area, province…"
-              className="w-full bg-transparent text-[13px] text-console-text outline-none placeholder:text-console-subtle"
+              className="w-full bg-transparent text-[14px] text-console-text outline-none placeholder:text-console-muted"
             />
           </div>
 
           <ul
             role="listbox"
-            className="console-scroll max-h-80 overflow-y-auto py-1"
+            className="console-scroll max-h-80 overflow-y-auto p-1.5"
           >
             {filtered.length === 0 && (
-              <li className="px-3 py-6 text-center text-[12px] text-console-muted">
+              <li className="px-3 py-6 text-center text-[14px] text-console-body">
                 Nothing matches “{query}”.
               </li>
             )}
@@ -176,9 +184,9 @@ export const ScopeSwitcher = ({
                       setOpen(false);
                       setQuery('');
                     }}
-                    style={{ paddingLeft: 12 + depth * 14 }}
+                    style={{ paddingLeft: 12 + depth * 16 }}
                     className={[
-                      'flex w-full items-center gap-2 py-1.5 pr-3 text-left text-[13px] transition-colors',
+                      'flex h-10 w-full items-center gap-2.5 rounded-full pr-3 text-left text-[14px] font-semibold transition-colors',
                       node.selectable
                         ? 'text-console-text hover:bg-console-tinted'
                         : // Above the ceiling: shown for context, not reachable.
@@ -187,7 +195,7 @@ export const ScopeSwitcher = ({
                     ].join(' ')}
                   >
                     <span
-                      className="h-1.5 w-1.5 shrink-0 rounded-full"
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
                       style={{
                         background: node.selectable
                           ? LEVEL_DOT[node.node_type]
@@ -196,11 +204,11 @@ export const ScopeSwitcher = ({
                       aria-hidden="true"
                     />
                     <span className="flex-1 truncate">{node.name}</span>
-                    <span className="shrink-0 text-[10px] uppercase tracking-wide text-console-subtle">
+                    <span className="shrink-0 text-[12px] font-medium text-console-muted">
                       {NODE_TYPE_LABELS[node.node_type]}
                     </span>
                     {isCurrent && (
-                      <Check size={13} className="shrink-0 text-console-action" />
+                      <Check size={16} className="shrink-0 text-console-text" />
                     )}
                   </button>
                 </li>

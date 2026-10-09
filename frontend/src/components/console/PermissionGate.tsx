@@ -80,7 +80,7 @@ export const ExplanatoryChip = ({
   <span
     className={[
       'inline-flex items-center gap-1.5 rounded-console-sm px-2.5 py-1.5',
-      'text-[11px] font-medium leading-tight',
+      'text-[12px] font-medium leading-tight',
       variant === 'caution'
         ? 'bg-console-caution-bg text-console-caution'
         : 'bg-console-tinted text-console-muted',
@@ -136,15 +136,15 @@ export const PermissionDenied = ({
         <path d="M7 11V7a5 5 0 0 1 10 0v4" />
       </svg>
     </div>
-    <h2 className="text-[15px] font-semibold text-console-text">
+    <h2 className="text-[17px] font-semibold text-console-text">
       {screenName} is not part of your Console
     </h2>
-    <p className="mt-1.5 max-w-sm text-[13px] leading-relaxed text-console-muted">
+    <p className="mt-1.5 max-w-sm text-[14px] leading-5 text-console-muted">
       Your role does not include this area. If you need it, ask whoever appointed
       you — they can grant the access, or tell you who can.
     </p>
     {requiredPermission && (
-      <p className="mt-3 font-mono text-[11px] text-console-subtle">
+      <p className="mt-3 font-mono text-[12px] text-console-subtle">
         requires {requiredPermission}
       </p>
     )}

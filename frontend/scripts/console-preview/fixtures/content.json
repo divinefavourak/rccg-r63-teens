@@ -1,0 +1,597 @@
+{
+ "GET /content/devotionals/calendar/": {
+  "start": "2026-09-28",
+  "end": "2026-10-31",
+  "days": [
+   {
+    "date": "2026-09-28",
+    "status": "published",
+    "is_covered": true,
+    "devotional": {
+     "id": "d2026-09-28",
+     "date": "2026-09-28",
+     "title": "Rooted",
+     "slug": "rooted",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "published",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-09-29",
+    "status": "published",
+    "is_covered": true,
+    "devotional": {
+     "id": "d2026-09-29",
+     "date": "2026-09-29",
+     "title": "Small Yes",
+     "slug": "small yes",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "published",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-09-30",
+    "status": "published",
+    "is_covered": true,
+    "devotional": {
+     "id": "d2026-09-30",
+     "date": "2026-09-30",
+     "title": "Whose Voice?",
+     "slug": "whose voice?",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "published",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-10-01",
+    "status": "published",
+    "is_covered": true,
+    "devotional": {
+     "id": "d2026-10-01",
+     "date": "2026-10-01",
+     "title": "Standing Firm",
+     "slug": "standing firm",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "published",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-10-02",
+    "status": "published",
+    "is_covered": true,
+    "devotional": {
+     "id": "d2026-10-02",
+     "date": "2026-10-02",
+     "title": "Open Hands",
+     "slug": "open hands",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "published",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-10-03",
+    "status": "published",
+    "is_covered": true,
+    "devotional": {
+     "id": "d2026-10-03",
+     "date": "2026-10-03",
+     "title": "Rest",
+     "slug": "rest",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "published",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-10-04",
+    "status": "published",
+    "is_covered": true,
+    "devotional": {
+     "id": "d2026-10-04",
+     "date": "2026-10-04",
+     "title": "Sent",
+     "slug": "sent",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "published",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-10-05",
+    "status": "published",
+    "is_covered": true,
+    "devotional": {
+     "id": "d2026-10-05",
+     "date": "2026-10-05",
+     "title": "First Things",
+     "slug": "first things",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "published",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-10-06",
+    "status": "published",
+    "is_covered": true,
+    "devotional": {
+     "id": "d2026-10-06",
+     "date": "2026-10-06",
+     "title": "Stay",
+     "slug": "stay",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "published",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-10-07",
+    "status": "published",
+    "is_covered": true,
+    "devotional": {
+     "id": "d2026-10-07",
+     "date": "2026-10-07",
+     "title": "Brave",
+     "slug": "brave",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "published",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-10-08",
+    "status": "published",
+    "is_covered": true,
+    "devotional": {
+     "id": "d2026-10-08",
+     "date": "2026-10-08",
+     "title": "Seen",
+     "slug": "seen",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "published",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-10-09",
+    "status": "scheduled",
+    "is_covered": true,
+    "devotional": {
+     "id": "d2026-10-09",
+     "date": "2026-10-09",
+     "title": "Enough",
+     "slug": "enough",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "scheduled",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-10-10",
+    "status": "approved",
+    "is_covered": true,
+    "devotional": {
+     "id": "d2026-10-10",
+     "date": "2026-10-10",
+     "title": "Follow",
+     "slug": "follow",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "approved",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-10-11",
+    "status": "in_review",
+    "is_covered": false,
+    "devotional": {
+     "id": "d2026-10-11",
+     "date": "2026-10-11",
+     "title": "Carried",
+     "slug": "carried",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "in_review",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-10-12",
+    "status": null,
+    "is_covered": false,
+    "devotional": null
+   },
+   {
+    "date": "2026-10-13",
+    "status": "approved",
+    "is_covered": true,
+    "devotional": {
+     "id": "d2026-10-13",
+     "date": "2026-10-13",
+     "title": "Slow Down",
+     "slug": "slow down",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "approved",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-10-14",
+    "status": "draft",
+    "is_covered": false,
+    "devotional": {
+     "id": "d2026-10-14",
+     "date": "2026-10-14",
+     "title": "Light",
+     "slug": "light",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "draft",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-10-15",
+    "status": "approved",
+    "is_covered": true,
+    "devotional": {
+     "id": "d2026-10-15",
+     "date": "2026-10-15",
+     "title": "Open Doors",
+     "slug": "open doors",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "approved",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-10-16",
+    "status": "approved",
+    "is_covered": true,
+    "devotional": {
+     "id": "d2026-10-16",
+     "date": "2026-10-16",
+     "title": "Kept",
+     "slug": "kept",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "approved",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-10-17",
+    "status": "scheduled",
+    "is_covered": true,
+    "devotional": {
+     "id": "d2026-10-17",
+     "date": "2026-10-17",
+     "title": "Near",
+     "slug": "near",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "scheduled",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-10-18",
+    "status": "approved",
+    "is_covered": true,
+    "devotional": {
+     "id": "d2026-10-18",
+     "date": "2026-10-18",
+     "title": "Still",
+     "slug": "still",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "approved",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-10-19",
+    "status": "approved",
+    "is_covered": true,
+    "devotional": {
+     "id": "d2026-10-19",
+     "date": "2026-10-19",
+     "title": "Known",
+     "slug": "known",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "approved",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-10-20",
+    "status": "approved",
+    "is_covered": true,
+    "devotional": {
+     "id": "d2026-10-20",
+     "date": "2026-10-20",
+     "title": "Held",
+     "slug": "held",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "approved",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-10-21",
+    "status": "approved",
+    "is_covered": true,
+    "devotional": {
+     "id": "d2026-10-21",
+     "date": "2026-10-21",
+     "title": "Sure",
+     "slug": "sure",
+     "memory_verse_passage": "",
+     "memory_verse_content": "",
+     "cover_image": null,
+     "has_audio": false,
+     "view_count": 0,
+     "status": "approved",
+     "published_at": null
+    }
+   },
+   {
+    "date": "2026-10-22",
+    "status": null,
+    "is_covered": false,
+    "devotional": null
+   },
+   {
+    "date": "2026-10-23",
+    "status": null,
+    "is_covered": false,
+    "devotional": null
+   },
+   {
+    "date": "2026-10-24",
+    "status": null,
+    "is_covered": false,
+    "devotional": null
+   },
+   {
+    "date": "2026-10-25",
+    "status": null,
+    "is_covered": false,
+    "devotional": null
+   },
+   {
+    "date": "2026-10-26",
+    "status": null,
+    "is_covered": false,
+    "devotional": null
+   },
+   {
+    "date": "2026-10-27",
+    "status": null,
+    "is_covered": false,
+    "devotional": null
+   },
+   {
+    "date": "2026-10-28",
+    "status": null,
+    "is_covered": false,
+    "devotional": null
+   },
+   {
+    "date": "2026-10-29",
+    "status": null,
+    "is_covered": false,
+    "devotional": null
+   },
+   {
+    "date": "2026-10-30",
+    "status": null,
+    "is_covered": false,
+    "devotional": null
+   },
+   {
+    "date": "2026-10-31",
+    "status": null,
+    "is_covered": false,
+    "devotional": null
+   }
+  ],
+  "gaps": [
+   "2026-10-11",
+   "2026-10-12",
+   "2026-10-14",
+   "2026-10-22",
+   "2026-10-23",
+   "2026-10-24",
+   "2026-10-25",
+   "2026-10-26",
+   "2026-10-27",
+   "2026-10-28",
+   "2026-10-29",
+   "2026-10-30",
+   "2026-10-31"
+  ],
+  "imminent_gaps": [
+   "2026-10-11",
+   "2026-10-12",
+   "2026-10-14"
+  ],
+  "buffer_days": 3
+ },
+ "GET /content/devotionals/review_queue/": {
+  "count": 3,
+  "results": [
+   {
+    "id": "q1",
+    "kind": "devotional",
+    "title": "Carried",
+    "for_date": "2026-10-11",
+    "status": "in_review",
+    "submitted_at": "2026-10-08T19:10:00+01:00",
+    "submitted_by": {
+     "id": "u-ngozi",
+     "display_name": "Ngozi Okafor"
+    },
+    "is_mine": false,
+    "can_approve": true,
+    "has_memory_verse": true
+   },
+   {
+    "id": "q2",
+    "kind": "devotional",
+    "title": "Light",
+    "for_date": "2026-10-14",
+    "status": "in_review",
+    "submitted_at": "2026-10-08T18:30:00+01:00",
+    "submitted_by": {
+     "id": "u-tunde",
+     "display_name": "Tunde Adeyemi"
+    },
+    "is_mine": true,
+    "can_approve": false,
+    "has_memory_verse": false
+   },
+   {
+    "id": "q5",
+    "kind": "devotional",
+    "title": "Later",
+    "for_date": "2026-10-25",
+    "status": "in_review",
+    "submitted_at": "2026-10-06T10:00:00+01:00",
+    "submitted_by": {
+     "id": "u-tunde",
+     "display_name": "Tunde Adeyemi"
+    },
+    "is_mine": true,
+    "can_approve": false,
+    "has_memory_verse": true
+   }
+  ]
+ },
+ "GET /content/manuals/review_queue/": {
+  "count": 1,
+  "results": [
+   {
+    "id": "q3",
+    "kind": "manual",
+    "title": "Week 41: Courage",
+    "for_date": "2026-10-11",
+    "status": "in_review",
+    "submitted_at": "2026-10-07T18:00:00+01:00",
+    "submitted_by": {
+     "id": "u-ngozi",
+     "display_name": "Ngozi Okafor"
+    },
+    "is_mine": false,
+    "can_approve": true
+   }
+  ]
+ },
+ "GET /content/articles/review_queue/": {
+  "count": 1,
+  "results": [
+   {
+    "id": "q4",
+    "kind": "article",
+    "title": "When prayer feels quiet",
+    "for_date": null,
+    "status": "in_review",
+    "submitted_at": "2026-10-06T12:00:00+01:00",
+    "submitted_by": {
+     "id": "u-amaka",
+     "display_name": "Amaka Eze"
+    },
+    "is_mine": false,
+    "can_approve": true
+   }
+  ]
+ }
+}

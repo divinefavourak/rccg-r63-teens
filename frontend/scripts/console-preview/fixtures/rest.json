@@ -1,0 +1,323 @@
+{
+ "GET /content/manuals/": {
+  "count": 41,
+  "next": "x",
+  "previous": null,
+  "results": [
+   {
+    "id": "mn42",
+    "series": "s1",
+    "series_title": "Q4 2026 \u00b7 Courage",
+    "week_number": 42,
+    "week_start_date": "2026-10-11",
+    "week_end_date": "2026-10-11",
+    "title": "Kindness",
+    "slug": "kindness",
+    "theme": "Small things done on purpose",
+    "cover_image": null,
+    "target_age_group": "teen",
+    "has_pdf": false,
+    "view_count": 0,
+    "status": "draft"
+   },
+   {
+    "id": "mn41",
+    "series": "s1",
+    "series_title": "Q4 2026 \u00b7 Courage",
+    "week_number": 41,
+    "week_start_date": "2026-10-04",
+    "week_end_date": "2026-10-04",
+    "title": "Courage",
+    "slug": "courage",
+    "theme": "Standing when it costs",
+    "cover_image": null,
+    "target_age_group": "teen",
+    "has_pdf": false,
+    "view_count": 0,
+    "status": "published"
+   },
+   {
+    "id": "mn40",
+    "series": "s1",
+    "series_title": "Q4 2026 \u00b7 Courage",
+    "week_number": 40,
+    "week_start_date": "2026-09-27",
+    "week_end_date": "2026-09-27",
+    "title": "Honesty",
+    "slug": "honesty",
+    "theme": "Truth that costs you something",
+    "cover_image": null,
+    "target_age_group": "teen",
+    "has_pdf": false,
+    "view_count": 0,
+    "status": "published"
+   }
+  ]
+ },
+ "GET /media/episodes/": {
+  "count": 3,
+  "next": null,
+  "previous": null,
+  "results": [
+   {
+    "id": "ep1",
+    "series": "ms1",
+    "series_title": "Real Talk",
+    "episode_number": 1,
+    "season_number": 1,
+    "title": "When prayer feels quiet",
+    "slug": "when prayer feels quiet",
+    "description": "",
+    "thumbnail": null,
+    "media_type": "audio",
+    "has_audio": true,
+    "has_video": false,
+    "audio_url": "https://example.com/a.mp3",
+    "audio_file": null,
+    "video_url": null,
+    "duration_seconds": 1260,
+    "duration_formatted": "21:00",
+    "status": "published",
+    "view_count": 48
+   },
+   {
+    "id": "ep2",
+    "series": "ms1",
+    "series_title": "Real Talk",
+    "episode_number": 1,
+    "season_number": 1,
+    "title": "Friends who pull you up",
+    "slug": "friends who pull you up",
+    "description": "",
+    "thumbnail": null,
+    "media_type": "video",
+    "has_audio": false,
+    "has_video": true,
+    "audio_url": null,
+    "audio_file": null,
+    "video_url": null,
+    "duration_seconds": 1260,
+    "duration_formatted": "21:00",
+    "status": "draft",
+    "view_count": 48
+   },
+   {
+    "id": "ep3",
+    "series": "ms1",
+    "series_title": "Real Talk",
+    "episode_number": 1,
+    "season_number": 1,
+    "title": "Exams and peace",
+    "slug": "exams and peace",
+    "description": "",
+    "thumbnail": null,
+    "media_type": "audio",
+    "has_audio": true,
+    "has_video": false,
+    "audio_url": "https://example.com/a.mp3",
+    "audio_file": null,
+    "video_url": null,
+    "duration_seconds": 1260,
+    "duration_formatted": "21:00",
+    "status": "in_review",
+    "view_count": 48
+   }
+  ]
+ },
+ "GET /media/series/": {
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+   {
+    "id": "ms1",
+    "category": null,
+    "category_name": null,
+    "title": "Real Talk",
+    "slug": "real-talk",
+    "short_description": "Honest conversations for teens",
+    "cover_image": null,
+    "host_name": "Tunde",
+    "episode_count": 12,
+    "subscriber_count": 0,
+    "is_featured": false,
+    "status": "published"
+   }
+  ]
+ },
+ "GET /bible/translations/": {
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+   {
+    "id": "kjv",
+    "code": "KJV",
+    "name": "KJV",
+    "full_name": "King James Version",
+    "language_code": "en",
+    "language_name": "English",
+    "is_offline_capable": true,
+    "is_default": true,
+    "is_active": true
+   },
+   {
+    "id": "yor",
+    "code": "YCB",
+    "name": "YCB",
+    "full_name": "Yoruba Contemporary Bible",
+    "language_code": "yo",
+    "language_name": "Yoruba",
+    "is_offline_capable": false,
+    "is_default": false,
+    "is_active": true
+   }
+  ]
+ },
+ "GET /bible/books/": {
+  "count": 66,
+  "next": "x",
+  "previous": null,
+  "results": []
+ },
+ "GET /identity/roles/": {
+  "count": 4,
+  "next": null,
+  "previous": null,
+  "results": [
+   {
+    "id": "role-rc",
+    "code": "regional_coordinator",
+    "label": "Regional Coordinator",
+    "description": "Runs a region",
+    "allowed_node_types": [
+     "region"
+    ],
+    "permissions": [
+     "users.view",
+     "users.manage",
+     "profiles.view",
+     "profiles.manage",
+     "memberships.view",
+     "memberships.manage",
+     "roles.view",
+     "roles.assign",
+     "hierarchy.view",
+     "content.view",
+     "content.publish",
+     "content.manage",
+     "media.manage",
+     "events.view",
+     "events.manage",
+     "events.checkin",
+     "payments.view"
+    ],
+    "is_system": true,
+    "is_active": true
+   },
+   {
+    "id": "role-pc",
+    "code": "province_coordinator",
+    "label": "Province Coordinator",
+    "description": "Runs a province, its people and events",
+    "allowed_node_types": [
+     "province"
+    ],
+    "permissions": [
+     "users.view",
+     "users.manage",
+     "profiles.view",
+     "profiles.manage",
+     "memberships.view",
+     "memberships.manage",
+     "roles.view",
+     "roles.assign",
+     "hierarchy.view",
+     "content.view",
+     "content.publish"
+    ],
+    "is_system": true,
+    "is_active": true
+   },
+   {
+    "id": "role-pl",
+    "code": "parish_leader",
+    "label": "Parish Leader",
+    "description": "Runs one parish and its door",
+    "allowed_node_types": [
+     "parish"
+    ],
+    "permissions": [
+     "users.view",
+     "profiles.view",
+     "memberships.view",
+     "content.view",
+     "events.view",
+     "events.checkin",
+     "hierarchy.view"
+    ],
+    "is_system": true,
+    "is_active": true
+   },
+   {
+    "id": "role-t",
+    "code": "teacher",
+    "label": "Teacher",
+    "description": "Lesson material, their teens, check-in",
+    "allowed_node_types": [
+     "parish",
+     "area"
+    ],
+    "permissions": [
+     "users.view",
+     "profiles.view",
+     "content.view",
+     "events.checkin"
+    ],
+    "is_system": true,
+    "is_active": true
+   }
+  ]
+ },
+ "GET /events/audit-logs/": {
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+   {
+    "id": "al1",
+    "registration": "g3",
+    "registration_code": "FT-2026-0431",
+    "attendee_name": "Chidi Nwosu",
+    "user": "u-tunde",
+    "user_name": "Tunde Adeyemi",
+    "action": "status_change",
+    "old_values": {
+     "status": "pending"
+    },
+    "new_values": {
+     "status": "confirmed"
+    },
+    "ip_address": null,
+    "timestamp": "2026-10-08T14:12:00+01:00"
+   },
+   {
+    "id": "al2",
+    "registration": "g2",
+    "registration_code": "FT-2026-0388",
+    "attendee_name": "Amaka Eze",
+    "user": null,
+    "user_name": null,
+    "action": "check_in",
+    "old_values": {
+     "status": "confirmed"
+    },
+    "new_values": {
+     "status": "checked_in"
+    },
+    "ip_address": null,
+    "timestamp": "2026-10-08T09:40:00+01:00"
+   }
+  ]
+ }
+}

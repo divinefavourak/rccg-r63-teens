@@ -77,3 +77,65 @@ class ReviewWorkflowMixin:
         except ValidationError as exc:
             return _error(exc, status.HTTP_400_BAD_REQUEST)
         return Response({'status': item.status, 'published_at': item.published_at})
+
+    @action(detail=False, methods=['get'],
+            permission_classes=[HasPermission(Perm.CONTENT_VIEW)])
+    def review_queue(self, request):
+        """
+        What is waiting for a second person, longest wait first.
+
+        `GET /content/<devotionals|manuals|articles>/review_queue/`
+
+        The list endpoints do not say who submitted an item, and should not:
+        they are what every teen reads. This is the Console's view, for people
+        who hold `content.view`, and it answers the one question the two-person
+        rule turns on. `is_mine` is decided here so no client compares ids, and
+        `can_approve` is the same predicate `review.approve` enforces.
+        """
+        model = self.queryset.model
+        queue = (
+            model.objects.filter(status='in_review')
+            .select_related('submitted_by', 'submitted_by__profile')
+            .order_by('submitted_at', 'created_at')
+        )
+        has_verses = hasattr(model, 'memory_verses')
+        if has_verses:
+            queue = queue.prefetch_related('memory_verses')
+
+        total = queue.count()
+        results = []
+        for item in queue[:200]:
+            author = item.submitted_by
+            mine = author is not None and author.pk == request.user.pk
+            for_date = getattr(item, 'date', None) or getattr(item, 'week_start_date', None)
+            row = {
+                'id': str(item.pk),
+                'kind': model._meta.model_name,
+                'title': item.title,
+                'for_date': for_date,
+                'status': item.status,
+                'submitted_at': item.submitted_at,
+                'submitted_by': None if author is None else {
+                    'id': str(author.pk),
+                    'display_name': _display_name(author),
+                },
+                'is_mine': mine,
+                'can_approve': not (review.requires_two_person_review(item) and mine),
+            }
+            if has_verses:
+                # Publishing needs a memory verse; the legacy text fields count
+                # because `ensure_primary_memory_verse` derives one from them.
+                row['has_memory_verse'] = bool(
+                    any(v.is_primary for v in item.memory_verses.all())
+                    or getattr(item, 'memory_verse_passage', '')
+                )
+            results.append(row)
+        return Response({'count': total, 'results': results})
+
+
+def _display_name(user):
+    profile = getattr(user, 'profile', None)
+    if profile and profile.display_name:
+        return profile.display_name
+    full = f'{user.first_name} {user.last_name}'.strip()
+    return full or user.get_username()

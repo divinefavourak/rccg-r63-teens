@@ -60,3 +60,41 @@ This revision implements ten product decisions: Bible as core platform capabilit
 3. **The memory verse raises the editorial bar.** Every devotional author must now supply a verse that can stand alone on a share card and thread through the challenge. Update the devotional writer's guide and the 60-day buffer review to check verse quality, not just presence.
 4. **Partner-nudge consent wording deserves teen testing.** The whole Accountability Partner feature hinges on teens genuinely understanding what they're enabling. Test the consent screen with real Region 63 teens before build.
 5. **Grace Day pause vs. earn balance is a guess.** The +1/perfect-week earn rate and 14-day pause allowance are starting values; the analytics now exist to tune them — commit to reviewing after one exam season.
+
+---
+
+# CHANGELOG — Console rebuild and event bedspaces (October 2026)
+
+Engineering changes that altered behaviour these documents describe. Pull request #54.
+
+## New
+
+- **Event bedspaces** — optional per event. Hostels, serial bed numbers, automatic allocation, beds reserved for leaders. Specified in `07-feature-specifications.md` #9.
+- **Review queue endpoint** — the Console's review screen now covers devotionals, manuals and articles and knows who submitted each. `07-feature-specifications.md` #5.
+- **Devotional import window** — a day, days before and days after, replacing the fixed "last 7 days". `07-feature-specifications.md` #5.
+- **`import_hierarchy --create-provinces`** and a sample tree for test databases. `ops/05-hierarchy-bootstrap.md`.
+
+## Changed
+
+- **The Console** was rebuilt to the Faith Tribe design and its data wiring corrected. The rules it now follows are recorded in `07-feature-specifications.md` #18.
+- **Check in on the web** has no camera. It finds a ticket by number or name; scanning a QR code remains the phone app's job.
+- **Session refresh on the website** calls `/auth/refresh/`. It had been calling a path that does not exist, so an expired session failed instead of renewing.
+
+- **Event managers see the events of the subtree they manage**, not only those at or above their own parish. `?node=` on the events list now means that node and everything beneath it; it matched the one node only.
+- **Moving a member** ends the membership they left. Before, the old membership stayed active and the person was listed in two places.
+
+## Fixed after review
+
+- **Bedspace actions check the event, not only the permission.** The summary, "place people waiting", placing someone and taking a bed back now refuse (403) an event outside the part of the hierarchy the caller manages.
+- **An event with people placed in hostels can be deleted.** The bed-to-hostel link was `PROTECT`, which blocked it; it is `RESTRICT`. A hostel with people in it still cannot be deleted on its own.
+- **Bed wording in notifications.** A waitlisted registration is no longer told "No bedspace is left"; one with no gender recorded is told the organiser will place it.
+- **A bad hostel id** when placing someone is a 400, not a 500.
+- **Review queue** shows the server's count, and one collection failing no longer hides the others.
+- **The website's session refresh** no longer writes an old session back over a newer one.
+- **Upcoming events in the website's notifications** are filtered on the server before the page is cut, so past events no longer crowd them out.
+
+## Document-by-document changes
+
+**07-feature-specifications.md** — #5 gains the review queue and the import window; #9 gains bedspaces and the rule for who sees an event; #18 gains an "As built" note with the Console's data rules, what People and Hierarchy can do, and what is still unbuilt.
+
+**ops/05-hierarchy-bootstrap.md** — section C documents `--create-provinces` and the sample tree.

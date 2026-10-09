@@ -164,7 +164,7 @@ const AdminLogin = () => {
           <button
             type="submit"
             disabled={isLoading}
-            className="mt-5 flex w-full items-center justify-center gap-2 rounded-console-md bg-console-action py-2.5 text-[13px] font-medium text-white transition-colors hover:bg-console-action-hover disabled:opacity-60"
+            className="mt-5 flex w-full items-center justify-center gap-2 rounded-console-md bg-console-action py-2.5 text-[13px] font-medium text-console-on-action transition-colors hover:bg-console-action-hover disabled:opacity-60"
           >
             {isLoading ? (
               <Loader variant="inline" size={15} label="Signing in…" />
