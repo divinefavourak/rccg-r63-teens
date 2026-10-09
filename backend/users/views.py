@@ -290,6 +290,48 @@ class UserViewSet(viewsets.ModelViewSet):
             user_agent=self.request.META.get('HTTP_USER_AGENT', '')
         )
     
+    def destroy(self, request, *args, **kwargs):
+        """
+        Delete an account for good. For test accounts and mistakes; someone who
+        has simply left is deactivated instead, which keeps their history.
+
+        Refused for your own account, for a superuser unless you are one, and
+        for anyone who has paid for an event: that record has to stay tied to
+        a person. Places they hold for an event still to come are cancelled first,
+        so the event does not keep a seat and a bed for somebody who is gone.
+        """
+        from django.db import transaction
+        from events.models import EventRegistration
+
+        target = self.get_object()
+        if target.pk == request.user.pk:
+            return Response(
+                {'detail': 'You cannot delete your own account.'},
+                status=status.HTTP_400_BAD_REQUEST)
+        if target.is_superuser and not request.user.is_superuser:
+            return Response(
+                {'detail': 'Only a superuser can delete a superuser.'},
+                status=status.HTTP_403_FORBIDDEN)
+
+        registrations = EventRegistration.objects.filter(user=target)
+        if registrations.filter(
+                payment_status=EventRegistration.PaymentStatus.PAID).exists():
+            return Response(
+                {'detail': 'This person has paid for an event, so the account '
+                           'cannot be deleted. Deactivate it instead.'},
+                status=status.HTTP_409_CONFLICT)
+
+        with transaction.atomic():
+            # Only places still to come. A registration that was checked in
+            # or attended is history and stays as it happened.
+            Status = EventRegistration.Status
+            holding = registrations.filter(
+                status__in=(Status.PENDING, Status.CONFIRMED)).select_related('event')
+            for registration in holding:
+                registration.cancel(user=request.user, reason='Account deleted')
+            self.perform_destroy(target)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     def perform_destroy(self, instance):
         # Log before deletion
         AuditLog.objects.create(

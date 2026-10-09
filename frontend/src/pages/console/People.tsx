@@ -15,7 +15,7 @@
  * the browser only ever holds one page.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowRightLeft, Check, Pencil, Plus, Search, X } from 'lucide-react';
+import { ArrowRightLeft, Check, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import api from '../../api/axios';
 import ScreenShell from '../../components/console/ScreenShell';
 import {
@@ -129,7 +129,7 @@ const Pager = ({
 };
 
 const PeopleScreen = () => {
-  const { can, scopeNode } = useConsoleAuth();
+  const { can, scopeNode, me } = useConsoleAuth();
   const [tab, setTab] = useState<Tab>('members');
   const [query, setQuery] = useState('');
   const [memberPage, setMemberPage] = useState(1);
@@ -139,6 +139,7 @@ const PeopleScreen = () => {
   const [revoking, setRevoking] = useState<ConsoleRoleAssignment | null>(null);
   const [editing, setEditing] = useState<ConsoleMembership | null>(null);
   const [moving, setMoving] = useState<ConsoleMembership | null>(null);
+  const [deleting, setDeleting] = useState<ConsoleMembership | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -220,6 +221,29 @@ const PeopleScreen = () => {
       setBusy(false);
     }
   }, [revoking, reloadAll]);
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleting) return;
+    const name = nameOf(deleting.user_detail);
+    setBusy(true);
+    setActionError(null);
+    try {
+      await api.delete(`/auth/users/${deleting.user}/`);
+      setDeleting(null);
+      setSelected(null);
+      setSaved(`${name}'s account is deleted.`);
+      reloadAll();
+    } catch (err: unknown) {
+      // The server's reason is the useful part: it says when to deactivate
+      // instead (someone who has paid), so it is shown as sent.
+      const detail = (err as { response?: { data?: { detail?: string } } })
+        ?.response?.data?.detail;
+      setDeleting(null);
+      setActionError(detail ?? "We couldn't delete that account. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }, [deleting, reloadAll]);
 
   const tabs = useMemo(() => {
     // Annotated rather than inferred: without this TS narrows the array to the
@@ -332,6 +356,27 @@ const PeopleScreen = () => {
           initialUserId={assigning === 'anyone' ? undefined : assigning.user}
           initialQuery={assigning === 'anyone' ? '' : nameOf(assigning.user_detail)}
         />
+      )}
+
+      {deleting && (
+        <Modal
+          title={`Delete ${nameOf(deleting.user_detail)}'s account?`}
+          subtitle="This cannot be undone. The account, its roles and its place in the hierarchy are removed, and any event place not yet paid for is cancelled. For someone who has simply left, deactivate the account from Edit details instead: that keeps their history."
+          onClose={() => setDeleting(null)}
+          width={480}
+          footer={
+            <>
+              <Btn size="md" onClick={() => setDeleting(null)}>
+                Cancel
+              </Btn>
+              <Btn variant="danger" size="md" disabled={busy} onClick={confirmDelete}>
+                {busy ? 'Deleting…' : 'Delete account'}
+              </Btn>
+            </>
+          }
+        >
+          {null}
+        </Modal>
       )}
 
       {revoking && (
@@ -651,6 +696,14 @@ const PeopleScreen = () => {
                   <ArrowRightLeft size={16} /> Move
                 </Btn>
               </PermissionGate>
+              {/* Never offered on your own account; the server refuses it too. */}
+              {selected.user !== me?.id && (
+                <PermissionGate permission="users.manage">
+                  <Btn variant="danger" size="md" onClick={() => setDeleting(selected)}>
+                    <Trash2 size={16} /> Delete
+                  </Btn>
+                </PermissionGate>
+              )}
             </div>
 
             {can('events.manage') && (
