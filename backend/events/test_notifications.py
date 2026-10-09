@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta, timezone as dt_timezone
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from events import notifications as event_notifications
@@ -77,6 +77,24 @@ class RegistrationNotificationTests(TestCase):
         notification = notifications_for(self.user).get()
         self.assertEqual(notification.notification_type, NotificationType.TRANSACTIONAL)
         self.assertIn('24 hours', notification.body)   # unpaid holds expire
+
+    @override_settings(UNPAID_REGISTRATION_HOLD_HOURS=6)
+    def test_the_deadline_is_the_configured_one(self):
+        event_notifications.notify_registration_received(
+            make_registration(self.event, self.user))
+
+        body = notifications_for(self.user).get().body
+        self.assertIn('within 6 hours', body)
+        self.assertNotIn('24 hours', body)
+
+    @override_settings(UNPAID_REGISTRATION_HOLD_HOURS=0)
+    def test_no_deadline_is_given_when_places_are_never_released(self):
+        event_notifications.notify_registration_received(
+            make_registration(self.event, self.user))
+
+        body = notifications_for(self.user).get().body
+        self.assertIn('Complete payment to confirm it.', body)
+        self.assertNotIn('hours', body)
 
     def test_a_paid_registration_does_not_mention_the_payment_deadline(self):
         registration = make_registration(

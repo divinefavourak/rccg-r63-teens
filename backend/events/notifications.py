@@ -58,7 +58,8 @@ def notify_registration_received(registration):
     """
     Registration created, payment (if any) still outstanding.
 
-    Worth its own message because unpaid registrations expire after 24h and
+    Worth its own message because unpaid registrations expire (after
+    `UNPAID_REGISTRATION_HOLD_HOURS`, 24 unless set otherwise) and
     release their capacity (`docs/07` §9) — a teen who does not know that loses
     their place silently.
     """
@@ -73,8 +74,13 @@ def notify_registration_received(registration):
     elif registration.is_paid:
         body = f'You are registered for {event.title}.'
     else:
+        # The deadline is a setting, and 0 means the place is never given up:
+        # say the real number, or no deadline at all.
+        from payments.registrations import hold_hours
+        hours = hold_hours()
+        within = f' within {hours} hour{"" if hours == 1 else "s"}' if hours else ''
         body = (f'Your place at {event.title} is held. '
-                f'Complete payment within 24 hours to confirm it.')
+                f'Complete payment{within} to confirm it.')
     body += f' It is on {_when_and_where(event)}.'
     # Where they will sleep, or that there is no bed left: said at the moment
     # they register, not discovered on arrival.
