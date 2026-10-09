@@ -522,6 +522,7 @@ needs them most.
 | Notifications | `GET /notifications/inbox/`, `POST .../mark_read/`, `POST/DELETE /notifications/devices/` |
 | Teacher tools | `GET /content/manuals/current/`, `/identity/class/`, `/events/checkin/today/`, `POST /events/checkin/scan/` |
 | Me | `GET /profiles/me/`, `/progress/summary/`, `/events/registrations/mine/` |
+| Ticket (paying) | `POST /payments/registrations/{id}/checkout/`, `POST /payments/registrations/{id}/check/`. The paying itself is on Paystack's page in the browser; the link for a parent is `/payments/pay/{pay_token}/` |
 | Saved | `GET/POST /profiles/favorites/`, `DELETE .../remove/` |
 | Sign-up | `POST /auth/signup/start/`, `/auth/signup/complete/`, `GET /hierarchy/public/children/` |
 | Log in | `POST /auth/login/`, `/auth/otp/request/`, `/auth/otp/verify/`, `/auth/refresh/`, `/auth/logout/`, `GET /auth/me/` |

@@ -436,8 +436,22 @@ export interface EventRegistration {
   amount_due: string | null;
   amount_paid: string | null;
   payment_reference: string | null;
+  /** The server's word on whether to offer Pay. Never worked out here. */
+  can_pay: boolean;
+  /** When an unpaid place is released, or null when no clock is running. */
+  pay_by: string | null;
+  /** Goes in the link a parent pays from. Null when there is nothing to pay. */
+  pay_token: string | null;
   checked_in_at: string | null;
   created_at: string;
+}
+
+/** `POST /payments/registrations/<id>/checkout/`: Paystack's page for a ticket. */
+export interface Checkout {
+  reference: string;
+  authorization_url: string;
+  amount: string;
+  pay_link: string;
 }
 
 /**

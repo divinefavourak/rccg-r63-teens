@@ -297,6 +297,26 @@ class EventRegistrationDetailSerializer(serializers.ModelSerializer):
     is_confirmed = serializers.BooleanField(read_only=True)
     is_paid = serializers.BooleanField(read_only=True)
     is_checked_in = serializers.BooleanField(read_only=True)
+    # Whether to offer Pay, by when, and what goes in the link for a parent.
+    # Decided by `payments/registrations.py`, so the phone never works out for
+    # itself what can be paid for.
+    can_pay = serializers.SerializerMethodField()
+    pay_by = serializers.SerializerMethodField()
+    pay_token = serializers.SerializerMethodField()
+
+    def get_can_pay(self, obj):
+        from payments import registrations as registration_payments
+        return registration_payments.refusal(obj) is None
+
+    def get_pay_by(self, obj):
+        from payments import registrations as registration_payments
+        return registration_payments.pay_by(obj)
+
+    def get_pay_token(self, obj):
+        from payments import registrations as registration_payments
+        if registration_payments.refusal(obj) is not None:
+            return None
+        return registration_payments.pay_token(obj)
 
     class Meta:
         model = EventRegistration
@@ -358,6 +378,9 @@ class EventRegistrationDetailSerializer(serializers.ModelSerializer):
             'amount_due',
             'amount_paid',
             'payment_reference',
+            'can_pay',
+            'pay_by',
+            'pay_token',
 
             # Check-in
             'checked_in_at',

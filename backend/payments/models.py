@@ -44,6 +44,16 @@ class Payment(models.Model):
         blank=True,
         related_name='payments'
     )
+    # An event registration, when that is what is being paid for. One
+    # registration can have several attempts; the one that paid it is
+    # `EventRegistration.payment`.
+    registration = models.ForeignKey(
+        'events.EventRegistration',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='payment_attempts'
+    )
     description = models.TextField()
     
     # Payer information
@@ -55,6 +65,10 @@ class Payment(models.Model):
     paystack_response = models.JSONField(null=True, blank=True)
     authorization_code = models.CharField(max_length=100, blank=True)
     channel = models.CharField(max_length=50, blank=True)
+    # Paystack's checkout page for this payment. Kept so that a second tap on
+    # Pay reopens the same page instead of starting a second charge.
+    authorization_url = models.URLField(max_length=500, blank=True)
+    access_code = models.CharField(max_length=100, blank=True)
     
     # Timestamps
     initiated_at = models.DateTimeField(auto_now_add=True)

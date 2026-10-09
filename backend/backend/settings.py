@@ -611,6 +611,16 @@ if _running_tests():
 PAYSTACK_SECRET_KEY=os.getenv("PAYSTACK_SECRET_KEY")
 PAYSTACK_PUBLIC_KEY=os.getenv("PAYSTACK_PUBLIC_KEY")
 FRONTEND_URL=os.getenv("FRONTEND_URL")
+# Where this API is reached from outside, e.g. https://api.example.com. Used
+# for the address Paystack sends a payer back to. Unset, the address of the
+# request is used, which behind a proxy can come out as http://.
+PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "").rstrip("/")
+# How long an unpaid place on a paid event is held before it is released
+# (docs/07 §9). 0 holds it for ever.
+UNPAID_REGISTRATION_HOLD_HOURS = int(os.getenv("UNPAID_REGISTRATION_HOLD_HOURS", "24"))
+# The phone app's link scheme (mobile/app.json). A payer is offered a way back
+# to the app only at an address that starts with it, or at one of our sites.
+MOBILE_APP_SCHEME = os.getenv("MOBILE_APP_SCHEME", "faithtribe")
 
 # Logging
 LOGGING = {

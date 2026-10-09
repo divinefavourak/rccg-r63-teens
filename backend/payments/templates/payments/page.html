@@ -1,0 +1,73 @@
+{% comment %}
+The one page a payer sees from us: before Paystack's checkout (a parent opening
+the link they were sent) and after it (anyone coming back from paying).
+
+It is opened in whatever browser the link landed in, often the one inside
+WhatsApp, so it is a single self-contained file: no script, no web font, no
+image. Colours are the ones the emails use.
+{% endcomment %}{% load tz %}{% timezone "Africa/Lagos" %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>{{ heading }} · Faith Tribe</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px 40px; background: #F9F6F1; color: #1C1916;
+    font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px; line-height: 24px;
+  }
+  main { max-width: 440px; margin: 0 auto; }
+  .brand { font-size: 19px; line-height: 24px; font-weight: 800; letter-spacing: -0.4px; margin: 0 4px 16px; }
+  .brand span { font-size: 12px; font-weight: 400; color: #6F6862; letter-spacing: 0; padding-left: 8px; }
+  .card { background: #FFFFFF; border-radius: 24px; padding: 28px 24px; }
+  h1 { font-size: 28px; line-height: 34px; letter-spacing: -0.5px; margin: 0 0 8px; }
+  p { margin: 0 0 16px; color: #4A443F; }
+  dl { margin: 0 0 20px; border-top: 1px solid #ECE6DD; }
+  dl div { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid #ECE6DD; }
+  dt { color: #6F6862; }
+  dd { margin: 0; font-weight: 600; text-align: right; }
+  .button {
+    display: block; width: 100%; border: 0; border-radius: 999px; padding: 16px 20px;
+    background: #1C1916; color: #FFFFFF; font: inherit; font-weight: 700; text-align: center;
+    text-decoration: none; cursor: pointer;
+  }
+  .note { font-size: 14px; line-height: 20px; color: #6F6862; margin: 16px 0 0; }
+  .good h1 { color: #047857; }
+</style>
+</head>
+<body>
+<main>
+  <div class="brand">Faith Tribe<span>RCCG Region 63</span></div>
+  <div class="card{% if tone == 'good' %} good{% endif %}">
+    <h1>{{ heading }}</h1>
+    <p>{{ message }}</p>
+
+    {% if registration %}
+    <dl>
+      <div><dt>Event</dt><dd>{{ registration.event.title }}</dd></div>
+      <div><dt>For</dt><dd>{{ registration.attendee_name }}</dd></div>
+      {% if amount %}<div><dt>Amount</dt><dd>₦{{ amount|floatformat:"-2g" }}</dd></div>{% endif %}
+      {% if pay_by %}<div><dt>Pay by</dt><dd>{{ pay_by|date:"D j M, g:i a" }}</dd></div>{% endif %}
+    </dl>
+    {% endif %}
+
+    {% if can_pay %}
+    <form method="post">
+      <button class="button" type="submit">Pay ₦{{ amount|floatformat:"-2g" }}</button>
+    </form>
+    <p class="note">You will pay on Paystack by card, bank transfer or USSD. We never see your card details.</p>
+    {% elif return_to %}
+    <a class="button" href="{{ return_to }}">Back to the app</a>
+    {% elif retry %}
+    <a class="button" href="">Check again</a>
+    {% endif %}
+
+    {% if note %}<p class="note">{{ note }}</p>{% endif %}
+  </div>
+</main>
+</body>
+</html>
+{% endtimezone %}

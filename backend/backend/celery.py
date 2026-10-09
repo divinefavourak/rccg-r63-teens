@@ -58,6 +58,15 @@ app.conf.beat_schedule = {
         'options': {'queue': 'default'},
     },
 
+    # "Pending unpaid registrations expire after 24h, releasing capacity"
+    # (docs/07 §9). Often enough that a released place is back on offer within
+    # minutes; the task does nothing while Paystack is not set up.
+    'expire-unpaid-registrations': {
+        'task': 'payments.tasks.expire_unpaid_registrations',
+        'schedule': crontab(minute='*/15'),
+        'options': {'queue': 'default'},
+    },
+
     # "no-devotional-scheduled-within-48h pages the admin" (docs/07 §5). Morning,
     # so the console team gets it at the start of a working day with time to fix it.
     'alert-devotional-gaps': {

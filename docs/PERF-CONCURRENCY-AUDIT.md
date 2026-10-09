@@ -255,6 +255,9 @@ Known follow-ups from the fixes themselves:
 - [ ] **BC-20. Double-click on pay creates two Paystack sessions.**
   `backend/payments/views.py:100-111`. Confirmed, agent.
   Fix: reuse an existing pending payment for the ticket.
+  _Not fixed on this route. Paying for an event registration is a new route
+  (`POST /payments/registrations/<id>/checkout/`) that does reuse the open
+  checkout; the legacy ticket route above is unchanged._
 
 - [ ] **BC-21. Login and OTP attempt caps can be exceeded by parallel guesses.**
   `backend/users/models.py:200-204`, `backend/users/otp.py:85-97`. Confirmed,

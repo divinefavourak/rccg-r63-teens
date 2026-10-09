@@ -1,17 +1,28 @@
-import { useCallback, useEffect } from 'react';
-import { AppState, ScrollView, Share, Text, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { AppState, Linking, Platform, ScrollView, Share, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
+import { createURL } from 'expo-linking';
 import QRCode from 'react-native-qrcode-svg';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useMyRegistrations } from '../../src/api/queries';
+import { useCheckPayment, useMyRegistrations, useStartPayment } from '../../src/api/queries';
 import { Icon } from '../../src/components/Icon';
-import { dayLabel, startOf, ticketStatus, timeLabel, whereLabel } from '../../src/data/events';
+import {
+  dayLabel,
+  formatNaira,
+  payHint,
+  payLink,
+  startOf,
+  ticketStatus,
+  timeLabel,
+  whereLabel,
+} from '../../src/data/events';
 import { useAuth } from '../../src/state/auth';
 import { useMyPhoto } from '../../src/state/photo';
 import { Object3D } from '../../src/ui/art';
+import { Button } from '../../src/ui/Button';
 import { BackHeader, EmptyState, Skeleton } from '../../src/ui/screen';
 import { useTokens } from '../../src/theme/ThemeProvider';
 import { ELEVATION } from '../../src/theme/tokens';
@@ -29,6 +40,13 @@ const POLL_MS = 15000;
 const POLL_FOR_MS = 10 * 60 * 1000;
 /** Doors open before the start time; watch from this long beforehand. */
 const DOORS_MS = 6 * 60 * 60 * 1000;
+/**
+ * After someone has been sent to pay, how often and for how long the ticket
+ * asks whether the payment has landed. A card is confirmed in seconds; a bank
+ * transfer can take a few minutes.
+ */
+const PAID_POLL_MS = 10000;
+const PAID_POLL_FOR_MS = 5 * 60 * 1000;
 
 /**
  * One ticket (Figma "Ticket").
@@ -81,6 +99,74 @@ export default function TicketScreen() {
     }, POLL_MS);
     return () => clearInterval(timer);
   }, [atTheDoor, refetch]);
+
+  // ── Paying ────────────────────────────────────────────────────────────
+  // The paying itself happens on Paystack's page, in the browser. This screen
+  // sends the teen there, and notices when they come back. What marks the
+  // ticket paid is Paystack telling the server; nothing here decides it.
+  const startPayment = useStartPayment(id);
+  const checkPayment = useCheckPayment(id);
+  const { mutateAsync: openCheckout } = startPayment;
+  const { mutate: askPaystack } = checkPayment;
+  /** True once this screen has sent someone to pay. */
+  const [sentToPay, setSentToPay] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
+  const canPay = !!ticket?.can_pay;
+  const justPaid = sentToPay && ticket?.payment_status === 'paid';
+
+  useEffect(() => {
+    if (!sentToPay || !canPay) return;
+    // Coming back from the browser: ask Paystack straight away, for the times
+    // its own message to the server has not arrived yet.
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') askPaystack();
+    });
+    // Then keep looking for a while, for a transfer that lands a minute later.
+    const until = Date.now() + PAID_POLL_FOR_MS;
+    const timer = setInterval(() => {
+      if (Date.now() > until) {
+        clearInterval(timer);
+        return;
+      }
+      if (AppState.currentState === 'active') refetch();
+    }, PAID_POLL_MS);
+    return () => {
+      sub.remove();
+      clearInterval(timer);
+    };
+  }, [sentToPay, canPay, askPaystack, refetch]);
+
+  const onPay = useCallback(async () => {
+    if (!id) return;
+    setPayError(null);
+    try {
+      const checkout = await openCheckout(createURL('/ticket/' + id));
+      setSentToPay(true);
+      if (Platform.OS === 'web') {
+        // The same tab: a new one opened after a network call is a pop-up to
+        // Safari, and blocked. Paystack's last page links back here.
+        window.location.assign(checkout.authorization_url);
+      } else {
+        await Linking.openURL(checkout.authorization_url);
+      }
+    } catch (err) {
+      setPayError(
+        err instanceof Error ? err.message : 'That did not go through. Please try again.',
+      );
+    }
+  }, [id, openCheckout]);
+
+  const onSendToParent = useCallback(() => {
+    const link = ticket ? payLink(ticket) : null;
+    if (!ticket || !link) return;
+    const amount = formatNaira(ticket.amount_due);
+    const what = event?.title ?? 'an event';
+    // Whoever it is sent to may pay at any time, so start watching for it.
+    setSentToPay(true);
+    Share.share({
+      message: `Please pay for my place at ${what}${amount ? ` (${amount})` : ''}: ${link}`,
+    }).catch(() => {});
+  }, [ticket, event]);
 
   const back = useCallback(
     () => (router.canGoBack() ? router.back() : router.replace('/tribe')),
@@ -244,6 +330,64 @@ export default function TicketScreen() {
             </View>
           </View>
         </View>
+
+        {canPay && (
+          <View className="w-full gap-3 rounded-2xl bg-surf-sunken p-4">
+            <View className="gap-1">
+              <Text
+                accessibilityRole="header"
+                className="font-ui-b text-[17px] leading-6 text-ink-1"
+              >
+                {formatNaira(ticket.amount_due) ?? 'Payment'} to pay
+              </Text>
+              <Text className="font-ui text-[14px] leading-5 text-ink-2">{payHint(ticket)}</Text>
+            </View>
+            {!!payError && (
+              <Text
+                accessibilityLiveRegion="polite"
+                className="font-ui-md text-[14px] leading-5 text-feedback-error"
+              >
+                {payError}
+              </Text>
+            )}
+            <Button
+              label="Pay now"
+              onPress={onPay}
+              loading={startPayment.isPending}
+              className="w-full"
+            />
+            {!!ticket.pay_token && (
+              <Button
+                label="Send to a parent to pay"
+                variant="secondary"
+                onPress={onSendToParent}
+                className="w-full"
+              />
+            )}
+            <Text className="text-center font-ui text-[12px] leading-4 text-ink-3">
+              {sentToPay
+                ? 'This ticket updates by itself once the payment arrives. A transfer can take a few minutes.'
+                : 'You pay on Paystack by card, bank transfer or USSD.'}
+            </Text>
+          </View>
+        )}
+
+        {justPaid && !arrived && (
+          <Animated.View entering={FadeIn.duration(250)}>
+            <View
+              accessibilityLiveRegion="polite"
+              className="w-full flex-row items-center gap-3 rounded-2xl bg-pop-lime py-3 pl-3 pr-4"
+            >
+              <Object3D name="thumb-up" size={56} />
+              <View className="min-w-0 flex-1 gap-0.5">
+                <Text className="font-ui-b text-[17px] leading-6 text-pop-on">Payment received</Text>
+                <Text className="font-ui text-[14px] leading-5 text-pop-on">
+                  Your place at {event?.title ?? 'the event'} is confirmed.
+                </Text>
+              </View>
+            </View>
+          </Animated.View>
+        )}
 
         {arrived ? (
           // Fades in when the scan lands. The classes sit on the inner view:

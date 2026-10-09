@@ -1,3 +1,4 @@
+import { API_URL } from '../api/config';
 import type { EventListItem, EventRegistration } from '../api/types';
 
 /** What every Tribe screen says about an event or a ticket, in one place. */
@@ -79,6 +80,27 @@ export function isLive(registration: EventRegistration): boolean {
 }
 
 /**
+ * The page a parent pays from, to send them. It is on the API's own address:
+ * the server draws it, and it needs no login and no app.
+ */
+export function payLink(registration: EventRegistration): string | null {
+  if (!registration.pay_token) return null;
+  return `${API_URL}/payments/pay/${registration.pay_token}/`;
+}
+
+/** What the panel under an unpaid ticket says about the time left. */
+export function payHint(registration: EventRegistration): string {
+  if (registration.status === 'cancelled') {
+    return 'Your place was released because it was not paid for in time. Pay now to get it back while there is room.';
+  }
+  if (registration.pay_by) {
+    const by = new Date(registration.pay_by);
+    return `Pay by ${dayLabel(by)}, ${timeLabel(by)} to keep your place.`;
+  }
+  return 'Your place is confirmed once this is paid.';
+}
+
+/**
  * Where a ticket stands, in the words printed on it.
  *
  * `settled` is false while something is still owed or undecided, which is
@@ -91,7 +113,9 @@ export function ticketStatus(registration: EventRegistration): { label: string; 
 
   switch (registration.status) {
     case 'cancelled':
-      return { label: 'Cancelled', settled: false };
+      // Given up for not being paid, and still payable: not the same as a
+      // place someone cancelled.
+      return { label: registration.can_pay ? 'Place released' : 'Cancelled', settled: false };
     case 'waitlisted':
       return { label: 'On the waiting list', settled: false };
     case 'checked_in':
