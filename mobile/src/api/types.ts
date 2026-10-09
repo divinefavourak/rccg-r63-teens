@@ -444,6 +444,12 @@ export interface EventRegistration {
   pay_token: string | null;
   checked_in_at: string | null;
   created_at: string;
+  /**
+   * Where they sleep, on an event with bedspaces (`_bed_payload`). Null when
+   * the event has none, or has run out. `is_firm` is false while a paid event
+   * is still owed for: the bed is held, not yet theirs.
+   */
+  bed?: { code: string; hostel: string; is_firm: boolean } | null;
 }
 
 /** `POST /payments/registrations/<id>/checkout/`: Paystack's page for a ticket. */

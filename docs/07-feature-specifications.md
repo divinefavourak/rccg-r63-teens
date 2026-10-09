@@ -149,8 +149,9 @@ The foundation. Full spec: `08-bible-experience.md`. Summary AC for V1: reader w
   - Only someone who manages the event may see its bedspace summary or change who sleeps where: `events.manage` over the event's own part of the hierarchy (or over any part, for an old event with no scope). Holding the permission elsewhere is refused with a 403, even though the event itself is visible.
   - A hostel with people in it cannot be deleted; move them or take the beds back first. Deleting the whole event removes its hostels and beds with it.
   - At the door, checking someone in shows their bed, so the volunteer can point them to it.
+  - The bed is shown on the phone ticket and on the page a parent pays from, marked as held while a paid event is still owed for.
   - Deleting a person's account (#18) cancels a pending or confirmed place they hold, which gives the bed back.
-  - Not built yet: rooms inside a hostel, grouping children by parish, the bed on the phone ticket and in the confirmation e-mail, and the leader choice on the phone's registration form.
+  - Not built yet: rooms inside a hostel, grouping children by parish, the bed in the confirmation e-mail, and the leader choice on the phone's registration form.
 **Dependencies:** Paystack merchant account (start early — legal lead time), hierarchy (#3), notifications (#10).
 **Future:** Multi-session events/workshop selection (V2); recurring programs (V2); group/family registration (V2).
 **Metrics:** Registration conversion from event view; payment success rate ≥90%; check-in throughput (target ≥6/scanner/min); % regional events on-platform.
