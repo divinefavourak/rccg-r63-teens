@@ -331,6 +331,22 @@ export default function TicketScreen() {
           </View>
         </View>
 
+        {!!ticket.bed && (
+          <View className="w-full gap-1 rounded-2xl bg-surf-sunken p-4">
+            <Text className="font-ui-md text-[12px] uppercase leading-4 tracking-[1.92px] text-ink-3">
+              Bedspace
+            </Text>
+            <Text selectable className="font-ui-b text-[17px] leading-6 text-ink-1">
+              {ticket.bed.code}, {ticket.bed.hostel}
+            </Text>
+            {!ticket.bed.is_firm && (
+              <Text className="font-ui text-[14px] leading-5 text-ink-2">
+                Held for you until the payment is confirmed.
+              </Text>
+            )}
+          </View>
+        )}
+
         {canPay && (
           <View className="w-full gap-3 rounded-2xl bg-surf-sunken p-4">
             <View className="gap-1">

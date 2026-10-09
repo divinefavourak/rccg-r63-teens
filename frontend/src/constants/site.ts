@@ -30,7 +30,7 @@ export const APP_LINKS = {
   /** The Android build (an .apk file). */
   android:
     import.meta.env.VITE_ANDROID_APP_URL ||
-    'https://expo.dev/artifacts/eas/dgqcJhGrpMqA8y0ng33Kr0PPH9Cpxake87I0W90e_Ac.apk',
+    'https://expo.dev/artifacts/eas/RvtDEI4nOr0wnPO2ReL8psE2WpNepyDpEet1xRxqyvw.apk',
   /** The web app, for iPhones. */
   web: import.meta.env.VITE_WEB_APP_URL || 'https://app.thefaithtribe.live',
 } as const;
