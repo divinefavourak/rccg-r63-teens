@@ -87,6 +87,7 @@ Engineering changes that altered behaviour these documents describe. Pull reques
 
 - **Deleting an account from People** in the Console, with the server refusing your own account, a superuser, and anyone who has paid. `07-feature-specifications.md` #18.
 - **Payments go through Squad** (GTCO) in place of Paystack: one key, `SQUAD_SECRET_KEY`, and a payer comes back to `/payments/return/<reference>/`. `07-feature-specifications.md` #9, `ops/07-production-secrets.md`.
+- **Deleting an event from Events** in the Console, for test events and mistakes. The server refuses an event you do not manage, and one that anyone has paid for unless you are a superuser. `07-feature-specifications.md` #9.
 
 ## Fixed after review
 

@@ -179,6 +179,35 @@ class EventViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
 
+    def destroy(self, request, *args, **kwargs):
+        """
+        Delete an event for good, with its registrations, hostels and beds.
+        For test events and mistakes; an event that is over or called off is
+        archived instead, which keeps who came.
+
+        Refused for an event you do not manage. Once anyone has paid for it
+        only a superuser may delete it: the payments themselves are kept
+        (`Payment.registration` is set null), but the registration that says
+        who each one was for goes with the event.
+        """
+        event = self.get_object()
+        if not can_manage_event(request.user, event):
+            return Response(
+                {'detail': 'You do not manage this event, so you cannot delete it.'},
+                status=status.HTTP_403_FORBIDDEN)
+
+        paid = event.registrations.filter(
+            payment_status=EventRegistration.PaymentStatus.PAID).count()
+        if paid and not request.user.is_superuser:
+            return Response(
+                {'detail': f'{paid} {"person has" if paid == 1 else "people have"} paid '
+                           'for this event, so only a superuser can delete it. '
+                           'Archive it instead.'},
+                status=status.HTTP_409_CONFLICT)
+
+        self.perform_destroy(event)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     @action(detail=False, methods=['get'])
     def upcoming(self, request):
         """Get upcoming events."""
