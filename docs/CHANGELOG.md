@@ -91,6 +91,8 @@ Engineering changes that altered behaviour these documents describe. Pull reques
 
 ## Fixed after review
 
+- **A deploy no longer undoes a move made in the Console.** `derive_hierarchy` runs on every deploy and was placing every user again from their old profile, so anyone moved in People came back as a second membership (listed twice, with the old place as home), and a revoked legacy role was granted again. It now places a user once. `repair_console_moves` undoes what was already put back. `ops/README.md`.
+
 - **Bedspace actions check the event, not only the permission.** The summary, "place people waiting", placing someone and taking a bed back now refuse (403) an event outside the part of the hierarchy the caller manages.
 - **An event with people placed in hostels can be deleted.** The bed-to-hostel link was `PROTECT`, which blocked it; it is `RESTRICT`. A hostel with people in it still cannot be deleted on its own.
 - **Bed wording in notifications.** A waitlisted registration is no longer told "No bedspace is left"; one with no gender recorded is told the organiser will place it.

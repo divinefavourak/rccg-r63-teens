@@ -19,7 +19,10 @@ python manage.py derive_hierarchy
 
 Reads every user's `province` / `zone` / `area` / `parish` fields and builds the
 nodes they imply under `Region 63`, creating one primary membership per user at the
-deepest node their data reaches. Users with no province land in an **"Unassigned"**
+deepest node their data reaches. It does this once per user: someone who already
+has a membership, current or ended, is skipped, so running it again (it runs on
+every deploy) does not undo a move or a revoked role made in the Console. Users
+with no province land in an **"Unassigned"**
 province bucket under the region — a real, visible place, not a null.
 
 Idempotent (`get_or_create` throughout), so re-running after correcting a user's

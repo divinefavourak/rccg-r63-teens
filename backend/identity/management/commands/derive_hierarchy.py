@@ -9,6 +9,11 @@ region 'Unassigned' bucket), and — for legacy leaders — a RoleAssignment usi
 the seeded DB roles, **fail-closed** (skipped + reported when the data doesn't
 reach the role's required node level). Idempotent; supports ``--dry-run``.
 Requires roles to be seeded first (``manage.py seed_rbac``).
+
+It places a user once. Someone who has ever had a membership has been through
+here (or signed up into the tree) and is left alone: this runs on every deploy,
+and where a person belongs and what they may do are decided in the Console
+after that, not by what their old profile says.
 """
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
@@ -17,7 +22,7 @@ from django.db import transaction
 from hierarchy import services
 from hierarchy.models import UNASSIGNED_NAME, HierarchyNode, NodeType
 from identity.authorization import set_membership
-from identity.models import Role, RoleAssignment
+from identity.models import Membership, Role, RoleAssignment
 
 User = get_user_model()
 
@@ -62,13 +67,20 @@ class Command(BaseCommand):
             raise CommandError(f'Roles not seeded: {sorted(missing)}. Run seed_rbac first.')
 
         stats = {'nodes_created': 0, 'memberships': 0, 'assignments': 0,
-                'unassigned': 0, 'roles_unresolved': 0}
+                'unassigned': 0, 'roles_unresolved': 0, 'already_placed': 0}
         try:
             with transaction.atomic():
                 national = self._root(options['national_name'], stats)
                 region = self._child(national, NodeType.REGION, options['region_name'], stats)
                 unassigned = self._child(region, NodeType.PROVINCE, UNASSIGNED_NAME, stats)
+                # Ended memberships count: a person moved in the Console has
+                # an ended one where their profile still points, and placing
+                # them there again is what listed them twice.
+                placed = set(Membership.objects.values_list('user_id', flat=True))
                 for user in User.objects.all().iterator():
+                    if user.pk in placed:
+                        stats['already_placed'] += 1
+                        continue
                     self._process(user, region, unassigned, roles, stats)
                 if options['dry_run']:
                     self.stdout.write(self.style.WARNING('DRY RUN — rolling back.'))
@@ -82,7 +94,8 @@ class Command(BaseCommand):
                 f'  unresolved: {username} needs a {level} node for role {code}'))
         self.stdout.write(self.style.SUCCESS(
             'nodes:{nodes_created} memberships:{memberships} assignments:{assignments} '
-            'unassigned:{unassigned} unresolved:{roles_unresolved}'.format(**stats)))
+            'unassigned:{unassigned} unresolved:{roles_unresolved} '
+            'already placed:{already_placed}'.format(**stats)))
 
     def _root(self, name, stats):
         root = HierarchyNode.objects.filter(node_type=NodeType.NATIONAL, name=name).first()
