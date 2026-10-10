@@ -15,6 +15,7 @@ urlpatterns = [
     # My profile
     path('me/', views.MyProfileView.as_view(), name='my_profile'),
     path('create/', views.CreateProfileView.as_view(), name='create_profile'),
+    path('repair/<uuid:user_id>/', views.RepairProfileView.as_view(), name='repair_profile'),
     
     # Router URLs
     path('', include(router.urls)),

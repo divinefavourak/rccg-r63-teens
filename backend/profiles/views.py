@@ -9,7 +9,10 @@ from django.utils import timezone
 
 from identity.authorization import HasPermission, IsSelfOrHasPermission, has_any_permission
 from identity.permissions_registry import Perm
+from django.contrib.auth import get_user_model
+
 from .models import TeenProfile, DevotionalProgress, ManualProgress, Favorite
+from .services import repair_profile
 from .serializers import (
     TeenProfileSerializer,
     TeenProfileCreateSerializer,
@@ -19,6 +22,8 @@ from .serializers import (
     ManualProgressSerializer,
     FavoriteSerializer,
 )
+
+User = get_user_model()
 
 
 class TeenProfileViewSet(viewsets.ModelViewSet):
@@ -88,9 +93,43 @@ class MyProfileView(generics.RetrieveUpdateAPIView):
         return TeenProfileSerializer
     
     def get_object(self):
+        # An account with no profile row gets one built from what the account
+        # knows, instead of a 404 the app can only show as "couldn't load".
+        if not TeenProfile.objects.filter(user=self.request.user).exists():
+            repair_profile(self.request.user)
         # select_related: the serializer reads the user's email off the profile.
         return get_object_or_404(
             TeenProfile.objects.select_related('user'), user=self.request.user)
+
+
+class RepairProfileView(generics.GenericAPIView):
+    """Create a person's missing profile, or fill in what it is missing.
+
+    POST /api/v1/profiles/repair/<user_id>/  body: {"reset": false}
+
+    Blank fields are filled from the account (gender, province, zone, area,
+    parish, and the church they joined). With ``reset: true`` the account
+    values replace what the profile holds and everything the teen typed in
+    (guardian, emergency, medical, bio, photo) is cleared. Streaks, counts,
+    saved items and progress are always kept.
+    """
+
+    permission_classes = [permissions.IsAuthenticated, HasPermission(Perm.PROFILES_MANAGE)]
+    serializer_class = TeenProfileSerializer
+
+    def post(self, request, user_id):
+        user = get_object_or_404(User, pk=user_id)
+        reset = str(request.data.get('reset', '')).lower() in ('1', 'true', 'yes')
+        profile, created, changed = repair_profile(user, reset=reset)
+        return Response(
+            {
+                'created': created,
+                'reset': reset,
+                'changed_fields': changed,
+                'profile': TeenProfileSerializer(profile).data,
+            },
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
 
 
 class CreateProfileView(generics.CreateAPIView):
