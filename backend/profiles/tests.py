@@ -115,3 +115,29 @@ class RepairProfileTests(APITestCase):
 
         call_command('repair_profiles', '--apply', stdout=StringIO())
         self.assertTrue(TeenProfile.objects.filter(user=self.user).exists())
+
+    def test_blank_account_gender_becomes_not_specified(self):
+        self.user.gender = ''
+        self.user.save()
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get('/api/v1/profiles/me/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['gender'], 'not_specified')
+
+    def test_reset_deletes_the_stored_photo(self):
+        from unittest import mock
+
+        from django.core.files.base import ContentFile
+
+        profile = TeenProfile.objects.create(user=self.user, gender='female')
+        profile.avatar.save('face.png', ContentFile(b'x'), save=True)
+        storage, name = profile.avatar.storage, profile.avatar.name
+        self.client.force_authenticate(user=self.admin)
+        with mock.patch.object(storage, 'delete') as delete, \
+                self.captureOnCommitCallbacks(execute=True):
+            self.client.post(self.url(self.user), {'reset': True}, format='json')
+
+        delete.assert_called_once_with(name)
+        self.assertFalse(TeenProfile.objects.get(user=self.user).avatar)
+        storage.delete(name)
