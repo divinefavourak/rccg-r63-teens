@@ -9,6 +9,11 @@ python manage.py migrate
 # work immediately (idempotent — safe to run every deploy).
 python manage.py derive_hierarchy || echo "derive_hierarchy skipped (non-blocking)"
 
+# Until 10 October 2026 the line above put back everyone who had been moved in
+# the Console, and granted again every legacy role that had been revoked. This
+# undoes that. It finds nothing once it has run, and can then be removed.
+python manage.py repair_console_moves || echo "repair_console_moves skipped (non-blocking)"
+
 # Test email configuration after deployment
 echo ""
 echo "=================================================="

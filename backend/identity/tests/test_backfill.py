@@ -2,6 +2,7 @@ from django.core.management import call_command
 from django.test import TestCase
 
 from hierarchy.models import NodeType
+from identity import authorization as authz
 from identity.models import Membership, RoleAssignment
 from .base import make_user, seed_rbac
 
@@ -52,3 +53,35 @@ class DeriveHierarchyTests(TestCase):
         call_command('derive_hierarchy', verbosity=0)
         self.assertEqual(Membership.objects.count(), memberships)
         self.assertEqual(RoleAssignment.objects.count(), assignments)
+
+    def test_someone_moved_in_the_console_is_not_put_back(self):
+        # It runs on every deploy. Their profile still says the old place.
+        call_command('derive_hierarchy', verbosity=0)
+        tolu = Membership.objects.get(user__username='tolu')
+        elsewhere = Membership.objects.get(user__username='funmi').organization_node
+        authz.transfer_primary_membership(tolu.user, elsewhere)
+        Membership.objects.filter(pk=tolu.pk).update(is_active=False, is_primary=False)
+
+        call_command('derive_hierarchy', verbosity=0)
+
+        home = Membership.objects.get(user__username='tolu', is_active=True)
+        self.assertEqual(home.organization_node, elsewhere)
+        self.assertTrue(home.is_primary)
+
+    def test_a_role_that_was_revoked_is_not_granted_again(self):
+        call_command('derive_hierarchy', verbosity=0)
+        authz.revoke_role(RoleAssignment.objects.get(user__username='chinedu'))
+
+        call_command('derive_hierarchy', verbosity=0)
+
+        self.assertFalse(RoleAssignment.objects.filter(
+            user__username='chinedu', is_active=True).exists())
+
+    def test_someone_new_is_still_placed(self):
+        call_command('derive_hierarchy', verbosity=0)
+        make_user('late', role='teen')
+
+        call_command('derive_hierarchy', verbosity=0)
+
+        self.assertEqual(
+            Membership.objects.get(user__username='late').organization_node.name, 'Unassigned')

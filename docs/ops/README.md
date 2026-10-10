@@ -48,7 +48,8 @@ description of it.
 |---|---|---|
 | `migrate` | yes | Apply schema changes. Always first. |
 | `seed_rbac` | yes | Reconcile permissions + roles to the code registry. |
-| `derive_hierarchy` | yes | Build the tree + memberships + legacy role assignments from user data. |
+| `derive_hierarchy` | yes | Build the tree + memberships + legacy role assignments from user data. Places each user once: anyone who has ever had a membership is left alone, so a move or a revoked role made in the Console is not undone by the next deploy. |
+| `repair_console_moves` | yes | One-off. Undoes the second memberships and re-granted roles that `derive_hierarchy` made before 10 October 2026 for people who had been moved, or had a role revoked, in the Console. `--dry-run` reports only. |
 | `grant_role <user> <role> <node>` | yes | Grant one role assignment (the bootstrap escape hatch). |
 | `import_bible <file.json>` | yes | Import a translation's text. |
 | `rebuild_bible_search` | yes | Rebuild the Scripture full-text index. |
