@@ -374,7 +374,9 @@ class EndpointTests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data['authorization_url'].startswith('https://sandbox-pay.squadco.com/'))
-        self.assertTrue(response.data['pay_link'].startswith('https://api.example.com/api/v1/payments/pay/'))
+        self.assertEqual(
+            response.data['pay_link'],
+            f'https://api.example.com/api/v1/payments/pay/{registrations.pay_token(self.registration)}/')
         self.assertEqual(
             mock_open.call_args.kwargs['callback_url'],
             f'https://api.example.com/api/v1/payments/return/{Payment.objects.get().reference}/')
@@ -417,6 +419,7 @@ class EndpointTests(APITestCase):
         self.assertIsNotNone(ticket['pay_by'])
         self.assertEqual(
             registrations.from_pay_token(ticket['pay_token']).pk, self.registration.pk)
+        self.assertTrue(ticket['pay_link'].endswith(f"/payments/pay/{ticket['pay_token']}/"))
 
     @patch('events.email_service.EventEmailService.send_registration_confirmed')
     @patch.object(SquadService, 'verify_payment')
@@ -433,6 +436,7 @@ class EndpointTests(APITestCase):
         self.assertEqual(response.data['payment_status'], 'paid')
         self.assertFalse(response.data['can_pay'])
         self.assertIsNone(response.data['pay_token'])
+        self.assertIsNone(response.data['pay_link'])
 
 
 @squad_test_keys
@@ -460,6 +464,47 @@ class PayerPagesTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertTrue(response['Location'].startswith('https://sandbox-pay.squadco.com/'))
+
+    def test_the_code_in_the_link_is_short_and_stays_the_same(self):
+        code = registrations.pay_token(self.registration)
+
+        self.assertEqual(len(code), 8)
+        fresh = EventRegistration.objects.get(pk=self.registration.pk)
+        self.assertEqual(registrations.pay_token(fresh), code)
+
+    def test_a_long_link_sent_before_the_short_ones_still_works(self):
+        from django.core import signing
+        old = signing.dumps(str(self.registration.pk), salt='payments.registration-pay-link')
+
+        response = self.client.get(f'/api/v1/payments/pay/{old}/')
+
+        self.assertContains(response, 'Ada Obi')
+
+    @override_settings(PAY_LINK_BASE='https://site.example.com/p')
+    def test_the_link_is_on_our_site_when_it_is_set(self):
+        link = registrations.pay_link(self.registration, 'https://api.example.com')
+
+        self.assertEqual(
+            link, f'https://site.example.com/p/{registrations.pay_token(self.registration)}')
+
+    @override_settings(FRONTEND_URL='https://site.example.com')
+    def test_a_chat_app_previewing_the_link_gets_the_event_and_a_picture(self):
+        response = self.client.get(self.link)
+
+        self.assertContains(response, 'property="og:title" content="Pay for Ada Obi · Teens Conference"')
+        self.assertContains(response, 'property="og:image" content="https://site.example.com/og-image.jpg"')
+
+    def test_the_preview_picture_is_the_events_flier(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        event = self.registration.event
+        event.cover_image = SimpleUploadedFile('flier.jpg', b'x', content_type='image/jpeg')
+        with patch.object(event.cover_image.storage, 'save', return_value='events/flier.jpg'):
+            event.save()
+
+        response = self.client.get(self.link)
+
+        self.assertContains(response, 'property="og:image" content="http')
+        self.assertContains(response, 'events/flier.jpg"')
 
     def test_a_link_that_was_altered_does_not_work(self):
         response = self.client.get(self.link[:-3] + 'xx/')

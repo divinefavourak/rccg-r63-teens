@@ -442,6 +442,8 @@ export interface EventRegistration {
   pay_by: string | null;
   /** Goes in the link a parent pays from. Null when there is nothing to pay. */
   pay_token: string | null;
+  /** The whole link a parent pays from. Absent from servers before it was added. */
+  pay_link?: string | null;
   checked_in_at: string | null;
   created_at: string;
   /**

@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework import viewsets, generics, status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -29,6 +31,8 @@ from identity.permissions_registry import Perm
 from events.models import EventRegistration
 from events.serializers import EventRegistrationDetailSerializer
 from events.views import own_registrations
+
+logger = logging.getLogger(__name__)
 
 
 class PaymentViewSet(viewsets.ModelViewSet):
@@ -333,7 +337,6 @@ class PaymentCallbackView(APIView):
 
 # `payments.urls` is mounted twice (`api/v1/payments/` and the older
 # `api/payments/`), so `reverse` cannot be trusted to pick this one.
-_PAY_LINK_PATH = '/api/v1/payments/pay/{token}/'
 _RETURN_PATH = '/api/v1/payments/return/'
 
 
@@ -345,10 +348,14 @@ def _reference_from(request):
     return ''
 
 
+def _api_base(request):
+    """This API's address as someone outside opens it, with no slash at the end."""
+    return settings.PUBLIC_API_URL or request.build_absolute_uri('/').rstrip('/')
+
+
 def _absolute(request, path):
     """`path` as an address someone outside can open."""
-    base = settings.PUBLIC_API_URL or request.build_absolute_uri('/').rstrip('/')
-    return base + path
+    return _api_base(request) + path
 
 
 def _safe_return_to(value):
@@ -415,8 +422,7 @@ class RegistrationCheckoutView(APIView):
             'reference': payment.reference,
             'authorization_url': payment.authorization_url,
             'amount': str(payment.amount),
-            'pay_link': _absolute(request, _PAY_LINK_PATH.format(
-                token=registration_payments.pay_token(registration))),
+            'pay_link': registration_payments.pay_link(registration, _api_base(request)),
         })
 
 
@@ -439,6 +445,22 @@ class RegistrationPaymentCheckView(APIView):
             registration_payments.check_registration(registration)
             registration = EventRegistration.objects.select_related('event').get(pk=registration.pk)
         return Response(EventRegistrationDetailSerializer(registration).data)
+
+
+def _preview_image(request, event):
+    """
+    The picture a chat app shows under a shared pay link: the event's flier,
+    or the site's own card when it has none. Absolute, as the chat app's
+    fetcher needs.
+    """
+    if event.cover_image:
+        try:
+            return request.build_absolute_uri(event.cover_image.url)
+        except Exception:  # Storage misconfigured: no picture beats a 500.
+            logger.exception('No URL for the cover of event %s', event.pk)
+    if settings.FRONTEND_URL:
+        return settings.FRONTEND_URL.rstrip('/') + '/og-image.jpg'
+    return ''
 
 
 def _page(request, heading, message, status_code=200, **context):
@@ -500,6 +522,7 @@ class RegistrationPayLinkView(View):
             amount=registration.amount_due,
             pay_by=registration_payments.pay_by(registration),
             can_pay=True,
+            preview_image=_preview_image(request, registration.event),
         )
 
     def post(self, request, token):

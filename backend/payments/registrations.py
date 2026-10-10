@@ -23,9 +23,10 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.core import signing
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Exists, OuterRef
 from django.utils import timezone
+from django.utils.crypto import get_random_string
 
 from events.models import Event, EventRegistration, RegistrationAuditLog
 
@@ -50,6 +51,7 @@ REUSE_FOR = timedelta(minutes=30)
 PREPARING_FOR = timedelta(seconds=30)
 
 _UNPAID = (PaymentStatus.PENDING, PaymentStatus.FAILED)
+# Signed the long pay links handed out before the short codes.
 _PAY_LINK_SALT = 'payments.registration-pay-link'
 
 
@@ -116,22 +118,60 @@ def pay_by(registration):
 
 # ── The link a parent pays from ──────────────────────────────────────────────
 
+# Letters and digits that cannot be misread for one another when a parent
+# types the link out by hand: no 0/O, 1/l/I.
+_PAY_CODE_ALPHABET = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+_PAY_CODE_LENGTH = 8
+
+
 def pay_token(registration):
     """
-    What goes in the link a teen sends to a parent. Signed, so it cannot be
-    guessed or altered, and it needs no login. It does not expire by itself:
-    it stops working when the registration can no longer be paid for.
+    What goes in the link a teen sends to a parent: a short random code,
+    given to the registration the first time it is asked for. Eight
+    characters from 56 is too many to guess, and it needs no login. It does
+    not expire by itself: it stops working when the registration can no
+    longer be paid for.
     """
-    return signing.dumps(str(registration.pk), salt=_PAY_LINK_SALT)
+    if registration.pay_code:
+        return registration.pay_code
+    for _ in range(5):
+        code = get_random_string(_PAY_CODE_LENGTH, _PAY_CODE_ALPHABET)
+        try:
+            with transaction.atomic():
+                # Only if no other request gave it one first.
+                EventRegistration.objects.filter(
+                    pk=registration.pk, pay_code__isnull=True).update(pay_code=code)
+        except IntegrityError:
+            continue  # That code is another registration's.
+        registration.pay_code = EventRegistration.objects.values_list(
+            'pay_code', flat=True).get(pk=registration.pk)
+        return registration.pay_code
+    raise RuntimeError('Could not find a free pay code.')
 
 
 def from_pay_token(token):
     """The registration a pay link is for, or None for a link that is not ours."""
+    registrations = EventRegistration.objects.select_related('event')
+    if len(token) <= _PAY_CODE_LENGTH:
+        return registrations.filter(pay_code=token).first()
+    # The long signed links sent before the short ones, which still work.
     try:
         pk = signing.loads(token, salt=_PAY_LINK_SALT)
     except signing.BadSignature:
         return None
-    return EventRegistration.objects.select_related('event').filter(pk=pk).first()
+    return registrations.filter(pk=pk).first()
+
+
+def pay_link(registration, fallback_base):
+    """
+    The whole address to send a parent. On our own site (`PAY_LINK_BASE`,
+    which proxies to this API) when that is set, so the link is short and
+    shows our name; otherwise on the API's own address, `fallback_base`.
+    """
+    code = pay_token(registration)
+    if settings.PAY_LINK_BASE:
+        return f'{settings.PAY_LINK_BASE}/{code}'
+    return f'{fallback_base}/api/v1/payments/pay/{code}/'
 
 
 # ── Opening a checkout ───────────────────────────────────────────────────────
