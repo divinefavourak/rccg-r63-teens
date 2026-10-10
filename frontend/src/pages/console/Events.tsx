@@ -19,7 +19,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, CalendarDays, Check, Lock, Pencil, Plus, ScanLine, X } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Check, Lock, Pencil, Plus, ScanLine, Trash2, X } from 'lucide-react';
 import api from '../../api/axios';
 import EventEditor, {
   type EventDraft,
@@ -901,6 +901,9 @@ export const Events = () => {
   const [open, setOpen] = useState<EventRow | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<EventRow | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleted, setDeleted] = useState<string | null>(null);
 
   /**
    * Open an event for editing from its full record. A list row leaves out the
@@ -929,6 +932,26 @@ export const Events = () => {
     params: { ...TAB_PARAMS[tab], page, page_size: PAGE_SIZE },
     errorMessage: "We couldn't load events. Try again.",
   });
+
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    setDeleteBusy(true);
+    setOpenError(null);
+    try {
+      await api.delete(`/events/events/${deleting.id}/`);
+      setDeleted(`${deleting.title} is deleted.`);
+      events.reload();
+    } catch (err: unknown) {
+      // The server's reason is the useful part: it says when to archive
+      // instead (an event people have paid for), so it is shown as sent.
+      const detail = (err as { response?: { data?: { detail?: string } } })
+        ?.response?.data?.detail;
+      setOpenError(detail ?? `We couldn't delete ${deleting.title}. Try again.`);
+    } finally {
+      setDeleting(null);
+      setDeleteBusy(false);
+    }
+  };
 
   const tabs = useMemo(() => {
     const base: { id: Tab; label: string }[] = [
@@ -972,6 +995,41 @@ export const Events = () => {
             events.reload();
           }}
         />
+      )}
+
+      {deleting && (
+        <Modal
+          title={`Delete ${deleting.title}?`}
+          subtitle="This cannot be undone. The event goes, with every registration, ticket, hostel and bed on it. Nobody who registered is told. It is meant for test events and mistakes: for an event that is over or called off, archive it instead, which keeps the record of who came."
+          onClose={() => setDeleting(null)}
+          width={480}
+          footer={
+            <>
+              <Btn size="md" onClick={() => setDeleting(null)}>
+                Cancel
+              </Btn>
+              <Btn variant="danger" size="md" disabled={deleteBusy} onClick={confirmDelete}>
+                {deleteBusy ? 'Deleting…' : 'Delete event'}
+              </Btn>
+            </>
+          }
+        >
+          {null}
+        </Modal>
+      )}
+
+      {deleted && (
+        <AlertBanner
+          kind="success"
+          className="mb-4"
+          action={
+            <Btn variant="soft" size="md" onClick={() => setDeleted(null)}>
+              Dismiss
+            </Btn>
+          }
+        >
+          {deleted}
+        </AlertBanner>
       )}
 
       {openError && (
@@ -1109,6 +1167,13 @@ export const Events = () => {
                               onClick={() => edit(e)}
                             >
                               <Pencil size={14} />
+                            </Btn>
+                            <Btn
+                              variant="ghost"
+                              aria-label={`Delete ${e.title}`}
+                              onClick={() => setDeleting(e)}
+                            >
+                              <Trash2 size={14} />
                             </Btn>
                           </div>
                         </Td>

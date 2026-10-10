@@ -101,13 +101,13 @@ export default function TicketScreen() {
   }, [atTheDoor, refetch]);
 
   // ── Paying ────────────────────────────────────────────────────────────
-  // The paying itself happens on Paystack's page, in the browser. This screen
+  // The paying itself happens on Squad's page, in the browser. This screen
   // sends the teen there, and notices when they come back. What marks the
-  // ticket paid is Paystack telling the server; nothing here decides it.
+  // ticket paid is Squad telling the server; nothing here decides it.
   const startPayment = useStartPayment(id);
   const checkPayment = useCheckPayment(id);
   const { mutateAsync: openCheckout } = startPayment;
-  const { mutate: askPaystack } = checkPayment;
+  const { mutate: askSquad } = checkPayment;
   /** True once this screen has sent someone to pay. */
   const [sentToPay, setSentToPay] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
@@ -116,10 +116,10 @@ export default function TicketScreen() {
 
   useEffect(() => {
     if (!sentToPay || !canPay) return;
-    // Coming back from the browser: ask Paystack straight away, for the times
+    // Coming back from the browser: ask Squad straight away, for the times
     // its own message to the server has not arrived yet.
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') askPaystack();
+      if (state === 'active') askSquad();
     });
     // Then keep looking for a while, for a transfer that lands a minute later.
     const until = Date.now() + PAID_POLL_FOR_MS;
@@ -134,7 +134,7 @@ export default function TicketScreen() {
       sub.remove();
       clearInterval(timer);
     };
-  }, [sentToPay, canPay, askPaystack, refetch]);
+  }, [sentToPay, canPay, askSquad, refetch]);
 
   const onPay = useCallback(async () => {
     if (!id) return;
@@ -144,7 +144,7 @@ export default function TicketScreen() {
       setSentToPay(true);
       if (Platform.OS === 'web') {
         // The same tab: a new one opened after a network call is a pop-up to
-        // Safari, and blocked. Paystack's last page links back here.
+        // Safari, and blocked. Squad's last page links back here.
         window.location.assign(checkout.authorization_url);
       } else {
         await Linking.openURL(checkout.authorization_url);
@@ -383,7 +383,7 @@ export default function TicketScreen() {
             <Text className="text-center font-ui text-[12px] leading-4 text-ink-3">
               {sentToPay
                 ? 'This ticket updates by itself once the payment arrives. A transfer can take a few minutes.'
-                : 'You pay on Paystack by card, bank transfer or USSD.'}
+                : 'You pay on Squad by card, bank transfer or USSD.'}
             </Text>
           </View>
         )}

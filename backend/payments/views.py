@@ -20,7 +20,7 @@ from . import registrations as registration_payments
 from .models import Payment, PaymentPlan, TransactionLog
 from .serializers import (
     PaymentSerializer, PaymentPlanSerializer,
-    InitializePaymentSerializer, PaystackCallbackSerializer
+    InitializePaymentSerializer
 )
 from .services import PaymentService
 from tickets.models import Ticket
@@ -91,7 +91,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
                              status=status.HTTP_400_BAD_REQUEST
                          )
 
-                    payment, paystack_response = payment_service.create_bulk_payment(
+                    payment, checkout_url = payment_service.create_bulk_payment(
                         tickets=tickets,
                         user=request.user,
                         request=request
@@ -115,7 +115,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
                             status=status.HTTP_400_BAD_REQUEST
                         )
                     
-                    payment, paystack_response = payment_service.create_payment(
+                    payment, checkout_url = payment_service.create_payment(
                         ticket=ticket,
                         user=request.user,
                         request=request
@@ -123,9 +123,8 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 
                 return Response({
                     'payment': PaymentSerializer(payment).data,
-                    'authorization_url': paystack_response['data']['authorization_url'],
+                    'authorization_url': checkout_url,
                     'reference': payment.reference,
-                    'access_code': paystack_response['data']['access_code']
                 })
                 
             except Exception as e:
@@ -262,14 +261,14 @@ class PaymentDashboardView(APIView):
         return Response(data)
 
 
-class PaystackWebhookView(APIView):
-    """Handle Paystack webhooks"""
+class SquadWebhookView(APIView):
+    """Handle Squad webhooks"""
     permission_classes = []  # No authentication for webhooks
     
     def post(self, request):
         # The signature is over the raw bytes, so read request.body and never
         # request.data: DRF would parse the body and the bytes would be gone.
-        signature = request.headers.get('X-Paystack-Signature', '')
+        signature = request.headers.get('x-squad-encrypted-body', '')
 
         try:
             PaymentService().handle_webhook(request.body, signature)
@@ -280,21 +279,17 @@ class PaystackWebhookView(APIView):
             )
 
         # A genuine event is acknowledged whether or not it changed anything.
-        # Paystack retries on any other answer, and a retry cannot help with an
-        # event we do not handle or a payment already completed.
+        # Sending it again cannot help with an event we do not handle or a
+        # payment already completed.
         return Response({'status': 'success'})
 
 
 class PaymentCallbackView(APIView):
-    """Handle Paystack payment callback (for frontend redirect)"""
+    """Handle Squad payment callback (for frontend redirect)"""
     permission_classes = []  # Public endpoint
     
     def get(self, request):
-        reference = request.GET.get('reference')
-        trxref = request.GET.get('trxref')
-        
-        # Use the reference from Paystack
-        payment_reference = reference or trxref
+        payment_reference = _reference_from(request)
         
         if not payment_reference:
             return Response(
@@ -342,6 +337,14 @@ _PAY_LINK_PATH = '/api/v1/payments/pay/{token}/'
 _RETURN_PATH = '/api/v1/payments/return/'
 
 
+def _reference_from(request):
+    """The payment reference in the address a gateway sent someone back to."""
+    for name in ('reference', 'transaction_ref', 'trxref'):
+        if request.GET.get(name):
+            return request.GET[name]
+    return ''
+
+
 def _absolute(request, path):
     """`path` as an address someone outside can open."""
     base = settings.PUBLIC_API_URL or request.build_absolute_uri('/').rstrip('/')
@@ -382,7 +385,7 @@ class RegistrationCheckoutView(APIView):
     """
     `POST /payments/registrations/<id>/checkout/`
 
-    Opens Paystack's checkout for a registration, or hands back the one that
+    Opens Squad's checkout for a registration, or hands back the one that
     is already open. The phone sends the payer to `authorization_url`;
     `pay_link` is the address to send to a parent instead.
     """
@@ -396,7 +399,7 @@ class RegistrationCheckoutView(APIView):
         try:
             payment = registration_payments.start(
                 registration,
-                callback_url=_absolute(request, _RETURN_PATH),
+                return_url=_absolute(request, _RETURN_PATH),
                 return_to=_safe_return_to(request.data.get('return_to')),
             )
         except registration_payments.NotPayable as exc:
@@ -421,7 +424,7 @@ class RegistrationPaymentCheckView(APIView):
     """
     `POST /payments/registrations/<id>/check/`
 
-    Asks Paystack about the registration's open checkouts and returns the
+    Asks Squad about the registration's open checkouts and returns the
     registration as it now stands. For the phone to call when the payer comes
     back to it, in case the webhook has not arrived yet.
     """
@@ -457,7 +460,7 @@ class RegistrationPayLinkView(View):
     `/payments/pay/<token>/`: the link a teen sends to a parent.
 
     No login: the token is the permission. Opening it shows what is being paid
-    for and by when; pressing Pay goes to Paystack. It is two steps on purpose.
+    for and by when; pressing Pay goes to Squad. It is two steps on purpose.
     A chat app fetches any link pasted into it to draw a preview, and that
     must not open a checkout.
 
@@ -506,7 +509,7 @@ class RegistrationPayLinkView(View):
 
         try:
             payment = registration_payments.start(
-                registration, callback_url=_absolute(request, _RETURN_PATH))
+                registration, return_url=_absolute(request, _RETURN_PATH))
         except registration_payments.NotPayable as exc:
             return self._refused(request, registration, str(exc))
         except registration_payments.BeingPrepared:
@@ -523,14 +526,14 @@ class RegistrationPayLinkView(View):
 
 class PaymentReturnView(View):
     """
-    `/payments/return/?reference=...`: where Paystack sends a payer afterwards.
+    `/payments/return/<reference>/`: where Squad sends a payer afterwards.
 
-    Asks Paystack what happened rather than believing the address, then says
+    Asks Squad what happened rather than believing the address, then says
     so. Someone who paid from the app is offered the way back to it.
     """
 
-    def get(self, request):
-        reference = request.GET.get('reference') or request.GET.get('trxref') or ''
+    def get(self, request, reference=''):
+        reference = reference or _reference_from(request)
         payment = (
             Payment.objects.select_related('registration__event')
             .filter(reference=reference, registration__isnull=False).first()

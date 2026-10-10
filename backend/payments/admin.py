@@ -7,16 +7,16 @@ class PaymentAdmin(admin.ModelAdmin):
     list_display = ('reference', 'amount', 'status', 'payer_email', 'initiated_at', 'completed_at')
     list_filter = ('status', 'payment_method', 'initiated_at')
     search_fields = ('reference', 'payer_email', 'payer_name', 'description')
-    readonly_fields = ('reference', 'paystack_reference', 'initiated_at', 'completed_at', 'updated_at')
+    readonly_fields = ('reference', 'gateway_reference', 'initiated_at', 'completed_at', 'updated_at')
     fieldsets = (
         ('Payment Information', {
-            'fields': ('reference', 'paystack_reference', 'amount', 'currency', 'status', 'payment_method')
+            'fields': ('reference', 'gateway_reference', 'amount', 'currency', 'status', 'payment_method')
         }),
         ('Details', {
             'fields': ('ticket', 'description', 'payer_email', 'payer_name', 'payer_phone')
         }),
-        ('Paystack Data', {
-            'fields': ('authorization_code', 'channel', 'paystack_response', 'metadata'),
+        ('Gateway Data', {
+            'fields': ('authorization_code', 'channel', 'gateway_response', 'metadata'),
             'classes': ('collapse',)
         }),
         ('Timestamps', {

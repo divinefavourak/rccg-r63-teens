@@ -393,10 +393,10 @@ export function useMyRegistrations(enabled = true) {
 }
 
 /**
- * Open Paystack's checkout for a ticket.
+ * Open Squad's checkout for a ticket.
  *
  * `returnTo` is this app's own address for the ticket. The server keeps it and
- * offers it as the way back on the page Paystack ends on.
+ * offers it as the way back on the page Squad ends on.
  */
 export function useStartPayment(id: string | undefined) {
   return useMutation({
@@ -406,9 +406,9 @@ export function useStartPayment(id: string | undefined) {
 }
 
 /**
- * Ask the server to ask Paystack whether a ticket has been paid for.
+ * Ask the server to ask Squad whether a ticket has been paid for.
  *
- * Paystack tells the server by itself, usually within seconds. This is for the
+ * Squad tells the server by itself, usually within seconds. This is for the
  * moment someone comes back from paying and that has not arrived yet.
  */
 export function useCheckPayment(id: string | undefined) {

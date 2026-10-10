@@ -122,7 +122,7 @@ def notify_registration_confirmed(registration):
 
 def notify_payment_received(registration, place_gone=False):
     """
-    Paystack confirmed the payment. Quiet-hours exempt: whoever just paid is
+    Squad confirmed the payment. Quiet-hours exempt: whoever just paid is
     looking at the ticket, waiting for it to change.
 
     `place_gone` is the rare case of a place that was released for not being
@@ -152,7 +152,7 @@ def notify_payment_received(registration, place_gone=False):
         deep_link=_ticket_link(registration),
         data={**_base_data(registration), 'payment_status': registration.payment_status},
         dedupe_key=f'event:payment_received:{registration.id}',
-        # Called from the webhook: Paystack must not wait on a push.
+        # Called from the webhook: Squad must not wait on a push.
         defer_push=True,
     )
 

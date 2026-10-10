@@ -68,7 +68,7 @@ Specified in full in `08-bible-experience.md` (flows B1–B7). Summary of the ca
 1. Tolu opens a shared deep link → **Event detail**: banner, date/venue, organizer (name + role — legitimacy matters to parents), price, capacity remaining, schedule.
 2. Tap **Register** → ◇ guest? → lightweight signup (flow 3) → resume registration automatically.
 3. Registration form: pre-filled from profile (name, parish); event-specific fields only (e.g., emergency contact for camps). One screen where possible.
-4. ◇ Paid event → payment method: **Pay now (Paystack: card/bank/USSD/transfer)** or **Share payment link** (sends to a parent — `03-user-personas.md`, Mr. Okafor).
+4. ◇ Paid event → payment method: **Pay now (Squad: card/bank/USSD/transfer)** or **Share payment link** (sends to a parent — `03-user-personas.md`, Mr. Okafor).
 5. ⚙ Payment webhook confirms → registration state `confirmed` → **QR ticket issued**.
 6. Ticket delivered: confirmation screen, Me → My Tickets, notification, and email/SMS fallback. Ticket page works offline (QR cached).
 7. ✖ Payment failed → registration held in `pending` for 24h with retry; capacity not consumed by unpaid registrations after expiry.

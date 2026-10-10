@@ -1,5 +1,5 @@
 {% comment %}
-The one page a payer sees from us: before Paystack's checkout (a parent opening
+The one page a payer sees from us: before Squad's checkout (a parent opening
 the link they were sent) and after it (anyone coming back from paying).
 
 It is opened in whatever browser the link landed in, often the one inside
@@ -59,7 +59,7 @@ image. Colours are the ones the emails use.
     <form method="post">
       <button class="button" type="submit">Pay ₦{{ amount|floatformat:"-2g" }}</button>
     </form>
-    <p class="note">You will pay on Paystack by card, bank transfer or USSD. We never see your card details.</p>
+    <p class="note">You will pay on Squad by card, bank transfer or USSD. We never see your card details.</p>
     {% elif return_to %}
     <a class="button" href="{{ return_to }}">Back to the app</a>
     {% elif retry %}

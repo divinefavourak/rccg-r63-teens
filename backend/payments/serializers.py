@@ -33,7 +33,7 @@ class PaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Payment
         fields = [
-            'id', 'reference', 'paystack_reference',
+            'id', 'reference', 'gateway_reference',
             'amount', 'formatted_amount', 'currency',
             'status', 'status_display', 'payment_method', 'payment_method_display',
             'ticket', 'ticket_details', 'description',
@@ -41,14 +41,14 @@ class PaymentSerializer(serializers.ModelSerializer):
             'authorization_code', 'channel',
             'is_successful', 'is_pending',
             'initiated_at', 'completed_at', 'updated_at',
-            'metadata', 'paystack_response'
+            'metadata', 'gateway_response'
         ]
         read_only_fields = [
-            'id', 'reference', 'paystack_reference',
+            'id', 'reference', 'gateway_reference',
             'amount', 'currency', 'status', 'payment_method',
             'authorization_code', 'channel',
             'initiated_at', 'completed_at', 'updated_at',
-            'paystack_response'
+            'gateway_response'
         ]
 
 
@@ -63,16 +63,3 @@ class InitializePaymentSerializer(serializers.Serializer):
         if not data.get('ticket_id') and not data.get('ticket_ids'):
             raise serializers.ValidationError("Either ticket_id or ticket_ids is required.")
         return data
-
-
-class PaystackCallbackSerializer(serializers.Serializer):
-    """Serializer for Paystack callback"""
-    reference = serializers.CharField(required=True)
-    trxref = serializers.CharField(required=False)
-    transaction = serializers.DictField(required=False)
-
-
-class WebhookSerializer(serializers.Serializer):
-    """Serializer for Paystack webhook"""
-    event = serializers.CharField(required=True)
-    data = serializers.DictField(required=True)

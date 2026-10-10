@@ -424,7 +424,7 @@ export interface PaymentPlan {
 export interface Payment {
   id: string;
   reference: string;
-  paystack_reference?: string;
+  gateway_reference?: string;
   amount: number;
   formatted_amount?: string;
   currency?: string;
@@ -446,7 +446,7 @@ export interface Payment {
   completed_at?: string | null;
   updated_at?: string;
   metadata?: Record<string, unknown>;
-  paystack_response?: Record<string, unknown>;
+  gateway_response?: Record<string, unknown>;
 }
 
 // ─── Legacy Tickets (tickets app — superseded by EventRegistration) ────────────

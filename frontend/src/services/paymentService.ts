@@ -2,7 +2,6 @@ import { api } from "./api";
 
 interface InitializeResponse {
   authorization_url: string;
-  access_code: string;
   reference: string;
   payment: any;
 }

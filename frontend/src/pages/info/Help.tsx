@@ -104,7 +104,7 @@ const TOPICS: Topic[] = [
       },
       {
         q: 'How do I pay?',
-        a: 'Payments go through Paystack. We never see your card details. You get your ticket once the payment is confirmed.',
+        a: 'Payments go through Squad. We never see your card details. You get your ticket once the payment is confirmed.',
       },
       {
         q: 'I paid but I have no ticket.',

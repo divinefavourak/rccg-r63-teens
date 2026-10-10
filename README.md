@@ -31,7 +31,7 @@ A comprehensive youth ministry web platform for the **Redeemed Christian Church 
 
 RCCG R63 Teens serves as:
 
-- **Event Registration System** — teens register for church events (campouts, conferences, etc.), receive QR-code tickets, and pay via Paystack
+- **Event Registration System** — teens register for church events (campouts, conferences, etc.), receive QR-code tickets, and pay via Squad
 - **Daily Devotional Platform** — Teenage Open Heaven daily Bible readings with reading streaks and engagement tracking
 - **Content Hub** — manuals (weekly teaching materials), podcasts, videos, and media series
 - **Administrative Hub** — admin and coordinator dashboards with analytics, bulk operations, and content management
@@ -49,7 +49,7 @@ RCCG R63 Teens serves as:
 | Cache | Redis |
 | Task Queue | Celery + AMQP |
 | Authentication | JWT (djangorestframework-simplejwt) |
-| Payments | Paystack |
+| Payments | Squad |
 | File Storage | Cloudflare R2 (via django-storages) |
 | Email | Brevo (SMTP) |
 | API Docs | drf-spectacular (Swagger / ReDoc) |
@@ -154,8 +154,7 @@ Located at `backend/.env`. Copy from `backend/.env.example`.
 | `REDIS_URL` | Redis connection URL | `redis://localhost:6379/0` |
 | `BREVO_SMTP_USER` | Brevo SMTP username/email | `your@email.com` |
 | `BREVO_SMTP_KEY` | Brevo SMTP API key | `your-brevo-key` |
-| `PAYSTACK_SECRET_KEY` | Paystack secret key | `sk_test_...` |
-| `PAYSTACK_PUBLIC_KEY` | Paystack public key | `pk_test_...` |
+| `SQUAD_SECRET_KEY` | Squad secret key (a sandbox key is sent to Squad's sandbox) | `sandbox_sk_...` |
 | `FRONTEND_URL` | Frontend base URL for email links | `http://localhost:3000` |
 | `R2_ACCESS_KEY_ID` | Cloudflare R2 access key | — |
 | `R2_SECRET_ACCESS_KEY` | Cloudflare R2 secret key | — |
@@ -244,7 +243,7 @@ rccg-r63-teens/
     ├── media/                 # Podcasts and media series
     ├── events/                # Event management
     ├── tickets/               # Ticketing (legacy)
-    ├── payments/              # Paystack payment processing
+    ├── payments/              # Squad payment processing
     ├── common/                # Shared models and mixins
     ├── templates/             # Email HTML templates
     └── requirements.txt
@@ -267,7 +266,7 @@ rccg-r63-teens/
 
 - Multi-role authentication with JWT
 - Event registration with QR-code PDF tickets
-- Paystack payment integration with proof-of-payment upload
+- Squad payment integration with proof-of-payment upload
 - Daily Teenage Open Heaven devotionals with reading streaks
 - Weekly teaching manuals and podcast/media series
 - Bulk user registration and email dispatch
