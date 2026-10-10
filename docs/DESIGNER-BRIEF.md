@@ -73,7 +73,7 @@ The backend is ready for all of these. Design them in this order.
 
 **Next — content and events:**
 5. **Library** — articles, videos, podcasts. Save items. Audio keeps playing in the background.
-6. **Events** — see an event, register, pay (Paystack), get a QR ticket.
+6. **Events** — see an event, register, pay (Squad), get a QR ticket.
 7. **Tribe** — church notices and your church info.
 8. **Me** — profile, progress, saved items, notifications, settings.
 

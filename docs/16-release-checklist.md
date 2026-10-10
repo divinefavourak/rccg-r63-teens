@@ -10,7 +10,7 @@ This is a gate, not a guideline. Every unchecked item is a launch blocker unless
 - [ ] OWASP pass: injection, XSS (strict CSP live), IDOR sweep on all ID-bearing endpoints, SSRF on any fetch-by-URL admin features.
 - [ ] Dependency and container vulnerability scan clean of criticals; secrets in managed store, none in repo history.
 - [ ] External penetration test completed; criticals and highs remediated and retested.
-- [ ] Paystack webhook signature verification + idempotency tested (replay attack test); payment flows cannot be spoofed to confirm registrations.
+- [ ] Squad webhook signature verification + idempotency tested (replay attack test); payment flows cannot be spoofed to confirm registrations.
 - [ ] QR tickets signed; forged/duplicate ticket scan rejected in test.
 - [ ] Audit logging live for all privileged actions; logs tamper-evident and retained per policy.
 - [ ] Admin accounts: strong-password policy enforced; 2FA for Administrator role.
@@ -42,11 +42,11 @@ This is a gate, not a guideline. Every unchecked item is a launch blocker unless
 
 ## Testing
 
-- [ ] Automated: unit + integration suites green; tenancy scope tests green against multi-region seed data; payment/webhook integration tests green in Paystack test mode.
+- [ ] Automated: unit + integration suites green; tenancy scope tests green against multi-region seed data; payment/webhook integration tests green in Squad's sandbox.
 - [ ] Reminder ladder verified end to end: rungs fire per preset and quiet hours; **completing the devotional cancels all remaining rungs (including queued sends) within seconds**; 7-day-ignore auto step-down triggers with its in-app note; timezone boundaries (midnight WAT) tested (`07-feature-specifications.md` #10).
 - [ ] Grace Day logic tested: monthly grant, earning, 4-day cap, 2-consecutive limit and third-miss reset, streak pause and resume, visible "Grace covered…" messaging (`12-gamification.md`).
 - [ ] End-to-end: the 26 flows in `06-user-flows.md` executed on real devices — minimum matrix: low-end Android (≤2GB RAM) Chrome, mid-range Android, one iOS Safari device, desktop Chrome/Firefox.
-- [ ] Live payment test: real card + bank transfer + USSD through production Paystack, refunded and reconciled.
+- [ ] Live payment test: real card + bank transfer + USSD through production Squad, refunded and reconciled.
 - [ ] Event dress rehearsal: a real pilot event (small gathering) run end-to-end — create, register, pay, QR check-in with two scanners including offline check-in sync, report export.
 - [ ] Pilot cohort: ≥50 real teens + 5 leaders used the app for ≥2 weeks; critical feedback triaged; showstoppers fixed.
 - [ ] UAT sign-off from: regional admin (Funmi profile), one coordinator, one teacher.
@@ -65,7 +65,7 @@ This is a gate, not a guideline. Every unchecked item is a launch blocker unless
 - [ ] Devotional pipeline monitor: alert fires if no devotional scheduled within 48h (tested by removing one).
 - [ ] Payment webhook failure alerting + replay runbook.
 - [ ] Status/incident communication path defined (who tells coordinators what, when something breaks on a Sunday morning).
-- [ ] Runbooks written: deploy, rollback, restore-from-backup, OTP provider failover, Paystack incident.
+- [ ] Runbooks written: deploy, rollback, restore-from-backup, OTP provider failover, Squad incident.
 
 ## Backups & recovery
 

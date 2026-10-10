@@ -9,7 +9,7 @@ from tickets.models import Ticket
 
 
 class Payment(models.Model):
-    """Payment model for Paystack integration"""
+    """A payment taken through the payment gateway (Squad)"""
     
     class Status(models.TextChoices):
         PENDING = 'pending', 'Pending'
@@ -28,7 +28,8 @@ class Payment(models.Model):
     # Payment identification
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     reference = models.CharField(max_length=100, unique=True, db_index=True)
-    paystack_reference = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    # The gateway's own reference for the charge. Squad asks for it on a refund.
+    gateway_reference = models.CharField(max_length=100, unique=True, null=True, blank=True)
     
     # Payment details
     amount = models.DecimalField(max_digits=10, decimal_places=2)  # Amount in Naira
@@ -61,14 +62,14 @@ class Payment(models.Model):
     payer_name = models.CharField(max_length=255, blank=True)
     payer_phone = models.CharField(max_length=20, blank=True)
     
-    # Paystack response data
-    paystack_response = models.JSONField(null=True, blank=True)
+    # What the gateway said about the charge
+    gateway_response = models.JSONField(null=True, blank=True)
     authorization_code = models.CharField(max_length=100, blank=True)
     channel = models.CharField(max_length=50, blank=True)
-    # Paystack's checkout page for this payment. Kept so that a second tap on
-    # Pay reopens the same page instead of starting a second charge.
+    # The gateway's checkout page for this payment. Kept so that a second tap
+    # on Pay reopens the same page instead of starting a second charge. The
+    # name is the one the phone app reads.
     authorization_url = models.URLField(max_length=500, blank=True)
-    access_code = models.CharField(max_length=100, blank=True)
     
     # Timestamps
     initiated_at = models.DateTimeField(auto_now_add=True)
@@ -104,23 +105,32 @@ class Payment(models.Model):
     def formatted_amount(self):
         return f"₦{self.amount:,.2f}"
     
-    def mark_as_successful(self, paystack_data):
-        """Mark payment as successful with Paystack data"""
+    # Squad's `transaction_type`, lower-cased, as one of our payment methods.
+    _METHODS = {
+        'card': PaymentMethod.CARD,
+        'transfer': PaymentMethod.BANK_TRANSFER,
+        'virtualaccount': PaymentMethod.BANK_TRANSFER,
+        'bank': PaymentMethod.BANK,
+        'ussd': PaymentMethod.USSD,
+        'merchantussd': PaymentMethod.USSD,
+    }
+
+    def mark_as_successful(self, charge):
+        """Mark payment as successful. `charge` is what `services._charge` returns."""
         self.status = self.Status.SUCCESS
         self.completed_at = timezone.now()
-        self.paystack_response = paystack_data
-        self.paystack_reference = paystack_data.get('reference')
-        self.authorization_code = paystack_data.get('authorization', {}).get('authorization_code', '')
-        self.channel = paystack_data.get('channel', '')
-        self.payment_method = paystack_data.get('authorization', {}).get('channel', '')
+        self.gateway_response = charge.get('raw')
+        self.gateway_reference = charge.get('gateway_reference')
+        self.channel = charge.get('channel') or ''
+        self.payment_method = self._METHODS.get(self.channel)
         self.save()
     
-    def mark_as_failed(self, paystack_data=None):
+    def mark_as_failed(self, gateway_data=None):
         """Mark payment as failed"""
         self.status = self.Status.FAILED
         self.completed_at = timezone.now()
-        if paystack_data:
-            self.paystack_response = paystack_data
+        if gateway_data:
+            self.gateway_response = gateway_data
         self.save()
 
 

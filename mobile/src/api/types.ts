@@ -452,7 +452,7 @@ export interface EventRegistration {
   bed?: { code: string; hostel: string; is_firm: boolean } | null;
 }
 
-/** `POST /payments/registrations/<id>/checkout/`: Paystack's page for a ticket. */
+/** `POST /payments/registrations/<id>/checkout/`: Squad's page for a ticket. */
 export interface Checkout {
   reference: string;
   authorization_url: string;

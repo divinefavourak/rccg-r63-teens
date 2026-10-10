@@ -14,7 +14,7 @@ const MAIL = `mailto:${SITE_CONTACT.email}`;
                         backend/progress/models.py, backend/payments/models.py,
                         backend/notifications/models.py
   - Who it is shared with: the services configured in backend/backend/settings.py
-                        (Paystack, Brevo, Cloudflare R2) and <Analytics /> in App.tsx
+                        (Squad, Brevo, Cloudflare R2) and <Analytics /> in App.tsx
   - What sits on the device: the localStorage keys in api/axios.ts and hooks/useTheme.ts
   - The promises about leaders and private data: docs/13-community.md, "Privacy"
 
@@ -153,7 +153,7 @@ const SECTIONS: LegalSection[] = [
         <List
           items={[
             <>
-              <B>Paystack</B> processes payments. It receives the payer’s name, email, phone and the amount, and it
+              <B>Squad</B> processes payments. It receives the payer’s name, email and the amount, and it
               handles the card details.
             </>,
             <>

@@ -86,6 +86,7 @@ Engineering changes that altered behaviour these documents describe. Pull reques
 ## Added after the merge
 
 - **Deleting an account from People** in the Console, with the server refusing your own account, a superuser, and anyone who has paid. `07-feature-specifications.md` #18.
+- **Payments go through Squad** (GTCO) in place of Paystack: one key, `SQUAD_SECRET_KEY`, and a payer comes back to `/payments/return/<reference>/`. `07-feature-specifications.md` #9, `ops/07-production-secrets.md`.
 
 ## Fixed after review
 

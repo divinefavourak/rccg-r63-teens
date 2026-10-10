@@ -23,7 +23,7 @@ Last updated 6 October 2026, on branch `feat/mobile-teacher-tools`.
 | Backend automated tests | **48 passed**; 4 newer ones not yet run |
 | Website deep links (production) | **Passed** after the fix |
 | The web app for iPhones | **13 of 13 passed** in headless Chrome; not yet run on an iPhone |
-| Paying for an event (Paystack) | Built, **not yet run** |
+| Paying for an event (Squad) | Paying works against the Squad sandbox; the webhook is **not yet run** |
 
 ## What you need
 
@@ -374,35 +374,40 @@ Not yet run, and needing a real iPhone with the site on HTTPS:
 
 ## 9. Paying for an event
 
-Written on 8 October 2026, on branch `feat/paystack-integration`. **Nothing
-here has been run yet**, on a phone or on the server. The mobile code
-typechecks.
+Written on 8 October 2026 for Paystack, and moved to Squad on 10 October 2026
+(branch `feat/squad-payments`). The backend tests pass; the rows below say what
+has been tried on a phone.
 
-It needs Paystack **test** keys in the local `backend/.env`
-(`PAYSTACK_SECRET_KEY=sk_test_…`, `PAYSTACK_PUBLIC_KEY=pk_test_…`), and a paid
-event to register for. Paystack cannot reach a computer on Wi-Fi, so its
-webhook will not arrive locally; the ticket is confirmed by the "ask Paystack"
-route instead, which is the path these tests exercise. Paystack's test cards
-are listed in its documentation.
+It needs a Squad **sandbox** key in the local `backend/.env`
+(`SQUAD_SECRET_KEY=sandbox_sk_…`, from `sandbox.squadco.com` under Profile →
+API & Webhook), the `payments` migration applied, and a paid event to register
+for. Squad cannot reach a computer on Wi-Fi, so its webhook will not arrive
+locally; the ticket is confirmed by the "ask Squad" route instead, which is
+the path these tests exercise. Squad's test cards are in its documentation
+under Payments → Test Cards. A sandbox transfer is completed by calling its
+"simulate payment" endpoint with the account number the payment page shows.
 
 The backend tests, from `backend\`:
 
 ```powershell
 $env:TEST_DATABASE_URL = 'postgres://faithtribe:faithtribe@localhost:5434/faithtribe'
-.\venv\Scripts\python.exe manage.py test payments.test_registrations --noinput
+.\venv\Scripts\python.exe manage.py test payments --noinput
 ```
 
 | Test | Result |
 |---|---|
-| `payments.test_registrations` (37 tests: opening a checkout, the webhook, released places, the pages a parent sees) | Not yet run |
-| `payments events` together, to see nothing older broke | Not yet run |
-| Register for a paid event: the ticket shows the amount, "Pay by …", **Pay now** and **Send to a parent to pay** | Not yet run |
-| **Pay now** opens Paystack in the browser; pay with a test card; the last page says "Payment received" and **Back to the app** returns to the ticket | Not yet run |
-| Back on the ticket: it reads "Confirmed and paid", the pay panel is gone, "Payment received" shows | Not yet run |
+| `payments.test_registrations` (37 tests: opening a checkout, the webhook, released places, the pages a parent sees) | Passed, 10 October 2026 |
+| `payments.tests` (what is sent to Squad, how its answers are read, the webhook's signature) | Passed, 10 October 2026 |
+| `payments events` together, to see nothing older broke | Passed, 10 October 2026 (180 tests) |
+| Register for a paid event: the ticket shows the amount, "Pay by …", **Pay now** and **Send to a parent to pay** | Passed, 10 October 2026 (Squad sandbox, local server) |
+| **Pay now** opens Squad in the browser; pay with a test card; the last page says "Payment received" and **Back to the app** returns to the ticket | Passed, 10 October 2026 (Squad sandbox, local server) |
+| The address Squad sends the payer back to is `/api/v1/payments/return/<reference>/`, whatever it adds after it | Passed, 10 October 2026 |
+| With the API reachable from outside (deployed, or a tunnel) and the webhook URL set in the sandbox dashboard: the webhook arrives, is accepted (200, not 401) and confirms the ticket without the app being opened | Not yet run |
+| Back on the ticket: it reads "Confirmed and paid", the pay panel is gone, "Payment received" shows | Passed, 10 October 2026 |
 | Tap **Pay now** twice quickly: one checkout, not two | Not yet run |
 | Close the browser without paying: the ticket still offers Pay, and nothing is marked failed | Not yet run |
-| **Send to a parent to pay**: the link opens on another phone with no login, shows the event, name and amount, and pays | Not yet run |
+| **Send to a parent to pay**: the link opens on another phone with no login, shows the event, name and amount, and pays | Passed, 10 October 2026 |
 | A ticket that is paid is accepted at the door (section 2), where before it was refused as unpaid | Not yet run |
 | An event with bedspaces: the bed reads as held before paying and firm after | Not yet run |
 | A place left unpaid for 24 hours is released, the teen is told, and the ticket reads "Place released" with Pay still offered | Not yet run |
-| The web app on an iPhone: Pay now leaves for Paystack in the same tab and comes back to the ticket | Not yet run |
+| The web app on an iPhone: Pay now leaves for Squad in the same tab and comes back to the ticket | Not yet run |

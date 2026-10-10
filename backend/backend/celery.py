@@ -60,7 +60,7 @@ app.conf.beat_schedule = {
 
     # "Pending unpaid registrations expire after 24h, releasing capacity"
     # (docs/07 §9). Often enough that a released place is back on offer within
-    # minutes; the task does nothing while Paystack is not set up.
+    # minutes; the task does nothing while Squad is not set up.
     'expire-unpaid-registrations': {
         'task': 'payments.tasks.expire_unpaid_registrations',
         'schedule': crontab(minute='*/15'),

@@ -379,7 +379,7 @@ Each screen below states its **base design**, then its **role variants**, then i
 >
 > **Library & Media** (`media.manage`). Articles, podcasts, videos, playlists. Grid view with covers, category filter (Faith · Relationships · Education · Health · Lifestyle · Testimonies · News), status pills, featured and pinned toggles. Episode editor: series, episode/season number, title, description, show notes, thumbnail, media type (audio / video / both), audio and video sources, duration, transcript, chapters, guests, tags, explicit flag, target age groups.
 >
-> **Settings.** Design **two versions**. The full version (Super Admin / National): organization details, region configuration, notification defaults, roles & permissions link, integrations (Paystack keys, webhook status), data export, and account security. The **account-only version** (Province Coordinator, Parish Leader, Teacher): profile, password, two-factor, notification preferences, sessions, sign out. Nothing else — not a full settings page with most of it hidden.
+> **Settings.** Design **two versions**. The full version (Super Admin / National): organization details, region configuration, notification defaults, roles & permissions link, integrations (Squad key, webhook status), data export, and account security. The **account-only version** (Province Coordinator, Parish Leader, Teacher): profile, password, two-factor, notification preferences, sessions, sign out. Nothing else — not a full settings page with most of it hidden.
 >
 > **Audit Log** (Super Admin / National). An append-only table: who, action, entity type, entity, when, IP, user agent. Filterable by actor, action, entity type, and date range, with before/after value diffs on an expanded row. This is a record, not a feed: quiet, monospaced identifiers, no avatars, no colour except on destructive actions. Nothing on this screen is editable or deletable — design it so that reads as obvious.
 
@@ -544,7 +544,7 @@ Each screen below states its **base design**, then its **role variants**, then i
 | Node comparison table | scope | ● | ● | ● | ● | — | — |
 | Change date range / export CSV | scope | ● | ● | ● | ● | — | — |
 | Organization & region settings | Super Admin / National | ● | ● | — | — | — | — |
-| Integrations (Paystack, webhooks) | `payments.manage` | ● | ● | — | — | — | — |
+| Integrations (Squad, webhooks) | `payments.manage` | ● | ● | — | — | — | — |
 | Roles & permissions matrix | `roles.manage` | ● | — | — | — | — | — |
 | Own profile / password / 2FA / sessions | — | ● | ● | ● | ● | ● | ● |
 | View audit log | Super Admin / National | ● | ● | — | — | — | — |

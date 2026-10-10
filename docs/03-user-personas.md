@@ -137,7 +137,7 @@ Super Teens are teens with recognized peer-leadership responsibility: leading pr
 
 **Needs**
 
-- Coordinator dashboard: event creation with capacity/pricing, live registration numbers, payment reconciliation against Paystack, QR check-in via phone camera, exportable reports (`07-feature-specifications.md`).
+- Coordinator dashboard: event creation with capacity/pricing, live registration numbers, payment reconciliation against Squad, QR check-in via phone camera, exportable reports (`07-feature-specifications.md`).
 - Hierarchy-scoped analytics: his area only, rolled up by parish (`14-analytics.md`).
 - Publishing tools with an approval flow so parish-level submissions reach him for review.
 

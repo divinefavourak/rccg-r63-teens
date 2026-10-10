@@ -2,17 +2,17 @@
 Paying for an event registration.
 
 `services.py` was written to pay for a legacy `Ticket`. This module points the
-same Paystack account and the same `Payment` row at an `EventRegistration`, and
+same Squad account and the same `Payment` row at an `EventRegistration`, and
 owns the rules about it:
 
 * The amount is the registration's own `amount_due`, fixed when it was made.
-  Paystack's fee comes out of what the church receives; the payer is charged
+  Squad's fee comes out of what the church receives; the payer is charged
   the price the event shows.
 * One checkout at a time. A second tap on Pay, or a parent opening the link the
   teen sent, reopens the checkout that is already open rather than starting a
   second charge.
-* Paystack's word is what marks a registration paid: the webhook, or a verify
-  call answered by Paystack. Nothing the phone says does.
+* Squad's word is what marks a registration paid: the webhook, or a verify
+  call answered by Squad. Nothing the phone says does.
 * A place on a paid event is held for `UNPAID_REGISTRATION_HOLD_HOURS`. After
   that it is given up. The same email cannot register twice for one event, so
   a place given up this way can still be paid for, and comes back if the event
@@ -43,10 +43,10 @@ PaymentStatus = EventRegistration.PaymentStatus
 UNPAID_REASON = 'Payment was not completed in time.'
 
 # How long an open checkout is handed out again. Past this a new one is made:
-# Paystack gives up on a checkout nobody finished, and does not say when.
+# Squad gives up on a checkout nobody finished, and does not say when.
 REUSE_FOR = timedelta(minutes=30)
 # A payment row with no checkout page yet is another request still talking to
-# Paystack. After this long it is taken to have died instead.
+# Squad. After this long it is taken to have died instead.
 PREPARING_FOR = timedelta(seconds=30)
 
 _UNPAID = (PaymentStatus.PENDING, PaymentStatus.FAILED)
@@ -62,7 +62,7 @@ class BeingPrepared(Exception):
 
 
 class Unavailable(Exception):
-    """Paystack is not set up, or did not answer. The message is for the payer."""
+    """Squad is not set up, or did not answer. The message is for the payer."""
 
 
 def hold_hours():
@@ -136,11 +136,15 @@ def from_pay_token(token):
 
 # ── Opening a checkout ───────────────────────────────────────────────────────
 
-def start(registration, callback_url, return_to=''):
+def start(registration, return_url, return_to=''):
     """
-    The Paystack checkout for this registration: the one already open if there
+    The Squad checkout for this registration: the one already open if there
     is one, a new one otherwise. Returns the `Payment`, whose
     `authorization_url` is the page to send the payer to.
+
+    `return_url` is our page Squad sends the payer back to. It ends in a
+    slash and the payment's reference is added to it. Squad's documentation
+    does not name the query parameter it appends, so ours is in the path.
 
     `return_to` is where the payer's own app wants to land afterwards. The
     caller has already checked it is somewhere of ours.
@@ -150,7 +154,7 @@ def start(registration, callback_url, return_to=''):
     except ValueError:
         raise Unavailable('Paying online is not set up yet. Please try again later.')
 
-    # Held only for the reads and the insert. The call to Paystack comes after
+    # Held only for the reads and the insert. The call to Squad comes after
     # it is released: a slow answer from them must not hold a database row.
     with transaction.atomic():
         registration = EventRegistration.objects.select_for_update().get(pk=registration.pk)
@@ -178,7 +182,7 @@ def start(registration, callback_url, return_to=''):
 
         event = registration.event
         payment = Payment.objects.create(
-            reference=service.paystack.generate_reference(),
+            reference=service.squad.generate_reference(),
             amount=registration.amount_due,
             currency='NGN',
             registration=registration,
@@ -195,35 +199,26 @@ def start(registration, callback_url, return_to=''):
         )
 
     try:
-        answer = service.paystack.initialize_payment({
-            'email': registration.attendee_email,
-            'amount': int(payment.amount * 100),  # kobo
-            'reference': payment.reference,
-            'callback_url': callback_url,
-            'metadata': {
+        payment.authorization_url = service.squad.open_checkout(
+            reference=payment.reference,
+            amount=payment.amount,
+            email=registration.attendee_email,
+            name=registration.attendee_name,
+            callback_url=f'{return_url}{payment.reference}/',
+            metadata={
                 'payment_id': str(payment.pk),
                 'registration_id': str(registration.pk),
-                'custom_fields': [
-                    {'display_name': 'Event', 'variable_name': 'event',
-                     'value': event.title},
-                    {'display_name': 'Attendee', 'variable_name': 'attendee',
-                     'value': registration.attendee_name},
-                    {'display_name': 'Registration', 'variable_name': 'registration',
-                     'value': registration.registration_id},
-                ],
+                'registration_code': registration.registration_id,
+                'event': event.title,
+                'attendee': registration.attendee_name,
             },
-        })
-        if not answer.get('status'):
-            raise ValueError(answer.get('message') or 'Paystack refused the payment.')
-        data = answer['data']
-        payment.authorization_url = data['authorization_url']
-        payment.access_code = data.get('access_code', '')
+        )
     except Exception as exc:
         logger.exception('Could not open a checkout for %s', registration.registration_id)
         payment.mark_as_failed({'error': str(exc)})
-        raise Unavailable('We could not reach Paystack. Please try again in a moment.')
+        raise Unavailable('We could not reach Squad. Please try again in a moment.')
 
-    payment.save(update_fields=['authorization_url', 'access_code', 'updated_at'])
+    payment.save(update_fields=['authorization_url', 'updated_at'])
     return payment
 
 
@@ -235,7 +230,7 @@ def settle(payment):
 
     Called by `PaymentService._complete`, inside its transaction and with the
     payment's row locked, so it runs once per payment however many times
-    Paystack reports it. Returns what to do once that transaction commits, or
+    Squad reports it. Returns what to do once that transaction commits, or
     None.
     """
     registration = EventRegistration.objects.select_for_update().get(pk=payment.registration_id)
@@ -313,18 +308,18 @@ def _announce_paid(registration, place_gone):
         logger.exception('Could not email %s their confirmation', registration.registration_id)
 
 
-# ── Asking Paystack ──────────────────────────────────────────────────────────
+# ── Asking Squad ─────────────────────────────────────────────────────────────
 
 def check(payment):
     """
-    Ask Paystack what became of one payment and act on the answer. Returns True
+    Ask Squad what became of one payment and act on the answer. Returns True
     when it is now successful.
 
     For the moment someone comes back from the checkout: the webhook usually
     gets there first, and this covers the times it has not. An unfinished
     checkout is left alone, not failed. Someone paying by transfer leaves the
-    page to open their bank's app, and Paystack calls that "abandoned" until
-    the money arrives.
+    page to open their bank's app, and Squad calls that "abandoned" or
+    "pending" until the money arrives.
     """
     if payment.status == Payment.Status.SUCCESS:
         return True
@@ -333,28 +328,25 @@ def check(payment):
 
     try:
         service = PaymentService()
-        answer = service.paystack.verify_payment(payment.reference)
+        charge = service.squad.verify_payment(payment.reference)
     except Exception:
         # Not set up, unreachable, or an answer that is not an answer. The
         # webhook is still on its way; this was only ever the second route.
-        logger.exception('Could not ask Paystack about %s', payment.reference)
-        return False
-    data = answer.get('data') or {}
-    if not answer.get('status'):
+        logger.exception('Could not ask Squad about %s', payment.reference)
         return False
 
-    if data.get('status') == 'success':
+    if charge['status'] == 'success':
         try:
-            completed_payment, _ = service._complete(payment.reference, data)
+            completed_payment, _ = service._complete(payment.reference, charge)
         except PaymentAmountMismatch:
             return False
         return completed_payment.status == Payment.Status.SUCCESS
 
-    if data.get('status') == 'failed':
+    if charge['status'] == 'failed':
         with transaction.atomic():
             fresh = Payment.objects.select_for_update().get(pk=payment.pk)
             if fresh.status == Payment.Status.PENDING:
-                fresh.mark_as_failed(data)
+                fresh.mark_as_failed(charge['raw'])
     return False
 
 
@@ -381,11 +373,11 @@ def expire_unpaid(now=None):
     Give up the places that were held for payment and not paid for in time.
     Returns how many.
 
-    Does nothing while Paystack is not set up: nobody can pay, so nobody can
+    Does nothing while Squad is not set up: nobody can pay, so nobody can
     be late. Someone in the middle of paying is left for the next run.
     """
     hours = hold_hours()
-    if not hours or not getattr(settings, 'PAYSTACK_SECRET_KEY', ''):
+    if not hours or not getattr(settings, 'SQUAD_SECRET_KEY', ''):
         return 0
 
     now = now or timezone.now()

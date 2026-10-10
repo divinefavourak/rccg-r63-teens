@@ -8,7 +8,7 @@ const MAIL = `mailto:${SITE_CONTACT.email}`;
 
 /*
   The rules for using Faith Tribe. Written to match what the product does today:
-  accounts, readings, the Bible, events with Paystack payments, and the Console.
+  accounts, readings, the Bible, events with Squad payments, and the Console.
 
   Two sections state the church's position rather than describing code, and
   should be confirmed by Region 63 leadership before this is relied on:
@@ -127,13 +127,13 @@ const SECTIONS: LegalSection[] = [
   {
     id: 'events',
     title: 'Events, tickets and payments',
-    summary: 'Prices are shown before you pay. Payments go through Paystack. For a refund or a change, ask the organisers.',
+    summary: 'Prices are shown before you pay. Payments go through Squad. For a refund or a change, ask the organisers.',
     body: (
       <>
         <List
           items={[
             'The price, date and place of an event are shown before you register. Details can change, and we will tell you if they do.',
-            'Payments are handled by Paystack. We do not see or keep your card details.',
+            'Payments are handled by Squad. We do not see or keep your card details.',
             'A ticket is for the person named on it. Bring it with you. It is checked at the door.',
             'The details you give when registering must be true, including guardian, emergency and medical information. They are used to keep you safe.',
             'If you are under 18, a parent or guardian must agree to you attending.',

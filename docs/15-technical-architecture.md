@@ -24,7 +24,7 @@ This document defines architectural *principles and shapes*, plus a recommended 
                             │
               ┌─────────────┼───────────────────────────┐
         ┌─────▼─────┐ ┌─────▼──────┐ ┌──────────▼──────────┐
-        │ Paystack  │ │ Push (Web  │ │ SMS/Email providers │
+        │ Squad     │ │ Push (Web  │ │ SMS/Email providers │
         │ webhooks  │ │ Push/FCM)  │ │ (OTP, transactional)│
         └───────────┘ └────────────┘ └─────────────────────┘
 ```
@@ -107,7 +107,7 @@ Web Push (VAPID/FCM) + in-app inbox as the mirror of record + SMS/email for tran
 
 ## Payments
 
-Paystack integration: initialize → redirect/inline → **webhook as source of truth** (signature-verified, idempotent processing); reconciliation view compares provider records to registrations (`03-user-personas.md`, Chinedu). Shareable payment links for parent payment. No card data ever touches our servers (PCI scope stays SAQ-A).
+Squad integration: initialize → redirect/inline → **webhook as source of truth** (signature-verified, idempotent processing); reconciliation view compares provider records to registrations (`03-user-personas.md`, Chinedu). Shareable payment links for parent payment. No card data ever touches our servers (PCI scope stays SAQ-A).
 
 ## Performance budgets (binding)
 

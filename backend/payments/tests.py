@@ -11,7 +11,7 @@ import json
 from .models import Payment, PaymentPlan, TransactionLog
 from users.models import User
 from tickets.models import Ticket
-from .services import PaystackService, PaymentService
+from .services import SquadError, SquadService, PaymentService, _charge
 from .serializers import PaymentSerializer, PaymentPlanSerializer
 
 
@@ -22,13 +22,40 @@ def result_list(response):
         return data['results']
     return data
 
-# PaystackService.__init__ refuses to construct without keys. The tests below
-# mock every outbound Paystack call, so these dummy values only need to be
-# non-empty — no request ever reaches Paystack.
-paystack_test_keys = override_settings(
-    PAYSTACK_SECRET_KEY='sk_test_dummy',
-    PAYSTACK_PUBLIC_KEY='pk_test_dummy',
-)
+# SquadService.__init__ refuses to construct without a key. The tests below
+# mock every outbound Squad call, so this dummy value only needs to be
+# non-empty — no request ever reaches Squad.
+squad_test_keys = override_settings(SQUAD_SECRET_KEY='sandbox_sk_dummy')
+
+
+def squad_charge(reference, amount=300000, status='Success'):
+    """What `SquadService.verify_payment` returns for a transaction."""
+    return _charge({
+        'transaction_ref': reference,
+        'transaction_status': status,
+        'transaction_amount': amount,  # in kobo
+        'transaction_type': 'Card',
+        'gateway_transaction_ref': f'{reference}_1_1',
+    })
+
+
+def squad_webhook(reference, amount=300000, event='charge_successful'):
+    """The body of the webhook Squad sends for a charge, as bytes."""
+    return json.dumps({
+        'Event': event,
+        'TransactionRef': reference,
+        'Body': {
+            'amount': amount,  # in kobo
+            'transaction_ref': reference,
+            'gateway_ref': f'{reference}_1_1',
+            'transaction_status': 'Success',
+            'currency': 'NGN',
+            'transaction_type': 'Card',
+            'merchant_amount': amount,
+            'meta': {},
+            'is_recurring': False,
+        },
+    }).encode('utf-8')
 
 
 class PaymentModelTests(TestCase):
@@ -127,26 +154,15 @@ class PaymentModelTests(TestCase):
         self.assertTrue(payment.is_pending)
         
         # Test marking as successful (using your actual method)
-        paystack_data = {
-            'reference': 'PAYSTACK_REF_123',
-            'status': 'success',
-            'amount': 300000,  # in kobo
-            'channel': 'card',
-            'authorization': {
-                'authorization_code': 'AUTH_code_123',
-                'channel': 'card'
-            }
-        }
-        
-        payment.mark_as_successful(paystack_data)
+        payment.mark_as_successful(squad_charge('TEST_STATUS_001'))
         
         self.assertEqual(payment.status, Payment.Status.SUCCESS)
         self.assertTrue(payment.is_successful)
         self.assertFalse(payment.is_pending)
         self.assertIsNotNone(payment.completed_at)
-        self.assertEqual(payment.paystack_reference, 'PAYSTACK_REF_123')
-        self.assertEqual(payment.authorization_code, 'AUTH_code_123')
+        self.assertEqual(payment.gateway_reference, 'TEST_STATUS_001_1_1')
         self.assertEqual(payment.channel, 'card')
+        self.assertEqual(payment.payment_method, Payment.PaymentMethod.CARD)
         
     
     def test_payment_serializer(self):
@@ -230,7 +246,7 @@ class PaymentPlanTests(TestCase):
         
 
 
-@paystack_test_keys
+@squad_test_keys
 class PaymentServiceTests(TestCase):
     """Tests for your actual PaymentService"""
     
@@ -271,23 +287,14 @@ class PaymentServiceTests(TestCase):
         # Create PaymentService instance
         self.payment_service = PaymentService()
     
-    @patch.object(PaystackService, 'initialize_payment')
-    @patch.object(PaystackService, 'generate_reference')
+    @patch.object(SquadService, 'open_checkout')
+    @patch.object(SquadService, 'generate_reference')
     def test_create_payment_integration(self, mock_generate_ref, mock_initialize):
         """Test payment creation with actual service"""
         
         # Mock the dependencies
-        mock_generate_ref.return_value = 'RCCG_20250101_123456'
-        
-        mock_initialize.return_value = {
-            'status': True,
-            'message': 'Authorization URL created',
-            'data': {
-                'authorization_url': 'https://paystack.com/pay/test_ref',
-                'reference': 'RCCG_20250101_123456',
-                'access_code': 'access_code_123'
-            }
-        }
+        mock_generate_ref.return_value = 'RCCG20250101123456'
+        mock_initialize.return_value = 'https://sandbox-pay.squadco.com/RCCG20250101123456'
         
         # Create mock request
         mock_request = Mock()
@@ -297,7 +304,7 @@ class PaymentServiceTests(TestCase):
         }
         
         # Call your actual service method
-        payment, paystack_response = self.payment_service.create_payment(
+        payment, checkout_url = self.payment_service.create_payment(
             ticket=self.ticket,
             user=self.user,
             request=mock_request
@@ -305,22 +312,23 @@ class PaymentServiceTests(TestCase):
         
         
         # Verify results
-        self.assertEqual(payment.reference, 'RCCG_20250101_123456')
+        self.assertEqual(payment.reference, 'RCCG20250101123456')
         self.assertEqual(payment.amount, Decimal('3000.00'))  # Default fee in PaymentService.create_payment
         self.assertEqual(payment.ticket, self.ticket)
         self.assertEqual(payment.payer_email, self.user.email)
         self.assertEqual(payment.status, Payment.Status.PENDING)
         
-        # Verify Paystack service was called
+        # Verify Squad service was called, for the ticket's price
         mock_generate_ref.assert_called_once()
         mock_initialize.assert_called_once()
-        
+        self.assertEqual(mock_initialize.call_args.kwargs['amount'], Decimal('3000.00'))
+
         # Verify the response
-        self.assertTrue(paystack_response['status'])
-        self.assertIn('authorization_url', paystack_response['data'])
+        self.assertEqual(checkout_url, 'https://sandbox-pay.squadco.com/RCCG20250101123456')
+        self.assertEqual(payment.authorization_url, checkout_url)
         
     
-    @patch.object(PaystackService, 'verify_payment')
+    @patch.object(SquadService, 'verify_payment')
     def test_verify_payment_integration(self, mock_verify):
         """Test payment verification with actual service"""
         
@@ -335,20 +343,8 @@ class PaymentServiceTests(TestCase):
             status=Payment.Status.PENDING
         )
         
-        # Mock Paystack verification
-        mock_verify.return_value = {
-            'status': True,
-            'data': {
-                'reference': 'VERIFY_TEST_001',
-                'status': 'success',
-                'amount': 500000,
-                'channel': 'card',
-                'authorization': {
-                    'authorization_code': 'AUTH_verify_123',
-                    'channel': 'card'
-                }
-            }
-        }
+        # Mock Squad verification
+        mock_verify.return_value = squad_charge('VERIFY_TEST_001', amount=500000)
         
         # Call your actual service method
         result = self.payment_service.verify_and_complete_payment(
@@ -360,12 +356,11 @@ class PaymentServiceTests(TestCase):
         # Verify result
         self.assertEqual(result, payment)
         self.assertEqual(result.status, Payment.Status.SUCCESS)
-        self.assertEqual(result.paystack_reference, 'VERIFY_TEST_001')
-        self.assertEqual(result.authorization_code, 'AUTH_verify_123')
+        self.assertEqual(result.gateway_reference, 'VERIFY_TEST_001_1_1')
         
 
 
-@paystack_test_keys
+@squad_test_keys
 class PaymentAPITests(APITestCase):
     """API tests using your actual views and serializers"""
     
@@ -503,24 +498,16 @@ class PaymentAPITests(APITestCase):
             self.assertEqual(payment['payer_email'], self.coordinator.email)
 
     
-    @patch('payments.services.PaystackService.initialize_payment')
-    @patch('payments.services.PaystackService.generate_reference')
+    @patch('payments.services.SquadService.open_checkout')
+    @patch('payments.services.SquadService.generate_reference')
     def test_initialize_payment_endpoint(self, mock_generate_ref, mock_initialize):
         """Test initialize payment endpoint"""
         
         self.client.force_authenticate(user=self.coordinator)
 
         # Mock responses
-        mock_generate_ref.return_value = 'RCCG_TEST_REF'
-        mock_initialize.return_value = {
-            'status': True,
-            'message': 'Authorization URL created',
-            'data': {
-                'authorization_url': 'https://paystack.com/pay/test',
-                'reference': 'RCCG_TEST_REF',
-                'access_code': 'test_access'
-            }
-        }
+        mock_generate_ref.return_value = 'RCCGTESTREF'
+        mock_initialize.return_value = 'https://sandbox-pay.squadco.com/RCCGTESTREF'
 
         # A fresh ticket with no prior payment: self.ticket already carries a
         # SUCCESS payment from setUp, and the endpoint (correctly) refuses to
@@ -559,9 +546,8 @@ class PaymentAPITests(APITestCase):
 
         # Check response structure
         self.assertIn('payment', response.data)
-        self.assertIn('authorization_url', response.data)
+        self.assertEqual(response.data['authorization_url'], 'https://sandbox-pay.squadco.com/RCCGTESTREF')
         self.assertIn('reference', response.data)
-        self.assertIn('access_code', response.data)
 
         # Verify payment was created in database
         payment_ref = response.data['reference']
@@ -822,15 +808,15 @@ class TransactionLogTests(TestCase):
         
 
 
-def paystack_signature(raw_body, secret='sk_test_dummy'):
-    """The signature Paystack would send for `raw_body`."""
+def squad_signature(raw_body, secret='sandbox_sk_dummy'):
+    """The `x-squad-encrypted-body` Squad would send for `raw_body`: in capitals."""
     import hashlib
     import hmac
-    return hmac.new(secret.encode('utf-8'), raw_body, hashlib.sha512).hexdigest()
+    return hmac.new(secret.encode('utf-8'), raw_body, hashlib.sha512).hexdigest().upper()
 
 
-@paystack_test_keys
-class PaystackWebhookTests(APITestCase):
+@squad_test_keys
+class SquadWebhookTests(APITestCase):
     """The webhook is unauthenticated: the signature is its only guard."""
 
     url = '/api/v1/payments/webhook'
@@ -845,22 +831,13 @@ class PaystackWebhookTests(APITestCase):
             status=Payment.Status.PENDING,
         )
 
-    def body(self, amount=300000, event='charge.success'):
-        return json.dumps({
-            'event': event,
-            'data': {
-                'reference': self.payment.reference,
-                'status': 'success',
-                'amount': amount,
-                'channel': 'card',
-                'authorization': {'authorization_code': 'AUTH_hook', 'channel': 'card'},
-            },
-        }).encode('utf-8')
+    def body(self, amount=300000, event='charge_successful'):
+        return squad_webhook(self.payment.reference, amount=amount, event=event)
 
     def post(self, raw_body, signature=None):
         headers = {}
         if signature is not None:
-            headers['HTTP_X_PAYSTACK_SIGNATURE'] = signature
+            headers['HTTP_X_SQUAD_ENCRYPTED_BODY'] = signature
         return self.client.post(
             self.url, data=raw_body, content_type='application/json', **headers)
 
@@ -882,7 +859,7 @@ class PaystackWebhookTests(APITestCase):
         self.assertFalse(TransactionLog.objects.exists())
 
     def test_signature_for_a_different_body_is_refused(self):
-        signature = paystack_signature(self.body(amount=100))
+        signature = squad_signature(self.body(amount=100))
 
         response = self.post(self.body(), signature=signature)
 
@@ -892,7 +869,7 @@ class PaystackWebhookTests(APITestCase):
     def test_genuine_event_completes_the_payment(self):
         raw = self.body()
 
-        response = self.post(raw, signature=paystack_signature(raw))
+        response = self.post(raw, signature=squad_signature(raw))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(self.status_now(), Payment.Status.SUCCESS)
@@ -900,7 +877,7 @@ class PaystackWebhookTests(APITestCase):
     @patch('tickets.services.EmailService.send_payment_confirmation')
     def test_a_retried_event_sends_one_email(self, mock_email):
         raw = self.body()
-        signature = paystack_signature(raw)
+        signature = squad_signature(raw)
 
         with self.captureOnCommitCallbacks(execute=True):
             first = self.post(raw, signature=signature)
@@ -915,7 +892,7 @@ class PaystackWebhookTests(APITestCase):
     def test_wrong_amount_does_not_complete_the_payment(self):
         raw = self.body(amount=100)
 
-        response = self.post(raw, signature=paystack_signature(raw))
+        response = self.post(raw, signature=squad_signature(raw))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(self.status_now(), Payment.Status.PENDING)
@@ -924,17 +901,17 @@ class PaystackWebhookTests(APITestCase):
         Payment.objects.filter(pk=self.payment.pk).update(status=Payment.Status.REFUNDED)
         raw = self.body()
 
-        self.post(raw, signature=paystack_signature(raw))
+        self.post(raw, signature=squad_signature(raw))
 
         self.assertEqual(self.status_now(), Payment.Status.REFUNDED)
 
     @patch('tickets.services.EmailService.send_payment_confirmation')
-    @patch.object(PaystackService, 'verify_payment')
+    @patch.object(SquadService, 'verify_payment')
     def test_verify_after_the_webhook_changes_nothing(self, mock_verify, mock_email):
         raw = self.body()
         with self.captureOnCommitCallbacks(execute=True):
-            self.post(raw, signature=paystack_signature(raw))
-        mock_verify.return_value = {'status': True, 'data': json.loads(raw)['data']}
+            self.post(raw, signature=squad_signature(raw))
+        mock_verify.return_value = squad_charge(self.payment.reference)
 
         with self.captureOnCommitCallbacks(execute=True):
             payment = PaymentService().verify_and_complete_payment(self.payment.reference)
@@ -942,14 +919,11 @@ class PaystackWebhookTests(APITestCase):
         self.assertEqual(payment.status, Payment.Status.SUCCESS)
         mock_email.assert_called_once()
 
-    @patch.object(PaystackService, 'verify_payment')
+    @patch.object(SquadService, 'verify_payment')
     def test_a_late_abandoned_answer_does_not_undo_a_success(self, mock_verify):
         raw = self.body()
-        self.post(raw, signature=paystack_signature(raw))
-        mock_verify.return_value = {
-            'status': True,
-            'data': {'reference': self.payment.reference, 'status': 'abandoned'},
-        }
+        self.post(raw, signature=squad_signature(raw))
+        mock_verify.return_value = squad_charge(self.payment.reference, status='Abandoned')
 
         with self.assertRaises(Exception):
             PaymentService().verify_and_complete_payment(self.payment.reference)
@@ -961,3 +935,104 @@ class PaystackWebhookTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(self.status_now(), Payment.Status.PENDING)
+
+    def test_the_signature_is_accepted_in_either_case(self):
+        raw = self.body()
+
+        response = self.post(raw, signature=squad_signature(raw).lower())
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.status_now(), Payment.Status.SUCCESS)
+
+    def test_squads_own_reference_and_the_channel_are_kept(self):
+        raw = self.body()
+
+        self.post(raw, signature=squad_signature(raw))
+
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.gateway_reference, 'WEBHOOK_TEST_001_1_1')
+        self.assertEqual(self.payment.payment_method, Payment.PaymentMethod.CARD)
+
+    def test_an_event_that_is_not_a_successful_charge_changes_nothing(self):
+        raw = self.body(event='something_else')
+
+        response = self.post(raw, signature=squad_signature(raw))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.status_now(), Payment.Status.PENDING)
+
+
+@squad_test_keys
+class SquadServiceTests(TestCase):
+    """What is sent to Squad and how its answers are read. No request leaves."""
+
+    @staticmethod
+    def answer(status_code, body):
+        response = Mock(status_code=status_code, text=json.dumps(body))
+        response.json.return_value = body
+        return response
+
+    @patch('payments.services.requests.request')
+    def test_a_checkout_is_opened_for_the_price_with_no_fee_passed_on(self, mock_request):
+        mock_request.return_value = self.answer(200, {
+            'status': 200, 'message': 'success',
+            'data': {'checkout_url': 'https://sandbox-pay.squadco.com/REF1'}})
+
+        checkout_url = SquadService().open_checkout(
+            reference='REF1', amount=Decimal('5000.00'), email='ada@example.com',
+            name='Ada Obi', callback_url='https://api.example.com/back/REF1/')
+
+        self.assertEqual(checkout_url, 'https://sandbox-pay.squadco.com/REF1')
+        self.assertEqual(
+            mock_request.call_args.args,
+            ('POST', 'https://sandbox-api-d.squadco.com/transaction/initiate'))
+        sent = mock_request.call_args.kwargs
+        self.assertEqual(sent['headers']['Authorization'], 'Bearer sandbox_sk_dummy')
+        self.assertEqual(sent['json']['amount'], 500000)  # kobo
+        self.assertIs(sent['json']['pass_charge'], False)
+        self.assertEqual(sent['json']['transaction_ref'], 'REF1')
+        self.assertEqual(sent['json']['callback_url'], 'https://api.example.com/back/REF1/')
+        self.assertTrue(TransactionLog.objects.get().is_successful)
+
+    @override_settings(SQUAD_SECRET_KEY='sk_live_dummy')
+    def test_a_live_key_is_sent_to_live(self):
+        self.assertEqual(SquadService().base_url, 'https://api-d.squadco.com')
+
+    @override_settings(SQUAD_SECRET_KEY='')
+    def test_no_key_is_refused(self):
+        with self.assertRaises(ValueError):
+            SquadService()
+
+    @patch('payments.services.requests.request')
+    def test_verify_reads_squads_names(self, mock_request):
+        mock_request.return_value = self.answer(200, {
+            'status': 200, 'success': True, 'message': 'Success',
+            'data': {
+                'transaction_amount': 500000,
+                'transaction_ref': 'REF1',
+                'transaction_status': 'Success',
+                'transaction_type': 'Transfer',
+                'gateway_transaction_ref': 'REF1_5_5_1',
+            }})
+
+        charge = SquadService().verify_payment('REF1')
+
+        self.assertEqual(
+            mock_request.call_args.args,
+            ('GET', 'https://sandbox-api-d.squadco.com/transaction/verify/REF1'))
+        self.assertEqual(charge['reference'], 'REF1')
+        self.assertEqual(charge['status'], 'success')
+        self.assertEqual(charge['amount'], 500000)
+        self.assertEqual(charge['gateway_reference'], 'REF1_5_5_1')
+        self.assertEqual(charge['channel'], 'transfer')
+
+    @patch('payments.services.requests.request')
+    def test_a_refusal_is_an_error_and_is_logged(self, mock_request):
+        mock_request.return_value = self.answer(400, {
+            'status': 400, 'success': False,
+            'message': 'Invalid transaction reference', 'data': {}})
+
+        with self.assertRaises(SquadError):
+            SquadService().verify_payment('NOPE')
+
+        self.assertFalse(TransactionLog.objects.get().is_successful)

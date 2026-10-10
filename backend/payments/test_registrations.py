@@ -2,10 +2,9 @@
 Paying for an event registration: what opens a checkout, what marks a place
 paid, and what happens to a place nobody paid for.
 
-No test here reaches Paystack. Every outbound call is mocked, and the webhook
-is signed with the dummy key the way Paystack would sign it.
+No test here reaches Squad. Every outbound call is mocked, and the webhook
+is signed with the dummy key the way Squad would sign it.
 """
-import json
 from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
@@ -20,8 +19,8 @@ from events.models import EventRegistration, Hostel, RegistrationAuditLog
 from events.test_registration_counters import make_event, make_registration
 from payments import registrations
 from payments.models import Payment
-from payments.services import PaystackService
-from payments.tests import paystack_signature, paystack_test_keys
+from payments.services import SquadService
+from payments.tests import squad_charge, squad_signature, squad_test_keys, squad_webhook
 
 User = get_user_model()
 Status = EventRegistration.Status
@@ -41,25 +40,15 @@ def unpaid(event, email='ada@example.com', **overrides):
     return make_registration(event, email=email, **fields)
 
 
-def paystack_opens():
-    """What Paystack answers when a checkout is opened."""
-    def answer(payload):
-        return {'status': True, 'data': {
-            'authorization_url': f'https://checkout.paystack.com/{payload["reference"]}',
-            'access_code': 'code_' + payload['reference'],
-            'reference': payload['reference'],
-        }}
+def squad_opens():
+    """What opening a checkout gives back: the address of Squad's page for it."""
+    def answer(reference, **_):
+        return f'https://sandbox-pay.squadco.com/{reference}'
     return answer
 
 
 def charge(payment, amount=500000, status='success'):
-    return {
-        'reference': payment.reference,
-        'status': status,
-        'amount': amount,
-        'channel': 'card',
-        'authorization': {'authorization_code': 'AUTH_x', 'channel': 'card'},
-    }
+    return squad_charge(payment.reference, amount=amount, status=status)
 
 
 def age(registration, hours):
@@ -68,24 +57,24 @@ def age(registration, hours):
         created_at=timezone.now() - timedelta(hours=hours))
 
 
-@paystack_test_keys
+@squad_test_keys
 class OpeningACheckoutTests(TestCase):
 
     def setUp(self):
         self.registration = unpaid(paid_event())
 
-    @patch.object(PaystackService, 'initialize_payment', side_effect=paystack_opens())
+    @patch.object(SquadService, 'open_checkout', side_effect=squad_opens())
     def test_the_payer_is_charged_the_price_on_the_registration(self, mock_open):
         payment = registrations.start(self.registration, CALLBACK)
 
-        sent = mock_open.call_args.args[0]
-        self.assertEqual(sent['amount'], 500000)  # kobo, with no fee added
-        self.assertEqual(sent['callback_url'], CALLBACK)
+        sent = mock_open.call_args.kwargs
+        self.assertEqual(sent['amount'], PRICE)  # with no fee added
+        self.assertEqual(sent['callback_url'], f'{CALLBACK}{payment.reference}/')
         self.assertEqual(payment.amount, PRICE)
         self.assertEqual(payment.registration, self.registration)
-        self.assertTrue(payment.authorization_url.startswith('https://checkout.paystack.com/'))
+        self.assertTrue(payment.authorization_url.startswith('https://sandbox-pay.squadco.com/'))
 
-    @patch.object(PaystackService, 'initialize_payment', side_effect=paystack_opens())
+    @patch.object(SquadService, 'open_checkout', side_effect=squad_opens())
     def test_a_second_tap_reopens_the_same_checkout(self, mock_open):
         first = registrations.start(self.registration, CALLBACK)
         second = registrations.start(self.registration, CALLBACK)
@@ -94,7 +83,7 @@ class OpeningACheckoutTests(TestCase):
         mock_open.assert_called_once()
         self.assertEqual(Payment.objects.count(), 1)
 
-    @patch.object(PaystackService, 'initialize_payment', side_effect=paystack_opens())
+    @patch.object(SquadService, 'open_checkout', side_effect=squad_opens())
     def test_an_old_checkout_is_not_handed_out_again(self, mock_open):
         first = registrations.start(self.registration, CALLBACK)
         Payment.objects.filter(pk=first.pk).update(
@@ -104,7 +93,7 @@ class OpeningACheckoutTests(TestCase):
 
         self.assertNotEqual(second.pk, first.pk)
 
-    @patch.object(PaystackService, 'initialize_payment')
+    @patch.object(SquadService, 'open_checkout')
     def test_a_checkout_still_being_opened_is_not_opened_twice(self, mock_open):
         Payment.objects.create(
             reference='IN_FLIGHT', amount=PRICE, registration=self.registration,
@@ -114,14 +103,14 @@ class OpeningACheckoutTests(TestCase):
             registrations.start(self.registration, CALLBACK)
         mock_open.assert_not_called()
 
-    @patch.object(PaystackService, 'initialize_payment', side_effect=Exception('timeout'))
-    def test_paystack_not_answering_is_said_plainly_and_recorded(self, _):
+    @patch.object(SquadService, 'open_checkout', side_effect=Exception('timeout'))
+    def test_squad_not_answering_is_said_plainly_and_recorded(self, _):
         with self.assertRaises(registrations.Unavailable):
             registrations.start(self.registration, CALLBACK)
 
         self.assertEqual(Payment.objects.get().status, Payment.Status.FAILED)
 
-    @override_settings(PAYSTACK_SECRET_KEY='', PAYSTACK_PUBLIC_KEY='')
+    @override_settings(SQUAD_SECRET_KEY='')
     def test_without_keys_nobody_is_sent_to_a_broken_page(self):
         with self.assertRaises(registrations.Unavailable):
             registrations.start(self.registration, CALLBACK)
@@ -144,9 +133,9 @@ class OpeningACheckoutTests(TestCase):
                     registrations.start(registration, CALLBACK)
 
 
-@paystack_test_keys
+@squad_test_keys
 class WebhookTests(APITestCase):
-    """Paystack saying a charge succeeded is what marks a registration paid."""
+    """Squad saying a charge succeeded is what marks a registration paid."""
 
     url = '/api/v1/payments/webhook'
 
@@ -154,18 +143,15 @@ class WebhookTests(APITestCase):
         self.user = User.objects.create_user(username='ada', email='ada@example.com', password='x')
         self.event = paid_event()
         self.registration = unpaid(self.event, user=self.user)
-        with patch.object(PaystackService, 'initialize_payment', side_effect=paystack_opens()):
+        with patch.object(SquadService, 'open_checkout', side_effect=squad_opens()):
             self.payment = registrations.start(self.registration, CALLBACK)
 
-    def deliver(self, payment=None, **overrides):
-        raw = json.dumps({
-            'event': 'charge.success',
-            'data': charge(payment or self.payment, **overrides),
-        }).encode('utf-8')
+    def deliver(self, payment=None, amount=500000):
+        raw = squad_webhook((payment or self.payment).reference, amount=amount)
         with self.captureOnCommitCallbacks(execute=True):
             return self.client.post(
                 self.url, data=raw, content_type='application/json',
-                HTTP_X_PAYSTACK_SIGNATURE=paystack_signature(raw))
+                HTTP_X_SQUAD_ENCRYPTED_BODY=squad_signature(raw))
 
     def reload(self):
         self.registration.refresh_from_db()
@@ -190,7 +176,7 @@ class WebhookTests(APITestCase):
 
     @patch('events.email_service.EventEmailService.send_registration_confirmed')
     @patch('events.notifications.notify_payment_received')
-    def test_paystack_retrying_tells_the_attendee_once(self, mock_notify, _):
+    def test_squad_retrying_tells_the_attendee_once(self, mock_notify, _):
         self.deliver()
         self.deliver()
 
@@ -209,7 +195,7 @@ class WebhookTests(APITestCase):
     def test_a_second_checkout_paid_as_well_is_kept_and_flagged(self, mock_notify, _):
         Payment.objects.filter(pk=self.payment.pk).update(
             initiated_at=timezone.now() - timedelta(hours=1))
-        with patch.object(PaystackService, 'initialize_payment', side_effect=paystack_opens()):
+        with patch.object(SquadService, 'open_checkout', side_effect=squad_opens()):
             second = registrations.start(self.registration, CALLBACK)
 
         self.deliver()
@@ -229,7 +215,7 @@ class WebhookTests(APITestCase):
         registration = unpaid(event, 'boy@example.com', attendee_gender='male')
         bedspaces.sync(registration)
         self.assertFalse(bedspaces.is_firm(registration))
-        with patch.object(PaystackService, 'initialize_payment', side_effect=paystack_opens()):
+        with patch.object(SquadService, 'open_checkout', side_effect=squad_opens()):
             payment = registrations.start(registration, CALLBACK)
 
         self.deliver(payment)
@@ -239,7 +225,7 @@ class WebhookTests(APITestCase):
         self.assertIsNotNone(bedspaces.bed_of(registration))
 
 
-@paystack_test_keys
+@squad_test_keys
 class ReleasedPlaceTests(TestCase):
     """A place is held for 24 hours, then given up; paying late can bring it back."""
 
@@ -280,7 +266,7 @@ class ReleasedPlaceTests(TestCase):
         self.assertEqual(self.status(paid), Status.CONFIRMED)
         self.assertEqual(self.status(vouched), Status.CONFIRMED)
 
-    @patch.object(PaystackService, 'initialize_payment', side_effect=paystack_opens())
+    @patch.object(SquadService, 'open_checkout', side_effect=squad_opens())
     def test_someone_in_the_middle_of_paying_is_left_alone(self, _):
         registrations.start(self.registration, CALLBACK)
         age(self.registration, hours=25)
@@ -288,7 +274,7 @@ class ReleasedPlaceTests(TestCase):
         self.assertEqual(registrations.expire_unpaid(), 0)
         self.assertEqual(self.status(), Status.PENDING)
 
-    @override_settings(PAYSTACK_SECRET_KEY='')
+    @override_settings(SQUAD_SECRET_KEY='')
     def test_nothing_is_released_while_nobody_can_pay(self):
         age(self.registration, hours=25)
 
@@ -302,7 +288,7 @@ class ReleasedPlaceTests(TestCase):
         self.assertIsNone(registrations.pay_by(self.registration))
 
     @patch('events.email_service.EventEmailService.send_registration_confirmed')
-    @patch.object(PaystackService, 'initialize_payment', side_effect=paystack_opens())
+    @patch.object(SquadService, 'open_checkout', side_effect=squad_opens())
     def test_paying_late_brings_the_place_back_while_there_is_room(self, *_):
         age(self.registration, hours=25)
         registrations.expire_unpaid()
@@ -316,7 +302,7 @@ class ReleasedPlaceTests(TestCase):
         self.assertEqual(self.registration.payment_status, Paid.PAID)
 
     @patch('events.notifications.notify_payment_received')
-    @patch.object(PaystackService, 'initialize_payment', side_effect=paystack_opens())
+    @patch.object(SquadService, 'open_checkout', side_effect=squad_opens())
     def test_paying_late_for_a_place_someone_else_took(self, _, mock_notify):
         payment = registrations.start(self.registration, CALLBACK)
         Payment.objects.filter(pk=payment.pk).update(
@@ -336,41 +322,40 @@ class ReleasedPlaceTests(TestCase):
         self.assertTrue(mock_notify.call_args.kwargs['place_gone'])
 
 
-@paystack_test_keys
-class AskingPaystackTests(TestCase):
+@squad_test_keys
+class AskingSquadTests(TestCase):
 
     def setUp(self):
         self.registration = unpaid(paid_event())
-        with patch.object(PaystackService, 'initialize_payment', side_effect=paystack_opens()):
+        with patch.object(SquadService, 'open_checkout', side_effect=squad_opens()):
             self.payment = registrations.start(self.registration, CALLBACK)
 
     @patch('events.email_service.EventEmailService.send_registration_confirmed')
-    @patch.object(PaystackService, 'verify_payment')
+    @patch.object(SquadService, 'verify_payment')
     def test_a_success_marks_the_registration_paid(self, mock_verify, _):
-        mock_verify.return_value = {'status': True, 'data': charge(self.payment)}
+        mock_verify.return_value = charge(self.payment)
 
         self.assertTrue(registrations.check_registration(self.registration))
 
         self.registration.refresh_from_db()
         self.assertEqual(self.registration.payment_status, Paid.PAID)
 
-    @patch.object(PaystackService, 'verify_payment')
+    @patch.object(SquadService, 'verify_payment')
     def test_an_unfinished_checkout_is_left_open(self, mock_verify):
-        # What Paystack says while someone is in their bank's app making the transfer.
-        mock_verify.return_value = {
-            'status': True, 'data': charge(self.payment, status='abandoned')}
+        # What Squad says while someone is in their bank's app making the transfer.
+        mock_verify.return_value = charge(self.payment, status='abandoned')
 
         self.assertFalse(registrations.check_registration(self.registration))
 
         self.payment.refresh_from_db()
         self.assertEqual(self.payment.status, Payment.Status.PENDING)
 
-    @patch.object(PaystackService, 'verify_payment', side_effect=Exception('timeout'))
-    def test_paystack_not_answering_is_not_an_error(self, _):
+    @patch.object(SquadService, 'verify_payment', side_effect=Exception('timeout'))
+    def test_squad_not_answering_is_not_an_error(self, _):
         self.assertFalse(registrations.check_registration(self.registration))
 
 
-@paystack_test_keys
+@squad_test_keys
 @override_settings(PUBLIC_API_URL='https://api.example.com')
 class EndpointTests(APITestCase):
 
@@ -380,7 +365,7 @@ class EndpointTests(APITestCase):
         self.registration = unpaid(paid_event(), user=self.ada)
         self.checkout = f'/api/v1/payments/registrations/{self.registration.pk}/checkout/'
 
-    @patch.object(PaystackService, 'initialize_payment', side_effect=paystack_opens())
+    @patch.object(SquadService, 'open_checkout', side_effect=squad_opens())
     def test_the_owner_gets_a_checkout_and_a_link_for_a_parent(self, mock_open):
         self.client.force_authenticate(self.ada)
 
@@ -388,14 +373,14 @@ class EndpointTests(APITestCase):
             self.checkout, {'return_to': 'faithtribe://ticket/abc'}, format='json')
 
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.data['authorization_url'].startswith('https://checkout.paystack.com/'))
+        self.assertTrue(response.data['authorization_url'].startswith('https://sandbox-pay.squadco.com/'))
         self.assertTrue(response.data['pay_link'].startswith('https://api.example.com/api/v1/payments/pay/'))
         self.assertEqual(
-            mock_open.call_args.args[0]['callback_url'],
-            'https://api.example.com/api/v1/payments/return/')
+            mock_open.call_args.kwargs['callback_url'],
+            f'https://api.example.com/api/v1/payments/return/{Payment.objects.get().reference}/')
         self.assertEqual(Payment.objects.get().metadata['return_to'], 'faithtribe://ticket/abc')
 
-    @patch.object(PaystackService, 'initialize_payment', side_effect=paystack_opens())
+    @patch.object(SquadService, 'open_checkout', side_effect=squad_opens())
     def test_a_way_back_to_somewhere_that_is_not_ours_is_dropped(self, _):
         self.client.force_authenticate(self.ada)
 
@@ -434,12 +419,12 @@ class EndpointTests(APITestCase):
             registrations.from_pay_token(ticket['pay_token']).pk, self.registration.pk)
 
     @patch('events.email_service.EventEmailService.send_registration_confirmed')
-    @patch.object(PaystackService, 'verify_payment')
-    @patch.object(PaystackService, 'initialize_payment', side_effect=paystack_opens())
+    @patch.object(SquadService, 'verify_payment')
+    @patch.object(SquadService, 'open_checkout', side_effect=squad_opens())
     def test_checking_returns_the_ticket_as_it_now_stands(self, _, mock_verify, __):
         self.client.force_authenticate(self.ada)
         self.client.post(self.checkout)
-        mock_verify.return_value = {'status': True, 'data': charge(Payment.objects.get())}
+        mock_verify.return_value = charge(Payment.objects.get())
 
         response = self.client.post(
             f'/api/v1/payments/registrations/{self.registration.pk}/check/')
@@ -450,7 +435,7 @@ class EndpointTests(APITestCase):
         self.assertIsNone(response.data['pay_token'])
 
 
-@paystack_test_keys
+@squad_test_keys
 @override_settings(PUBLIC_API_URL='https://api.example.com')
 class PayerPagesTests(TestCase):
     """The pages a parent opens: no login, and nothing happens until Pay is pressed."""
@@ -459,7 +444,7 @@ class PayerPagesTests(TestCase):
         self.registration = unpaid(paid_event())
         self.link = f'/api/v1/payments/pay/{registrations.pay_token(self.registration)}/'
 
-    @patch.object(PaystackService, 'initialize_payment')
+    @patch.object(SquadService, 'open_checkout')
     def test_opening_the_link_shows_what_is_owed_and_opens_no_checkout(self, mock_open):
         response = self.client.get(self.link)
 
@@ -469,12 +454,12 @@ class PayerPagesTests(TestCase):
         mock_open.assert_not_called()
         self.assertFalse(Payment.objects.exists())
 
-    @patch.object(PaystackService, 'initialize_payment', side_effect=paystack_opens())
-    def test_pressing_pay_goes_to_paystack(self, _):
+    @patch.object(SquadService, 'open_checkout', side_effect=squad_opens())
+    def test_pressing_pay_goes_to_squad(self, _):
         response = self.client.post(self.link)
 
         self.assertEqual(response.status_code, 302)
-        self.assertTrue(response['Location'].startswith('https://checkout.paystack.com/'))
+        self.assertTrue(response['Location'].startswith('https://sandbox-pay.squadco.com/'))
 
     def test_a_link_that_was_altered_does_not_work(self):
         response = self.client.get(self.link[:-3] + 'xx/')
@@ -487,26 +472,25 @@ class PayerPagesTests(TestCase):
         self.assertContains(self.client.get(self.link), 'Already paid')
 
     @patch('events.email_service.EventEmailService.send_registration_confirmed')
-    @patch.object(PaystackService, 'verify_payment')
-    @patch.object(PaystackService, 'initialize_payment', side_effect=paystack_opens())
-    def test_coming_back_from_paystack_confirms_and_offers_the_way_back(self, _, mock_verify, __):
+    @patch.object(SquadService, 'verify_payment')
+    @patch.object(SquadService, 'open_checkout', side_effect=squad_opens())
+    def test_coming_back_from_squad_confirms_and_offers_the_way_back(self, _, mock_verify, __):
         payment = registrations.start(
             self.registration, CALLBACK, return_to='faithtribe://ticket/abc')
-        mock_verify.return_value = {'status': True, 'data': charge(payment)}
+        mock_verify.return_value = charge(payment)
 
-        response = self.client.get('/api/v1/payments/return/', {'reference': payment.reference})
+        response = self.client.get(f'/api/v1/payments/return/{payment.reference}/')
 
         self.assertContains(response, 'Payment received')
         self.assertContains(response, 'faithtribe://ticket/abc')
         self.registration.refresh_from_db()
         self.assertEqual(self.registration.payment_status, Paid.PAID)
 
-    @patch.object(PaystackService, 'verify_payment')
-    @patch.object(PaystackService, 'initialize_payment', side_effect=paystack_opens())
+    @patch.object(SquadService, 'verify_payment')
+    @patch.object(SquadService, 'open_checkout', side_effect=squad_opens())
     def test_coming_back_before_the_bank_has_answered(self, _, mock_verify):
         payment = registrations.start(self.registration, CALLBACK)
-        mock_verify.return_value = {
-            'status': True, 'data': charge(payment, status='abandoned')}
+        mock_verify.return_value = charge(payment, status='abandoned')
 
         response = self.client.get('/api/v1/payments/return/', {'reference': payment.reference})
 

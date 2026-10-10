@@ -27,7 +27,7 @@ A deliberate exclusion: **mood tracking** does not appear in V1. See "Cut and de
 | Today | Daily devotional (Teenage Open Heavens + regional devotionals) with its **memory verse as the Verse of the Day** (one verse powers the home screen card, notifications, share card, and challenge theme — "One Day. One Verse. One Message."), reading streak with grace days, one daily challenge, continue-reading card |
 | Bible | Integrated Bible with 2 public-domain translations (WEB, KJV), book/chapter/verse navigation, reading position sync, continue reading, verse sharing (image + text), basic search, Scripture deep-links from all content |
 | Library | Unified media library (articles, videos, podcasts) with categories, saved content, audio background playback via PWA |
-| Events | Event creation, registration, capacity, payments (Paystack), QR tickets, check-in scanning, waitlists |
+| Events | Event creation, registration, capacity, payments (Squad), QR tickets, check-in scanning, waitlists |
 | Weekly Manuals | Teacher-facing weekly lesson manuals, viewable and downloadable |
 | Notifications | Push (PWA) + in-app inbox; the **habit reminder ladder** (morning → afternoon → evening → final streak reminder, each canceled the moment the day's devotional is done), configurable intensity presets, event updates (`12-gamification.md`, `07-feature-specifications.md` #10) |
 | Admin & Coordinator | Content publishing workflow (draft → review → publish), event management, member overview, basic analytics dashboard |
@@ -45,7 +45,7 @@ Highlights/notes (Bible), reading plans, Journeys, memory-verse *practice* (spac
 
 ### Dependencies and risks
 
-- **Paystack merchant setup** under the appropriate church entity must be resolved before event payments ship (legal/finance dependency, long lead time — start immediately).
+- **Squad merchant setup** under the appropriate church entity must be resolved before event payments ship (legal/finance dependency, long lead time — start immediately).
 - **Devotional content pipeline:** an editorial commitment from the regional team to publish daily. Software without content is an empty shell; secure a 60-day content buffer before launch.
 - **Bible text ingestion:** WEB and KJV must be sourced, verified, and structured (see `08-bible-experience.md`, licensing section).
 

@@ -607,12 +607,12 @@ if _running_tests():
     NOTIFICATIONS_PUSH_BACKEND = "notifications.push.LoggingPushBackend"
     NOTIFICATIONS_DEVICE_PUSH_BACKEND = "notifications.push.LoggingDevicePushBackend"
 
-# PayStack payment gateway
-PAYSTACK_SECRET_KEY=os.getenv("PAYSTACK_SECRET_KEY")
-PAYSTACK_PUBLIC_KEY=os.getenv("PAYSTACK_PUBLIC_KEY")
+# Squad payment gateway (https://docs.squadco.com). A key that starts
+# `sandbox_` is sent to the sandbox; any other key is sent to live.
+SQUAD_SECRET_KEY = os.getenv("SQUAD_SECRET_KEY", "")
 FRONTEND_URL=os.getenv("FRONTEND_URL")
 # Where this API is reached from outside, e.g. https://api.example.com. Used
-# for the address Paystack sends a payer back to. Unset, the address of the
+# for the address Squad sends a payer back to. Unset, the address of the
 # request is used, which behind a proxy can come out as http://.
 PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "").rstrip("/")
 # How long an unpaid place on a paid event is held before it is released
