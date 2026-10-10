@@ -615,6 +615,11 @@ FRONTEND_URL=os.getenv("FRONTEND_URL")
 # for the address Squad sends a payer back to. Unset, the address of the
 # request is used, which behind a proxy can come out as http://.
 PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "").rstrip("/")
+# Where the short link a parent pays from starts, e.g.
+# https://thefaithtribe.live/p. The site there must pass `/p/<code>` on to
+# this API's `/api/v1/payments/pay/<code>/` (frontend/vercel.json does).
+# Unset, the link is on the API's own address.
+PAY_LINK_BASE = os.getenv("PAY_LINK_BASE", "").rstrip("/")
 # How long an unpaid place on a paid event is held before it is released
 # (docs/07 §9). 0 holds it for ever.
 UNPAID_REGISTRATION_HOLD_HOURS = int(os.getenv("UNPAID_REGISTRATION_HOLD_HOURS", "24"))

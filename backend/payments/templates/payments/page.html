@@ -4,7 +4,8 @@ the link they were sent) and after it (anyone coming back from paying).
 
 It is opened in whatever browser the link landed in, often the one inside
 WhatsApp, so it is a single self-contained file: no script, no web font, no
-image. Colours are the ones the emails use.
+image. Colours are the ones the emails use. The pay link's page names a
+picture for chat apps to preview (the event's flier), but does not show it.
 {% endcomment %}{% load tz %}{% timezone "Africa/Lagos" %}<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -12,6 +13,15 @@ image. Colours are the ones the emails use.
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>{{ heading }} · Faith Tribe</title>
+{% if can_pay and registration %}{% with event=registration.event %}
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Faith Tribe">
+<meta property="og:title" content="Pay for {{ registration.attendee_name }} · {{ event.title }}">
+<meta property="og:description" content="{{ event.start_datetime|date:'D j M, g:i a' }}{% if event.venue %} at {{ event.venue }}{% endif %}. ₦{{ amount|floatformat:'-2g' }} to confirm the place.">
+{% if preview_image %}<meta property="og:image" content="{{ preview_image }}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="{{ preview_image }}">{% endif %}
+{% endwith %}{% endif %}
 <style>
   * { box-sizing: border-box; }
   body {

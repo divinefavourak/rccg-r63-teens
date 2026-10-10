@@ -303,6 +303,7 @@ class EventRegistrationDetailSerializer(serializers.ModelSerializer):
     can_pay = serializers.SerializerMethodField()
     pay_by = serializers.SerializerMethodField()
     pay_token = serializers.SerializerMethodField()
+    pay_link = serializers.SerializerMethodField()
 
     def get_can_pay(self, obj):
         from payments import registrations as registration_payments
@@ -317,6 +318,16 @@ class EventRegistrationDetailSerializer(serializers.ModelSerializer):
         if registration_payments.refusal(obj) is not None:
             return None
         return registration_payments.pay_token(obj)
+
+    def get_pay_link(self, obj):
+        from django.conf import settings
+        from payments import registrations as registration_payments
+        if registration_payments.refusal(obj) is not None:
+            return None
+        request = self.context.get('request')
+        api_base = settings.PUBLIC_API_URL or (
+            request.build_absolute_uri('/').rstrip('/') if request else '')
+        return registration_payments.pay_link(obj, api_base)
 
     class Meta:
         model = EventRegistration
@@ -381,6 +392,7 @@ class EventRegistrationDetailSerializer(serializers.ModelSerializer):
             'can_pay',
             'pay_by',
             'pay_token',
+            'pay_link',
 
             # Check-in
             'checked_in_at',

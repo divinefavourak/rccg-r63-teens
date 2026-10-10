@@ -381,6 +381,10 @@ class EventRegistration(UUIDMixin, TimestampMixin):
         related_name='registrations'
     )
     payment_reference = models.CharField(max_length=100, blank=True)
+    # The short code in the link a parent pays from (`/p/<code>`). Given out
+    # the first time the link is asked for; `payments/registrations.py`.
+    pay_code = models.CharField(
+        max_length=12, unique=True, null=True, blank=True, editable=False)
 
     # Legacy payment proof (for manual verification)
     proof_of_payment = models.FileField(upload_to='payment_proofs/', null=True, blank=True)

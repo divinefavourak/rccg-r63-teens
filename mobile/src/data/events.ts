@@ -80,10 +80,12 @@ export function isLive(registration: EventRegistration): boolean {
 }
 
 /**
- * The page a parent pays from, to send them. It is on the API's own address:
- * the server draws it, and it needs no login and no app.
+ * The page a parent pays from, to send them. The server draws it, and it needs
+ * no login and no app. The server says where it is (a short link on our own
+ * site); a server too old to say is asked on the API's own address.
  */
 export function payLink(registration: EventRegistration): string | null {
+  if (registration.pay_link) return registration.pay_link;
   if (!registration.pay_token) return null;
   return `${API_URL}/payments/pay/${registration.pay_token}/`;
 }
