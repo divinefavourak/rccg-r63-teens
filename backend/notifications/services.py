@@ -32,7 +32,9 @@ from .models import (
     IGNORED_DAYS_BEFORE_STEP_DOWN, STEP_DOWN, Notification, NotificationPreference,
     NotificationType, PushDevice, PushSubscription,
 )
-from .push import device_push_backend, push_backend
+from .push import (
+    LoggingDevicePushBackend, LoggingPushBackend, device_push_backend, push_backend,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -222,6 +224,50 @@ def _push(notification):
         notification.pushed_at = timezone.now()
         notification.save(update_fields=['pushed_at', 'updated_at'])
     return delivered
+
+
+def send_test(user):
+    """
+    Send this person one notification because they asked for it, and say what
+    became of it.
+
+    The answer to "are notifications working on this phone?", which otherwise
+    means waiting for a reminder that may never come and guessing why. It goes
+    through `send` like everything else, as a transactional message: the person
+    tapped a button a second ago and is waiting for the result, which is exactly
+    what that type is for, so neither quiet hours nor a muted type hides it.
+
+    Returns `{'sent': bool, 'reason': str}`. The reasons, in the order they are
+    ruled out:
+
+    - `not_registered`: no browser or phone of theirs is known to the server.
+    - `delivery_failed`: every attempt to reach one raised.
+    - `not_switched_on`: it "went", but only to a backend that writes to the
+      log. The deployment has not turned real delivery on for what they hold.
+    """
+    notification = send(
+        user,
+        NotificationType.TRANSACTIONAL,
+        'Notifications are working',
+        'This is the test you asked for. Reminders will arrive just like this.',
+        deep_link='/settings/notifications',
+        data={'test': True},
+    )
+    if notification is None or notification.data.get('suppressed'):
+        return {'sent': False, 'reason': 'not_registered'}
+    if notification.pushed_at is None:
+        return {'sent': False, 'reason': 'delivery_failed'}
+
+    # "Pushed" is true of the logging backends too. Only a real one reaches
+    # anybody, so the answer depends on which of them this person can be
+    # reached through.
+    has_browser = PushSubscription.objects.filter(user=user, is_active=True).exists()
+    has_phone = PushDevice.objects.filter(user=user, is_active=True).exists()
+    reaches_browser = has_browser and not isinstance(push_backend(), LoggingPushBackend)
+    reaches_phone = has_phone and not isinstance(device_push_backend(), LoggingDevicePushBackend)
+    if not (reaches_browser or reaches_phone):
+        return {'sent': False, 'reason': 'not_switched_on'}
+    return {'sent': True, 'reason': ''}
 
 
 # ---------------------------------------------------------------------------

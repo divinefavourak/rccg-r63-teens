@@ -4,7 +4,8 @@ Notification API — the inbox, the preferences screen, push registration.
 Every route is owner-scoped. There is deliberately no "send" endpoint: features
 send through `notifications.services.send`, never over HTTP, because §10 requires
 that the ladder, quiet-hours and cap rules cannot be routed around — and an HTTP
-send endpoint is exactly a way to route around them.
+send endpoint is exactly a way to route around them. `test/` is not one: it
+sends a fixed message to the caller and nobody else.
 """
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -109,6 +110,23 @@ class PushSubscriptionView(APIView):
             )
         services.unsubscribe(request.user, endpoint)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class TestNotificationView(APIView):
+    """
+    Send the caller one test notification and report what happened to it.
+
+    For the "Send me a test notification" button in the app's settings. The
+    message is fixed and goes only to the person asking, so this cannot be used
+    to message anyone. Throttled like the code requests, because each call is a
+    request to another company's push service.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_scope = 'otp'
+
+    def post(self, request, *args, **kwargs):
+        return Response(services.send_test(request.user))
 
 
 class PushDeviceView(APIView):

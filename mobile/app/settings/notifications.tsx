@@ -1,8 +1,9 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { api, ApiError } from '../../src/api/client';
 import {
   useNotificationPreferences,
   useUpdateNotificationPreferences,
@@ -10,6 +11,7 @@ import {
 import type { NotificationPreferences } from '../../src/api/types';
 import { PushPrompt } from '../../src/components/PushPrompt';
 import { timeLabel } from '../../src/data/events';
+import { Button } from '../../src/ui/Button';
 import { Toggle } from '../../src/ui/inputs';
 import { BackHeader, EmptyState, SectionTitle, Skeleton } from '../../src/ui/screen';
 import { ELEVATION } from '../../src/theme/tokens';
@@ -143,6 +145,8 @@ export default function NotificationSettingsScreen() {
             </>
           )}
 
+          <TestNotification />
+
           {update.isError && (
             <Text
               accessibilityLiveRegion="polite"
@@ -159,6 +163,80 @@ export default function NotificationSettingsScreen() {
         </ScrollView>
       )}
     </View>
+  );
+}
+
+/** What the server says became of a test (`notifications.services.send_test`). */
+interface TestResult {
+  sent: boolean;
+  reason: '' | 'not_registered' | 'delivery_failed' | 'not_switched_on';
+}
+
+/** What to tell the person, and whether it is good news. */
+const TEST_OUTCOMES: Record<TestResult['reason'] | 'offline' | 'busy', string> = {
+  '': 'Sent. It should arrive within a few seconds. If it does not, check that notifications for Faith Tribe are allowed in your phone’s settings.',
+  not_registered:
+    'This phone is not set up to get notifications yet. Turn them on at the top of this page, then try again.',
+  delivery_failed:
+    'We tried, but could not reach this phone. Close the app completely, open it again, and try once more.',
+  not_switched_on:
+    'Notifications are not switched on at our end yet. This is ours to fix, not your phone.',
+  offline: 'We could not ask for a test. Check your connection and try again.',
+  busy: 'That is a few tests in a row. Wait a minute, then try again.',
+};
+
+/**
+ * "Send me a test notification".
+ *
+ * A reminder that never comes gives no clue why. This asks the server to send
+ * one now, to this person only, and says in plain words what happened: sent,
+ * or which link in the chain is missing.
+ */
+function TestNotification() {
+  const [pending, setPending] = useState(false);
+  const [outcome, setOutcome] = useState<keyof typeof TEST_OUTCOMES | null>(null);
+
+  const send = useCallback(async () => {
+    setPending(true);
+    setOutcome(null);
+    try {
+      const result = await api.post<TestResult>('/notifications/test/', {});
+      setOutcome(result.sent ? '' : result.reason || 'delivery_failed');
+    } catch (err) {
+      setOutcome(err instanceof ApiError && err.status === 429 ? 'busy' : 'offline');
+    } finally {
+      setPending(false);
+    }
+  }, []);
+
+  return (
+    <Group>
+      <View className="gap-3 py-3">
+        <View className="gap-0.5">
+          <Text className="font-ui-sb text-[16px] leading-6 text-ink-1">Check it works</Text>
+          <Text className="font-ui text-[14px] leading-5 text-ink-3">
+            We will send one notification to this phone now.
+          </Text>
+        </View>
+        <Button
+          label="Send me a test notification"
+          variant="secondary"
+          onPress={send}
+          loading={pending}
+          className="w-full"
+        />
+        {outcome !== null && (
+          <Text
+            accessibilityLiveRegion="polite"
+            className={`font-ui-md text-[14px] leading-5 ${
+              outcome === '' ? 'text-ink-2' : 'text-feedback-error'
+            }`}
+          >
+            {TEST_OUTCOMES[outcome]}
+          </Text>
+        )}
+      </View>
+    </Group>
   );
 }
 

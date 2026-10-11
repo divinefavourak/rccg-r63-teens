@@ -12,5 +12,6 @@ urlpatterns = [
          name='notification-preferences'),
     path('push/', views.PushSubscriptionView.as_view(), name='notification-push'),
     path('devices/', views.PushDeviceView.as_view(), name='notification-devices'),
+    path('test/', views.TestNotificationView.as_view(), name='notification-test'),
     path('', include(router.urls)),
 ]
