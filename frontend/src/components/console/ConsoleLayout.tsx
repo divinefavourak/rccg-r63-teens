@@ -11,7 +11,7 @@
  * click. Authority is not a progressive enhancement.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
 import { useConsoleAuth } from '../../context/ConsoleAuthContext';
 import Loader from '../Loader';
@@ -26,11 +26,40 @@ export const ConsoleLayout = () => {
     useConsoleAuth();
   const { theme, toggleTheme } = useTheme();
   const hierarchy = useHierarchy();
-  // Icons only below the `lg` breakpoint, where a 236px column would crowd the
-  // screen; the top row's menu button opens it.
+  // Below `md` there is no room for a standing column at all: the sidebar is a
+  // drawer the top row's menu button slides over the screen. From `md` to `lg`
+  // it stands collapsed to icons; from `lg` up it stands open. The menu button
+  // toggles whichever of the two applies at the current width.
   const [collapsed, setCollapsed] = useState(
     () => window.matchMedia('(max-width: 1023px)').matches,
   );
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const { pathname } = useLocation();
+
+  // Choosing a section is the end of the drawer's job. Adjusted during render
+  // rather than in an effect, so the new screen never paints under an open drawer.
+  const [drawerPath, setDrawerPath] = useState(pathname);
+  if (drawerPath !== pathname) {
+    setDrawerPath(pathname);
+    setDrawerOpen(false);
+  }
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDrawerOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [drawerOpen]);
+
+  const toggleSidebar = () => {
+    if (window.matchMedia('(max-width: 767px)').matches) {
+      setDrawerOpen((v) => !v);
+    } else {
+      setCollapsed((v) => !v);
+    }
+  };
 
   const nav = useMemo(() => computeNav(permissions), [permissions]);
 
@@ -133,18 +162,26 @@ export const ConsoleLayout = () => {
   }
 
   return (
-    <div className="flex h-screen gap-4 bg-console-canvas p-4 text-console-body">
+    <div className="flex h-dvh gap-4 bg-console-canvas p-3 text-console-body md:p-4">
+      {drawerOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+          onClick={() => setDrawerOpen(false)}
+          aria-hidden="true"
+        />
+      )}
       <Sidebar
         items={nav.filter((item) => item.inSidebar?.(permissions) ?? true)}
         collapsed={collapsed}
+        drawerOpen={drawerOpen}
         showCheckIn={needsCheckinShortcut}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col gap-5 px-2 pt-1">
+      <div className="flex min-w-0 flex-1 flex-col gap-4 pt-1 md:gap-5 md:px-2">
         <TopBar
           roots={hierarchy.roots}
           hierarchyLoading={hierarchy.isLoading}
-          onToggleSidebar={() => setCollapsed((v) => !v)}
+          onToggleSidebar={toggleSidebar}
           showNotifications={nav.some((item) => item.id === 'notifications')}
           dark={theme === 'dark'}
           onToggleDark={toggleTheme}

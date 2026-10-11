@@ -41,13 +41,13 @@ export const ScreenShell = ({
 
   return (
     <div className="w-full pb-6">
-      <p className="mb-5 text-[12px] font-medium uppercase leading-4 tracking-[0.04em] text-console-muted">
+      <p className="mb-3 text-[12px] font-medium uppercase md:mb-5 leading-4 tracking-[0.04em] text-console-muted">
         Console&nbsp;&nbsp;/&nbsp;&nbsp;{crumb ?? title}
       </p>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-[32px] font-extrabold leading-10 tracking-[-0.02em] text-console-text">
+            <h1 className="text-[26px] font-extrabold leading-8 md:text-[32px] md:leading-10 tracking-[-0.02em] text-console-text">
               {title}
             </h1>
             {readOnly && (

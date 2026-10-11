@@ -30,8 +30,9 @@ interface TopBarProps {
   onToggleDark: () => void;
 }
 
+// 40px on a phone, where four 52px circles and the scope pill do not fit in a row.
 const ROUND =
-  'flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full bg-console-tinted text-console-text transition-colors hover:bg-console-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-console-text';
+  'flex h-10 w-10 md:h-[52px] md:w-[52px] shrink-0 items-center justify-center rounded-full bg-console-tinted text-console-text transition-colors hover:bg-console-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-console-text';
 
 export const TopBar = ({
   roots,
@@ -66,7 +67,7 @@ export const TopBar = ({
   }, [menuOpen]);
 
   return (
-    <header className="flex shrink-0 items-center gap-3">
+    <header className="flex shrink-0 items-center gap-2 md:gap-3">
       <button
         type="button"
         onClick={onToggleSidebar}
@@ -76,14 +77,14 @@ export const TopBar = ({
         <Menu size={20} />
       </button>
 
-      <ScopeSwitcher
-        roots={roots}
-        current={scopeNode}
-        onSelect={setScopeNode}
-        isLoading={hierarchyLoading}
-      />
-
-      <div className="flex-1" />
+      <div className="min-w-0 flex-1">
+        <ScopeSwitcher
+          roots={roots}
+          current={scopeNode}
+          onSelect={setScopeNode}
+          isLoading={hierarchyLoading}
+        />
+      </div>
 
       {showNotifications && (
         <Link
@@ -113,13 +114,18 @@ export const TopBar = ({
           aria-label="Your account"
           className="block rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-console-text"
         >
-          <Avatar name={displayName} size={52} />
+          <span className="md:hidden">
+            <Avatar name={displayName} size={40} />
+          </span>
+          <span className="hidden md:block">
+            <Avatar name={displayName} size={52} />
+          </span>
         </button>
 
         {menuOpen && (
           <div
             role="menu"
-            className="absolute right-0 z-50 mt-2 w-64 overflow-hidden rounded-console-lg bg-console-raised py-1.5 shadow-console-dialog"
+            className="absolute right-0 z-50 mt-2 w-64 max-w-[calc(100vw-24px)] overflow-hidden rounded-console-lg bg-console-raised py-1.5 shadow-console-dialog"
           >
             <div className="border-b border-console-border px-4 py-2.5">
               <p className="text-[14px] font-semibold leading-5 text-console-text">
