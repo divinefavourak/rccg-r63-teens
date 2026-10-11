@@ -32,7 +32,9 @@ from .models import (
     IGNORED_DAYS_BEFORE_STEP_DOWN, STEP_DOWN, Notification, NotificationPreference,
     NotificationType, PushDevice, PushSubscription,
 )
-from .push import device_push_backend, push_backend
+from .push import (
+    LoggingDevicePushBackend, LoggingPushBackend, device_push_backend, push_backend,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -196,6 +198,9 @@ def _push(notification):
         user=notification.user, is_active=True,
     )
     delivered = False
+    # Which kind of device took it. Not stored: `send_test` reads it straight
+    # off the object to say what actually got through.
+    notification.delivered_via = set()
     for subscription in subscriptions:
         try:
             push_backend().send(subscription, notification)
@@ -206,6 +211,7 @@ def _push(notification):
             logger.exception('Push failed for subscription %s', subscription.id)
             continue
         delivered = True
+        notification.delivered_via.add('browser')
 
     devices = PushDevice.objects.filter(user=notification.user, is_active=True)
     for device in devices:
@@ -217,11 +223,68 @@ def _push(notification):
             continue
         PushDevice.objects.filter(pk=device.pk).update(last_used_at=timezone.now())
         delivered = True
+        notification.delivered_via.add('phone')
 
     if delivered:
         notification.pushed_at = timezone.now()
         notification.save(update_fields=['pushed_at', 'updated_at'])
     return delivered
+
+
+def send_test(user):
+    """
+    Send this person one notification because they asked for it, and say what
+    became of it.
+
+    The answer to "are notifications working on this phone?", which otherwise
+    means waiting for a reminder that may never come and guessing why. It goes
+    through `send` like everything else, as a transactional message: the person
+    tapped a button a second ago and is waiting for the result, which is exactly
+    what that type is for, so neither quiet hours nor a muted type hides it.
+
+    Returns `{'sent': bool, 'reason': str}`. The reasons, in the order they are
+    ruled out:
+
+    - `not_registered`: no browser or phone of theirs is known to the server.
+    - `delivery_failed`: a real push service was asked and none accepted it.
+    - `not_switched_on`: it "went", but only to a backend that writes to the
+      log. The deployment has not turned real delivery on for what they hold.
+
+    "Sent" means a real push service accepted it. A log line never counts,
+    even when it sits beside a real attempt that failed.
+    """
+    notification = send(
+        user,
+        NotificationType.TRANSACTIONAL,
+        'Notifications are working',
+        'This is the test you asked for. Reminders will arrive just like this.',
+        deep_link='/settings/notifications',
+        data={'test': True},
+    )
+    if notification is None or notification.data.get('suppressed'):
+        return {'sent': False, 'reason': 'not_registered'}
+
+    # Each kind of device this person holds is either served by a real push
+    # service or by the backend that only writes to the log.
+    holds = {
+        'browser': PushSubscription.objects.filter(user=user, is_active=True).exists(),
+        'phone': PushDevice.objects.filter(user=user, is_active=True).exists(),
+    }
+    real = {
+        'browser': not isinstance(push_backend(), LoggingPushBackend),
+        'phone': not isinstance(device_push_backend(), LoggingDevicePushBackend),
+    }
+    delivered_via = getattr(notification, 'delivered_via', set())
+
+    if any(real[kind] for kind in delivered_via):
+        return {'sent': True, 'reason': ''}
+    if any(holds[kind] and real[kind] for kind in holds):
+        # A real service was tried for something they hold, and it is not among
+        # the ones that took it.
+        return {'sent': False, 'reason': 'delivery_failed'}
+    if delivered_via:
+        return {'sent': False, 'reason': 'not_switched_on'}
+    return {'sent': False, 'reason': 'delivery_failed'}
 
 
 # ---------------------------------------------------------------------------

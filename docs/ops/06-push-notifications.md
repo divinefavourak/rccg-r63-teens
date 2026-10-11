@@ -80,6 +80,22 @@ End-to-end (needs a real browser subscription):
 
 ---
 
+## Checking it from a phone
+
+In the app, **Me → Settings → Reminders → What you hear about** has a **Send me a
+test notification** button. It calls `POST /api/v1/notifications/test/`, which
+sends one fixed message to the person asking and answers with what became of it:
+
+| Answer | What it means |
+|---|---|
+| `sent` | A real push backend accepted it for one of their browsers or phones. |
+| `not_registered` | The server knows no browser or phone for this account. Permission was never granted on that device, or the app has not been opened since. |
+| `not_switched_on` | Their device is registered, but the backend that serves it is still the logging one. Check `NOTIFICATIONS_PUSH_BACKEND` (browsers) and `NOTIFICATIONS_DEVICE_PUSH_BACKEND` (phones). |
+| `delivery_failed` | The push service refused or could not be reached. The reason is in the server log. |
+
+This needs no worker: it is sent inside the request. The timed reminders do need
+the worker and beat (below), so a test that arrives proves delivery, not the clock.
+
 ## Operational notes
 
 - **Dead endpoints self-retire.** When a browser drops a subscription, the push

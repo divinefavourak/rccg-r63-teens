@@ -23,6 +23,90 @@ def make_user(username='teen'):
         username=username, email=f'{username}@example.com', password='x')
 
 
+class TestNotificationTests(TestCase):
+    """The "Send me a test notification" button."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = make_user()
+        self.client.force_authenticate(self.user)
+        self.url = reverse('notification-test')
+
+    def test_needs_a_signed_in_person(self):
+        self.assertEqual(APIClient().post(self.url).status_code, 401)
+
+    def test_says_when_no_phone_or_browser_is_registered(self):
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, {'sent': False, 'reason': 'not_registered'})
+
+    def test_says_when_the_server_only_logs(self):
+        """A logging backend "delivers", and nothing reaches the phone."""
+        services.register_device(self.user, TOKEN, platform='android')
+
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.data, {'sent': False, 'reason': 'not_switched_on'})
+
+    def test_sends_to_the_callers_phone_and_nobody_elses(self):
+        services.register_device(self.user, TOKEN, platform='android')
+        other = make_user('other')
+        services.register_device(other, 'ExponentPushToken[bbbbbbbbbbbbbbbbbbbbbb]')
+
+        with override_settings(
+            NOTIFICATIONS_DEVICE_PUSH_BACKEND='notifications.push.ExpoPushBackend',
+        ), mock.patch.object(push.ExpoPushBackend, 'send', return_value=True) as send:
+            response = self.client.post(self.url)
+
+        self.assertEqual(response.data, {'sent': True, 'reason': ''})
+        self.assertEqual(send.call_count, 1)
+        self.assertEqual(send.call_args.args[0].user, self.user)
+
+    def test_is_not_held_back_by_quiet_hours(self):
+        """Someone testing at night is still waiting for an answer."""
+        services.register_device(self.user, TOKEN, platform='android')
+        preference = services.preferences_for(self.user)
+        preference.quiet_hours_start, preference.quiet_hours_end = time(0, 0), time(23, 59)
+        preference.save()
+
+        with override_settings(
+            NOTIFICATIONS_DEVICE_PUSH_BACKEND='notifications.push.ExpoPushBackend',
+        ), mock.patch.object(push.ExpoPushBackend, 'send', return_value=True):
+            response = self.client.post(self.url)
+
+        self.assertEqual(response.data, {'sent': True, 'reason': ''})
+
+    def test_says_when_the_push_service_cannot_be_reached(self):
+        services.register_device(self.user, TOKEN, platform='android')
+
+        with override_settings(
+            NOTIFICATIONS_DEVICE_PUSH_BACKEND='notifications.push.ExpoPushBackend',
+        ), mock.patch.object(
+            push.ExpoPushBackend, 'send', side_effect=push.PushDeliveryError('down'),
+        ):
+            response = self.client.post(self.url)
+
+        self.assertEqual(response.data, {'sent': False, 'reason': 'delivery_failed'})
+
+    def test_a_logged_browser_does_not_hide_a_phone_that_failed(self):
+        """
+        A browser on the logging backend "succeeds". That must not turn a real
+        send to the phone that failed into "sent".
+        """
+        services.subscribe(self.user, 'https://push.example/abc', 'p256dh', 'auth')
+        services.register_device(self.user, TOKEN, platform='android')
+
+        with override_settings(
+            NOTIFICATIONS_DEVICE_PUSH_BACKEND='notifications.push.ExpoPushBackend',
+        ), mock.patch.object(
+            push.ExpoPushBackend, 'send', side_effect=push.PushDeliveryError('down'),
+        ):
+            response = self.client.post(self.url)
+
+        self.assertEqual(response.data, {'sent': False, 'reason': 'delivery_failed'})
+
+
 class DeviceAPITests(TestCase):
 
     def setUp(self):
