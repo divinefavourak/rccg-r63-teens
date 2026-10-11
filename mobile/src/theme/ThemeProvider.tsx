@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 import { useColorScheme as useNativeWindColorScheme } from 'nativewind';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -55,6 +56,30 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
   }, [setColorScheme]);
+
+  // On the web, "match phone" has to be done by hand. With class-based dark
+  // mode NativeWind starts every page as light unless <html> already carries
+  // the `dark` class, and its own "system" setting only moves the values read
+  // from JS, never that class — so a phone set to dark got a light web app, or
+  // dark icons on light cards. Reading the browser's own setting and passing
+  // it on as a plain choice keeps both halves together, and follows the phone
+  // if it changes while the app is open.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || preference !== 'system') return;
+    const query = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (!query) return;
+    const follow = () => setColorScheme(query.matches ? 'dark' : 'light');
+    follow();
+    // Safari before 14 has `matchMedia` but only the older listener pair.
+    // "Match phone" is the default, so throwing here would be a blank app on
+    // every old iPhone.
+    if (typeof query.addEventListener === 'function') {
+      query.addEventListener('change', follow);
+      return () => query.removeEventListener('change', follow);
+    }
+    query.addListener?.(follow);
+    return () => query.removeListener?.(follow);
+  }, [preference, setColorScheme]);
 
   const scheme: Scheme = colorScheme === 'dark' ? 'dark' : 'light';
 
