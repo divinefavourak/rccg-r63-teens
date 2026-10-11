@@ -87,7 +87,7 @@ and check what lands in the asset list.
 
 ```
 app/                      routes (expo-router)
-  _layout.tsx             fonts, splash, providers, stack
+  _layout.tsx             fonts, launch animation, providers, stack
   (tabs)/
     _layout.tsx           the five destinations
     index.tsx             Today
@@ -128,6 +128,7 @@ src/
   api/queryClient.ts      cache defaults + RN focus/online bridges
   theme/tokens.ts         imperative mirror of global.css + elevation, motion
   theme/ThemeProvider.tsx light/dark, persisted
+  splash/                 the launch animation: the tree's traced shapes and their timing
   state/auth.tsx          who is signed in
   state/chrome.tsx        nav visibility, shared with the reader's scroll
   state/reader.tsx        reader theme, text size and last page, on this phone

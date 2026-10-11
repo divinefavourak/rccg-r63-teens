@@ -1,10 +1,11 @@
 import '../global.css';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Platform, View } from 'react-native';
+import { Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
+import Animated, { useSharedValue } from 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFonts } from 'expo-font';
@@ -34,11 +35,14 @@ import { installAppStateBridges, queryClient } from '../src/api/queryClient';
 import { startWebApp } from '../src/state/install';
 import { usePushSync } from '../src/state/push';
 import { loadWelcomed } from '../src/state/welcome';
+import { SplashAnimation, useSplashEntrance } from '../src/splash/SplashAnimation';
 
-// Hold the native splash until fonts and the stored theme are both ready.
-// Without this the first frame renders in the system font and the OS colour
-// scheme, then visibly reflows — the opposite of the "calm" the product is
-// built around (09-design-principles.md).
+// Hold the native splash until the animated one is on screen to take over
+// from it (`SplashAnimation`, which lets it go). That in turn stays up until
+// fonts and the stored theme are both ready: without it the first frame
+// renders in the system font and the OS colour scheme, then visibly reflows —
+// the opposite of the "calm" the product is built around
+// (09-design-principles.md).
 SplashScreen.preventAutoHideAsync().catch(() => {
   // Already hidden, or called twice under Fast Refresh. Not worth surfacing.
 });
@@ -147,61 +151,80 @@ function AppShell({ fontsSettled }: { fontsSettled: boolean }) {
   // the navigator below exists, since a tap has to be pushed onto it.
   usePushSync(user?.id, canRender);
 
-  // Hidden from `onLayout` rather than an effect: the effect fires in the same
-  // commit as the render, which can tear down the splash a frame before the
-  // tree has actually laid out and flash an empty screen. onLayout runs after.
-  const onLayout = useCallback(() => {
-    SplashScreen.hideAsync().catch(() => {});
-  }, []);
-
-  if (!canRender) return null;
+  // The launch animation plays over all of this from the first frame, and
+  // leaves only once there is a laid-out screen underneath to leave to.
+  // Reported from `onLayout` rather than an effect: the effect fires in the
+  // same commit as the render, which can open the splash a frame before the
+  // tree has actually laid out and show an empty screen. onLayout runs after.
+  const splashClock = useSharedValue(0);
+  const [laidOut, setLaidOut] = useState(false);
+  const [splashDone, setSplashDone] = useState(false);
+  const onLayout = useCallback(() => setLaidOut(true), []);
+  const onSplashDone = useCallback(() => setSplashDone(true), []);
+  const entrance = useSplashEntrance(splashClock);
 
   return (
-    <View style={[{ flex: 1, backgroundColor: tokens.surfBase }, WEB_COLUMN]} onLayout={onLayout}>
-      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: tokens.surfBase },
-          // Subtle slide, consistent with the platform back gesture
-          // (09-design-principles.md).
-          animation: 'slide_from_right',
-        }}
-      >
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen
-          name="devotional"
-          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-        />
-        <Stack.Screen name="notifications" />
-        <Stack.Screen name="article/[id]" />
-        <Stack.Screen
-          name="player"
-          // Rises over the Library and closes downwards, like the docked
-          // player it grows out of.
-          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-        />
-        <Stack.Screen name="watch/[id]" />
-        <Stack.Screen name="event/[id]/index" />
-        <Stack.Screen name="event/[id]/register" />
-        <Stack.Screen name="events/past" />
-        <Stack.Screen name="ticket/[id]" />
-        <Stack.Screen name="tickets" />
-        <Stack.Screen name="progress" />
-        <Stack.Screen name="saved" />
-        <Stack.Screen name="settings/index" />
-        <Stack.Screen name="settings/account" />
-        <Stack.Screen name="settings/notifications" />
-        <Stack.Screen name="settings/feedback" />
-        {/* Teacher tools: its own stack and nav, in `console/_layout.tsx`. */}
-        <Stack.Screen name="console" />
-        <Stack.Screen name="dev/kit" />
-        {/* Welcome, sign-up and log in. Full screens rather than modals: the
-            sign-up steps push onto each other, and a modal stack inside a modal
-            loses the back gesture on Android. Every one of them offers a way
-            out to the guest experience (05-navigation.md — never a wall). */}
-        <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
-      </Stack>
-    </View>
+    <>
+      {canRender ? (
+        <Animated.View
+          // The rise belongs to the hand-over only; once the splash has gone
+          // the screen carries no transform at all.
+          style={[
+            { flex: 1, backgroundColor: tokens.surfBase },
+            WEB_COLUMN,
+            splashDone ? null : entrance,
+          ]}
+          onLayout={onLayout}
+        >
+          <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: tokens.surfBase },
+              // Subtle slide, consistent with the platform back gesture
+              // (09-design-principles.md).
+              animation: 'slide_from_right',
+            }}
+          >
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen
+              name="devotional"
+              options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+            />
+            <Stack.Screen name="notifications" />
+            <Stack.Screen name="article/[id]" />
+            <Stack.Screen
+              name="player"
+              // Rises over the Library and closes downwards, like the docked
+              // player it grows out of.
+              options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+            />
+            <Stack.Screen name="watch/[id]" />
+            <Stack.Screen name="event/[id]/index" />
+            <Stack.Screen name="event/[id]/register" />
+            <Stack.Screen name="events/past" />
+            <Stack.Screen name="ticket/[id]" />
+            <Stack.Screen name="tickets" />
+            <Stack.Screen name="progress" />
+            <Stack.Screen name="saved" />
+            <Stack.Screen name="settings/index" />
+            <Stack.Screen name="settings/account" />
+            <Stack.Screen name="settings/notifications" />
+            <Stack.Screen name="settings/feedback" />
+            {/* Teacher tools: its own stack and nav, in `console/_layout.tsx`. */}
+            <Stack.Screen name="console" />
+            <Stack.Screen name="dev/kit" />
+            {/* Welcome, sign-up and log in. Full screens rather than modals: the
+                sign-up steps push onto each other, and a modal stack inside a modal
+                loses the back gesture on Android. Every one of them offers a way
+                out to the guest experience (05-navigation.md — never a wall). */}
+            <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
+          </Stack>
+        </Animated.View>
+      ) : null}
+      {splashDone ? null : (
+        <SplashAnimation clock={splashClock} ready={laidOut} onDone={onSplashDone} />
+      )}
+    </>
   );
 }

@@ -51,6 +51,11 @@
         height: 100%;
         flex: 1;
       }
+      /* Before the app has drawn anything: the same still a phone shows, a
+         cream disc on green, which the launch animation then picks up from. */
+      #root:empty {
+        background: radial-gradient(circle at center, #f9f6f1 0 45px, #10b981 46px);
+      }
     </style>
   </head>
 
