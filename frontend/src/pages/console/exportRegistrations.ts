@@ -41,18 +41,41 @@ export interface ExportScope {
 /** The most the API hands over in one page (`DefaultPagination.max_page_size`). */
 const PAGE = 200;
 
-/** Every registration the filter matches, however many pages that is. */
-export async function fetchRegistrations(event: ExportEvent, scope: ExportScope): Promise<ExportRow[]> {
-  const rows: ExportRow[] = [];
+/** One pass over every page: the rows by ticket, and how many the server says there are. */
+async function readAll(event: ExportEvent, scope: ExportScope) {
+  const rows = new Map<string, ExportRow>();
+  let count = 0;
   for (let page = 1; ; page++) {
-    const { data } = await api.get<{ results?: ExportRow[]; next?: string | null } | ExportRow[]>(
-      `/events/events/${event.id}/registrations/`,
-      { params: { status: scope.status, search: scope.search, page, page_size: PAGE } },
-    );
-    if (Array.isArray(data)) return data;
-    rows.push(...(data.results ?? []));
-    if (!data.next || !data.results?.length) return rows;
+    const { data } = await api.get<
+      { results?: ExportRow[]; next?: string | null; count?: number } | ExportRow[]
+    >(`/events/events/${event.id}/registrations/`, {
+      params: { status: scope.status, search: scope.search, page, page_size: PAGE },
+    });
+    const results = Array.isArray(data) ? data : (data.results ?? []);
+    for (const row of results) rows.set(row.registration_id, row);
+    if (Array.isArray(data)) return { rows, count: rows.size };
+    count = data.count ?? rows.size;
+    if (!data.next || results.length === 0) return { rows, count };
   }
+}
+
+/**
+ * Every registration the filter matches, however many pages that is.
+ *
+ * The pages are read newest first, one request after another. If someone
+ * registers, or a status changes, while a long list is being read, the pages
+ * shift under it: one person can come back twice and another not at all. Rows
+ * are kept by ticket number, so nobody is listed twice, and a pass that ends
+ * with a different number of people than the server reports is read again.
+ * After three tries the last pass is used: at a busy gate the list may never
+ * hold still, and a file that is one arrival behind beats no file.
+ */
+export async function fetchRegistrations(event: ExportEvent, scope: ExportScope): Promise<ExportRow[]> {
+  let pass = await readAll(event, scope);
+  for (let tries = 1; tries < 3 && pass.rows.size !== pass.count; tries++) {
+    pass = await readAll(event, scope);
+  }
+  return [...pass.rows.values()];
 }
 
 const label = (value: string | undefined) =>
