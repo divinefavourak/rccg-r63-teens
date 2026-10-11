@@ -83,11 +83,34 @@ npx expo export --platform android --output-dir /tmp/export-check --clear
 
 and check what lands in the asset list.
 
+## Releasing an Android build
+
+Production builds are made on Expo and then kept in the R2 bucket the backend
+uses, because Expo deletes a build's file after a while and gives every build
+a new address.
+
+```bash
+npx eas-cli build --platform android --profile production   # makes the .apk; the build number goes up by itself
+npm run release -- add <expo build id> --notes "what changed" # copies it into R2
+npm run release -- promote <build number>                     # makes it the one people download
+npm run release -- list                                       # every build kept, and which is current
+```
+
+`add` only stores a build. Try it on a phone, then `promote` it. To go back,
+promote an older build number. Everything lives under `apps/android/` in the
+bucket: one file per build (`faith-tribe-1.0.0-2.apk`), `versions.json` with
+the list, and `faith-tribe-latest.apk`, which is always the current build and
+is the address to hand out.
+
+The script reads the `R2_*` settings from the environment or from
+`backend/.env`. On this machine Node needs `NODE_OPTIONS=--use-system-ca` in
+front of these commands.
+
 ## Layout
 
 ```
 app/                      routes (expo-router)
-  _layout.tsx             fonts, splash, providers, stack
+  _layout.tsx             fonts, launch animation, providers, stack
   (tabs)/
     _layout.tsx           the five destinations
     index.tsx             Today
@@ -128,6 +151,7 @@ src/
   api/queryClient.ts      cache defaults + RN focus/online bridges
   theme/tokens.ts         imperative mirror of global.css + elevation, motion
   theme/ThemeProvider.tsx light/dark, persisted
+  splash/                 the launch animation: the tree's traced shapes and their timing
   state/auth.tsx          who is signed in
   state/chrome.tsx        nav visibility, shared with the reader's scroll
   state/reader.tsx        reader theme, text size and last page, on this phone

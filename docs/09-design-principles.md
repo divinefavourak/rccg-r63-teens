@@ -54,6 +54,7 @@ Motion has three jobs: orient (where did that come from?), acknowledge (did that
 - Durations: 150–250ms standard transitions; 300–400ms only for celebration moments. Easing: standard decelerate for entrances, accelerate for exits.
 - Screen transitions: subtle slide/fade consistent with platform back gestures.
 - **Celebrations:** streak milestones and journey completions get one gentle, organic animation (a leaf unfurling beats confetti cannons). Max once per session. Never blocking; always skippable.
+- **Launch:** the one place motion is allowed to be a show. Opening the app grows the Faith Tribe tree out of the launch screen (trunk, flame, figures, heads, then the ring and lettering, a single burst of confetti, and the tagline in three beats) and opens it into the first screen: about 2.5 seconds to settle and 1 second to hand over. It plays once per cold start, never on returning to the app, waits on the finished badge if the app is still loading rather than cutting off, and a tap hurries it along. With reduced motion on it is the finished badge and a fade. This is deliberately outside the duration limits above; nothing else is.
 - No looping attention-grabbers, no shaking badges, no pulsing dots.
 - All motion respects `prefers-reduced-motion`.
 
