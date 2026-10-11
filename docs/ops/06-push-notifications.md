@@ -34,11 +34,13 @@ warning in development.
    vapid --applicationServerKey   # the base64 public key the frontend needs
    ```
 
-2. **`pywebpush` installed** in the backend environment (add to `requirements.txt`).
+2. **`pywebpush` installed** in the backend environment. It is in `requirements.txt`, so a deploy installs it.
 
-3. **The frontend service worker** subscribed with the public key and POSTing the
-   subscription to `/api/v1/notifications/push/`. (Frontend work — out of scope
-   here, but the backend endpoint is ready.)
+3. **The web app built with the public key.** The web app (`mobile/`, deployed
+   to `app.thefaithtribe.live`) reads it from `EXPO_PUBLIC_VAPID_PUBLIC_KEY` when
+   it is built. Set that on the web app's Vercel project to the same value as
+   `VAPID_PUBLIC_KEY` below and redeploy. Without it the web app treats push as
+   unsupported: it never asks for permission and never subscribes.
 
 ---
 
