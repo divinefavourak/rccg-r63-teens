@@ -45,11 +45,19 @@ export default function ForgotPasswordScreen() {
       await api.post('/auth/forgot-password/', { email: address }, { anonymous: true });
       setSentTo(address);
     } catch (err) {
-      setError(
-        err instanceof ApiError && err.status === 429
-          ? 'Too many tries. Wait a few minutes, then try again.'
-          : 'We could not send the link. Check your connection and try again.',
-      );
+      const status = err instanceof ApiError ? err.status : 0;
+      if (status === 429) {
+        setError('Too many tries. Wait a few minutes, then try again.');
+      } else if (status === 0) {
+        // Never reached the server, so nothing about any account was learned.
+        setError('We could not send the link. Check your connection and try again.');
+      } else {
+        // The server answered with an error. It answers every address the same
+        // way on purpose; if a failure that only a real account can cause (its
+        // email would not send) showed differently here, this screen would say
+        // which addresses have accounts. So it shows what it always shows.
+        setSentTo(address);
+      }
     } finally {
       setPending(false);
     }
