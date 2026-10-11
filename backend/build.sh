@@ -14,6 +14,11 @@ python manage.py derive_hierarchy || echo "derive_hierarchy skipped (non-blockin
 # undoes that. It finds nothing once it has run, and can then be removed.
 python manage.py repair_console_moves || echo "repair_console_moves skipped (non-blocking)"
 
+# Devotionals the scraper saved before it wrote the Verse of the Day row have
+# the verse as text only, so Today shows none. This gives them one. It finds
+# nothing once it has run, and can then be removed.
+python manage.py backfill_memory_verses || echo "backfill_memory_verses skipped (non-blocking)"
+
 # Test email configuration after deployment
 echo ""
 echo "=================================================="

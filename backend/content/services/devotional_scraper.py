@@ -986,6 +986,15 @@ def scrape_and_save_devotional(target_date: date = None, force: bool = False) ->
             logger.info(f"Updated existing devotional for {target_date}")
         else:
             devotional = Devotional.objects.create(**data)
+
+        # The scraper writes the verse as text. The Verse of the Day is a
+        # `MemoryVerse` row, and a scraped devotional is saved as published
+        # without passing through review, which is the only other place that
+        # row is made. Without this the reading showed the verse while the
+        # Today card, the reminders and the Console all saw a day with none.
+        from content.services.daily import ensure_primary_memory_verse
+        ensure_primary_memory_verse(devotional)
+
         logger.info(f"Successfully saved devotional for {target_date}: {devotional.title}")
 
         return {

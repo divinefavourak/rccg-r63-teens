@@ -543,3 +543,101 @@ class DevotionalRegressionTests(APITestCase):
         self.devotional.save(update_fields=['status'])
         response = self.client.get(reverse('devotional-list'))
         self.assertEqual(0, response.data['count'])
+
+
+class ScrapedDevotionalVerseTests(TestCase):
+    """
+    A devotional the scraper saves is published without going through review,
+    so the scraper has to write the Verse of the Day row itself.
+    """
+
+    DAY = datetime.date(2026, 10, 10)
+    SCRAPED = {
+        'date': DAY,
+        'title': 'Women Who Show God\'s Glory',
+        'slug': '2026-10-10-women-who-show-gods-glory',
+        'content': 'From the beginning of time...',
+        'memory_verse_passage': 'Proverbs 31:30',
+        'memory_verse_content': 'Favour is deceitful, and beauty is vain...',
+        'source_url': 'https://example.com',
+        'status': 'published',
+    }
+
+    def scrape(self, data, **kwargs):
+        from content.services.devotional_scraper import scrape_and_save_devotional
+        with mock.patch(
+            'content.services.devotional_scraper.RCCGOnlineScraper.scrape', return_value=None,
+        ), mock.patch(
+            'content.services.devotional_scraper.DevotionalScraper.scrape',
+            return_value=dict(data),
+        ):
+            return scrape_and_save_devotional(self.DAY, **kwargs)
+
+    def test_a_scraped_devotional_has_its_verse_of_the_day(self):
+        self.scrape(self.SCRAPED)
+
+        verse = daily.primary_memory_verse(Devotional.objects.get(date=self.DAY))
+        self.assertIsNotNone(verse)
+        self.assertEqual(verse.reference_display, 'Proverbs 31:30')
+
+    def test_scraping_the_same_day_again_does_not_add_a_second_verse(self):
+        self.scrape(self.SCRAPED)
+        self.scrape(self.SCRAPED, force=True)
+
+        devotional = Devotional.objects.get(date=self.DAY)
+        self.assertEqual(devotional.memory_verses.filter(is_primary=True).count(), 1)
+
+    def test_a_scrape_with_no_verse_makes_none_up(self):
+        data = {**self.SCRAPED, 'memory_verse_passage': '', 'memory_verse_content': ''}
+        self.scrape(data)
+
+        self.assertIsNone(daily.primary_memory_verse(Devotional.objects.get(date=self.DAY)))
+
+
+class BackfillMemoryVersesTests(TestCase):
+    """`manage.py backfill_memory_verses`, for the ones saved before the fix."""
+
+    def run_command(self, *args):
+        from io import StringIO
+
+        from django.core.management import call_command
+        out = StringIO()
+        call_command('backfill_memory_verses', *args, stdout=out)
+        return out.getvalue()
+
+    def test_gives_a_verse_to_a_devotional_that_only_has_the_text(self):
+        devotional = make_devotional(
+            datetime.date(2026, 10, 10),
+            memory_verse_passage='Proverbs 31:30', memory_verse_content='Favour is deceitful...',
+        )
+
+        output = self.run_command()
+
+        self.assertIn('1 devotional(s) given', output)
+        self.assertEqual(
+            daily.primary_memory_verse(Devotional.objects.get(pk=devotional.pk)).reference_display,
+            'Proverbs 31:30',
+        )
+
+    def test_leaves_alone_a_devotional_that_already_has_one(self):
+        devotional = make_devotional(
+            datetime.date(2026, 10, 10),
+            memory_verse_passage='Proverbs 31:30', memory_verse_content='Favour is deceitful...',
+        )
+        make_memory_verse(devotional, reference='John 3:16')
+
+        output = self.run_command()
+
+        self.assertIn('0 devotional(s) given', output)
+        self.assertEqual(devotional.memory_verses.count(), 1)
+
+    def test_a_dry_run_changes_nothing(self):
+        devotional = make_devotional(
+            datetime.date(2026, 10, 10),
+            memory_verse_passage='Proverbs 31:30', memory_verse_content='Favour is deceitful...',
+        )
+
+        output = self.run_command('--dry-run')
+
+        self.assertIn('1 devotional(s) would be given', output)
+        self.assertEqual(devotional.memory_verses.count(), 0)
