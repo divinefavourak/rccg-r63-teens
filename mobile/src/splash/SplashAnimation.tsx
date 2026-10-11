@@ -595,8 +595,11 @@ export function SplashAnimation({ clock, ready, onDone }: SplashAnimationProps) 
         style={StyleSheet.absoluteFill}
         onPress={hurry}
         accessible
-        accessibilityRole="image"
-        accessibilityLabel="Faith Tribe"
+        // A button, and said to be one: the tap is the only way to hurry the
+        // animation, and a screen reader cannot find it on an "image".
+        accessibilityRole="button"
+        accessibilityLabel="Faith Tribe is opening"
+        accessibilityHint="Skips the opening animation"
       >
         <Moving
           clock={clock}
