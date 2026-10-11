@@ -681,4 +681,14 @@ CELERY_TIMEZONE = 'Africa/Lagos'
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
 
+# With no worker running, a task handed to the queue is never picked up. Set
+# this where the web service is all there is, and such tasks run on the spot
+# instead. Leave it off wherever a worker exists.
+CELERY_TASK_ALWAYS_EAGER = os.getenv('CELERY_TASK_ALWAYS_EAGER', '').lower() in ('1', 'true', 'yes')
+
+# The scheduled tasks driven by an outside timer rather than Celery beat, for a
+# deployment with no worker (common/scheduler.py). The timer must send this
+# secret; while it is empty the endpoint does not exist.
+SCHEDULER_SECRET = os.getenv('SCHEDULER_SECRET', '')
+
 # Celery Beat schedule is defined in backend/celery.py

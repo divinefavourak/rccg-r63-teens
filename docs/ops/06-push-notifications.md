@@ -106,7 +106,8 @@ the worker and beat (below), so a test that arrives proves delivery, not the clo
 - **The scheduler must be running.** The habit ladder, event reminders, and the
   devotional-gap alert are Celery beat tasks (`backend/backend/celery.py`). Push
   works without beat, but the *habit loop* does not — confirm the worker and beat
-  processes are up.
+  processes are up, or that an outside timer is driving the schedule instead
+  ([10 — Timed tasks without a worker](10-scheduler-without-a-worker.md)).
 - **Quiet hours and the announcement cap are timezone-correct.** They bound the day
   in Africa/Lagos, not UTC, so a 00:30-Lagos send is filed on the right day.
 

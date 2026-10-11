@@ -27,11 +27,18 @@ def dispatch_habit_ladder():
 
 
 @shared_task(name='notifications.tasks.close_out_reminder_day', ignore_result=True)
-def close_out_reminder_day():
+def close_out_reminder_day(on=None):
     """
     End-of-day step-down accounting. Runs once, after quiet hours begin, when no
     further rung can fire.
+
+    `on` is the day to close, as an ISO date. Beat leaves it out and gets
+    today. A caller running this late (`common.scheduler`, catching up after
+    midnight) names the day it was scheduled for, or it would close the new
+    day and never count the one that just ended.
     """
+    from datetime import date
+
     from django.core.cache import cache
 
     from common.dates import app_today
@@ -39,7 +46,7 @@ def close_out_reminder_day():
     # Closing a day adds one to each teen's run of ignored days, so doing it
     # twice (a duplicated beat, a retried worker) steps a teen down early.
     # `add` only succeeds for the first caller of the day.
-    day = app_today()
+    day = date.fromisoformat(on) if on else app_today()
     key = f'notifications:closed_out:{day.isoformat()}'
     if not cache.add(key, 1, 36 * 60 * 60):
         logger.info('Reminder day %s was already closed; nothing done.', day)

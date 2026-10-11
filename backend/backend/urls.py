@@ -21,6 +21,8 @@ from django.urls import path, include
 from django.http import JsonResponse
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
+from common import scheduler
+
 def health(request):
     """Simple health check endpoint"""
     return JsonResponse({
@@ -49,6 +51,8 @@ urlpatterns = [
     path('api/v1/payments/', include('payments.urls')),
     path('api/v1/today/', include('today.urls')),
     path('api/v1/notifications/', include('notifications.urls')),
+    # The beat schedule, run by an outside timer where there is no worker.
+    path('api/v1/scheduler/tick/', scheduler.tick, name='scheduler-tick'),
 
     # Legacy API endpoints (for backward compatibility with frontend)
     path('api/auth/', include('users.urls')),
