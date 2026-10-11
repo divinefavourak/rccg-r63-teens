@@ -70,8 +70,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (!query) return;
     const follow = () => setColorScheme(query.matches ? 'dark' : 'light');
     follow();
-    query.addEventListener('change', follow);
-    return () => query.removeEventListener('change', follow);
+    // Safari before 14 has `matchMedia` but only the older listener pair.
+    // "Match phone" is the default, so throwing here would be a blank app on
+    // every old iPhone.
+    if (typeof query.addEventListener === 'function') {
+      query.addEventListener('change', follow);
+      return () => query.removeEventListener('change', follow);
+    }
+    query.addListener?.(follow);
+    return () => query.removeListener?.(follow);
   }, [preference, setColorScheme]);
 
   const scheme: Scheme = colorScheme === 'dark' ? 'dark' : 'light';
