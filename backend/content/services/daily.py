@@ -112,6 +112,52 @@ def ensure_primary_memory_verse(devotional):
     return verse
 
 
+# `DailyChallenge.title` is what the Today card prints, and the column is this wide.
+CHALLENGE_TITLE_LENGTH = 200
+
+
+def ensure_daily_challenge(devotional):
+    """
+    Give a published devotional's day its challenge, from the Action Point,
+    when nobody has written one.
+
+    The Today card shows a `DailyChallenge` row, and those were only ever made
+    by hand in the admin, so the card read "None today" every day. Every
+    devotional already ends in an Action Point ("Tell three girls around you
+    that they are special and loved by God"), which is what
+    `docs/12-gamification.md` asks a challenge to be: one small, real thing to
+    do, themed with the day's message.
+
+    A challenge someone wrote for that day always stands: this makes one only
+    when the day has none at all, active or not, so switching a derived one off
+    in the admin is respected too. A draft gets nothing, since its challenge
+    would show on Today before its reading does.
+
+    Returns the day's challenge, or None when there is nothing to make one from.
+    """
+    from profiles.models import DailyChallenge
+
+    if devotional is None or devotional.status != Devotional.Status.PUBLISHED:
+        return None
+
+    existing = DailyChallenge.objects.filter(challenge_date=devotional.date)
+    if existing.exists():
+        return existing.filter(is_active=True).order_by('-created_at').first()
+
+    action = ' '.join((devotional.action_point or '').split())
+    if not action:
+        return None
+
+    title = action
+    if len(title) > CHALLENGE_TITLE_LENGTH:
+        # Cut at a word, and say that it was cut. The whole of it is in the
+        # description.
+        title = title[:CHALLENGE_TITLE_LENGTH - 1].rsplit(' ', 1)[0].rstrip(' ,;:') + '…'
+    return DailyChallenge.objects.create(
+        title=title, description=action, challenge_date=devotional.date,
+    )
+
+
 def validate_publishable(devotional):
     """
     The publish gate: a devotional without exactly one primary memory verse

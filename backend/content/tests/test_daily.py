@@ -641,3 +641,71 @@ class BackfillMemoryVersesTests(TestCase):
 
         self.assertIn('1 devotional(s) would be given', output)
         self.assertEqual(devotional.memory_verses.count(), 0)
+
+
+class ChallengeFromActionPointTests(TestCase):
+    """With no challenge written for the day, the devotional's Action Point is it."""
+
+    DAY = datetime.date(2026, 10, 11)
+    ACTION = 'Tell three girls around you that they are special and loved by God.'
+
+    def challenges(self):
+        from profiles.models import DailyChallenge
+        return DailyChallenge.objects.filter(challenge_date=self.DAY)
+
+    def test_a_published_devotional_gives_its_day_a_challenge(self):
+        devotional = make_devotional(self.DAY, action_point=self.ACTION)
+
+        challenge = daily.ensure_daily_challenge(devotional)
+
+        self.assertEqual(challenge.title, self.ACTION)
+        self.assertEqual(challenge.challenge_date, self.DAY)
+        self.assertEqual(self.challenges().count(), 1)
+
+    def test_asking_twice_makes_one(self):
+        devotional = make_devotional(self.DAY, action_point=self.ACTION)
+
+        daily.ensure_daily_challenge(devotional)
+        daily.ensure_daily_challenge(devotional)
+
+        self.assertEqual(self.challenges().count(), 1)
+
+    def test_a_challenge_someone_wrote_is_left_alone(self):
+        from profiles.models import DailyChallenge
+        written = DailyChallenge.objects.create(
+            title='Pray for one friend by name', description='...', challenge_date=self.DAY)
+        devotional = make_devotional(self.DAY, action_point=self.ACTION)
+
+        self.assertEqual(daily.ensure_daily_challenge(devotional), written)
+        self.assertEqual(self.challenges().count(), 1)
+
+    def test_one_that_was_switched_off_is_not_made_again(self):
+        from profiles.models import DailyChallenge
+        DailyChallenge.objects.create(
+            title=self.ACTION, description=self.ACTION, challenge_date=self.DAY, is_active=False)
+        devotional = make_devotional(self.DAY, action_point=self.ACTION)
+
+        self.assertIsNone(daily.ensure_daily_challenge(devotional))
+        self.assertEqual(self.challenges().count(), 1)
+
+    def test_a_draft_gets_none(self):
+        devotional = make_devotional(
+            self.DAY, action_point=self.ACTION, status=Devotional.Status.DRAFT)
+
+        self.assertIsNone(daily.ensure_daily_challenge(devotional))
+        self.assertEqual(self.challenges().count(), 0)
+
+    def test_no_action_point_means_no_challenge(self):
+        devotional = make_devotional(self.DAY, action_point='  ')
+
+        self.assertIsNone(daily.ensure_daily_challenge(devotional))
+
+    def test_a_long_action_point_is_cut_at_a_word_for_the_card(self):
+        long_action = ' '.join(['encourage'] * 40)
+        devotional = make_devotional(self.DAY, action_point=long_action)
+
+        challenge = daily.ensure_daily_challenge(devotional)
+
+        self.assertLessEqual(len(challenge.title), daily.CHALLENGE_TITLE_LENGTH)
+        self.assertTrue(challenge.title.endswith('encourage…'))
+        self.assertEqual(challenge.description, long_action)

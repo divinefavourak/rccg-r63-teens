@@ -90,6 +90,7 @@ One unified system replacing the legacy badges/achievements/certificates trio (`
 - One per day on Today; small, real, often *off-screen*: "Text someone an encouraging verse", "Pray for one friend by name", "Read Psalm 1" (deep-links and auto-completes — `08-bible-experience.md`).
 - Skippable without any penalty or nag; completing counts as a spiritual action.
 - Challenge authorship is editorial (content team), themed with the devotional where possible.
+- When the content team has not written one for the day, the devotional's own **Action Point** is the day's challenge. It is made when the devotional is published, and a challenge written by hand for that day always takes its place.
 
 ## Memory verse tracking
 
