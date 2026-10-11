@@ -10,7 +10,7 @@
  * up front is kinder than letting someone open it and hunt for a button that was
  * never going to be there.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type Ref } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   BarChart3,
@@ -64,6 +64,7 @@ interface SidebarProps {
    * open there is room for the labels.
    */
   drawerOpen?: boolean;
+  ref?: Ref<HTMLElement>;
   /**
    * The green way to the door, for someone who works one but has no Events
    * section to reach it through (a Teacher).
@@ -76,6 +77,7 @@ export const Sidebar = ({
   collapsed: collapsedProp = false,
   drawerOpen = false,
   showCheckIn = false,
+  ref,
 }: SidebarProps) => {
   const { displayName, roleLabel } = useAccountLabel();
   const isDrawer = useMediaQuery('(max-width: 767px)');
@@ -83,14 +85,23 @@ export const Sidebar = ({
 
   return (
     <aside
+      ref={ref}
+      // As a drawer it is a modal dialog; as a column it is just navigation.
+      role={isDrawer ? 'dialog' : undefined}
+      aria-modal={isDrawer && drawerOpen ? true : undefined}
+      aria-label={isDrawer ? 'Console navigation' : undefined}
       className={[
         'flex shrink-0 flex-col rounded-console-xl bg-console-ink px-3 pb-4 pt-5 text-console-on-ink transition-[width]',
         collapsed ? 'w-[68px]' : 'w-[236px]',
         // The drawer: pinned over the screen's left edge, off it until opened.
-        'max-md:fixed max-md:inset-y-3 max-md:left-3 max-md:z-50 max-md:w-[min(260px,calc(100vw-48px))] max-md:transition-[transform,visibility]',
-        drawerOpen ? 'max-md:translate-x-0' : 'max-md:invisible max-md:-translate-x-[calc(100%+24px)]',
+        'max-md:fixed max-md:inset-y-3 max-md:left-3 max-md:z-50 max-md:w-[min(260px,calc(100vw-48px))]',
+        // Visibility flips at once on opening, so the drawer can take focus
+        // straight away, and only after the slide on closing.
+        drawerOpen
+          ? 'max-md:translate-x-0 max-md:transition-transform'
+          : 'max-md:invisible max-md:-translate-x-[calc(100%+24px)] max-md:transition-[transform,visibility]',
       ].join(' ')}
-      aria-hidden={isDrawer && !drawerOpen ? true : undefined}
+      inert={isDrawer && !drawerOpen}
     >
       <div
         className={`flex shrink-0 items-center pb-4 ${collapsed ? 'justify-center' : 'px-2'}`}

@@ -10,7 +10,7 @@
  * then rearrange it — and on a slow connection that flash is long enough to
  * click. Authority is not a progressive enhancement.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
 import { useConsoleAuth } from '../../context/ConsoleAuthContext';
@@ -34,6 +34,9 @@ export const ConsoleLayout = () => {
     () => window.matchMedia('(max-width: 1023px)').matches,
   );
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
+  // Whatever opened the drawer, to hand focus back to when it closes.
+  const returnFocus = useRef<HTMLElement | null>(null);
   const { pathname } = useLocation();
 
   // Choosing a section is the end of the drawer's job. Adjusted during render
@@ -53,8 +56,43 @@ export const ConsoleLayout = () => {
     return () => document.removeEventListener('keydown', onKey);
   }, [drawerOpen]);
 
+  // Crossing a breakpoint resets that layout's state. Without this, opening the
+  // Console narrow and then widening it left the sidebar collapsed above `lg`,
+  // where the button that expands it is hidden; and a drawer left open
+  // reappeared on returning to phone width.
+  useEffect(() => {
+    const wide = window.matchMedia('(min-width: 1024px)');
+    const phone = window.matchMedia('(max-width: 767px)');
+    const onWide = () => setCollapsed(!wide.matches);
+    const onPhone = () => {
+      if (!phone.matches) {
+        returnFocus.current = null;
+        setDrawerOpen(false);
+      }
+    };
+    wide.addEventListener('change', onWide);
+    phone.addEventListener('change', onPhone);
+    return () => {
+      wide.removeEventListener('change', onWide);
+      phone.removeEventListener('change', onPhone);
+    };
+  }, []);
+
+  // The open drawer is modal: focus goes into it, the rest of the shell is
+  // `inert` behind it (so Tab cannot reach what the backdrop covers), and focus
+  // returns to whatever opened it once it closes, however it closes.
+  useEffect(() => {
+    if (drawerOpen) {
+      sidebarRef.current?.querySelector<HTMLElement>('a, button')?.focus();
+    } else if (returnFocus.current) {
+      returnFocus.current.focus();
+      returnFocus.current = null;
+    }
+  }, [drawerOpen]);
+
   const toggleSidebar = () => {
     if (window.matchMedia('(max-width: 767px)').matches) {
+      if (!drawerOpen) returnFocus.current = document.activeElement as HTMLElement;
       setDrawerOpen((v) => !v);
     } else {
       setCollapsed((v) => !v);
@@ -172,12 +210,16 @@ export const ConsoleLayout = () => {
       )}
       <Sidebar
         items={nav.filter((item) => item.inSidebar?.(permissions) ?? true)}
+        ref={sidebarRef}
         collapsed={collapsed}
         drawerOpen={drawerOpen}
         showCheckIn={needsCheckinShortcut}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col gap-4 pt-1 md:gap-5 md:px-2">
+      <div
+        className="flex min-w-0 flex-1 flex-col gap-4 pt-1 md:gap-5 md:px-2"
+        inert={drawerOpen}
+      >
         <TopBar
           roots={hierarchy.roots}
           hierarchyLoading={hierarchy.isLoading}
