@@ -10,8 +10,8 @@
  * then rearrange it — and on a slow connection that flash is long enough to
  * click. Authority is not a progressive enhancement.
  */
-import { useEffect, useMemo, useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Outlet, useLocation } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
 import { useConsoleAuth } from '../../context/ConsoleAuthContext';
 import Loader from '../Loader';
@@ -26,11 +26,78 @@ export const ConsoleLayout = () => {
     useConsoleAuth();
   const { theme, toggleTheme } = useTheme();
   const hierarchy = useHierarchy();
-  // Icons only below the `lg` breakpoint, where a 236px column would crowd the
-  // screen; the top row's menu button opens it.
+  // Below `md` there is no room for a standing column at all: the sidebar is a
+  // drawer the top row's menu button slides over the screen. From `md` to `lg`
+  // it stands collapsed to icons; from `lg` up it stands open. The menu button
+  // toggles whichever of the two applies at the current width.
   const [collapsed, setCollapsed] = useState(
     () => window.matchMedia('(max-width: 1023px)').matches,
   );
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
+  // Whatever opened the drawer, to hand focus back to when it closes.
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const { pathname } = useLocation();
+
+  // Choosing a section is the end of the drawer's job. Adjusted during render
+  // rather than in an effect, so the new screen never paints under an open drawer.
+  const [drawerPath, setDrawerPath] = useState(pathname);
+  if (drawerPath !== pathname) {
+    setDrawerPath(pathname);
+    setDrawerOpen(false);
+  }
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDrawerOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [drawerOpen]);
+
+  // Crossing a breakpoint resets that layout's state. Without this, opening the
+  // Console narrow and then widening it left the sidebar collapsed above `lg`,
+  // where the button that expands it is hidden; and a drawer left open
+  // reappeared on returning to phone width.
+  useEffect(() => {
+    const wide = window.matchMedia('(min-width: 1024px)');
+    const phone = window.matchMedia('(max-width: 767px)');
+    const onWide = () => setCollapsed(!wide.matches);
+    const onPhone = () => {
+      if (!phone.matches) {
+        returnFocus.current = null;
+        setDrawerOpen(false);
+      }
+    };
+    wide.addEventListener('change', onWide);
+    phone.addEventListener('change', onPhone);
+    return () => {
+      wide.removeEventListener('change', onWide);
+      phone.removeEventListener('change', onPhone);
+    };
+  }, []);
+
+  // The open drawer is modal: focus goes into it, the rest of the shell is
+  // `inert` behind it (so Tab cannot reach what the backdrop covers), and focus
+  // returns to whatever opened it once it closes, however it closes.
+  useEffect(() => {
+    if (drawerOpen) {
+      sidebarRef.current?.querySelector<HTMLElement>('a, button')?.focus();
+    } else if (returnFocus.current) {
+      returnFocus.current.focus();
+      returnFocus.current = null;
+    }
+  }, [drawerOpen]);
+
+  const toggleSidebar = () => {
+    if (window.matchMedia('(max-width: 767px)').matches) {
+      if (!drawerOpen) returnFocus.current = document.activeElement as HTMLElement;
+      setDrawerOpen((v) => !v);
+    } else {
+      setCollapsed((v) => !v);
+    }
+  };
 
   const nav = useMemo(() => computeNav(permissions), [permissions]);
 
@@ -133,18 +200,30 @@ export const ConsoleLayout = () => {
   }
 
   return (
-    <div className="flex h-screen gap-4 bg-console-canvas p-4 text-console-body">
+    <div className="flex h-dvh gap-4 bg-console-canvas p-3 text-console-body md:p-4">
+      {drawerOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+          onClick={() => setDrawerOpen(false)}
+          aria-hidden="true"
+        />
+      )}
       <Sidebar
         items={nav.filter((item) => item.inSidebar?.(permissions) ?? true)}
+        ref={sidebarRef}
         collapsed={collapsed}
+        drawerOpen={drawerOpen}
         showCheckIn={needsCheckinShortcut}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col gap-5 px-2 pt-1">
+      <div
+        className="flex min-w-0 flex-1 flex-col gap-4 pt-1 md:gap-5 md:px-2"
+        inert={drawerOpen}
+      >
         <TopBar
           roots={hierarchy.roots}
           hierarchyLoading={hierarchy.isLoading}
-          onToggleSidebar={() => setCollapsed((v) => !v)}
+          onToggleSidebar={toggleSidebar}
           showNotifications={nav.some((item) => item.id === 'notifications')}
           dark={theme === 'dark'}
           onToggleDark={toggleTheme}
