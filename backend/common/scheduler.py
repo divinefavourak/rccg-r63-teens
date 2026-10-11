@@ -8,13 +8,15 @@ had no clock at all: nothing was ever sent on time, and nothing said so.
 
 `tick` is the same clock driven from outside. A timer service calls it every
 few minutes; it works out which entries of the beat schedule came due since
-the last call and runs them here, in the web process. The schedule itself
-stays in one place, so a deployment can move between this and a real worker
-without the two drifting apart.
+the last call that finished its work, and runs them here, in the web process.
+The schedule itself stays in one place, so a deployment can move between this
+and a real worker without the two drifting apart.
 
 A late or missed call is absorbed rather than lost: the window runs from the
-previous call to this one, so a task whose minute fell in the gap still runs.
-Every scheduled task is already safe to run twice (each dedupes its own
+last finished call to this one, so a task whose minute fell in the gap still
+runs. The window is only moved on once the work is done, so a web process that
+is restarted halfway through leaves it where it was and the next call tries
+again. Every scheduled task is already safe to run twice (each dedupes its own
 sends), which is what makes that, and two overlapping calls, harmless.
 
 Off unless `SCHEDULER_SECRET` is set. See docs/ops/10-scheduler-without-a-worker.md.
@@ -52,6 +54,14 @@ LADDER_TASK = 'notifications.tasks.dispatch_habit_ladder'
 # worse than none, where a daily tidy-up three hours late is just late.
 MAX_LADDER_WINDOW_MINUTES = 30
 
+# Closes "today". Run late, after midnight, it has to be told which day it was
+# meant for, or it closes the new one and yesterday is never counted.
+CLOSE_OUT_TASK = 'notifications.tasks.close_out_reminder_day'
+
+# One run at a time in this process. A second call that arrives while the
+# first is still working would only repeat it.
+_running = threading.Lock()
+
 
 def _fires_at(schedule, moment):
     """Does this crontab fire in the minute `moment` falls in? (Local time.)"""
@@ -67,10 +77,12 @@ def _fires_at(schedule, moment):
 
 def due_tasks(start, end):
     """
-    The names of the beat entries that came due in `(start, end]`.
+    The beat entries that came due in `(start, end]`, as `{task name: when}`.
 
-    Half-open on the left, like the ladder's own window, so a task sitting
-    exactly on the boundary between two calls belongs to one of them.
+    `when` is the last minute the task was scheduled for inside the window, in
+    the schedule's own timezone. Half-open on the left, like the ladder's own
+    window, so a task sitting exactly on the boundary between two calls belongs
+    to one of them.
     """
     zone = ZoneInfo(settings.CELERY_TIMEZONE)
     minute = start.astimezone(zone).replace(second=0, microsecond=0) + timedelta(minutes=1)
@@ -80,19 +92,21 @@ def due_tasks(start, end):
         minutes.append(minute)
         minute += timedelta(minutes=1)
 
-    due = []
+    due = {}
     for entry in celery_app.conf.beat_schedule.values():
         schedule = entry['schedule']
         if not isinstance(schedule, crontab):
             continue
-        if any(_fires_at(schedule, m) for m in minutes):
-            due.append(entry['task'])
+        fired = [m for m in minutes if _fires_at(schedule, m)]
+        if fired:
+            due[entry['task']] = fired[-1]
     return due
 
 
-def claim_window(now=None):
+def open_window(now=None):
     """
-    The stretch of time this call answers for, and mark it answered.
+    The stretch of time this call answers for: from the last call that
+    finished, to now.
 
     Remembered in the cache. If the cache has forgotten (or is down, which
     reads as forgotten), the call covers one normal interval.
@@ -110,25 +124,35 @@ def claim_window(now=None):
             pass
     if start >= now:
         start = now - timedelta(minutes=1)
-    cache.set(LAST_TICK_KEY, now.isoformat(), 24 * 60 * 60)
     return start, now
 
 
-def run(names, window_minutes):
-    """Run each task here and now. One failing must not stop the others."""
+def close_window(end):
+    """Everything up to `end` has been dealt with; the next call starts there."""
+    cache.set(LAST_TICK_KEY, end.isoformat(), 24 * 60 * 60)
+
+
+def run(due, window_minutes):
+    """
+    Run each task in `due` (`{name: when it was scheduled for}`) here and now.
+    One failing must not stop the others.
+    """
     results = {}
-    for name in names:
+    for name, scheduled_for in due.items():
         try:
             if name == LADDER_TASK:
                 from notifications import ladder
                 sent = ladder.dispatch(
                     window_minutes=min(window_minutes, MAX_LADDER_WINDOW_MINUTES))
                 results[name] = f'{sent} sent'
-            else:
-                outcome = import_string(name).apply(throw=False)
-                if outcome.failed():
-                    raise outcome.result
-                results[name] = 'ok'
+                continue
+            kwargs = {}
+            if name == CLOSE_OUT_TASK:
+                kwargs['on'] = scheduled_for.date().isoformat()
+            outcome = import_string(name).apply(kwargs=kwargs, throw=False)
+            if outcome.failed():
+                raise outcome.result
+            results[name] = 'ok'
         except Exception:
             logger.exception('Scheduled task %s failed', name)
             results[name] = 'failed'
@@ -136,16 +160,22 @@ def run(names, window_minutes):
     return results
 
 
-def _run_in_background(names, window_minutes):
+def _run_in_background(due, window_minutes, end):
     """
     Off the request thread, so the timer gets its answer straight away: timer
     services give up after a few seconds, and a sweep of every teen's reminder
     settings can take longer than that.
+
+    The caller holds `_running`; this lets it go. The window is closed only
+    after the work, so a process killed in the middle of it leaves the window
+    open and the next call does the work again.
     """
     def work():
         try:
-            run(names, window_minutes)
+            run(due, window_minutes)
+            close_window(end)
         finally:
+            _running.release()
             # The thread opened its own database connection; nothing else will
             # close it.
             connection.close()
@@ -169,12 +199,24 @@ def tick(request):
     if not hmac.compare_digest(given.encode(), f'Bearer {secret}'.encode()):
         return JsonResponse({'detail': 'Not allowed.'}, status=403)
 
-    start, end = claim_window()
-    names = due_tasks(start, end)
-    window_minutes = max(1, round((end - start).total_seconds() / 60))
-    if names:
-        _run_in_background(names, window_minutes)
+    if not _running.acquire(blocking=False):
+        # The last call is still working. It has not closed its window, so
+        # whatever is due now is still due when the next call comes.
+        return JsonResponse({'due': [], 'busy': True}, status=202)
+
+    try:
+        start, end = open_window()
+        due = due_tasks(start, end)
+        window_minutes = max(1, round((end - start).total_seconds() / 60))
+        if due:
+            _run_in_background(due, window_minutes, end)
+        else:
+            close_window(end)
+            _running.release()
+    except Exception:
+        _running.release()
+        raise
     return JsonResponse(
-        {'due': names, 'since': start.isoformat(), 'until': end.isoformat()},
+        {'due': list(due), 'since': start.isoformat(), 'until': end.isoformat()},
         status=202,
     )

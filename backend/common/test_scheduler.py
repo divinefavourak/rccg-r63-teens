@@ -59,24 +59,31 @@ class WindowTests(TestCase):
         cache.clear()
 
     def test_the_first_call_covers_one_interval(self):
-        now = lagos(14, 5)
-
-        start, end = scheduler.claim_window(now)
+        start, end = scheduler.open_window(lagos(14, 5))
 
         self.assertEqual(end - start, timedelta(minutes=5))
 
-    def test_the_next_call_starts_where_the_last_one_ended(self):
-        scheduler.claim_window(lagos(14, 5))
+    def test_the_next_call_starts_where_the_last_one_finished(self):
+        scheduler.close_window(lagos(14, 5))
 
-        start, end = scheduler.claim_window(lagos(14, 17))
+        start, end = scheduler.open_window(lagos(14, 17))
 
         self.assertEqual(start, lagos(14, 5))
         self.assertEqual(end, lagos(14, 17))
 
-    def test_a_long_silence_is_not_replayed_in_full(self):
-        scheduler.claim_window(lagos(1, 0))
+    def test_a_call_that_never_finished_is_covered_by_the_next(self):
+        """The process died mid-run: its window was opened and never closed."""
+        scheduler.close_window(lagos(8, 55))
+        scheduler.open_window(lagos(9, 0))
 
-        start, end = scheduler.claim_window(lagos(14, 0))
+        start, _ = scheduler.open_window(lagos(9, 5))
+
+        self.assertEqual(start, lagos(8, 55))
+
+    def test_a_long_silence_is_not_replayed_in_full(self):
+        scheduler.close_window(lagos(1, 0))
+
+        start, end = scheduler.open_window(lagos(14, 0))
 
         self.assertEqual(end - start, timedelta(minutes=scheduler.MAX_WINDOW_MINUTES))
 
@@ -85,7 +92,7 @@ class RunTests(TestCase):
 
     def test_the_ladder_gets_the_window_capped(self):
         with mock.patch('notifications.ladder.dispatch', return_value=3) as dispatch:
-            results = scheduler.run([LADDER], window_minutes=120)
+            results = scheduler.run({LADDER: lagos(14, 5)}, window_minutes=120)
 
         dispatch.assert_called_once_with(
             window_minutes=scheduler.MAX_LADDER_WINDOW_MINUTES)
@@ -95,9 +102,18 @@ class RunTests(TestCase):
         with mock.patch('notifications.ladder.dispatch', side_effect=RuntimeError('boom')), \
                 mock.patch('events.tasks.send_event_reminders.apply') as apply:
             apply.return_value.failed.return_value = False
-            results = scheduler.run([LADDER, EVENT_REMINDERS], window_minutes=5)
+            results = scheduler.run(
+                {LADDER: lagos(9, 0), EVENT_REMINDERS: lagos(9, 0)}, window_minutes=5)
 
         self.assertEqual(results, {LADDER: 'failed', EVENT_REMINDERS: 'ok'})
+
+    def test_a_late_close_out_is_told_which_day_it_was_for(self):
+        """22:00 on the 12th, run after midnight, still closes the 12th."""
+        with mock.patch('notifications.tasks.close_out_reminder_day.apply') as apply:
+            apply.return_value.failed.return_value = False
+            scheduler.run({CLOSE_OUT: lagos(22, 0)}, window_minutes=150)
+
+        self.assertEqual(apply.call_args.kwargs['kwargs'], {'on': '2026-10-12'})
 
 
 @override_settings(CACHES=LOCAL_CACHE)
@@ -125,11 +141,37 @@ class TickViewTests(TestCase):
 
     @override_settings(SCHEDULER_SECRET='s3cret')
     def test_runs_what_is_due_and_says_so(self):
-        with mock.patch.object(scheduler, 'due_tasks', return_value=[LADDER]), \
+        due = {LADDER: lagos(14, 5)}
+        with mock.patch.object(scheduler, 'due_tasks', return_value=due), \
                 mock.patch.object(scheduler, '_run_in_background') as background:
-            response = self.client.post(self.url, HTTP_AUTHORIZATION='Bearer s3cret')
+            try:
+                response = self.client.post(self.url, HTTP_AUTHORIZATION='Bearer s3cret')
+            finally:
+                # The stand-in never runs, so it never lets the lock go.
+                scheduler._running.release()
 
         self.assertEqual(response.status_code, 202)
         self.assertEqual(response.json()['due'], [LADDER])
         background.assert_called_once()
-        self.assertEqual(background.call_args.args[0], [LADDER])
+        self.assertEqual(background.call_args.args[0], due)
+
+    @override_settings(SCHEDULER_SECRET='s3cret')
+    def test_a_call_with_nothing_due_moves_the_window_on(self):
+        with mock.patch.object(scheduler, 'due_tasks', return_value={}):
+            self.client.post(self.url, HTTP_AUTHORIZATION='Bearer s3cret')
+
+        self.assertIsNotNone(cache.get(scheduler.LAST_TICK_KEY))
+        self.assertTrue(scheduler._running.acquire(blocking=False))
+        scheduler._running.release()
+
+    @override_settings(SCHEDULER_SECRET='s3cret')
+    def test_a_call_during_a_run_does_not_start_another(self):
+        scheduler._running.acquire()
+        try:
+            with mock.patch.object(scheduler, '_run_in_background') as background:
+                response = self.client.post(self.url, HTTP_AUTHORIZATION='Bearer s3cret')
+        finally:
+            scheduler._running.release()
+
+        self.assertEqual(response.json(), {'due': [], 'busy': True})
+        background.assert_not_called()

@@ -22,6 +22,8 @@ list; the work carries on after the answer.
 
 - A late or skipped call is covered by the next one (up to 3 hours back; 30
   minutes for reminders, since a morning reminder at noon helps nobody).
+- If the web service restarts in the middle of the work, the next call does it
+  again: a call only counts once its work has finished.
 - Every scheduled task already refuses to send the same thing twice, so an
   extra call does no harm.
 - The calls also keep a free web service from going to sleep.
