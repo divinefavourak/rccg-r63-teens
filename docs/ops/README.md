@@ -41,6 +41,7 @@ description of it.
 | [07](07-production-secrets.md) | Production secrets | Every environment variable, and which are load-bearing |
 | [08](08-rollback.md) | Rollback | When a deployment goes wrong |
 | [09](09-migration-rehearsal.md) | Migration rehearsal | Dry-run the migrations against a throwaway copy of production **before** the real deploy |
+| [10](10-scheduler-without-a-worker.md) | Timed tasks without a worker | Driving reminders and the other scheduled work from a free outside timer, where a Celery worker costs money |
 
 ## The commands, at a glance
 
