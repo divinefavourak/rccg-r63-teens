@@ -89,6 +89,23 @@ class TestNotificationTests(TestCase):
 
         self.assertEqual(response.data, {'sent': False, 'reason': 'delivery_failed'})
 
+    def test_a_logged_browser_does_not_hide_a_phone_that_failed(self):
+        """
+        A browser on the logging backend "succeeds". That must not turn a real
+        send to the phone that failed into "sent".
+        """
+        services.subscribe(self.user, 'https://push.example/abc', 'p256dh', 'auth')
+        services.register_device(self.user, TOKEN, platform='android')
+
+        with override_settings(
+            NOTIFICATIONS_DEVICE_PUSH_BACKEND='notifications.push.ExpoPushBackend',
+        ), mock.patch.object(
+            push.ExpoPushBackend, 'send', side_effect=push.PushDeliveryError('down'),
+        ):
+            response = self.client.post(self.url)
+
+        self.assertEqual(response.data, {'sent': False, 'reason': 'delivery_failed'})
+
 
 class DeviceAPITests(TestCase):
 
