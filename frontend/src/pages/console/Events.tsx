@@ -19,7 +19,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, CalendarDays, Check, Lock, Pencil, Plus, ScanLine, Trash2, X } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Check, Download, Lock, Pencil, Plus, ScanLine, Trash2, X } from 'lucide-react';
 import api from '../../api/axios';
 import EventEditor, {
   type EventDraft,
@@ -53,6 +53,7 @@ import { useConsolePage } from '../../hooks/useConsoleList';
 import { useConsoleStats } from '../../hooks/useConsoleStats';
 import { useDebounced } from '../../hooks/useDebounced';
 import { parseAPIDate } from '../../utils/dates';
+import { downloadCsv, downloadPdf, fetchRegistrations } from './exportRegistrations';
 
 /** `EventListSerializer`. */
 interface EventRow {
@@ -502,7 +503,40 @@ const Registrations = ({ event, onBack }: { event: EventRow; onBack: () => void 
   const [cancelling, setCancelling] = useState<RegistrationRow | null>(null);
   const [placing, setPlacing] = useState<RegistrationRow | null>(null);
   const [notice, setNotice] = useState<{ kind: 'error' | 'success'; text: string } | null>(null);
+  const [exporting, setExporting] = useState<'csv' | 'pdf' | null>(null);
   const search = useDebounced(query.trim());
+
+  /**
+   * Save what the table is showing, every page of it, as a file. The filter
+   * and the search apply, so "Pending" exports the pending ones only.
+   */
+  const exportAs = useCallback(
+    async (kind: 'csv' | 'pdf') => {
+      setExporting(kind);
+      setNotice(null);
+      try {
+        const rows = await fetchRegistrations(event, {
+          status: filter === 'all' ? undefined : filter,
+          search: search || undefined,
+        });
+        if (rows.length === 0) {
+          setNotice({ kind: 'error', text: 'There is nothing to export for this filter.' });
+          return;
+        }
+        if (kind === 'csv') {
+          downloadCsv(event, rows);
+        } else {
+          const showing = filter === 'all' ? 'all statuses' : `${filter} only`;
+          await downloadPdf(event, rows, search ? `${showing}, matching "${search}"` : showing);
+        }
+      } catch {
+        setNotice({ kind: 'error', text: "We couldn't make the export. Check your connection and try again." });
+      } finally {
+        setExporting(null);
+      }
+    },
+    [event, filter, search],
+  );
 
   const list = useConsolePage<RegistrationRow>(`/events/events/${event.id}/registrations/`, {
     params: {
@@ -755,6 +789,26 @@ const Registrations = ({ event, onBack }: { event: EventRow; onBack: () => void 
           label={`Search registrations for ${event.title}`}
           placeholder="Search name, email or ticket"
         />
+        <Btn
+          variant="soft"
+          size="md"
+          onClick={() => exportAs('csv')}
+          disabled={exporting !== null}
+          aria-label={`Export registrations for ${event.title} as a CSV file`}
+        >
+          <Download size={16} aria-hidden className="mr-1.5" />
+          {exporting === 'csv' ? 'Exporting…' : 'CSV'}
+        </Btn>
+        <Btn
+          variant="soft"
+          size="md"
+          onClick={() => exportAs('pdf')}
+          disabled={exporting !== null}
+          aria-label={`Export registrations for ${event.title} as a PDF file`}
+        >
+          <Download size={16} aria-hidden className="mr-1.5" />
+          {exporting === 'pdf' ? 'Exporting…' : 'PDF'}
+        </Btn>
       </div>
 
       <Card>
