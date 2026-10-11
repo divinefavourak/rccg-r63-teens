@@ -23,7 +23,9 @@ from django.utils import timezone
 
 from common.models import PublishableMixin
 
-from .daily import ensure_primary_memory_verse, validate_publishable
+from .daily import (
+    ensure_daily_challenge, ensure_primary_memory_verse, validate_publishable,
+)
 
 Status = PublishableMixin.Status
 
@@ -161,6 +163,9 @@ def publish(item, user):
     item.status = Status.PUBLISHED
     item.published_at = timezone.now()
     item.save(update_fields=['status', 'published_at', 'updated_at'])
+    # A devotional's Action Point is the day's challenge unless one was written.
+    if hasattr(item, 'action_point'):
+        ensure_daily_challenge(item)
     return item
 
 

@@ -992,8 +992,10 @@ def scrape_and_save_devotional(target_date: date = None, force: bool = False) ->
         # without passing through review, which is the only other place that
         # row is made. Without this the reading showed the verse while the
         # Today card, the reminders and the Console all saw a day with none.
-        from content.services.daily import ensure_primary_memory_verse
+        from content.services.daily import ensure_daily_challenge, ensure_primary_memory_verse
         ensure_primary_memory_verse(devotional)
+        # The same gap, one card along: the day's challenge is its own row too.
+        ensure_daily_challenge(devotional)
 
         logger.info(f"Successfully saved devotional for {target_date}: {devotional.title}")
 
