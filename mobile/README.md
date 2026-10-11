@@ -123,6 +123,7 @@ app/                      routes (expo-router)
     sign-up.tsx           eight questions on one screen; only the question changes
     verify.tsx            the 6-digit code (sign-up and log in)
     all-set.tsx  log-in.tsx
+    forgot-password.tsx   ask for the email, send the reset link
   devotional.tsx          full devotional (modal)
   article/[id].tsx        an article from the Library
   player.tsx              the full audio player (modal)

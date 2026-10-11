@@ -26,6 +26,7 @@ const GOOGLE = require('../../assets/art/google.svg');
  * Two ways in, because there are two kinds of account. Teens who joined in the
  * app have no password and sign in with a code; accounts made on the website
  * (and every leader) have one. The field takes an email or a phone for both.
+ * A forgotten password is reset by an emailed link (`forgot-password.tsx`).
  *
  * Dismissible like every auth screen: "Read today's devotional without signing
  * in" goes back to the guest experience (05-navigation.md).
@@ -81,6 +82,16 @@ export default function LogInScreen() {
       // `useAuth` holds the message.
     }
   }, [identifier, pending, requestLoginCode, router]);
+
+  // The reset link goes by email, so an email already typed is carried over
+  // and a phone number is not.
+  const forgot = useCallback(() => {
+    const typed = identifier.trim();
+    router.push({
+      pathname: '/forgot-password',
+      params: typed.includes('@') ? { email: typed } : {},
+    });
+  }, [identifier, router]);
 
   const asGuest = useCallback(() => {
     markWelcomed();
@@ -151,16 +162,16 @@ export default function LogInScreen() {
 
         {/* No "Remember me": a phone session always persists, so a checkbox
             would promise a choice that does not exist. */}
-        <Pressable
-          onPress={sendCode}
-          accessibilityRole="button"
-          hitSlop={10}
-          className="self-end"
-        >
-          <Text className="font-ui-sb text-[14px] leading-5 text-green">
-            No password? Get a code
-          </Text>
-        </Pressable>
+        <View className="w-full flex-row flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <Pressable onPress={forgot} accessibilityRole="link" hitSlop={10}>
+            <Text className="font-ui-sb text-[14px] leading-5 text-green">Forgot password?</Text>
+          </Pressable>
+          <Pressable onPress={sendCode} accessibilityRole="button" hitSlop={10}>
+            <Text className="font-ui-sb text-[14px] leading-5 text-green">
+              No password? Get a code
+            </Text>
+          </Pressable>
+        </View>
 
         <View className="w-full">
           <FormError>{error ?? notice}</FormError>
