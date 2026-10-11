@@ -169,6 +169,28 @@ ROLE_SEED = [
         'is_system': True,
     },
     {
+        # In charge of devotionals, manuals, articles and media for the whole
+        # region (or country): writes them, and reviews other people's. Content
+        # is not scoped to a node yet, so this reaches all of it wherever it is
+        # granted; the node only records who appointed them and for which area.
+        #
+        # Holding both `content.manage` and `content.publish` does not let them
+        # approve their own submission — the two-person rule compares people,
+        # not permissions — so a lone Content Manager still needs a second
+        # reviewer (another Content Manager or a coordinator).
+        'code': 'content_manager',
+        'label': 'Content Manager',
+        'description': 'Writes, reviews and publishes devotionals, manuals, '
+                       'articles and media.',
+        'allowed_node_types': [_NATIONAL, _REGION],
+        'permissions': [
+            Perm.HIERARCHY_VIEW,
+            Perm.CONTENT_VIEW, Perm.CONTENT_PUBLISH, Perm.CONTENT_MANAGE,
+            Perm.MEDIA_MANAGE,
+        ],
+        'is_system': True,
+    },
+    {
         'code': 'teen',
         'label': 'Teen',
         'allowed_node_types': [_PARISH],

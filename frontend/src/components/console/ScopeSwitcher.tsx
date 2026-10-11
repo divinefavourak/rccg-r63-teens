@@ -98,23 +98,23 @@ export const ScopeSwitcher = ({
 
   if (isLoading) {
     return (
-      <div className="h-[52px] w-56 animate-pulse rounded-full bg-console-skeleton" />
+      <div className="h-10 w-full max-w-56 animate-pulse rounded-full md:h-[52px] bg-console-skeleton" />
     );
   }
 
   const label = (
     <>
       <span
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-console-go text-console-on-go"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-console-go text-console-on-go md:h-9 md:w-9"
         aria-hidden="true"
       >
-        <GitBranch size={18} />
+        <GitBranch size={16} />
       </span>
-      <span className="min-w-0 text-left">
+      <span className="min-w-0 flex-1 text-left">
         <span className="block max-w-[200px] truncate text-[14px] font-semibold leading-5 text-console-text">
           {current?.name ?? 'Choose a scope'}
         </span>
-        <span className="block max-w-[200px] truncate text-[12px] font-medium leading-4 text-console-muted">
+        <span className="hidden max-w-[200px] truncate text-[12px] font-medium sm:block leading-4 text-console-muted">
           {path ?? (current ? NODE_TYPE_LABELS[current.node_type] : 'No scope')}
         </span>
       </span>
@@ -124,27 +124,27 @@ export const ScopeSwitcher = ({
   // Nothing to switch between — a Teacher is pinned to one parish.
   if (selectableCount <= 1) {
     return (
-      <div className="flex h-[52px] items-center gap-2.5 rounded-full bg-console-tinted pl-2 pr-4">
+      <div className="flex h-10 w-fit max-w-full items-center gap-2.5 rounded-full bg-console-tinted pl-1.5 pr-4 md:h-[52px] md:pl-2">
         {label}
       </div>
     );
   }
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative w-fit max-w-full" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="flex h-[52px] items-center gap-2.5 rounded-full border-[1.5px] border-console-border-strong bg-console-surface pl-2 pr-3.5 transition-colors hover:bg-console-tinted"
+        className="flex h-10 w-full items-center gap-2 rounded-full border-[1.5px] pl-1.5 md:h-[52px] md:gap-2.5 border-console-border-strong bg-console-surface pr-3 md:pl-2 md:pr-3.5 transition-colors hover:bg-console-tinted"
       >
         {label}
         <ChevronDown size={18} className="shrink-0 text-console-text" />
       </button>
 
       {open && (
-        <div className="absolute left-0 z-50 mt-2 w-[340px] overflow-hidden rounded-console-lg bg-console-raised shadow-console-dialog">
+        <div className="absolute left-0 z-50 mt-2 w-[340px] overflow-hidden max-md:fixed max-md:inset-x-3 max-md:top-16 max-md:w-auto rounded-console-lg bg-console-raised shadow-console-dialog">
           <div className="flex items-center gap-2 border-b border-console-border px-4 py-3">
             <Search size={16} className="shrink-0 text-console-muted" />
             <input

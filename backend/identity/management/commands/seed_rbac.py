@@ -32,6 +32,7 @@ class Command(BaseCommand):
                     'label': spec['label'],
                     'allowed_node_types': spec['allowed_node_types'],
                     'is_system': spec.get('is_system', False),
+                    **({'description': spec['description']} if 'description' in spec else {}),
                 },
             )
             created_roles += int(was_created)
