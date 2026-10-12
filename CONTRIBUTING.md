@@ -52,19 +52,18 @@ We use the following branch naming conventions:
 
 | Branch | Purpose |
 |---|---|
-| `main` | Production-ready code — do **not** push directly |
-| `dev` | Integration branch for ongoing development |
-| `feature/<short-description>` | New feature work |
+| `main` | Production-ready code — do **not** push directly. Render and Vercel deploy from it |
+| `feat/<short-description>` | New feature work |
 | `fix/<short-description>` | Bug fixes |
 | `chore/<short-description>` | Maintenance tasks, refactors, dependency updates |
 | `docs/<short-description>` | Documentation-only changes |
 
-**Always branch off `dev`**, not `main`:
+**Always branch off `main`**:
 
 ```bash
-git checkout dev
-git pull upstream dev
-git checkout -b feature/your-feature-name
+git checkout main
+git pull upstream main
+git checkout -b feat/your-feature-name
 ```
 
 ---
@@ -100,10 +99,13 @@ git checkout -b feature/your-feature-name
 Use clear, descriptive commit messages following this format:
 
 ```
-<type>: <short summary>
+<type>(<scope>): <short summary>
 
 [optional body — explain why, not what]
 ```
+
+The scope is the part of the product the change touches, such as `content`,
+`events`, `mobile` or `console`. Leave it out when a change has no single home.
 
 **Types:**
 
@@ -119,8 +121,8 @@ Use clear, descriptive commit messages following this format:
 **Examples:**
 
 ```
-feat: add QR code download button to ticket preview
-fix: resolve coordinator dashboard pagination error
+feat(content): the devotional's Action Point is the day's challenge
+fix(content): scraped devotionals get their Verse of the Day
 docs: update README with backend environment variables
 chore: upgrade Vite to v7
 ```
@@ -131,10 +133,10 @@ chore: upgrade Vite to v7
 
 1. Push your branch to your fork:
    ```bash
-   git push origin feature/your-feature-name
+   git push origin feat/your-feature-name
    ```
 
-2. Open a Pull Request against the `dev` branch of the upstream repository
+2. Open a Pull Request against the `main` branch of the upstream repository
 
 3. Fill in the PR template:
    - **What does this PR do?** — short description

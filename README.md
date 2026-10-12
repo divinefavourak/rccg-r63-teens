@@ -1,303 +1,342 @@
-# RCCG R63 Teens soon to be faith tribe 
+# Faith Tribe
 
-A comprehensive youth ministry web platform for the **Redeemed Christian Church of God, Region 63**. It powers event registration, daily devotionals, media content, and administrative management for teens, coordinators, and admins.
+Faith Tribe is a discipleship platform for teenagers in the Redeemed Christian Church of God. A teen opens it for the day's devotional and its verse, reads the Bible, registers and pays for camp, and keeps a ticket on their phone. Teachers and coordinators run their classes, events and content from the same system.
 
----
+It is first deployed for **RCCG Region 63**, and this repository was called *RCCG R63 Teens* before the product had a name. Region 63 is a tenant, not the product: nothing in the code may name it.
 
-## Table of Contents
+| | Address |
+|---|---|
+| Website and Console | <https://www.thefaithtribe.live> |
+| Web app (for iPhones) | <https://app.thefaithtribe.live> |
+| API | <https://api.thefaithtribe.live/api/v1> |
+| Android app | An `.apk` linked from the website. It is not in the Play Store yet. |
 
-- [Project Overview](#project-overview)
-- [Tech Stack](#tech-stack)
-- [Prerequisites](#prerequisites)
-- [Getting Started](#getting-started)
-  - [1. Clone the Repository](#1-clone-the-repository)
-  - [2. Backend Setup (Django)](#2-backend-setup-django)
-  - [3. Frontend Setup (React + Vite)](#3-frontend-setup-react--vite)
-- [Environment Variables](#environment-variables)
-  - [Backend .env](#backend-env)
-  - [Frontend .env](#frontend-env)
-- [Running the Project](#running-the-project)
-- [Available Scripts](#available-scripts)
-- [Project Structure](#project-structure)
-- [User Roles](#user-roles)
-- [Key Features](#key-features)
-- [API Documentation](#api-documentation)
+## Contents
+
+- [What is in this repository](#what-is-in-this-repository)
+- [What it does](#what-it-does)
+- [Tech stack](#tech-stack)
+- [Running it locally](#running-it-locally)
+- [Environment variables](#environment-variables)
+- [Tests and checks](#tests-and-checks)
+- [The API](#the-api)
+- [Roles and the church hierarchy](#roles-and-the-church-hierarchy)
+- [Deployment](#deployment)
+- [Documentation](#documentation)
 - [Contributing](#contributing)
-- [Contributors](#contributors)
 
----
+## What is in this repository
 
-## Project Overview
+One API and three things that talk to it.
 
-RCCG R63 Teens serves as:
+| Folder | What it is | Stack |
+|---|---|---|
+| [`backend/`](backend) | The API. Every client reads and writes through it. | Django 5.2, Django REST Framework, PostgreSQL, Redis, Celery |
+| [`frontend/`](frontend) | The public website, event registration on the web, and the **Console** for leaders at `/admin`. | React 19, TypeScript, Vite 7, Tailwind |
+| [`mobile/`](mobile) | The teen app, with teacher tools inside it. The same code builds the Android app and the web app that iPhone users add to their Home Screen. | Expo SDK 57, React Native 0.86, expo-router, NativeWind |
+| [`docs/`](docs) | The product handbook, the design notes and the operations runbooks. | Markdown |
 
-- **Event Registration System** — teens register for church events (campouts, conferences, etc.), receive QR-code tickets, and pay via Squad
-- **Daily Devotional Platform** — Teenage Open Heaven daily Bible readings with reading streaks and engagement tracking
-- **Content Hub** — manuals (weekly teaching materials), podcasts, videos, and media series
-- **Administrative Hub** — admin and coordinator dashboards with analytics, bulk operations, and content management
+```
+rccg-r63-teens/
+├── backend/
+│   ├── backend/          settings, URLs, Celery schedule
+│   ├── users/            accounts, sign-up, log in, one-time codes
+│   ├── identity/         roles, permissions, role assignments
+│   ├── hierarchy/        the church tree: parish up to national
+│   ├── profiles/         a teen's profile and saved items
+│   ├── today/            the Today screen, in one call
+│   ├── content/          devotionals, manuals, articles
+│   ├── bible/            translations, text, search, highlights and notes
+│   ├── progress/         streaks, grace days, reading history
+│   ├── media/            podcasts, videos, series
+│   ├── events/           events, registration, bedspaces, check-in
+│   ├── payments/         Squad checkout, webhook, pay links
+│   ├── notifications/    inbox, push, the reminder ladder
+│   ├── tickets/          the older ticketing API the website still uses
+│   ├── common/           shared models, mixins, the scheduler endpoint
+│   └── templates/        email templates
+├── frontend/
+│   └── src/              pages, components, services, stores
+├── mobile/
+│   ├── app/              routes (expo-router)
+│   └── src/              API client, state, theme, UI kit
+└── docs/
+    ├── 01 … 16           the product handbook
+    ├── ops/              runbooks for deploying and maintaining
+    ├── design/           backend design notes, by phase
+    └── adr/              architecture decision records
+```
 
----
+## What it does
 
-## Tech Stack
+**For a teen**
+
+- **Today.** One devotional a day (Teenage Open Heavens), its memory verse as the Verse of the Day, and a daily challenge taken from the devotional's Action Point.
+- **Bible.** A built-in reader with several translations. A whole translation can be kept on the phone and read with no signal.
+- **Library.** Articles, podcasts, videos and the weekly teaching manuals.
+- **Events.** Register for a camp or conference, pay through Squad or send a parent a pay link, and hold a QR ticket.
+- **Progress.** Streaks with grace days, and reminders that stop for the day once the devotional is read.
+
+**For teachers and coordinators**
+
+- **Teacher tools in the app.** This week's manual, the class list, and a ticket scanner for check-in that keeps working offline.
+- **The Console** on the web. People, roles, the church hierarchy, events and bedspaces, registrations and exports, content review.
+
+## Tech stack
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS |
-| State Management | Zustand, React Hook Form, Zod |
-| Backend | Django 5, Django REST Framework |
-| Database | PostgreSQL |
-| Cache | Redis |
-| Task Queue | Celery + AMQP |
-| Authentication | JWT (djangorestframework-simplejwt) |
+| API | Django 5.2, Django REST Framework, drf-spectacular |
+| Database | PostgreSQL 16 |
+| Cache and queue | Redis, Celery |
+| Sign-in | JWT (`djangorestframework-simplejwt`), one-time codes by email |
 | Payments | Squad |
-| File Storage | Cloudflare R2 (via django-storages) |
-| Email | Brevo (SMTP) |
-| API Docs | drf-spectacular (Swagger / ReDoc) |
+| File storage | Cloudflare R2, through `django-storages` |
+| Email | Brevo |
+| Push | Expo push (Android), Web Push (the web app) |
+| Website and Console | React 19, TypeScript, Vite 7, Tailwind, Zustand, React Query, React Hook Form, Zod |
+| App | Expo SDK 57, React Native 0.86, expo-router, NativeWind, Reanimated, React Query |
+| Hosting | Render (API), Vercel (website and web app), Expo EAS (Android builds) |
 
----
+## Running it locally
 
-## Prerequisites
+You need:
 
-Make sure the following are installed on your machine:
-
-- **Python** 3.11 or higher
-- **Node.js** 18 or higher + **npm**
-- **PostgreSQL** (running locally or via a connection URL)
-- **Redis** (running locally, default port 6379)
+- **Python 3.12**
+- **Node.js 20** or newer, with npm
+- **Docker**, for the local PostgreSQL and Redis
 - **Git**
-
----
-
-## Getting Started
-
-### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/divinefavourak/rccg-r63-teens.git
 cd rccg-r63-teens
 ```
 
----
+### 1. The backend
 
-### 2. Backend Setup (Django)
+Start PostgreSQL and Redis:
 
 ```bash
-# Navigate into the backend directory
 cd backend
-
-# Create and activate a virtual environment
-python -m venv venv
-source venv/bin/activate        # On Windows: venv\Scripts\activate
-
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Copy the example env file and fill in your values
-cp .env.example .env
-# Edit .env with your actual credentials (see Environment Variables section)
-
-# Apply database migrations
-python manage.py migrate
-
-# (Optional) Create a superuser for the admin panel
-python manage.py createsuperuser
-
-# (Optional) Seed devotional content from the scraper
-python manage.py scrape_devotional
-
-# (Optional) Create provincial coordinator accounts
-python manage.py create_provincial_users
-
-# Start the development server
-python manage.py runserver
+docker compose up -d
 ```
 
-The backend API will be available at `http://localhost:8000`.
+This gives you Redis on port 6379 and an empty database on port 5434. Redis is not optional: without it every request waits several seconds on a refused connection.
 
----
-
-### 3. Frontend Setup (React + Vite)
-
-Open a new terminal tab/window:
+Create the environment and install:
 
 ```bash
-# Navigate into the frontend directory
-cd frontend
-
-# Install Node dependencies
-npm install
-
-# Copy the example env file and fill in your values
+python -m venv venv
+source venv/bin/activate          # Windows: venv\Scripts\activate
+pip install -r requirements.txt
 cp .env.example .env
-# Edit .env with your actual API URL
+```
 
-# Start the development server
+In `backend/.env`, set a `SECRET_KEY` and point the database at the container:
+
+```
+DATABASE_URL=postgres://faithtribe:faithtribe@localhost:5434/faithtribe
+```
+
+> **Never put the production `DATABASE_URL` in a local `.env`.** Anything you run would read and write real people's data, and with the Brevo keys set it would send them real email.
+
+Then:
+
+```bash
+python manage.py migrate
+python manage.py createsuperuser
+python manage.py runserver 0.0.0.0:8000
+```
+
+`0.0.0.0` lets a phone on the same Wi-Fi reach the API. Plain `runserver` only answers on the computer itself.
+
+A new database has no church hierarchy, no Bible text and no devotionals, so the app will look empty. [`docs/ops/02-fresh-installation.md`](docs/ops/02-fresh-installation.md) walks through filling it. The short version:
+
+```bash
+python manage.py import_bible web.json        # Bible text
+python manage.py scrape_devotional            # today's devotional
+python manage.py verify_deployment            # says what is still missing, and the command that fixes it
+```
+
+### 2. The website and Console
+
+```bash
+cd frontend
+npm install
+cp .env.example .env
 npm run dev
 ```
 
-The frontend will be available at `http://localhost:5173`.
+It runs at <http://localhost:5173>. The Console is at `/admin`.
 
----
-
-## Environment Variables
-
-### Backend `.env`
-
-Located at `backend/.env`. Copy from `backend/.env.example`.
-
-| Variable | Description | Example |
-|---|---|---|
-| `SECRET_KEY` | Django secret key | `your-secret-key-here` |
-| `DEBUG` | Enable debug mode | `True` |
-| `ALLOWED_HOSTS` | Comma-separated allowed hosts | `localhost,127.0.0.1` |
-| `DATABASE_URL` | PostgreSQL connection URL | `postgres://user:pass@localhost:5432/dbname` |
-| `REDIS_URL` | Redis connection URL | `redis://localhost:6379/0` |
-| `BREVO_SMTP_USER` | Brevo SMTP username/email | `your@email.com` |
-| `BREVO_SMTP_KEY` | Brevo SMTP API key | `your-brevo-key` |
-| `SQUAD_SECRET_KEY` | Squad secret key (a sandbox key is sent to Squad's sandbox) | `sandbox_sk_...` |
-| `FRONTEND_URL` | Frontend base URL for email links | `http://localhost:3000` |
-| `R2_ACCESS_KEY_ID` | Cloudflare R2 access key | — |
-| `R2_SECRET_ACCESS_KEY` | Cloudflare R2 secret key | — |
-| `R2_ACCOUNT_ID` | Cloudflare account ID | — |
-| `R2_BUCKET_NAME` | R2 bucket name | `rccg-r63-media` |
-
-### Frontend `.env`
-
-Located at `frontend/.env`. Copy from `frontend/.env.example`.
-
-| Variable | Description | Example |
-|---|---|---|
-| `VITE_API_URL` | Backend API base URL | `http://localhost:8000/api` |
-| `VITE_PUBLIC_AGENT_USERNAME` | Agent account username | — |
-| `VITE_PUBLIC_AGENT_PASSWORD` | Agent account password | — |
-
----
-
-## Running the Project
-
-To run the full application you need three services running simultaneously:
-
-| Service | Command | URL |
-|---|---|---|
-| Django backend | `python manage.py runserver` | http://localhost:8000 |
-| React frontend | `npm run dev` | http://localhost:5173 |
-| Redis | `redis-server` | localhost:6379 |
-
-Optionally, start Celery for background tasks (email sending, etc.):
+### 3. The app
 
 ```bash
-# From the backend/ directory, with venv activated
+cd mobile
+npm install
+npx expo start
+```
+
+Press `a` for an Android emulator, scan the QR code with Expo Go on a phone, or run `npx expo start --web` to open it in a browser. With `EXPO_PUBLIC_API_URL` unset, the app finds the API on the computer serving the bundle, port 8000, so a phone on the same Wi-Fi works with nothing to configure.
+
+Push notifications, the check-in camera and release builds need more than Expo Go. All of that is in [`mobile/README.md`](mobile/README.md).
+
+### Timed tasks
+
+Daily reminders, the devotional scrape and event reminders run on a schedule. Locally, start a worker and beat from `backend/`:
+
+```bash
 celery -A backend worker --loglevel=info
+celery -A backend beat --loglevel=info
 ```
 
----
+Most work does not need them. Production has no worker at all; see [Deployment](#deployment).
 
-## Available Scripts
+## Environment variables
 
-### Backend
+Each part has an `.env.example` to copy. These are the settings you are most likely to touch. The full list for the backend, with what breaks when each is wrong, is in [`docs/ops/07-production-secrets.md`](docs/ops/07-production-secrets.md).
 
-| Command | Description |
+### `backend/.env`
+
+| Variable | What it is |
 |---|---|
-| `python manage.py runserver` | Start development server |
-| `python manage.py migrate` | Apply database migrations |
-| `python manage.py makemigrations` | Create new migrations |
-| `python manage.py createsuperuser` | Create an admin user |
-| `python manage.py scrape_devotional` | Scrape and import devotionals |
-| `python manage.py create_provincial_users` | Seed coordinator accounts |
-| `python manage.py test_emails` | Test email configuration |
+| `SECRET_KEY` | Django's signing key. No default. |
+| `DEBUG` | `True` locally. Must be `False` in production. |
+| `ALLOWED_HOSTS` | Comma-separated hostnames. |
+| `DATABASE_URL` | PostgreSQL connection string. Left unset it falls back to SQLite, which some migrations cannot run on. |
+| `REDIS_URL` | Defaults to `redis://localhost:6379/0`, which is the Docker container. |
+| `TEST_DATABASE_URL` | Used only by `manage.py test`. |
+| `SCRIPTURE_TIMEZONE` | The timezone that decides what "today" is. `Africa/Lagos`. |
+| `CORS_ALLOWED_ORIGINS` | Every browser address allowed to call the API. |
+| `FRONTEND_URL` | The website's address, used in email links. |
+| `BREVO_SMTP_USER`, `BREVO_SMTP_KEY`, `BREVO_API_KEY`, `DEFAULT_FROM_EMAIL` | Email. |
+| `OTP_PROVIDER` | How one-time codes are sent. |
+| `SQUAD_SECRET_KEY`, `PUBLIC_API_URL`, `PAY_LINK_BASE` | Payments. A key starting `sandbox_sk_` goes to Squad's sandbox. |
+| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ACCOUNT_ID`, `R2_BUCKET_NAME`, `R2_PUBLIC_DOMAIN` | File storage. |
+| `SCHEDULER_SECRET`, `CELERY_TASK_ALWAYS_EAGER` | Timed tasks where there is no Celery worker. |
 
-### Frontend
+### `frontend/.env`
 
-| Command | Description |
+| Variable | What it is |
 |---|---|
-| `npm run dev` | Start Vite development server |
-| `npm run build` | Build for production |
-| `npm run lint` | Run ESLint |
-| `npm run preview` | Preview production build locally |
+| `VITE_API_URL` | The API, for example `http://localhost:8000/api`. |
+| `VITE_PUBLIC_AGENT_USERNAME`, `VITE_PUBLIC_AGENT_PASSWORD` | The account public event registrations are made under when nobody is signed in. |
+| `VITE_ANDROID_APP_URL`, `VITE_WEB_APP_URL` | Where the landing page sends a teen for the app. Both have defaults. |
 
----
+### `mobile/.env`
 
-## Project Structure
+| Variable | What it is |
+|---|---|
+| `EXPO_PUBLIC_API_URL` | The API, ending in `/api/v1`. Leave it unset in development. |
+| `EXPO_PUBLIC_VAPID_PUBLIC_KEY` | Web Push for the web app. Without it the web app works, with no notifications. |
 
-```
-rccg-r63-teens/
-├── frontend/                  # React + TypeScript + Vite SPA
-│   ├── src/
-│   │   ├── pages/             # Route-level page components
-│   │   ├── components/        # Shared UI components
-│   │   ├── context/           # React Context (Auth, Notifications)
-│   │   ├── hooks/             # Custom React hooks
-│   │   ├── services/          # Axios API service modules
-│   │   ├── store/             # Zustand state stores
-│   │   ├── types/             # TypeScript type definitions
-│   │   ├── utils/             # Helper utilities
-│   │   └── schemas/           # Zod validation schemas
-│   ├── public/                # Static assets
-│   └── package.json
-│
-└── backend/                   # Django + DRF API
-    ├── backend/               # Django project settings & URLs
-    ├── users/                 # User auth and role management
-    ├── profiles/              # Teen profile data
-    ├── content/               # Devotionals app
-    ├── media/                 # Podcasts and media series
-    ├── events/                # Event management
-    ├── tickets/               # Ticketing (legacy)
-    ├── payments/              # Squad payment processing
-    ├── common/                # Shared models and mixins
-    ├── templates/             # Email HTML templates
-    └── requirements.txt
+## Tests and checks
+
+**Backend.** The tests want a local database, because a remote one makes the suite take many minutes:
+
+```bash
+cd backend
+docker compose -f docker-compose.test.yml up -d
+python manage.py test
 ```
 
----
+`TEST_DATABASE_URL` in `.env.example` already points at that container, on port 5433.
 
-## User Roles
+**Website**
 
-| Role | Access |
+```bash
+cd frontend
+npm run lint
+npm run typecheck
+npm run build
+```
+
+**App**
+
+```bash
+cd mobile
+npm run typecheck
+npm run doctor
+```
+
+What has been tried on real phones, and the results, is in [`mobile/TESTING.md`](mobile/TESTING.md).
+
+## The API
+
+Everything current is under `/api/v1/`:
+
+| Path | Covers |
 |---|---|
-| **Teen** | Register for events, view devotionals, consume content, track reading streaks |
-| **Coordinator** | Manage registrations for their province, view provincial stats |
-| **Admin** | Full system access — user management, content CRUD, analytics, bulk operations |
-| **Individual** | Limited access for non-teen registered users |
+| `/api/v1/auth/` | Sign-up, log in, one-time codes, token refresh |
+| `/api/v1/identity/` | Roles, permissions, a teacher's class |
+| `/api/v1/hierarchy/` | The church tree |
+| `/api/v1/profiles/` | Profiles and saved items |
+| `/api/v1/today/` | The Today screen and the daily challenge |
+| `/api/v1/content/` | Devotionals, manuals, articles |
+| `/api/v1/bible/` | Bible text, search, the personal layer |
+| `/api/v1/progress/` | Streaks, grace days, history |
+| `/api/v1/media/` | Podcasts, videos, series |
+| `/api/v1/events/` | Events, registrations, check-in |
+| `/api/v1/payments/` | Checkout, the Squad webhook, pay links |
+| `/api/v1/notifications/` | Inbox, devices, push |
 
----
+With the server running:
 
-## Key Features
+- **Swagger UI:** <http://localhost:8000/docs/>
+- **ReDoc:** <http://localhost:8000/api/schema/redoc/>
+- **Health check:** <http://localhost:8000/health/>
 
-- Multi-role authentication with JWT
-- Event registration with QR-code PDF tickets
-- Squad payment integration with proof-of-payment upload
-- Daily Teenage Open Heaven devotionals with reading streaks
-- Weekly teaching manuals and podcast/media series
-- Bulk user registration and email dispatch
-- Admin dashboard with charts and statistics (Recharts)
-- Dark mode support
-- Responsive design (mobile-first)
-- Swagger / ReDoc API documentation
+Unversioned paths under `/api/` still exist for older pages of the website. New code should use `/api/v1/`.
 
----
+## Roles and the church hierarchy
 
-## API Documentation
+The church is a tree: **Parish → Area → Zone → Province → Region → National**. A person belongs to a parish. A role is always held *at a place in the tree*, for example "coordinator of this province", and reaches everything beneath that place and nothing outside it.
 
-Once the backend server is running, interactive API docs are available at:
+Roles grant permissions such as publishing content, managing an event or checking people in. Code checks the permission, never the role's name. The server decides what someone may see or do; hiding a button in a client is for convenience only.
 
-- **Swagger UI**: http://localhost:8000/docs/
-- **ReDoc**: http://localhost:8000/redoc/
+The design is in [`docs/design/phase1-hierarchy-rbac.md`](docs/design/phase1-hierarchy-rbac.md). Setting up the first roles and the tree is in [`docs/ops/04-rbac-bootstrap.md`](docs/ops/04-rbac-bootstrap.md) and [`05-hierarchy-bootstrap.md`](docs/ops/05-hierarchy-bootstrap.md).
 
-The API is versioned under `/api/v1/`.
+## Deployment
 
----
+| Part | Host | How it deploys |
+|---|---|---|
+| API | Render | Builds `main` and runs [`backend/build.sh`](backend/build.sh): install, collect static files, migrate, then a few safe-to-repeat repair commands. |
+| Website and Console | Vercel, root `frontend` | Builds `main`. |
+| Web app | Vercel, root `mobile` | A second Vercel project. It is the app exported for the web. |
+| Android app | Expo EAS | Built on Expo, then copied into the R2 bucket with `npm run release`, so the download address never changes. Steps in [`mobile/README.md`](mobile/README.md#releasing-an-android-build). |
+
+There is no Celery worker in production. An outside timer calls `POST /api/v1/scheduler/tick/` every five minutes and the API runs whatever is due. See [`docs/ops/10-scheduler-without-a-worker.md`](docs/ops/10-scheduler-without-a-worker.md).
+
+After any deployment, run:
+
+```bash
+python manage.py verify_deployment
+```
+
+It checks migrations, settings, roles, the hierarchy, Bible text, today's devotional and push, and prints the command that fixes each thing it finds wrong. The runbooks for a first deployment, a fresh database, rollback and the rest are in [`docs/ops/`](docs/ops/README.md).
+
+## Documentation
+
+| Where | What |
+|---|---|
+| [`docs/README.md`](docs/README.md) | The product handbook: start here. Vision, personas, navigation, feature specs, the design system, and the rules that are not up for debate. |
+| [`docs/15-technical-architecture.md`](docs/15-technical-architecture.md) | The architecture and the rules it binds the code to. |
+| [`docs/ops/`](docs/ops/README.md) | Runbooks for deploying and maintaining the backend. |
+| [`docs/design/`](docs/design) | Backend design notes, by phase. |
+| [`docs/adr/`](docs/adr) | Architecture decision records. |
+| [`docs/BACKEND-AUDIT.md`](docs/BACKEND-AUDIT.md) | The backend refactor plan and where it stands. |
+| [`docs/PERF-CONCURRENCY-AUDIT.md`](docs/PERF-CONCURRENCY-AUDIT.md) | Performance and concurrency findings, with the status of each. |
+| [`docs/CHANGELOG.md`](docs/CHANGELOG.md) | The history of major product decisions. |
+| [`mobile/README.md`](mobile/README.md) | Everything about the app: layout, push, the web app, releases. |
+
+When a change makes the code differ from what the handbook says, update the handbook in the same pull request.
 
 ## Contributing
 
-Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines on how to contribute to this project.
+Read [`CONTRIBUTING.md`](CONTRIBUTING.md) first. In short: branch from `main`, name the branch `feat/…`, `fix/…`, `chore/…` or `docs/…`, write commit messages as `type(scope): summary`, and open a pull request against `main`.
 
----
+Never commit `.env` files, the Firebase service account key, or any other secret.
 
-## Contributors
+## Maintainer
 
-| Name | Role |
-|---|---|
-| **Divine-favour Solomon Akanbi** | Project Lead / Full-Stack Developer |
-<!-- | **Koded0214h** | Frontend Developer |
-| **savebiz** | Backend Developer | -->
+**Divine-favour Solomon Akanbi**, project lead and full-stack developer.
