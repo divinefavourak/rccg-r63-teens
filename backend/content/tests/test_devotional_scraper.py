@@ -254,6 +254,39 @@ class TestRCCGOnlineScraper:
         for value in result.values():
             assert 'OPEN HEAVENS FOR TEENS' not in str(value)
 
+    @patch('content.services.devotional_scraper.requests.get')
+    def test_a_site_that_is_down_is_not_searched(self, mock_get):
+        """A 522 is the server failing, so the slug search would only wait again."""
+        import requests
+        from content.services.devotional_scraper import RCCGOnlineScraper
+
+        response = MagicMock(status_code=522)
+        response.raise_for_status.side_effect = requests.exceptions.HTTPError(response=response)
+        mock_get.return_value = response
+
+        assert RCCGOnlineScraper().scrape(date(2026, 10, 13)) is None
+        assert mock_get.call_count == 1
+
+    @patch('content.services.devotional_scraper.requests.get')
+    def test_a_missing_page_is_searched_for(self, mock_get):
+        from content.services.devotional_scraper import RCCGOnlineScraper
+
+        search = MagicMock(status_code=200)
+        search.json.return_value = []
+        mock_get.side_effect = [MagicMock(status_code=404), search]
+
+        assert RCCGOnlineScraper().scrape(date(2026, 10, 13)) is None
+        assert mock_get.call_count == 2
+
+    @patch('content.services.devotional_scraper.requests.get')
+    def test_no_request_is_made_after_the_deadline(self, mock_get):
+        import time
+        from content.services.devotional_scraper import OutOfTime, RCCGOnlineScraper
+
+        with pytest.raises(OutOfTime):
+            RCCGOnlineScraper(deadline=time.monotonic()).scrape(date(2026, 10, 13))
+        mock_get.assert_not_called()
+
 
 @pytest.mark.django_db
 class TestScrapeAndSave:

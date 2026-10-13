@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.db.models import Count, Q
 from django.db.models.functions import Greatest
 from datetime import date, timedelta
+import time
 
 from common.dates import app_today
 
@@ -384,6 +385,9 @@ class DevotionalViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
         return Response({'success': True})
 
     FETCH_LIMIT_DAYS = 31
+    # All the scraping one call may do. Gunicorn kills a worker 30 seconds into
+    # a request, so this has to end, and answer, comfortably before that.
+    FETCH_BUDGET_SECONDS = 20
 
     @action(detail=False, methods=['post'], permission_classes=[HasPermission(Perm.CONTENT_MANAGE)])
     def fetch_from_web(self, request):
@@ -398,9 +402,11 @@ class DevotionalViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
           - force (bool, default false): re-scrape even if record exists
 
         At most FETCH_LIMIT_DAYS days per call: each day is a request to
-        someone else's website, made while the caller waits.
+        someone else's website, made while the caller waits. The days that
+        FETCH_BUDGET_SECONDS ran out before reaching come back in
+        `not_attempted`, to be asked for again.
         """
-        from .services.devotional_scraper import scrape_and_save_devotional
+        from .services.devotional_scraper import OutOfTime, scrape_and_save_devotional
 
         def _whole(name, default):
             try:
@@ -442,10 +448,16 @@ class DevotionalViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
 
         results = []
         errors = []
+        not_attempted = []
+        deadline = time.monotonic() + self.FETCH_BUDGET_SECONDS
         # Oldest first.
-        for offset in range(-before, after + 1):
-            target_date = centre + timedelta(days=offset)
-            result = scrape_and_save_devotional(target_date, force=force)
+        days = [centre + timedelta(days=offset) for offset in range(-before, after + 1)]
+        for index, target_date in enumerate(days):
+            try:
+                result = scrape_and_save_devotional(target_date, force=force, deadline=deadline)
+            except OutOfTime:
+                not_attempted = [str(day) for day in days[index:]]
+                break
             if result:
                 results.append(result)
             else:
@@ -458,6 +470,7 @@ class DevotionalViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
             'skipped_count': len(errors),
             'results': results,
             'errors': errors,
+            'not_attempted': not_attempted,
         })
 
 

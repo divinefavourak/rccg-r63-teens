@@ -9,6 +9,7 @@ https://www.openheavens.com.ng/YYYY/MM/open-heaven-for-teens-DD-monthname-YYYY.h
 """
 import logging
 import re
+import time
 from datetime import date
 from typing import Optional, Dict, Any, List
 from contextlib import contextmanager
@@ -23,6 +24,28 @@ logger = logging.getLogger(__name__)
 class ScraperException(Exception):
     """Base exception for scraper errors."""
     pass
+
+
+class OutOfTime(ScraperException):
+    """The caller's deadline passed before the next request could be made."""
+
+
+def _timeout_within(deadline: Optional[float], cap: float) -> float:
+    """
+    The timeout for the next request: ``cap``, or what is left of ``deadline``.
+
+    Each request has its own timeout, but a day can take a dozen of them, and
+    when a source is down every one runs to its limit. A web request that waits
+    on that is killed by gunicorn at 30 seconds, taking the worker with it. A
+    ``time.monotonic()`` deadline shared by every request keeps the total
+    bounded. ``None`` means no deadline, which is what the Celery tasks want.
+    """
+    if deadline is None:
+        return cap
+    remaining = deadline - time.monotonic()
+    if remaining < 1:
+        raise OutOfTime()
+    return min(cap, remaining)
 
 
 class DevotionalScraper:
@@ -56,8 +79,9 @@ class DevotionalScraper:
     # Required fields that must have content
     REQUIRED_FIELDS = ['title', 'content']
     
-    def __init__(self, timeout: int = 30):
+    def __init__(self, timeout: int = 30, deadline: Optional[float] = None):
         self.timeout = timeout
+        self.deadline = deadline
         self._session = None
     
     @contextmanager
@@ -149,7 +173,7 @@ class DevotionalScraper:
         """Fetch a page with proper error handling."""
         try:
             with self._get_session() as session:
-                response = session.get(url, timeout=self.timeout)
+                response = session.get(url, timeout=_timeout_within(self.deadline, self.timeout))
                 if response.status_code == 404:
                     logger.warning(f"Devotional page not found: {url}")
                     return None
@@ -685,9 +709,15 @@ class RCCGOnlineScraper:
             year=target_date.year,
         )
 
+    def __init__(self, deadline: Optional[float] = None):
+        self.deadline = deadline
+        # Set when the site itself is failing (no answer, or a 5xx), as opposed
+        # to answering that a page does not exist.
+        self.unreachable = False
+
     def fetch_page(self, url: str) -> Optional[str]:
         try:
-            r = requests.get(url, headers=self.HEADERS, timeout=20)
+            r = requests.get(url, headers=self.HEADERS, timeout=_timeout_within(self.deadline, 20))
             if r.status_code == 404:
                 logger.warning(f"[RCCGOnline] 404: {url}")
                 return None
@@ -695,6 +725,8 @@ class RCCGOnlineScraper:
             return r.text
         except requests.exceptions.RequestException as e:
             logger.error(f"[RCCGOnline] Fetch error {url}: {e}")
+            status_code = getattr(e.response, 'status_code', None)
+            self.unreachable = status_code is None or status_code >= 500
             return None
 
     def discover_url(self, target_date: date) -> Optional[str]:
@@ -714,7 +746,7 @@ class RCCGOnlineScraper:
             r = requests.get(
                 self.API_URL,
                 headers=self.HEADERS,
-                timeout=20,
+                timeout=_timeout_within(self.deadline, 20),
                 params={
                     'search': f'open heavens for teens {target_date.day} {month} {target_date.year}',
                     'per_page': 10,
@@ -891,7 +923,9 @@ class RCCGOnlineScraper:
         url = self.build_url(target_date)
         logger.info(f"[RCCGOnline] Scraping {target_date} from {url}")
         html = self.fetch_page(url)
-        if not html:
+        # The search is for a slug that drifted, so it only follows a 404. When
+        # the site is down, asking the same server again just waits a second time.
+        if not html and not self.unreachable:
             url = self.discover_url(target_date)
             html = self.fetch_page(url) if url else None
         if not html:
@@ -906,10 +940,16 @@ class RCCGOnlineScraper:
         return data
 
 
-def scrape_and_save_devotional(target_date: date = None, force: bool = False) -> Optional[dict]:
+def scrape_and_save_devotional(
+    target_date: date = None, force: bool = False, deadline: Optional[float] = None,
+) -> Optional[dict]:
     """
     Scrape a devotional and save it to the database.
     If force=True, updates an existing record in place after a successful scrape.
+
+    ``deadline`` is a ``time.monotonic()`` value shared by every request made
+    here. Once it passes, OutOfTime is raised and nothing is saved for this
+    date. Callers that are not holding a web request open leave it as None.
 
     Scraping strategy (single rccgonline.org HTTP request):
     1. Fetch rccgonline.org with require_content=False to get title + memory verse.
@@ -929,7 +969,7 @@ def scrape_and_save_devotional(target_date: date = None, force: bool = False) ->
         return None
 
     # One rccgonline request gives us either full data or a title hint
-    partial_rccg = RCCGOnlineScraper().scrape(target_date, require_content=False)
+    partial_rccg = RCCGOnlineScraper(deadline=deadline).scrape(target_date, require_content=False)
 
     if partial_rccg and partial_rccg.get('content'):
         data = partial_rccg
@@ -939,7 +979,7 @@ def scrape_and_save_devotional(target_date: date = None, force: bool = False) ->
             f"[RCCGOnline] No full content for {target_date}, trying openheavens.com.ng"
             + (f" with title hint: '{title_hint}'" if title_hint else "")
         )
-        data = DevotionalScraper().scrape(target_date, title_hint=title_hint)
+        data = DevotionalScraper(deadline=deadline).scrape(target_date, title_hint=title_hint)
 
         if not data:
             # Save partial data as a draft so admins can complete it
