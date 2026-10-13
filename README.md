@@ -1,4 +1,10 @@
-# Faith Tribe
+<p align="center">
+  <img src="docs/assets/rccg-junior-church-global.png" alt="The Redeemed Christian Church of God, Junior Church Global" width="213" height="96">
+  &nbsp;&nbsp;&nbsp;
+  <img src="frontend/src/assets/site/logos/faith-tribe.webp" alt="Faith Tribe, Region 63 Junior Church" width="96" height="96">
+</p>
+
+<h1 align="center">Faith Tribe</h1>
 
 Faith Tribe is a discipleship platform for teenagers in the Redeemed Christian Church of God. A teen opens it for the day's devotional and its verse, reads the Bible, registers and pays for camp, and keeps a ticket on their phone. Teachers and coordinators run their classes, events and content from the same system.
 
