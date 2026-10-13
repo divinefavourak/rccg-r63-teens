@@ -136,19 +136,34 @@ export const Content = () => {
     setImporting(true);
     setImportMessage(null);
     try {
-      const { data } = await api.post<{ results?: unknown[]; errors?: unknown[] }>(
+      const { data } = await api.post<{
+        results?: unknown[];
+        errors?: unknown[];
+        not_attempted?: unknown[];
+      }>(
         '/content/devotionals/fetch_from_web/',
         { date: importDate, days_before: daysBefore, days_after: daysAfter },
       );
       setImportOpen(false);
       const made = (data.results ?? []).length;
       const skipped = (data.errors ?? []).length;
-      setImportMessage({
-        ok: true,
-        text: made
-          ? `Imported ${made} ${made === 1 ? 'devotional' : 'devotionals'}${skipped ? `, skipped ${skipped}` : ''}. They are drafts until reviewed.`
-          : 'Nothing new to import. Those days already have a devotional, or the source has not published them yet.',
-      });
+      // Days the server ran out of time for, which happens when the source
+      // site is slow or down. Not the same as "nothing new".
+      const unreached = (data.not_attempted ?? []).length;
+      const imported = `Imported ${made} ${made === 1 ? 'devotional' : 'devotionals'}${skipped ? `, skipped ${skipped}` : ''}. They are drafts until reviewed.`;
+      if (unreached) {
+        setImportMessage({
+          ok: false,
+          text: `${made ? `${imported} ` : ''}The source site was too slow to finish: ${unreached} ${unreached === 1 ? 'day was' : 'days were'} not checked. Try again later.`,
+        });
+      } else {
+        setImportMessage({
+          ok: true,
+          text: made
+            ? imported
+            : 'Nothing new to import. Those days already have a devotional, or the source has not published them yet.',
+        });
+      }
       await reload();
     } catch (err: unknown) {
       const detail = (
