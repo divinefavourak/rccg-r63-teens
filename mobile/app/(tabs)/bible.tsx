@@ -105,7 +105,7 @@ export default function BibleScreen() {
   useEffect(() => {
     const address =
       params.book && params.chapter
-        ? `${params.book}|${params.chapter}|${params.verse}|${params.to}|${params.at}`
+        ? `${params.book}|${params.chapter}|${params.verse}|${params.to}|${params.returnTo}|${params.at}`
         : '';
     if (address && address !== applied.current) {
       applied.current = address;
@@ -119,7 +119,7 @@ export default function BibleScreen() {
       return;
     }
     const found = referred.data;
-    const key = `p:${params.passage}|${params.at}`;
+    const key = `p:${params.passage}|${params.returnTo}|${params.at}`;
     if (params.passage && found && key !== applied.current) {
       applied.current = key;
       open(found.book, found.chapter, found.start_verse ?? undefined, found.end_verse ?? undefined);
