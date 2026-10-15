@@ -56,6 +56,8 @@ export default function DevotionalScreen() {
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const devotional = query.data;
+  /** Where the Bible's back button returns to. */
+  const backHere = devotionalId ? `/devotional?id=${devotionalId}` : '/devotional';
   const bookmarked = devotionalId ? saved.isSaved(devotionalId) : false;
   const done = markRead.isSuccess || (isTodays && (today.data?.devotional_completed ?? false));
 
@@ -165,16 +167,28 @@ export default function DevotionalScreen() {
                         ...(place.start_verse_number
                           ? { verse: String(place.start_verse_number) }
                           : {}),
+                        ...(place.end_verse_number
+                          ? { to: String(place.end_verse_number) }
+                          : {}),
+                        returnTo: backHere,
+                        at: String(Date.now()),
                       },
                     });
                   } else if (devotional.bible_text_passage) {
                     // Older readings hold the passage only as words.
                     router.push({
                       pathname: '/bible',
-                      params: { passage: devotional.bible_text_passage },
+                      params: {
+                        passage: devotional.bible_text_passage,
+                        returnTo: backHere,
+                        at: String(Date.now()),
+                      },
                     });
                   } else {
-                    router.push('/bible');
+                    router.push({
+                      pathname: '/bible',
+                      params: { returnTo: backHere, at: String(Date.now()) },
+                    });
                   }
                 }}
               />

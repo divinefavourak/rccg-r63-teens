@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, FlatList, Pressable, Share, Text, View } from 'react-native';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useNavigationContainerRef, useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import Animated, { useAnimatedScrollHandler, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,11 +42,14 @@ const READ_AFTER_MS = 10_000;
  *
  * A passage is found by address (`/bible/lookup/?book=John&chapter=3`): the
  * reader knows "John 3", not a chapter id, and so does every link into it.
- * Other screens open a passage with `book` + `chapter` (+ `verse`), or with
- * `passage` when all they hold is the words of a reference.
+ * Other screens open a passage with `book` + `chapter` (+ `verse`, + `to` for
+ * the last verse of a range), or with `passage` when all they hold is the
+ * words of a reference. `returnTo` names the screen that sent them, so back
+ * goes there rather than to Today.
  */
 export default function BibleScreen() {
   const router = useRouter();
+  const rootNavigation = useNavigationContainerRef();
   const insets = useSafeAreaInsets();
   const navClearance = useNavClearance(24);
   const { navHidden } = useChrome();
@@ -57,8 +60,10 @@ export default function BibleScreen() {
   const { book, chapter } = reader;
   // Undefined means "the server's default translation".
   const [translation, setTranslation] = useState<string | undefined>(undefined);
-  /** The verse a link or a search asked for: scrolled to and marked. */
-  const [focus, setFocus] = useState<number | null>(null);
+  /** The verses a link or a search asked for: scrolled to and marked. */
+  const [focus, setFocus] = useState<{ start: number; end: number } | null>(null);
+  /** The screen that linked here, until the reader leaves this tab. */
+  const [returnTo, setReturnTo] = useState<string | null>(null);
   const [selected, setSelected] = useState<BibleVerse | null>(null);
   const [navigator, setNavigator] = useState<'closed' | 'books' | 'search'>('closed');
   const [sheet, setSheet] = useState<'translation' | 'text' | null>(null);
@@ -73,9 +78,9 @@ export default function BibleScreen() {
   const translationCode = passage.data?.translation?.code ?? translation ?? '';
 
   const open = useCallback(
-    (nextBook: string, nextChapter: number, verse?: number) => {
+    (nextBook: string, nextChapter: number, verse?: number, endVerse?: number) => {
       reader.setPosition(nextBook, nextChapter);
-      setFocus(verse ?? null);
+      setFocus(verse ? { start: verse, end: Math.max(verse, endVerse ?? verse) } : null);
       setSelected(null);
       setNavigator('closed');
     },
@@ -87,25 +92,70 @@ export default function BibleScreen() {
     book?: string;
     chapter?: string;
     verse?: string;
+    to?: string;
     passage?: string;
+    returnTo?: string;
+    /** Makes a repeat of the same link a new one, so it lands again. */
+    at?: string;
   }>();
   const referred = useReference(params.passage);
   /** The link last acted on, so re-rendering does not drag the reader back to it. */
   const applied = useRef('');
 
   useEffect(() => {
-    const address = params.book && params.chapter ? `${params.book}|${params.chapter}|${params.verse}` : '';
+    const address =
+      params.book && params.chapter
+        ? `${params.book}|${params.chapter}|${params.verse}|${params.to}|${params.returnTo}|${params.at}`
+        : '';
     if (address && address !== applied.current) {
       applied.current = address;
-      open(params.book as string, Number(params.chapter) || 1, Number(params.verse) || undefined);
+      open(
+        params.book as string,
+        Number(params.chapter) || 1,
+        Number(params.verse) || undefined,
+        Number(params.to) || undefined,
+      );
+      setReturnTo(params.returnTo || null);
       return;
     }
     const found = referred.data;
-    if (params.passage && found && `p:${params.passage}` !== applied.current) {
-      applied.current = `p:${params.passage}`;
-      open(found.book, found.chapter, found.start_verse ?? undefined);
+    const key = `p:${params.passage}|${params.returnTo}|${params.at}`;
+    if (params.passage && found && key !== applied.current) {
+      applied.current = key;
+      open(found.book, found.chapter, found.start_verse ?? undefined, found.end_verse ?? undefined);
+      setReturnTo(params.returnTo || null);
+      return;
     }
-  }, [params.book, params.chapter, params.verse, params.passage, referred.data, open]);
+    // A link to the Bible itself, with no passage: only the way back is new.
+    const bare = `r:${params.returnTo}|${params.at}`;
+    if (!params.book && !params.passage && params.returnTo && bare !== applied.current) {
+      applied.current = bare;
+      setReturnTo(params.returnTo);
+    }
+  }, [
+    params.book,
+    params.chapter,
+    params.verse,
+    params.to,
+    params.passage,
+    params.returnTo,
+    params.at,
+    referred.data,
+    open,
+  ]);
+
+  /**
+   * Back to the screen that linked here. If it is still under the tabs, pop
+   * to it so the stack does not grow a second copy; otherwise open it again.
+   */
+  const goBackToSource = useCallback(() => {
+    if (!returnTo) return;
+    setReturnTo(null);
+    const name = returnTo.replace(/^\//, '').split('?')[0];
+    const routes = rootNavigation.getRootState()?.routes ?? [];
+    if (routes.slice(0, -1).some((route) => route.name === name)) router.dismissTo(returnTo as never);
+    else router.push(returnTo as never);
+  }, [returnTo, rootNavigation, router]);
 
   // ── Previous and next, across books ─────────────────────────────────────
   const { previous, next, current } = useMemo(
@@ -154,19 +204,29 @@ export default function BibleScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      // Hardware back closes the book picker before it leaves the tab.
+      // Hardware back closes the book picker before it leaves the tab, and
+      // leaves for the screen that linked here, if one did.
       const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-        if (navigator === 'closed') return false;
-        setNavigator('closed');
-        return true;
+        if (navigator !== 'closed') {
+          setNavigator('closed');
+          return true;
+        }
+        if (returnTo) {
+          goBackToSource();
+          return true;
+        }
+        return false;
       });
       return () => {
         sub.remove();
         // Leaving the reader must always bring the nav back.
         navHidden.value = withTiming(0, { duration: DURATION.base });
       };
-    }, [navigator, navHidden]),
+    }, [navigator, navHidden, returnTo, goBackToSource]),
   );
+
+  // Once the reader leaves this tab by any other way, back is the tab's own again.
+  useFocusEffect(useCallback(() => () => setReturnTo(null), []));
 
   // ── Jump to the verse a link asked for ──────────────────────────────────
   const list = useRef<FlatList<BibleVerse>>(null);
@@ -174,7 +234,7 @@ export default function BibleScreen() {
     list.current?.scrollToOffset({ offset: 0, animated: false });
     navHidden.value = withTiming(0, { duration: DURATION.base });
     if (!focus || verses.length === 0) return;
-    const index = verses.findIndex((v) => v.number === focus);
+    const index = verses.findIndex((v) => v.number === focus.start);
     if (index > 0) {
       // After layout, or the list has no row heights to scroll by.
       const timer = setTimeout(
@@ -242,7 +302,11 @@ export default function BibleScreen() {
       <VerseRow
         verse={item}
         state={
-          selected?.id === item.id ? 'selected' : focus === item.number ? 'focus' : 'plain'
+          selected?.id === item.id
+            ? 'selected'
+            : focus && item.number >= focus.start && item.number <= focus.end
+              ? 'focus'
+              : 'plain'
         }
         saved={savedAs.has(item.id)}
         fontSize={reader.fontSize}
@@ -320,6 +384,9 @@ export default function BibleScreen() {
         className="flex-row items-center gap-2 px-5 pb-2"
         style={{ paddingTop: insets.top + HEADER_GAP }}
       >
+        {returnTo && (
+          <BarButton icon="chevronLeft" label="Back to the devotional" tok={tok} onPress={goBackToSource} />
+        )}
         <Press
           onPress={() => setNavigator('books')}
           accessibilityLabel={`Choose a book. Now reading ${bookName} ${chapter}`}
