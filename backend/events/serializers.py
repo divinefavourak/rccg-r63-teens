@@ -7,11 +7,13 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 
+from hierarchy.models import HierarchyNode
 from identity.authorization import has_any_permission
 from identity.permissions_registry import Perm
 from . import bedspaces
 from .models import (
     BedAssignment, BulkUpload, Event, EventRegistration, Hostel, RegistrationAuditLog,
+    RegistrationBatch,
 )
 
 
@@ -64,6 +66,8 @@ class EventListSerializer(serializers.ModelSerializer):
             'spots_remaining',
             'is_upcoming',
             'is_featured',
+            'payment_method',
+            'group_registration_enabled',
             'status',
         ]
 
@@ -132,6 +136,12 @@ class EventDetailSerializer(serializers.ModelSerializer):
             'group_discount_threshold',
             'group_discount_price',
             'current_price',
+            'payment_method',
+            'bank_name',
+            'bank_account_number',
+            'bank_account_name',
+            'payment_instructions',
+            'group_registration_enabled',
 
             # Eligibility
             'scope_node',
@@ -212,6 +222,12 @@ class EventCreateUpdateSerializer(serializers.ModelSerializer):
             'early_bird_deadline',
             'group_discount_threshold',
             'group_discount_price',
+            'payment_method',
+            'bank_name',
+            'bank_account_number',
+            'bank_account_name',
+            'payment_instructions',
+            'group_registration_enabled',
             'scope_node',
             'target_age_groups',
             'min_age',
@@ -233,6 +249,33 @@ class EventCreateUpdateSerializer(serializers.ModelSerializer):
             # Auto-generated in model.save() from title — do not require from client
             'slug': {'required': False},
         }
+
+    def validate(self, data):
+        data = super().validate(data)
+        instance = self.instance
+
+        def value(name):
+            return data.get(name, getattr(instance, name, None) if instance else None)
+
+        is_free = value('is_free')
+        method = value('payment_method') or Event.PaymentMethod.ONLINE
+        if not is_free and method == Event.PaymentMethod.MANUAL:
+            missing = {
+                name: 'Needed when people pay by bank transfer.'
+                for name in ('bank_name', 'bank_account_number', 'bank_account_name')
+                if not (value(name) or '').strip()
+            }
+            if missing:
+                raise serializers.ValidationError(missing)
+        number = (value('bank_account_number') or '').strip()
+        if number and not number.isdigit():
+            raise serializers.ValidationError(
+                {'bank_account_number': 'Use digits only, like 0123456789.'})
+        threshold, group_price = value('group_discount_threshold'), value('group_discount_price')
+        if (threshold is None) != (group_price is None):
+            raise serializers.ValidationError({
+                'group_discount_price': 'Set both the group size and the group price, or neither.'})
+        return data
 
 
 # =====================
@@ -260,6 +303,8 @@ class EventRegistrationListSerializer(serializers.ModelSerializer):
 
     event_title = serializers.CharField(source='event.title', read_only=True)
     bed = serializers.SerializerMethodField()
+    batch_reference = serializers.CharField(
+        source='batch.reference', read_only=True, default=None)
 
     def get_bed(self, obj):
         return _bed_payload(obj)
@@ -281,6 +326,9 @@ class EventRegistrationListSerializer(serializers.ModelSerializer):
             'bed',
             'status',
             'payment_status',
+            'batch',
+            'batch_reference',
+            'claimed_at',
             'checked_in_at',
             'created_at',
         ]
@@ -389,6 +437,8 @@ class EventRegistrationDetailSerializer(serializers.ModelSerializer):
             'amount_due',
             'amount_paid',
             'payment_reference',
+            'batch',
+            'claimed_at',
             'can_pay',
             'pay_by',
             'pay_token',
@@ -461,6 +511,11 @@ class EventRegistrationCreateSerializer(serializers.ModelSerializer):
             # Notes
             'notes',
         ]
+        extra_kwargs = {
+            # Blank on the model only so a group's seats can exist before
+            # anyone claims them. A teen registering themself still gives it.
+            'attendee_age': {'required': True, 'allow_null': False},
+        }
 
     ALREADY_REGISTERED = (
         'This email address is already registered for this event. '
@@ -559,6 +614,10 @@ class EventRegistrationCreateSerializer(serializers.ModelSerializer):
             validated_data['user'] = owner
             if owner is not None and hasattr(owner, 'teen_profile'):
                 validated_data['profile'] = owner.teen_profile
+            # Where the attendee belongs, so the people who reconcile that part
+            # of the church see what was paid for them.
+            from .scoping import user_node
+            validated_data['node'] = user_node(owner)
 
         # Never taken on the client's word alone: only someone who holds a
         # leader role can come as a leader, whatever the form sent.
@@ -783,3 +842,160 @@ class HostelSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 'reserved_for_leaders': f'{attendees} attendees are already placed here; that leaves no room to reserve this many.'})
         return data
+
+
+# =====================
+# GROUP REGISTRATION
+# =====================
+
+def _node_detail(node):
+    if node is None:
+        return None
+    return {'id': str(node.pk), 'name': node.name, 'node_type': node.node_type}
+
+
+class BatchSeatSerializer(serializers.ModelSerializer):
+    """A seat in a group: its ticket number and code, and who claimed it."""
+
+    bed = serializers.SerializerMethodField()
+    claimed = serializers.SerializerMethodField()
+
+    def get_bed(self, obj):
+        return _bed_payload(obj)
+
+    def get_claimed(self, obj):
+        return obj.claimed_at is not None
+
+    class Meta:
+        model = EventRegistration
+        fields = [
+            'id', 'registration_id', 'claim_code', 'attendee_gender', 'attendee_name',
+            'attendee_phone', 'status', 'payment_status', 'claimed', 'claimed_at',
+            'checked_in_at', 'bed',
+        ]
+
+
+class RegistrationBatchSerializer(serializers.ModelSerializer):
+    """A coordinator's group, as the list shows it."""
+
+    event_title = serializers.CharField(source='event.title', read_only=True)
+    event_start = serializers.DateTimeField(source='event.start_datetime', read_only=True)
+    payment_method = serializers.CharField(source='event.payment_method', read_only=True)
+    node_detail = serializers.SerializerMethodField()
+    created_by_name = serializers.SerializerMethodField()
+    headcount = serializers.IntegerField(read_only=True)
+    balance = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    receipts_waiting = serializers.SerializerMethodField()
+
+    def get_node_detail(self, obj):
+        return _node_detail(obj.node)
+
+    def get_created_by_name(self, obj):
+        return obj.created_by.get_full_name() if obj.created_by else ''
+
+    def get_receipts_waiting(self, obj):
+        annotated = getattr(obj, 'receipts_waiting', None)
+        if annotated is not None:
+            return annotated
+        return obj.receipts.filter(status='submitted').count()
+
+    class Meta:
+        model = RegistrationBatch
+        fields = [
+            'id', 'reference', 'event', 'event_title', 'event_start', 'payment_method',
+            'node', 'node_detail', 'created_by', 'created_by_name', 'contact_phone',
+            'male_count', 'female_count', 'headcount', 'unit_price', 'amount_due',
+            'amount_paid', 'balance', 'status', 'receipts_waiting', 'paid_at', 'created_at',
+        ]
+        read_only_fields = fields
+
+
+class RegistrationBatchDetailSerializer(RegistrationBatchSerializer):
+    """One group, with its seats, its receipts and how to pay for it."""
+
+    seats = serializers.SerializerMethodField()
+    receipts = serializers.SerializerMethodField()
+    bank_details = serializers.SerializerMethodField()
+    can_resize = serializers.SerializerMethodField()
+    can_cancel = serializers.SerializerMethodField()
+    can_pay_online = serializers.SerializerMethodField()
+    can_send_receipt = serializers.SerializerMethodField()
+
+    def get_seats(self, obj):
+        seats = obj.seats.select_related('bed', 'bed__hostel').exclude(
+            status=EventRegistration.Status.CANCELLED).order_by('registration_id')
+        return BatchSeatSerializer(seats, many=True).data
+
+    def get_receipts(self, obj):
+        from payments.serializers import PaymentReceiptSerializer
+        return PaymentReceiptSerializer(
+            obj.receipts.select_related('submitted_by', 'reviewed_by').all(),
+            many=True, context=self.context).data
+
+    def get_bank_details(self, obj):
+        event = obj.event
+        if not event.pays_manually:
+            return None
+        return {
+            'bank_name': event.bank_name,
+            'account_number': event.bank_account_number,
+            'account_name': event.bank_account_name,
+            'instructions': event.payment_instructions,
+        }
+
+    def get_can_resize(self, obj):
+        return (obj.status == RegistrationBatch.Status.AWAITING_PAYMENT
+                and obj.amount_paid == 0)
+
+    def get_can_cancel(self, obj):
+        return obj.status != RegistrationBatch.Status.CANCELLED and (
+            obj.amount_paid == 0 or obj.event.is_free)
+
+    def get_can_pay_online(self, obj):
+        from payments import batch_payments
+        return batch_payments.refusal(obj) is None
+
+    def get_can_send_receipt(self, obj):
+        from payments import receipts
+        return receipts.submit_refusal(obj) is None
+
+    class Meta(RegistrationBatchSerializer.Meta):
+        fields = RegistrationBatchSerializer.Meta.fields + [
+            'notes', 'consent_attested', 'seats', 'receipts', 'bank_details',
+            'can_resize', 'can_cancel', 'can_pay_online', 'can_send_receipt',
+        ]
+        read_only_fields = fields
+
+
+class RegistrationBatchCreateSerializer(serializers.Serializer):
+    event = serializers.PrimaryKeyRelatedField(queryset=Event.objects.all())
+    node = serializers.PrimaryKeyRelatedField(queryset=HierarchyNode.objects.all())
+    male_count = serializers.IntegerField(min_value=0)
+    female_count = serializers.IntegerField(min_value=0)
+    contact_phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
+    consent_attested = serializers.BooleanField(required=False, default=False)
+
+
+class RegistrationBatchUpdateSerializer(serializers.Serializer):
+    male_count = serializers.IntegerField(min_value=0, required=False)
+    female_count = serializers.IntegerField(min_value=0, required=False)
+    contact_phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+
+class BatchQuoteSerializer(serializers.Serializer):
+    event = serializers.PrimaryKeyRelatedField(queryset=Event.objects.all())
+    male_count = serializers.IntegerField(min_value=0)
+    female_count = serializers.IntegerField(min_value=0)
+
+
+class SeatNameSerializer(serializers.Serializer):
+    registration_id = serializers.CharField(max_length=30)
+    name = serializers.CharField(max_length=255, allow_blank=True)
+    phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+
+
+class ClaimSeatSerializer(serializers.Serializer):
+    registration_id = serializers.CharField(max_length=30)
+    claim_code = serializers.CharField(max_length=12)

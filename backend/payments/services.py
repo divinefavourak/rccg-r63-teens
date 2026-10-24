@@ -414,6 +414,15 @@ class PaymentService:
 
             payment.mark_as_successful(charge)
 
+            # --- A COORDINATOR'S GROUP ---
+            # Paid once its payments add up to what it owes: `events/batches.py`.
+            if payment.batch_id:
+                from events import batches
+                after_commit = batches.refresh(payment.batch)
+                if after_commit:
+                    transaction.on_commit(after_commit)
+                return payment, True
+
             # --- AN EVENT REGISTRATION ---
             # Its own rules, notification and email: see `registrations.py`.
             if payment.registration_id:

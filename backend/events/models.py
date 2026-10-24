@@ -104,6 +104,24 @@ class Event(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     group_discount_threshold = models.PositiveIntegerField(null=True, blank=True)
     group_discount_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
+    # How a paid event is paid for. Online is the gateway (`payments/`); manual
+    # is a transfer to the account below, proved with a receipt that a leader
+    # holding `payments.reconcile` checks against the bank statement.
+    class PaymentMethod(models.TextChoices):
+        ONLINE = 'online', 'Online (card, transfer or USSD through the gateway)'
+        MANUAL = 'manual', 'Bank transfer to our account, with a receipt'
+
+    payment_method = models.CharField(
+        max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.ONLINE)
+    bank_name = models.CharField(max_length=100, blank=True)
+    bank_account_number = models.CharField(max_length=20, blank=True)
+    bank_account_name = models.CharField(max_length=255, blank=True)
+    payment_instructions = models.TextField(blank=True)
+
+    # Coordinators may register a group (a headcount) and pay for it at once:
+    # `events/batches.py`.
+    group_registration_enabled = models.BooleanField(default=False)
+
     # Eligibility
     #
     # `scope_node` is the event's place in the church tree: the node that owns it,
@@ -216,6 +234,10 @@ class Event(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
         return False
 
     @property
+    def pays_manually(self):
+        return not self.is_free and self.payment_method == self.PaymentMethod.MANUAL
+
+    @property
     def current_price(self):
         """Get current applicable price (handles early bird)."""
         if self.is_free:
@@ -308,7 +330,9 @@ class EventRegistration(UUIDMixin, TimestampMixin):
     attendee_name = models.CharField(max_length=255)
     attendee_email = models.EmailField()
     attendee_phone = models.CharField(max_length=20)
-    attendee_age = models.PositiveIntegerField()
+    # Blank on a seat a coordinator bought for a group: it is filled in when
+    # the teen claims the seat (`batches.claim`).
+    attendee_age = models.PositiveIntegerField(null=True, blank=True)
     attendee_gender = models.CharField(max_length=20, blank=True)
     attendee_date_of_birth = models.DateField(null=True, blank=True)
     attendee_category = models.CharField(max_length=50, blank=True)  # Age group category
@@ -386,6 +410,31 @@ class EventRegistration(UUIDMixin, TimestampMixin):
     pay_code = models.CharField(
         max_length=12, unique=True, null=True, blank=True, editable=False)
 
+    # =====================
+    # Group registration
+    # =====================
+    # A seat in a coordinator's batch. Its attendee fields stay blank until the
+    # teen claims it with the ticket number and `claim_code` the coordinator
+    # handed out.
+    batch = models.ForeignKey(
+        'events.RegistrationBatch',
+        on_delete=models.CASCADE,
+        null=True, blank=True,
+        related_name='seats',
+    )
+    claim_code = models.CharField(
+        max_length=12, unique=True, null=True, blank=True, editable=False)
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    # Where in the church the attendee comes from: the batch's node, or the
+    # registering teen's primary membership. Scopes who may see the row and
+    # reconcile what was paid for it.
+    node = models.ForeignKey(
+        'hierarchy.HierarchyNode',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='event_registrations',
+    )
+
     # Legacy payment proof (for manual verification)
     proof_of_payment = models.FileField(upload_to='payment_proofs/', null=True, blank=True)
 
@@ -447,7 +496,15 @@ class EventRegistration(UUIDMixin, TimestampMixin):
         ordering = ['-created_at']
         verbose_name = 'Event Registration'
         verbose_name_plural = 'Event Registrations'
-        unique_together = [['event', 'attendee_email']]  # One registration per email per event
+        constraints = [
+            # One registration per email per event. A group's unclaimed seats
+            # have no email yet, so they are left out.
+            models.UniqueConstraint(
+                fields=['event', 'attendee_email'],
+                condition=~models.Q(attendee_email=''),
+                name='evreg_one_per_email_per_event',
+            ),
+        ]
         indexes = [
             # registration_id is already unique=True + db_index=True on the field,
             # so the entry that stood here was a third index on one column.
@@ -640,6 +697,63 @@ class BulkUpload(UUIDMixin, TimestampMixin):
 
     def __str__(self):
         return f"{self.filename} - {self.get_status_display()}"
+
+
+class RegistrationBatch(UUIDMixin, TimestampMixin):
+    """
+    A coordinator's group registration: a headcount for one event, paid for
+    at once. Each place is an `EventRegistration` seat (`seats`); the rules
+    are in `events/batches.py`.
+    """
+
+    class Status(models.TextChoices):
+        AWAITING_PAYMENT = 'awaiting_payment', 'Awaiting payment'
+        UNDER_REVIEW = 'under_review', 'Receipt under review'
+        PART_PAID = 'part_paid', 'Part paid'
+        PAID = 'paid', 'Paid'
+        CANCELLED = 'cancelled', 'Cancelled'
+
+    reference = models.CharField(max_length=20, unique=True, editable=False)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='batches')
+    # Where the teens come from: the coordinator's province, or a node in it.
+    node = models.ForeignKey(
+        'hierarchy.HierarchyNode', on_delete=models.PROTECT, related_name='registration_batches')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+        related_name='registration_batches')
+    contact_phone = models.CharField(max_length=20, blank=True)
+
+    male_count = models.PositiveIntegerField(default=0)
+    female_count = models.PositiveIntegerField(default=0)
+
+    # The price of one seat when the batch was made or last resized.
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    amount_due = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    amount_paid = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.AWAITING_PAYMENT)
+    # The coordinator confirms the parents agreed, when the event asks for it.
+    consent_attested = models.BooleanField(default=False)
+    notes = models.TextField(blank=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Group registration'
+        verbose_name_plural = 'Group registrations'
+        indexes = [models.Index(fields=['event', 'status'])]
+
+    def __str__(self):
+        return f'{self.reference} · {self.event} · {self.headcount}'
+
+    @property
+    def headcount(self):
+        return self.male_count + self.female_count
+
+    @property
+    def balance(self):
+        return max(self.amount_due - self.amount_paid, 0)
 
 
 class RegistrationAuditLog(UUIDMixin):

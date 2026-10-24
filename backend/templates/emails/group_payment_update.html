@@ -1,0 +1,45 @@
+{% extends "emails/_base.html" %}
+{% block title %}{% if outcome == 'paid' %}Group paid{% elif outcome == 'rejected' %}Receipt not accepted{% else %}Payment received{% endif %}{% endblock %}
+{% block preheader %}{{ batch.reference }} for {{ event.title }}: {% if outcome == 'paid' %}paid in full, every seat is confirmed.{% elif outcome == 'rejected' %}a receipt was not accepted.{% else %}part of the payment has been received.{% endif %}{% endblock %}
+{% block accent %}{% if outcome == 'paid' %}#10B981{% elif outcome == 'rejected' %}#FF7BAC{% else %}#FFC857{% endif %}{% endblock %}
+{% block eyebrow %}Group registration{% endblock %}
+{% block heading %}{% if outcome == 'paid' %}{{ batch.headcount }} seat{{ batch.headcount|pluralize }} confirmed{% elif outcome == 'rejected' %}We could not accept your receipt{% else %}Payment received, balance outstanding{% endif %}{% endblock %}
+{% block lead %}{% if coordinator_name %}Hi {{ coordinator_name }}. {% endif %}{% if outcome == 'paid' %}Your group is paid for. Give each teen their ticket number and code; they claim their seat in the Faith Tribe app.{% elif outcome == 'rejected' %}{% if note %}The reason given: {{ note }}{% else %}Check the receipt and send it again.{% endif %}{% else %}We have recorded what was received. The seats are confirmed once the balance is paid.{% endif %}{% endblock %}
+
+{% block content %}
+{% include "emails/_event.html" with top="0" %}
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;">
+  <tr>
+    <td bgcolor="#F2EAE0" style="border-radius:20px;padding:6px 20px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        {% include "emails/_row.html" with label="Group" value=batch.reference mono=True first=True %}
+        {% include "emails/_row.html" with label="Seats" value=batch.headcount %}
+        <tr>
+          <td valign="top" style="padding:12px 12px 12px 0;border-top:1px solid #E2D8CC;font-size:14px;line-height:20px;color:#6F6862;">Total</td>
+          <td valign="top" align="right" style="padding:12px 0;border-top:1px solid #E2D8CC;font-size:15px;line-height:20px;font-weight:700;color:#1C1916;">&#8358;{{ batch.amount_due|floatformat:"2g" }}</td>
+        </tr>
+        <tr>
+          <td valign="top" style="padding:12px 12px 12px 0;border-top:1px solid #E2D8CC;font-size:14px;line-height:20px;color:#6F6862;">Received</td>
+          <td valign="top" align="right" style="padding:12px 0;border-top:1px solid #E2D8CC;font-size:15px;line-height:20px;font-weight:700;color:#1C1916;">&#8358;{{ batch.amount_paid|floatformat:"2g" }}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+{% if outcome == 'paid' and seats %}
+<p style="margin:28px 0 4px;font-size:18px;line-height:24px;font-weight:800;color:#1C1916;">Tickets</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+  {% for seat in seats %}
+  <tr>
+    <td valign="top" style="padding:12px 12px 12px 0;{% if not forloop.first %}border-top:1px solid #EAE3DA;{% endif %}font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:14px;line-height:20px;font-weight:700;color:#1C1916;">{{ seat.registration_id }}</td>
+    <td valign="top" style="padding:12px 12px 12px 0;{% if not forloop.first %}border-top:1px solid #EAE3DA;{% endif %}font-size:14px;line-height:20px;color:#4B4540;">{{ seat.attendee_gender|capfirst }}</td>
+    <td valign="top" align="right" style="padding:12px 0;{% if not forloop.first %}border-top:1px solid #EAE3DA;{% endif %}font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:14px;line-height:20px;font-weight:700;letter-spacing:0.8px;color:#1C1916;">{{ seat.claim_code }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+{% include "emails/_button.html" with href=batch_url label="Open the group" %}
+{% endblock %}

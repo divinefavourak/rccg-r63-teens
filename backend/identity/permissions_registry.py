@@ -57,6 +57,9 @@ class Perm:
     # Payments
     PAYMENTS_VIEW = 'payments.view'
     PAYMENTS_MANAGE = 'payments.manage'
+    # Checking bank-transfer receipts against the statement and recording the
+    # money: `payments/receipts.py`. Narrower than manage, which refunds.
+    PAYMENTS_RECONCILE = 'payments.reconcile'
 
 
 # (code, human label) — the full registered vocabulary for this phase.
@@ -82,6 +85,7 @@ REGISTRY = [
     (Perm.EVENTS_CHECKIN, 'Check in event attendees'),
     (Perm.PAYMENTS_VIEW, 'View payments/reconciliation'),
     (Perm.PAYMENTS_MANAGE, 'Manage payments/refunds'),
+    (Perm.PAYMENTS_RECONCILE, 'Verify transfer receipts and reconcile payments'),
 ]
 
 ALL_PERMISSION_CODES = [code for code, _ in REGISTRY]
@@ -117,6 +121,7 @@ ROLE_SEED = [
             Perm.BIBLE_MANAGE,
             Perm.MEDIA_MANAGE, Perm.EVENTS_VIEW, Perm.EVENTS_MANAGE,
             Perm.EVENTS_CHECKIN, Perm.PAYMENTS_VIEW, Perm.PAYMENTS_MANAGE,
+            Perm.PAYMENTS_RECONCILE,
         ],
         'is_system': True,
     },
@@ -130,7 +135,9 @@ ROLE_SEED = [
             Perm.ROLES_VIEW, Perm.ROLES_ASSIGN, Perm.HIERARCHY_VIEW,
             Perm.CONTENT_VIEW, Perm.CONTENT_PUBLISH, Perm.CONTENT_MANAGE,
             Perm.MEDIA_MANAGE, Perm.EVENTS_VIEW, Perm.EVENTS_MANAGE,
-            Perm.EVENTS_CHECKIN, Perm.PAYMENTS_VIEW,
+            # Checks the transfer receipts its provinces send for group
+            # registrations.
+            Perm.EVENTS_CHECKIN, Perm.PAYMENTS_VIEW, Perm.PAYMENTS_RECONCILE,
         ],
         'is_system': True,
     },

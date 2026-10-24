@@ -10,19 +10,24 @@ from decimal import Decimal
 from django.db.models import Count, Sum, Q
 from django.db.models.functions import Coalesce
 
-from identity.authorization import HasPermission, HasPermissionOrReadOnly, has_any_permission
+from identity.authorization import (
+    HasPermission, HasPermissionOrReadOnly, has_any_permission, scope_queryset,
+)
 from identity.permissions_registry import Perm
 from content.views import get_age_group_filter
 from common.view_counts import count_view
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import ProtectedError, RestrictedError
 
+from . import batches
 from . import bedspaces
 from . import checkin
 from . import notifications as event_notifications
 from . import scoping
 from .email_service import EventEmailService
-from .models import Event, EventRegistration, BulkUpload, Hostel, RegistrationAuditLog
+from .models import (
+    Event, EventRegistration, BulkUpload, Hostel, RegistrationAuditLog, RegistrationBatch,
+)
 from .serializers import (
     EventListSerializer,
     EventDetailSerializer,
@@ -37,6 +42,13 @@ from .serializers import (
     RegistrationAuditLogSerializer,
     EventDashboardStatsSerializer,
     HostelSerializer,
+    BatchQuoteSerializer,
+    ClaimSeatSerializer,
+    RegistrationBatchCreateSerializer,
+    RegistrationBatchDetailSerializer,
+    RegistrationBatchSerializer,
+    RegistrationBatchUpdateSerializer,
+    SeatNameSerializer,
 )
 
 
@@ -685,3 +697,164 @@ class HostelViewSet(viewsets.ModelViewSet):
                 {'detail': 'People are placed in this hostel. Move them out before removing it.'},
                 status=status.HTTP_409_CONFLICT,
             )
+
+
+# =====================
+# GROUP REGISTRATION
+# =====================
+
+class RegistrationBatchViewSet(viewsets.GenericViewSet):
+    """
+    A coordinator's group registrations: `events/batches.py`.
+
+    Coordinators see and run the groups of the part of the church where they
+    hold `events.manage`. Whoever reconciles payments there sees them too, to
+    check what a receipt is for.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    filterset_fields = ['event', 'status', 'node']
+    search_fields = ['reference', 'node__name', 'created_by__first_name', 'created_by__last_name']
+    ordering = ['-created_at']
+
+    def get_queryset(self):
+        from payments import receipts
+        user = self.request.user
+        base = RegistrationBatch.objects.select_related('event', 'node', 'created_by')
+        managed = scope_queryset(base, user, Perm.EVENTS_MANAGE)
+        reconciled = receipts.scope_batches(base, user, receipts._code_for(user))
+        return base.filter(
+            Q(pk__in=managed.values('pk')) | Q(pk__in=reconciled.values('pk'))
+        ).annotate(receipts_waiting=Count('receipts', filter=Q(receipts__status='submitted')))
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return RegistrationBatchSerializer
+        return RegistrationBatchDetailSerializer
+
+    def _managed(self, request, pk):
+        batch = self.get_queryset().filter(pk=pk).first()
+        if batch is None:
+            return None, Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if not batches.can_manage(request.user, batch):
+            return None, Response(
+                {'detail': 'Only a coordinator for this part of the church can change this group.'},
+                status=status.HTTP_403_FORBIDDEN)
+        return batch, None
+
+    def _detail(self, batch):
+        batch = self.get_queryset().get(pk=batch.pk)
+        return RegistrationBatchDetailSerializer(batch, context={'request': self.request}).data
+
+    def list(self, request):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            return self.get_paginated_response(
+                RegistrationBatchSerializer(page, many=True, context={'request': request}).data)
+        return Response(RegistrationBatchSerializer(
+            queryset, many=True, context={'request': request}).data)
+
+    def retrieve(self, request, pk=None):
+        batch = self.get_queryset().filter(pk=pk).first()
+        if batch is None:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(self._detail(batch))
+
+    def create(self, request):
+        if not has_any_permission(request.user, Perm.EVENTS_MANAGE):
+            return Response(
+                {'detail': 'Only coordinators can register groups.'},
+                status=status.HTTP_403_FORBIDDEN)
+        serializer = RegistrationBatchCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        try:
+            batch = batches.create(
+                request.user, data['event'], data['node'],
+                data['male_count'], data['female_count'],
+                contact_phone=data.get('contact_phone', ''),
+                notes=data.get('notes', ''),
+                consent_attested=data.get('consent_attested', False),
+            )
+        except batches.BatchError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self._detail(batch), status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, pk=None):
+        batch, refused = self._managed(request, pk)
+        if refused:
+            return refused
+        serializer = RegistrationBatchUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        try:
+            if 'male_count' in data or 'female_count' in data:
+                batch = batches.resize(
+                    request.user, batch,
+                    data.get('male_count', batch.male_count),
+                    data.get('female_count', batch.female_count))
+        except batches.BatchError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        changes = {k: data[k] for k in ('contact_phone', 'notes') if k in data}
+        if changes:
+            RegistrationBatch.objects.filter(pk=batch.pk).update(**changes)
+        return Response(self._detail(batch))
+
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        batch, refused = self._managed(request, pk)
+        if refused:
+            return refused
+        try:
+            batch = batches.cancel(request.user, batch, request.data.get('reason', ''))
+        except batches.BatchError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self._detail(batch))
+
+    @action(detail=False, methods=['post'])
+    def quote(self, request):
+        serializer = BatchQuoteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        result = batches.quote(data['event'], data['male_count'], data['female_count'])
+        return Response({
+            key: str(value) if isinstance(value, Decimal) else value
+            for key, value in result.items()
+        })
+
+    @action(detail=True, methods=['patch'])
+    def seats(self, request, pk=None):
+        """Put names on seats: `{"seats": [{"registration_id", "name", "phone"}]}`."""
+        batch, refused = self._managed(request, pk)
+        if refused:
+            return refused
+        rows = SeatNameSerializer(data=request.data.get('seats', []), many=True)
+        rows.is_valid(raise_exception=True)
+        updated, errors = batches.name_seats(request.user, batch, rows.validated_data)
+        return Response({'updated': updated, 'errors': errors, 'batch': self._detail(batch)})
+
+
+class ClaimSeatView(generics.GenericAPIView):
+    """
+    `POST /events/registrations/claim/` with `registration_id` and
+    `claim_code`: a teen takes the seat their coordinator bought for them.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ClaimSeatSerializer
+    throttle_scope = 'ticket_claim'
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            seat = batches.claim(
+                request.user,
+                serializer.validated_data['registration_id'],
+                serializer.validated_data['claim_code'],
+            )
+        except batches.BatchError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        seat = EventRegistration.objects.select_related('event', 'event__scope_node').get(pk=seat.pk)
+        return Response(EventRegistrationDetailSerializer(seat, context={'request': request}).data)

@@ -88,6 +88,10 @@ def refusal(registration):
         return 'There is nothing to pay for this event.'
     if registration.payment_status == PaymentStatus.PAID:
         return 'This registration has already been paid for.'
+    if registration.batch_id:
+        return 'This seat is paid for with its group, by the coordinator who registered it.'
+    if event.pays_manually:
+        return 'This event is paid for by bank transfer. Upload the receipt instead.'
     if registration.payment_status == PaymentStatus.REFUNDED:
         return 'This registration was refunded.'
     if not registration.amount_due or registration.amount_due <= 0:
@@ -110,6 +114,8 @@ def pay_by(registration):
     """When an unpaid place will be given up, or None when no clock is running."""
     hours = hold_hours()
     if not hours or registration.status != Status.PENDING:
+        return None
+    if registration.batch_id or registration.event.pays_manually:
         return None
     if registration.payment_status not in _UNPAID or registration.event.is_free:
         return None
@@ -434,7 +440,12 @@ def expire_unpaid(now=None):
             event__is_free=False,
             amount_due__gt=0,
             created_at__lt=now - timedelta(hours=hours),
+            # A group's seats wait for its coordinator's payment, and a transfer
+            # waits for someone to check the receipt: neither is the gateway
+            # checkout this hold is for.
+            batch__isnull=True,
         )
+        .exclude(event__payment_method=Event.PaymentMethod.MANUAL)
         .filter(~Exists(paying))
         .values_list('pk', flat=True)
     )

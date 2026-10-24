@@ -213,3 +213,74 @@ class EventEmailService:
         }
         html = render_to_string('emails/bulk_registration_confirmation.html', context)
         return _send_in_thread(subject, html, [coordinator_email], sender='no_reply')
+
+    # ── Group registration and transfer receipts ────────────────────────────
+
+    @staticmethod
+    def _batch_url(batch):
+        return f'{_get_frontend_url().rstrip("/")}/admin/groups?batch={batch.pk}'
+
+    @staticmethod
+    def send_batch_update(batch, outcome, note=''):
+        """
+        Tell the coordinator what became of their group's payment. `outcome`
+        is 'paid' (with the ticket sheet), 'part_paid' or 'rejected'.
+        """
+        coordinator = batch.created_by
+        if coordinator is None or not coordinator.email:
+            return None
+        subjects = {
+            'paid': f'{batch.event.title}: your group {batch.reference} is paid',
+            'part_paid': f'{batch.event.title}: payment received for {batch.reference}',
+            'rejected': f'{batch.event.title}: we could not accept a receipt for {batch.reference}',
+        }
+        seats = []
+        if outcome == 'paid':
+            seats = list(
+                batch.seats.exclude(status='cancelled').order_by('registration_id'))
+        context = {
+            'batch': batch,
+            'event': batch.event,
+            'outcome': outcome,
+            'note': note,
+            'seats': seats,
+            'coordinator_name': coordinator.get_full_name(),
+            'batch_url': EventEmailService._batch_url(batch),
+            'frontend_url': _get_frontend_url(),
+            'logo_url': _LOGO_URL,
+            'faith_logo_url': _FAITH_LOGO_URL,
+        }
+        html = render_to_string('emails/group_payment_update.html', context)
+        return _send_in_thread(subjects[outcome], html, [coordinator.email], sender='no_reply')
+
+    @staticmethod
+    def send_batch_paid(batch):
+        return EventEmailService.send_batch_update(batch, 'paid')
+
+    @staticmethod
+    def send_receipt_submitted(receipt, recipients):
+        """Ask the people who reconcile payments to check a receipt."""
+        if not recipients:
+            return None
+        target = receipt.batch or receipt.registration
+        if receipt.batch_id:
+            target_label = f'{target.reference} · {target.headcount} seats · {target.node.name}'
+            amount_due = target.amount_due
+        else:
+            target_label = f'{target.registration_id} · {target.attendee_name}'
+            amount_due = target.amount_due
+        submitter = receipt.submitted_by
+        context = {
+            'receipt': receipt,
+            'event': receipt.event,
+            'target_label': target_label,
+            'amount_due': amount_due or 0,
+            'from_name': (submitter.get_full_name() if submitter else '') or 'Someone',
+            'review_url': f'{_get_frontend_url().rstrip("/")}/admin/payments?receipt={receipt.pk}',
+            'frontend_url': _get_frontend_url(),
+            'logo_url': _LOGO_URL,
+            'faith_logo_url': _FAITH_LOGO_URL,
+        }
+        html = render_to_string('emails/receipt_submitted.html', context)
+        subject = f'{receipt.event.title}: a transfer receipt to check'
+        return _send_in_thread(subject, html, recipients, sender='no_reply')

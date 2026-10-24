@@ -135,6 +135,27 @@ def sample_contexts():
             'tickets': [_ticket(), _ticket('Chidi Eze', 'R63-0043')], 'status': 'APPROVED',
             'coordinator_name': 'Bro. Segun', 'ticket_count': 2,
         },
+        'group_payment_update': {
+            'batch': SimpleNamespace(
+                reference='GRP-7K3QX9', headcount=2, amount_due=Decimal('30000'),
+                amount_paid=Decimal('30000')),
+            'event': _event(), 'outcome': 'paid', 'note': '', 'coordinator_name': 'Bro. Segun',
+            'seats': [
+                SimpleNamespace(registration_id='CAMP-20261218-00001', attendee_gender='male',
+                                claim_code='K7Q2MX'),
+                SimpleNamespace(registration_id='CAMP-20261218-00002', attendee_gender='female',
+                                claim_code='P3ZR8N'),
+            ],
+            'batch_url': f'{FRONTEND}/admin/groups?batch=1', 'frontend_url': FRONTEND, **LOGOS,
+        },
+        'receipt_submitted': {
+            'receipt': SimpleNamespace(
+                amount_claimed=Decimal('30000'), paid_on=date(2026, 10, 3),
+                bank_reference='TRF/2026/1003'),
+            'event': _event(), 'target_label': 'GRP-7K3QX9 · 2 seats · Province 9',
+            'amount_due': Decimal('30000'), 'from_name': 'Bro. Segun',
+            'review_url': f'{FRONTEND}/admin/payments?receipt=1', 'frontend_url': FRONTEND, **LOGOS,
+        },
         'payment_confirmation': {'payment': payment},
         'payment_reminder': ticket_base,
         'welcome_email': ticket_base,

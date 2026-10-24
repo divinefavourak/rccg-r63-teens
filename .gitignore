@@ -69,6 +69,7 @@ coverage.xml
 media/
 !backend/media/
 backend/media/devotionals/
+backend/private_media/
 staticfiles/
 uploads/
 

@@ -1,0 +1,29 @@
+{% extends "emails/_base.html" %}
+{% block title %}A receipt to check{% endblock %}
+{% block preheader %}{{ from_name }} sent a transfer receipt of &#8358;{{ receipt.amount_claimed|floatformat:"2g" }} for {{ event.title }}.{% endblock %}
+{% block accent %}#FFC857{% endblock %}
+{% block eyebrow %}Payments{% endblock %}
+{% block heading %}A transfer receipt to check{% endblock %}
+{% block lead %}{{ from_name }} says they paid &#8358;{{ receipt.amount_claimed|floatformat:"2g" }} into the event&rsquo;s account. Check it against the bank statement, then verify or reject it.{% endblock %}
+
+{% block content %}
+{% include "emails/_event.html" with top="0" %}
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;">
+  <tr>
+    <td bgcolor="#F2EAE0" style="border-radius:20px;padding:6px 20px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        {% include "emails/_row.html" with label="For" value=target_label first=True %}
+        {% include "emails/_row.html" with label="Paid on" value=receipt.paid_on %}
+        {% if receipt.bank_reference %}{% include "emails/_row.html" with label="Bank reference" value=receipt.bank_reference mono=True %}{% endif %}
+        <tr>
+          <td valign="top" style="padding:12px 12px 12px 0;border-top:1px solid #E2D8CC;font-size:14px;line-height:20px;color:#6F6862;">Amount due</td>
+          <td valign="top" align="right" style="padding:12px 0;border-top:1px solid #E2D8CC;font-size:15px;line-height:20px;font-weight:700;color:#1C1916;">&#8358;{{ amount_due|floatformat:"2g" }}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+{% include "emails/_button.html" with href=review_url label="Check the receipt" %}
+{% endblock %}

@@ -417,8 +417,14 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000
 FILE_UPLOAD_PERMISSIONS = 0o644
 
 # Allowed file types for payment receipts
-ALLOWED_RECEIPT_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png', '.gif']
+ALLOWED_RECEIPT_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png', '.webp']
 MAX_RECEIPT_SIZE = 5 * 1024 * 1024  # 5MB
+
+# Receipts are bank records, so they are not kept with the public media
+# (`common/storage.py`). A bucket with no public domain, when R2 is set up;
+# this folder otherwise.
+R2_PRIVATE_BUCKET_NAME = os.getenv('R2_PRIVATE_BUCKET_NAME', '').strip()
+PRIVATE_MEDIA_ROOT = os.getenv('PRIVATE_MEDIA_ROOT', str(BASE_DIR / 'private_media'))
 
 
 # Default primary key field type
@@ -484,6 +490,8 @@ REST_FRAMEWORK = {
         # of teens behind one address; the per-destination cap does the real work.
         'signup': os.getenv('SIGNUP_THROTTLE_RATE', '20/min'),
         'public_hierarchy': '120/min',
+        # Claiming a coordinator's seat with its ticket number and code.
+        'ticket_claim': os.getenv('TICKET_CLAIM_THROTTLE_RATE', '10/min'),
     },
 }
 
