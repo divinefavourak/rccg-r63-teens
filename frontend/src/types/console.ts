@@ -12,7 +12,7 @@
  * a compile-time constant — an administrator can change it without a deploy.
  */
 
-/** The 21 registered permission codes. Mirrors `permissions_registry.REGISTRY`. */
+/** The 22 registered permission codes. Mirrors `permissions_registry.REGISTRY`. */
 export type Permission =
   // Identity / authorization
   | 'users.view'
@@ -40,7 +40,8 @@ export type Permission =
   | 'events.checkin'
   // Payments
   | 'payments.view'
-  | 'payments.manage';
+  | 'payments.manage'
+  | 'payments.reconcile';
 
 /** Every code, for iteration (the Roles matrix renders one row each). */
 export const ALL_PERMISSIONS: Permission[] = [
@@ -65,6 +66,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   'events.checkin',
   'payments.view',
   'payments.manage',
+  'payments.reconcile',
 ];
 
 /** Human labels, for the Roles matrix and the assign-role summary. */
@@ -90,6 +92,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'events.checkin': 'Check attendees in at the door',
   'payments.view': 'See payments and reconciliation',
   'payments.manage': 'Issue refunds and payment plans',
+  'payments.reconcile': 'Check transfer receipts and reconcile payments',
 };
 
 /**

@@ -51,6 +51,13 @@ const FIELD_NAMES: Record<string, string> = {
   scope_node: 'Scope',
   cover_image: 'Cover image',
   slug: 'Title',
+  payment_method: 'How people pay',
+  bank_name: 'Bank',
+  bank_account_number: 'Account number',
+  bank_account_name: 'Account name',
+  payment_instructions: 'Payment instructions',
+  group_discount_threshold: 'Group size for the group price',
+  group_discount_price: 'Group price',
 };
 
 export interface EventDraft {
@@ -71,6 +78,15 @@ export interface EventDraft {
   max_attendees?: number | null;
   registration_status?: string;
   status?: string;
+  /** `online` is the gateway; `manual` a transfer to the account below. */
+  payment_method?: 'online' | 'manual';
+  bank_name?: string;
+  bank_account_number?: string;
+  bank_account_name?: string;
+  payment_instructions?: string;
+  group_registration_enabled?: boolean;
+  group_discount_threshold?: number | null;
+  group_discount_price?: string | number | null;
 }
 
 /** `<input type="datetime-local">` wants `YYYY-MM-DDTHH:mm`, ISO gives more. */
@@ -133,6 +149,14 @@ export const EventEditor = ({
     max_attendees: event?.max_attendees ?? null,
     registration_status: event?.registration_status ?? 'open',
     status: event?.status ?? 'draft',
+    payment_method: event?.payment_method ?? 'online',
+    bank_name: event?.bank_name ?? '',
+    bank_account_number: event?.bank_account_number ?? '',
+    bank_account_name: event?.bank_account_name ?? '',
+    payment_instructions: event?.payment_instructions ?? '',
+    group_registration_enabled: event?.group_registration_enabled ?? false,
+    group_discount_threshold: event?.group_discount_threshold ?? null,
+    group_discount_price: event?.group_discount_price ?? '',
   });
   const [showMore, setShowMore] = useState(false);
   /*
@@ -154,7 +178,12 @@ export const EventEditor = ({
     form.start_datetime && form.end_datetime
       ? form.end_datetime < form.start_datetime
       : false;
-  const ready = missing.length === 0 && !endsBeforeStart;
+  // A transfer needs somewhere to transfer to. The server says the same.
+  const manual = !form.is_free && form.payment_method === 'manual';
+  const bankMissing =
+    manual &&
+    !(form.bank_name?.trim() && form.bank_account_number?.trim() && form.bank_account_name?.trim());
+  const ready = missing.length === 0 && !endsBeforeStart && !bankMissing;
 
   const save = async () => {
     setBusy(true);
@@ -171,6 +200,11 @@ export const EventEditor = ({
         // the form resolves it rather than storing something incoherent.
         price: form.is_free ? null : form.price || null,
         max_attendees: form.max_attendees || null,
+        // Both or neither: the server refuses one without the other.
+        group_discount_threshold: form.group_discount_threshold || null,
+        group_discount_price: form.group_discount_threshold
+          ? form.group_discount_price || null
+          : null,
         scope_node: scopeNode?.id ?? null,
       };
 
@@ -371,16 +405,142 @@ export const EventEditor = ({
             This event is free
           </label>
           {!form.is_free && (
-            <Field label="Price (₦)">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={String(form.price ?? '')}
-                onChange={(e) => set('price', e.target.value)}
-                className={inputCls}
-              />
-            </Field>
+            <div className="mt-2 space-y-3">
+              <Field label="Price (₦)">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={String(form.price ?? '')}
+                  onChange={(e) => set('price', e.target.value)}
+                  className={inputCls}
+                />
+              </Field>
+
+              <fieldset>
+                <legend className="block text-[12px] font-medium uppercase leading-4 tracking-[0.06em] text-console-muted">
+                  How people pay
+                </legend>
+                <div className="mt-1 grid gap-2 sm:grid-cols-2">
+                  {(
+                    [
+                      ['online', 'Online', 'Card, transfer or USSD through the payment gateway. Confirmed automatically.'],
+                      ['manual', 'Bank transfer', 'To your account. People upload the receipt and someone checks it.'],
+                    ] as const
+                  ).map(([value, label, hint]) => (
+                    <label
+                      key={value}
+                      className={`flex cursor-pointer gap-2 rounded-console-md border-2 p-3 ${form.payment_method === value ? 'border-console-text' : 'border-console-border'}`}
+                    >
+                      <input
+                        type="radio"
+                        name="payment_method"
+                        className="mt-1"
+                        checked={form.payment_method === value}
+                        onChange={() => set('payment_method', value)}
+                      />
+                      <span>
+                        <span className="block text-[14px] font-semibold text-console-text">{label}</span>
+                        <span className="block text-[12px] leading-4 text-console-muted">{hint}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
+              {manual && (
+                <div className="space-y-3 rounded-console-md border border-console-border p-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="Bank" required>
+                      <input
+                        value={form.bank_name}
+                        onChange={(e) => set('bank_name', e.target.value)}
+                        className={inputCls}
+                        placeholder="Zenith Bank"
+                      />
+                    </Field>
+                    <Field label="Account number" required>
+                      <input
+                        inputMode="numeric"
+                        value={form.bank_account_number}
+                        onChange={(e) =>
+                          set('bank_account_number', e.target.value.replace(/\D/g, ''))
+                        }
+                        className={inputCls}
+                        maxLength={20}
+                        placeholder="0123456789"
+                      />
+                    </Field>
+                  </div>
+                  <Field label="Account name" required>
+                    <input
+                      value={form.bank_account_name}
+                      onChange={(e) => set('bank_account_name', e.target.value)}
+                      className={inputCls}
+                    />
+                  </Field>
+                  <Field
+                    label="Payment instructions"
+                    hint="Optional. For example: use your group reference as the narration."
+                  >
+                    <textarea
+                      rows={2}
+                      value={form.payment_instructions}
+                      onChange={(e) => set('payment_instructions', e.target.value)}
+                      className={inputCls}
+                    />
+                  </Field>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-console-md border border-console-border p-3">
+          <label className="flex items-center gap-2 text-[14px] text-console-body">
+            <input
+              type="checkbox"
+              checked={Boolean(form.group_registration_enabled)}
+              onChange={(e) => set('group_registration_enabled', e.target.checked)}
+            />
+            Coordinators can register groups
+          </label>
+          {form.group_registration_enabled && (
+            <>
+              <p className="mt-1 text-[12px] font-medium leading-4 text-console-muted">
+                A coordinator enters how many boys and girls are coming and pays
+                once. Each teen gets a ticket number and code to claim in the app.
+              </p>
+              {!form.is_free && (
+                <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                  <Field label="Group price from" hint="People in a group. Optional.">
+                    <input
+                      type="number"
+                      min="2"
+                      value={form.group_discount_threshold ?? ''}
+                      onChange={(e) =>
+                        set(
+                          'group_discount_threshold',
+                          e.target.value ? Number(e.target.value) : null,
+                        )
+                      }
+                      className={inputCls}
+                    />
+                  </Field>
+                  <Field label="Group price per person (₦)">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      disabled={!form.group_discount_threshold}
+                      value={String(form.group_discount_price ?? '')}
+                      onChange={(e) => set('group_discount_price', e.target.value)}
+                      className={inputCls}
+                    />
+                  </Field>
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -494,6 +654,11 @@ export const EventEditor = ({
         {missing.length > 0 && (
           <p className="text-[12px] text-console-subtle">
             Still needed: {missing.join(', ').replace(/_/g, ' ')}.
+          </p>
+        )}
+        {bankMissing && (
+          <p className="text-[12px] text-console-subtle">
+            Still needed: the bank, account number and account name people transfer to.
           </p>
         )}
       </div>

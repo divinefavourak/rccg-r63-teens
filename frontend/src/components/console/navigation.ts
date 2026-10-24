@@ -116,6 +116,30 @@ export const NAV_ITEMS: NavItem[] = [
     access: readWrite('events.view', 'events.manage'),
   },
   {
+    id: 'groups',
+    label: 'Group registration',
+    icon: 'UsersRound',
+    // A coordinator registers and pays for a headcount. Whoever reconciles
+    // payments opens a group to see what a receipt is for, but changes nothing.
+    access: (p) =>
+      has(p, 'events.manage')
+        ? true
+        : has(p, 'payments.reconcile') || has(p, 'payments.view')
+          ? 'readonly'
+          : false,
+  },
+  {
+    id: 'payments',
+    label: 'Payments',
+    icon: 'Receipt',
+    // payments.view sees what came in; payments.reconcile checks the
+    // transfer receipts that make it so.
+    access: readWrite('payments.view', 'payments.reconcile'),
+    // A coordinator's own receipts are on the group itself. The list of
+    // everyone's is for the people who check them.
+    inSidebar: (p) => has(p, 'payments.reconcile') || !has(p, 'events.manage'),
+  },
+  {
     id: 'check-in',
     label: 'Check in',
     icon: 'ScanLine',

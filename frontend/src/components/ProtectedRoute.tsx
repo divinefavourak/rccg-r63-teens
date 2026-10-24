@@ -9,7 +9,7 @@ interface ProtectedRouteProps {
   /**
    * Restrict by legacy `User.role`. Omit to require only that the visitor is
    * signed in — which is what the Console does, because what it shows is decided
-   * by the 21 permissions from `/identity/me/`, not by a role string.
+   * by the permissions from `/identity/me/`, not by a role string.
    */
   allowedRoles?: UserRole[];
   /** Where to send a signed-out visitor. */

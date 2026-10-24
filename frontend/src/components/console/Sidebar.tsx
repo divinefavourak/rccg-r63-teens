@@ -23,12 +23,14 @@ import {
   GitBranch,
   GraduationCap,
   Headphones,
+  Receipt,
   ScanLine,
   ScrollText,
   ShieldCheck,
   SlidersHorizontal,
   Sun,
   Users,
+  UsersRound,
   type LucideIcon,
 } from 'lucide-react';
 import LogoLockup from '../site/LogoLockup';
@@ -47,6 +49,8 @@ const ICONS: Record<string, LucideIcon> = {
   Headphones,
   Cross,
   Calendar,
+  UsersRound,
+  Receipt,
   ScanLine,
   GraduationCap,
   Bell,

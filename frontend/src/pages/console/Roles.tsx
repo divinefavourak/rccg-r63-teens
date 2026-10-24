@@ -63,7 +63,7 @@ const DOMAINS: { label: string; permissions: Permission[] }[] = [
     label: 'Events',
     permissions: ['events.view', 'events.manage', 'events.checkin'],
   },
-  { label: 'Money', permissions: ['payments.view', 'payments.manage'] },
+  { label: 'Money', permissions: ['payments.view', 'payments.reconcile', 'payments.manage'] },
 ];
 
 function unwrap<T>(data: unknown): T[] {
@@ -299,7 +299,7 @@ export const Roles = () => {
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Badge tone="neutral">
-          {ordered.length} roles · 21 permissions
+          {ordered.length} roles · {ALL_PERMISSIONS.length} permissions
         </Badge>
         <span className="text-[12px] text-console-subtle">
           Permission codes are defined in code; which role holds which is stored

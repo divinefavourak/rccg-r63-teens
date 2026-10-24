@@ -125,7 +125,7 @@ function columns(event: ExportEvent): Column[] {
  * leading apostrophe so it stays text: these are words people typed into a
  * sign-up form, opened later on a leader's computer.
  */
-function cell(value: string): string {
+export function cell(value: string): string {
   const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
   return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
@@ -139,7 +139,7 @@ function fileName(event: ExportEvent, extension: string): string {
   return `${slug || 'event'}-registrations-${day}.${extension}`;
 }
 
-function save(blob: Blob, name: string) {
+export function save(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -167,7 +167,7 @@ export function downloadCsv(event: ExportEvent, rows: ExportRow[]) {
  * dotted vowels (Ọ, ẹ, ṣ) would print as stray symbols, so they are reduced
  * to their base letter here. The CSV keeps every name exactly as typed.
  */
-const plain = (text: string) =>
+export const plain = (text: string) =>
   text
     .normalize('NFD')
     .replace(/[\u0300-\u036F]/g, '')
