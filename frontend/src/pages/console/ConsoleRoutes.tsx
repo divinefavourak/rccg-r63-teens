@@ -30,6 +30,8 @@ import Manuals from './Manuals';
 import Media from './Media';
 import Bible from './Bible';
 import Events from './Events';
+import GroupRegistration from './GroupRegistration';
+import Payments from './Payments';
 import CheckIn from './CheckIn';
 import MyClass from './MyClass';
 import Notifications from './Notifications';
@@ -68,6 +70,8 @@ const SCREENS: { id: string; element: ReactNode }[] = [
   { id: 'media', element: <Media /> },
   { id: 'bible', element: <Bible /> },
   { id: 'events', element: <Events /> },
+  { id: 'groups', element: <GroupRegistration /> },
+  { id: 'payments', element: <Payments /> },
   { id: 'check-in', element: <CheckIn /> },
   { id: 'my-class', element: <MyClass /> },
   { id: 'notifications', element: <Notifications /> },

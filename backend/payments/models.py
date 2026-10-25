@@ -55,6 +55,15 @@ class Payment(models.Model):
         blank=True,
         related_name='payment_attempts'
     )
+    # A coordinator's group registration, when the payment is for all its
+    # seats at once (`events/batches.py`).
+    batch = models.ForeignKey(
+        'events.RegistrationBatch',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='payments'
+    )
     description = models.TextField()
     
     # Payer information
@@ -132,6 +141,98 @@ class Payment(models.Model):
         if gateway_data:
             self.gateway_response = gateway_data
         self.save()
+
+
+def _receipt_path(instance, filename):
+    import os
+    ext = os.path.splitext(filename)[1].lower()
+    return f'receipts/{timezone.now():%Y/%m}/{uuid.uuid4().hex}{ext}'
+
+
+def _private_storage():
+    from common.storage import private_storage
+    return private_storage()
+
+
+class PaymentReceipt(models.Model):
+    """
+    Proof of a bank transfer to an event's account, for a manual-payment
+    event. Someone holding `payments.reconcile` checks it against the bank
+    statement; verifying it records the money as a `Payment`, so the ledger
+    has online and manual money in one place. The rules are in `receipts.py`.
+    """
+
+    class Status(models.TextChoices):
+        SUBMITTED = 'submitted', 'Waiting to be checked'
+        VERIFIED = 'verified', 'Verified'
+        REJECTED = 'rejected', 'Rejected'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # What it pays for: a coordinator's batch, or one registration.
+    batch = models.ForeignKey(
+        'events.RegistrationBatch', on_delete=models.CASCADE,
+        null=True, blank=True, related_name='receipts')
+    registration = models.ForeignKey(
+        'events.EventRegistration', on_delete=models.CASCADE,
+        null=True, blank=True, related_name='receipts')
+
+    submitted_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, related_name='payment_receipts')
+    amount_claimed = models.DecimalField(max_digits=12, decimal_places=2)
+    paid_on = models.DateField()
+    payer_name = models.CharField(max_length=255, blank=True)
+    # The transfer's reference or narration, as the bank shows it.
+    bank_reference = models.CharField(max_length=100, blank=True)
+    file = models.FileField(upload_to=_receipt_path, storage=_private_storage)
+    file_name = models.CharField(max_length=255, blank=True)
+    file_type = models.CharField(max_length=100, blank=True)
+    # So the same receipt sent twice, for two batches, is noticed.
+    file_sha256 = models.CharField(max_length=64, db_index=True)
+
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.SUBMITTED)
+    amount_verified = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='payment_receipts_reviewed')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_note = models.TextField(blank=True)
+    # The money this receipt was verified as.
+    payment = models.OneToOneField(
+        Payment, on_delete=models.SET_NULL, null=True, blank=True, related_name='receipt')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(batch__isnull=False, registration__isnull=True)
+                    | models.Q(batch__isnull=True, registration__isnull=False)
+                ),
+                name='receipt_for_batch_or_registration',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['status', 'created_at']),
+            models.Index(fields=['bank_reference']),
+        ]
+
+    def __str__(self):
+        return f'Receipt {self.amount_claimed} ({self.get_status_display()})'
+
+    @property
+    def target(self):
+        return self.batch or self.registration
+
+    @property
+    def event(self):
+        return self.batch.event if self.batch_id else self.registration.event
+
+    @property
+    def node(self):
+        return self.batch.node if self.batch_id else self.registration.node
 
 
 class PaymentPlan(models.Model):

@@ -11,11 +11,14 @@ router.register(r'registrations', views.EventRegistrationViewSet, basename='regi
 router.register(r'bulk-uploads', views.EventBulkUploadViewSet, basename='event-bulk-upload')
 router.register(r'audit-logs', views.RegistrationAuditLogViewSet, basename='audit-log')
 router.register(r'hostels', views.HostelViewSet, basename='hostel')
+router.register(r'batches', views.RegistrationBatchViewSet, basename='batch')
 
 urlpatterns = [
     # Check-in at the door: `events.checkin` only, so a Teacher can use it.
     path('checkin/today/', checkin_views.CheckInTodayView.as_view(), name='checkin-today'),
     path('checkin/scan/', checkin_views.CheckInScanView.as_view(), name='checkin-scan'),
     path('checkin/search/', checkin_views.CheckInSearchView.as_view(), name='checkin-search'),
+    # Before the router, whose `registrations/<pk>/` would take it.
+    path('registrations/claim/', views.ClaimSeatView.as_view(), name='registration-claim'),
     path('', include(router.urls)),
 ]

@@ -1,6 +1,8 @@
 import logging
+import uuid
 
 from rest_framework import viewsets, generics, status, permissions
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import action
@@ -10,7 +12,7 @@ from decimal import Decimal
 from django.db.models import Count, Sum, Q
 from django.db.models.functions import Coalesce
 from django.conf import settings
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError as DjangoValidationError
 from django.http import HttpResponseRedirect
 from django.shortcuts import render
 from django.utils.decorators import method_decorator
@@ -19,17 +21,23 @@ from django.views.decorators.csrf import csrf_exempt
 from urllib.parse import urlsplit
 
 from . import registrations as registration_payments
-from .models import Payment, PaymentPlan, TransactionLog
+from .models import Payment, PaymentPlan, PaymentReceipt, TransactionLog
+from . import batch_payments, receipts
 from .serializers import (
     PaymentSerializer, PaymentPlanSerializer,
-    InitializePaymentSerializer
+    InitializePaymentSerializer, LedgerPaymentSerializer, PaymentReceiptCreateSerializer,
+    PaymentReceiptSerializer, ReceiptRejectSerializer, ReceiptVerifySerializer,
 )
 from .services import PaymentService
 from tickets.models import Ticket
-from identity.authorization import HasPermission, has_any_permission
+from identity.authorization import HasPermission, has_any_permission, scope_queryset
 from identity.permissions_registry import Perm
-from events.models import EventRegistration
-from events.serializers import EventRegistrationDetailSerializer
+from events import batches
+from events.models import Event, EventRegistration, RegistrationBatch
+from events.serializers import (
+    EventRegistrationDetailSerializer, RegistrationBatchDetailSerializer,
+    RegistrationBatchSerializer,
+)
 from events.views import own_registrations
 
 logger = logging.getLogger(__name__)
@@ -597,3 +605,267 @@ class PaymentReturnView(View):
             'This can take a few minutes with a transfer or USSD. The ticket '
             'updates by itself once the payment arrives; you do not need to pay again.',
             retry=True, **shared)
+
+# =====================
+# GROUPS, TRANSFER RECEIPTS AND RECONCILIATION
+# =====================
+
+def _batch_for(user, pk):
+    """A group `user` may pay for: one they run as a coordinator."""
+    batch = RegistrationBatch.objects.select_related('event', 'node', 'created_by').filter(pk=pk).first()
+    if batch is None or not batches.can_manage(user, batch):
+        return None
+    return batch
+
+
+def _console_return(batch):
+    base = (settings.FRONTEND_URL or '').rstrip('/')
+    return f'{base}/admin/groups?batch={batch.pk}&paid=1'
+
+
+class BatchCheckoutView(APIView):
+    """`POST /payments/batches/<id>/checkout/`: open the gateway for what a group owes."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        batch = _batch_for(request.user, pk)
+        if batch is None:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            payment = batch_payments.start(batch, callback_url=_console_return(batch))
+        except registration_payments.NotPayable as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except registration_payments.BeingPrepared:
+            return Response(
+                {'detail': 'The payment page is being prepared. Try again in a moment.'},
+                status=status.HTTP_409_CONFLICT)
+        except registration_payments.Unavailable as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response({
+            'reference': payment.reference,
+            'authorization_url': payment.authorization_url,
+            'amount': str(payment.amount),
+        })
+
+
+class BatchPaymentCheckView(APIView):
+    """`POST /payments/batches/<id>/check/`: ask the gateway, for when the coordinator comes back."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        batch = _batch_for(request.user, pk)
+        if batch is None:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        batch_payments.check_batch(batch)
+        batch.refresh_from_db()
+        return Response(RegistrationBatchDetailSerializer(batch, context={'request': request}).data)
+
+
+class PaymentReceiptViewSet(viewsets.GenericViewSet):
+    """
+    Transfer receipts: `payments/receipts.py`.
+
+    `GET` lists the receipts you sent, for groups you run, or in the part of
+    the church you reconcile (`?status=submitted` for the ones to check).
+    `POST` (multipart) sends one. `verify` and `reject` are for whoever holds
+    `payments.reconcile` over it.
+    """
+    queryset = PaymentReceipt.objects.none()
+    permission_classes = [permissions.IsAuthenticated]
+    filterset_fields = ['status', 'batch', 'registration']
+    ordering = ['-created_at']
+
+    def get_queryset(self):
+        user = self.request.user
+        base = PaymentReceipt.objects.select_related(
+            'batch__event', 'batch__node', 'registration__event', 'registration__node',
+            'submitted_by', 'reviewed_by')
+        mine = Q(submitted_by=user)
+        managed_batches = scope_queryset(RegistrationBatch.objects.all(), user, Perm.EVENTS_MANAGE)
+        mine |= Q(batch__in=managed_batches)
+        reviewed = receipts.scope_receipts(base, user, receipts._code_for(user))
+        queryset = base.filter(mine | Q(pk__in=reviewed.values('pk')))
+        event = self.request.query_params.get('event')
+        if event:
+            try:
+                event = uuid.UUID(str(event))
+            except ValueError:
+                raise ValidationError({'event': ['That is not an event id.']})
+            queryset = queryset.filter(Q(batch__event_id=event) | Q(registration__event_id=event))
+        return queryset
+
+    def get_serializer_class(self):
+        return PaymentReceiptSerializer
+
+    def _out(self, receipt):
+        receipt = self.get_queryset().get(pk=receipt.pk)
+        return PaymentReceiptSerializer(receipt, context={'request': self.request}).data
+
+    def list(self, request):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        context = {'request': request}
+        if page is not None:
+            return self.get_paginated_response(
+                PaymentReceiptSerializer(page, many=True, context=context).data)
+        return Response(PaymentReceiptSerializer(queryset, many=True, context=context).data)
+
+    def retrieve(self, request, pk=None):
+        receipt = self.get_queryset().filter(pk=pk).first()
+        if receipt is None:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(self._out(receipt))
+
+    def create(self, request):
+        serializer = PaymentReceiptCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        if data.get('batch'):
+            target = RegistrationBatch.objects.select_related('event', 'node').filter(
+                pk=data['batch']).first()
+        else:
+            target = EventRegistration.objects.select_related('event', 'node').filter(
+                pk=data['registration']).first()
+        if target is None:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            receipt = receipts.submit(
+                request.user, target,
+                amount=data['amount'], paid_on=data['paid_on'], file=data['file'],
+                payer_name=data.get('payer_name', ''),
+                bank_reference=data.get('bank_reference', ''),
+            )
+        except receipts.ReceiptError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self._out(receipt), status=status.HTTP_201_CREATED)
+
+    def _review(self, request, pk, action):
+        receipt = self.get_queryset().filter(pk=pk).first()
+        if receipt is None:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            receipt = action(receipt)
+        except receipts.ReceiptError as exc:
+            code = (status.HTTP_403_FORBIDDEN
+                    if not receipts.can_reconcile(request.user, receipt.node)
+                    else status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': str(exc)}, status=code)
+        return Response(self._out(receipt))
+
+    @action(detail=True, methods=['post'])
+    def verify(self, request, pk=None):
+        serializer = ReceiptVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return self._review(request, pk, lambda receipt: receipts.verify(
+            request.user, receipt,
+            amount=serializer.validated_data.get('amount'),
+            note=serializer.validated_data.get('note', '')))
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        serializer = ReceiptRejectSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return self._review(request, pk, lambda receipt: receipts.reject(
+            request.user, receipt, reason=serializer.validated_data['reason']))
+
+
+class ReceiptFileView(APIView):
+    """
+    `GET /payments/receipts/<id>/file/`: the receipt itself, streamed from
+    private storage to someone allowed to see it. Never cached.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        from django.http import FileResponse
+        receipt = PaymentReceipt.objects.select_related(
+            'batch__node', 'registration__node', 'batch__event').filter(pk=pk).first()
+        if receipt is None or not receipts.can_see(request.user, receipt):
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            handle = receipt.file.open('rb')
+        except Exception:
+            logger.exception('Could not open receipt %s', receipt.pk)
+            return Response({'detail': 'The file could not be opened.'},
+                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        # A type we checked is shown in the browser; anything else (a row from
+        # before the type was checked) is only ever downloaded.
+        safe = receipt.file_type in receipts.SAFE_TYPES.values()
+        response = FileResponse(
+            handle, content_type=receipt.file_type if safe else 'application/octet-stream',
+            filename=receipt.file_name or 'receipt', as_attachment=not safe)
+        response['Cache-Control'] = 'private, no-store'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
+
+
+class ReconciliationView(APIView):
+    """
+    `GET /payments/reconciliation/?event=<id>`: what an event expects and
+    what has come in, in the part of the church you reconcile, with the
+    ledger of payments and the groups that still owe. `&export=csv` for the
+    ledger as a spreadsheet (not `format`, which DRF keeps for renderers).
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+
+        user = request.user
+        if not (has_any_permission(user, Perm.PAYMENTS_RECONCILE)
+                or has_any_permission(user, Perm.PAYMENTS_VIEW)):
+            return Response({'detail': 'You cannot see payments.'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            event = Event.objects.filter(pk=request.query_params.get('event')).first()
+        except (ValueError, DjangoValidationError):
+            event = None
+        if event is None:
+            return Response({'event': ['Choose an event.']}, status=status.HTTP_400_BAD_REQUEST)
+
+        code = receipts._code_for(user)
+        ledger = receipts.scope_payments(
+            Payment.objects.select_related('batch__node', 'registration__node').filter(
+                Q(batch__event=event) | Q(registration__event=event),
+                status=Payment.Status.SUCCESS,
+            ), user, code).order_by('-completed_at')
+        owing = receipts.scope_batches(
+            RegistrationBatch.objects.select_related('node', 'event', 'created_by').filter(
+                event=event).exclude(status__in=[
+                    RegistrationBatch.Status.PAID, RegistrationBatch.Status.CANCELLED]),
+            user, code).order_by('node__name')
+
+        if request.query_params.get('export') == 'csv':
+            return self._csv(event, ledger)
+
+        summary = receipts.summary(event, user)
+        return Response({
+            'event': {'id': str(event.pk), 'title': event.title,
+                      'payment_method': event.payment_method},
+            'summary': {key: (str(value) if isinstance(value, Decimal) else value)
+                        for key, value in summary.items()},
+            'ledger': LedgerPaymentSerializer(ledger[:500], many=True).data,
+            'owing': RegistrationBatchSerializer(owing, many=True).data,
+            'can_reconcile': receipts.can_reconcile_anywhere(user),
+        })
+
+    @staticmethod
+    def _csv(event, ledger):
+        import csv
+        from django.http import HttpResponse
+
+        response = HttpResponse(content_type='text/csv; charset=utf-8')
+        response['Content-Disposition'] = f'attachment; filename="payments-{event.slug}.csv"'
+        response.write('﻿')
+        writer = csv.writer(response)
+        writer.writerow(['Date', 'Reference', 'For', 'Where', 'Kind', 'Amount', 'Payer',
+                         'Bank reference'])
+
+        def cell(value):
+            # A spreadsheet runs a cell that starts like a formula.
+            text = '' if value is None else str(value)
+            return f"'{text}" if text[:1] in ('=', '+', '-', '@') else text
+
+        for row in LedgerPaymentSerializer(ledger, many=True).data:
+            writer.writerow([cell(v) for v in (
+                row['completed_at'], row['reference'], row['for_reference'], row['node'],
+                row['kind'], row['amount'], row['payer_name'], row['bank_reference'])])
+        return response

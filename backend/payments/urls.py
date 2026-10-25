@@ -5,9 +5,18 @@ from . import views
 router = DefaultRouter()
 router.register(r'payments', views.PaymentViewSet, basename='payment')
 router.register(r'payment-plans', views.PaymentPlanViewSet, basename='payment-plan')
+router.register(r'receipts', views.PaymentReceiptViewSet, basename='payment-receipt')
 
 urlpatterns = [
+    # Before the router, which would read `file` as an action.
+    path('receipts/<uuid:pk>/file/', views.ReceiptFileView.as_view(), name='payment_receipt_file'),
     path('', include(router.urls)),
+
+    # Coordinators' groups: open the gateway for what one owes, and ask how it went
+    path('batches/<uuid:pk>/checkout/', views.BatchCheckoutView.as_view(), name='batch_checkout'),
+    path('batches/<uuid:pk>/check/', views.BatchPaymentCheckView.as_view(), name='batch_payment_check'),
+    # What an event expects and what came in
+    path('reconciliation/', views.ReconciliationView.as_view(), name='payment_reconciliation'),
     
     # Dashboard
     path('dashboard/', views.PaymentDashboardView.as_view(), name='payment_dashboard'),

@@ -131,7 +131,7 @@ function App() {
 
           {/*
             The Console. Gated on being signed in only — what you can see inside
-            is decided by the 21 permissions from /identity/me/, not by a role
+            is decided by the permissions from /identity/me/, not by a role
             string. Someone holding no role gets a stated "you have no role yet"
             screen from ConsoleLayout rather than a redirect, because being
             authenticated with no authority is a real state, not an error.

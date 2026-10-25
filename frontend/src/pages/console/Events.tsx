@@ -113,6 +113,10 @@ interface RegistrationRow {
   attendee_gender?: string;
   attending_as_leader?: boolean;
   bed?: { code: string; hostel: string; hostel_id: string; is_firm: boolean } | null;
+  /** A seat in a coordinator's group, and whether a teen has claimed it. */
+  batch?: string | null;
+  batch_reference?: string | null;
+  claimed_at?: string | null;
 }
 
 /** `EventDashboardStatsSerializer`. */
@@ -859,7 +863,18 @@ const Registrations = ({ event, onBack }: { event: EventRow; onBack: () => void 
                             {r.attendee_name}
                           </span>
                           <span className="block truncate text-[12px] font-medium leading-4 text-console-muted">
-                            {r.attendee_email}
+                            {r.batch_reference ? (
+                              <Link
+                                to={`/admin/groups?batch=${r.batch}`}
+                                className="hover:underline"
+                                title="A seat in a group registration"
+                              >
+                                Group {r.batch_reference}
+                                {r.claimed_at ? '' : ' · not claimed yet'}
+                              </Link>
+                            ) : (
+                              r.attendee_email
+                            )}
                           </span>
                         </span>
                       </div>
