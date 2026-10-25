@@ -773,7 +773,8 @@ class RegistrationBatchViewSet(viewsets.GenericViewSet):
             batch = batches.create(
                 request.user, data['event'], data['node'],
                 data['male_count'], data['female_count'],
-                contact_phone=data.get('contact_phone', ''),
+                contact_email=data['contact_email'],
+                contact_phone=data['contact_phone'],
                 notes=data.get('notes', ''),
                 consent_attested=data.get('consent_attested', False),
             )
@@ -796,7 +797,7 @@ class RegistrationBatchViewSet(viewsets.GenericViewSet):
                     data.get('female_count', batch.female_count))
         except batches.BatchError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        changes = {k: data[k] for k in ('contact_phone', 'notes') if k in data}
+        changes = {k: data[k] for k in ('contact_email', 'contact_phone', 'notes') if k in data}
         if changes:
             RegistrationBatch.objects.filter(pk=batch.pk).update(**changes)
         return Response(self._detail(batch))

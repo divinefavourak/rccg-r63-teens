@@ -23,9 +23,9 @@ All are under `/api/v1/` and need a signed-in user.
 | Method and path | Who | What for |
 |---|---|---|
 | `GET /events/batches/` · `GET /events/batches/<id>/` | coordinators (`events.manage`), reconcilers | Groups and one group, with its seats, receipts, bank details and `can_*` flags. |
-| `POST /events/batches/` | `events.manage` over `node` | `{event, node, male_count, female_count, contact_phone, consent_attested}` |
+| `POST /events/batches/` | `events.manage` over `node` | `{event, node, male_count, female_count, contact_email, contact_phone, consent_attested}`. The email and phone are required, and everything about the group is sent to that email. |
 | `POST /events/batches/quote/` | coordinators | `{event, male_count, female_count}` returns the unit price, total and whether the group price applied. |
-| `PATCH /events/batches/<id>/` | the group's coordinators | Change the counts (before any payment), the phone or the notes. |
+| `PATCH /events/batches/<id>/` | the group's coordinators | Change the counts (before any payment), the contact email or phone, or the notes. |
 | `POST /events/batches/<id>/cancel/` | the group's coordinators | Only while nothing has been paid. |
 | `PATCH /events/batches/<id>/seats/` | the group's coordinators | `{seats: [{registration_id, name, phone}]}` puts names on seats. |
 | `POST /events/registrations/claim/` | any teen | `{registration_id, claim_code}` returns the registration, now theirs. Throttled. |
@@ -68,7 +68,7 @@ The web Console is the main place for this. A phone version for coordinators on 
 
 - A list of groups (`GET /events/batches/`) with status and balance.
 - A group screen with the seats, a "Share tickets" action (the system share sheet with the ticket numbers and codes as text, which is what coordinators send on WhatsApp), and the same pay or receipt panel as the web: gateway checkout via `POST /payments/batches/<id>/checkout/` opened in `expo-web-browser`, or the transfer details and a receipt upload with `batch` instead of `registration`.
-- New group: the same fields as the web modal, with the live quote from `/events/batches/quote/`.
+- New group: the same fields as the web modal, including the required contact email (pre-filled from the account, but editable) and phone, with the live quote from `/events/batches/quote/`.
 - Gate it the way the web does: on `events.manage` from `/identity/me/`, never on a role name.
 
 ### 4. Copy
@@ -78,5 +78,5 @@ Use the words the Console uses, so a coordinator hears one vocabulary: *group*, 
 ## Operations
 
 - Set `R2_PRIVATE_BUCKET_NAME` to a bucket with no public domain before taking real receipts. See `docs/ops/07-production-secrets.md`.
-- Migrations: `events.0013`, `payments.0005`, and `identity.0007`, which grants `payments.reconcile`. Every existing event stays `online`, with group registration off.
+- Migrations: `events.0013`, `payments.0005`, and `identity.0007`, which grants `payments.reconcile`. Every existing event stays `online`, and group registration is **on** for all events, existing ones included. Turn it off per event in the editor.
 - To take transfers for an event: in the Console, edit the event, choose **Bank transfer**, fill in the account, and tick **Coordinators can register groups**. Optionally set a group price from a group size.

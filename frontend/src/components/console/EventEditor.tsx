@@ -154,7 +154,7 @@ export const EventEditor = ({
     bank_account_number: event?.bank_account_number ?? '',
     bank_account_name: event?.bank_account_name ?? '',
     payment_instructions: event?.payment_instructions ?? '',
-    group_registration_enabled: event?.group_registration_enabled ?? false,
+    group_registration_enabled: event?.group_registration_enabled ?? true,
     group_discount_threshold: event?.group_discount_threshold ?? null,
     group_discount_price: event?.group_discount_price ?? '',
   });

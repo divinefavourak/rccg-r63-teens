@@ -306,7 +306,9 @@ def verify(reviewer, receipt, *, amount=None, note=''):
             description=(
                 f'{event.title}: transfer for '
                 f'{target.reference if receipt.batch_id else target.registration_id}'),
-            payer_email=(submitter.email if submitter else '') or '',
+            payer_email=(
+                receipt.batch.reply_email if receipt.batch_id
+                else (submitter.email if submitter else '')) or '',
             payer_name=receipt.payer_name or (submitter.get_full_name() if submitter else ''),
             completed_at=timezone.now(),
             metadata={

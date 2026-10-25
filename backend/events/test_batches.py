@@ -248,8 +248,10 @@ class BatchApiTests(APITestCase):
         response = self.client.post('/api/v1/events/batches/', {
             'event': str(self.event.id), 'node': str(self.tree['prov'].id),
             'male_count': 2, 'female_count': 1,
+            'contact_email': 'segun.coord@example.com', 'contact_phone': '08031234567',
         }, format='json')
         self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data['contact_email'], 'segun.coord@example.com')
         self.assertEqual(len(response.data['seats']), 3)
         self.assertEqual(response.data['amount_due'], '30000.00')
         self.assertTrue(response.data['can_pay_online'])
@@ -272,8 +274,23 @@ class BatchApiTests(APITestCase):
         response = self.client.post('/api/v1/events/batches/', {
             'event': str(self.event.id), 'node': str(self.tree['prov'].id),
             'male_count': 1, 'female_count': 0,
+            'contact_email': 'teen@example.com', 'contact_phone': '0803',
         }, format='json')
         self.assertEqual(response.status_code, 403)
+
+    def test_a_group_needs_an_email_and_a_phone_number(self):
+        self.client.force_authenticate(self.coordinator)
+        response = self.client.post('/api/v1/events/batches/', {
+            'event': str(self.event.id), 'node': str(self.tree['prov'].id),
+            'male_count': 1, 'female_count': 0,
+        }, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('contact_email', response.data)
+        self.assertIn('contact_phone', response.data)
+        self.assertFalse(RegistrationBatch.objects.exists())
+
+    def test_events_take_groups_unless_turned_off(self):
+        self.assertTrue(make_event(title='Any event').group_registration_enabled)
 
     def test_quote(self):
         self.client.force_authenticate(self.coordinator)

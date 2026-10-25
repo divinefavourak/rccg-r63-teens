@@ -39,7 +39,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="event",
             name="group_registration_enabled",
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=True),
         ),
         migrations.AddField(
             model_name="event",
@@ -104,6 +104,7 @@ class Migration(migrations.Migration):
                     "reference",
                     models.CharField(editable=False, max_length=20, unique=True),
                 ),
+                ("contact_email", models.EmailField(blank=True, max_length=254)),
                 ("contact_phone", models.CharField(blank=True, max_length=20)),
                 ("male_count", models.PositiveIntegerField(default=0)),
                 ("female_count", models.PositiveIntegerField(default=0)),

@@ -180,7 +180,7 @@ def _price_seats(batch):
         held.update(amount_due=batch.unit_price)
 
 
-def create(user, event, node, male, female, *, contact_phone='', notes='',
+def create(user, event, node, male, female, *, contact_email='', contact_phone='', notes='',
            consent_attested=False):
     """Make a batch and its seats. Raises `BatchError` with the reason it cannot."""
     if male < 0 or female < 0:
@@ -200,6 +200,7 @@ def create(user, event, node, male, female, *, contact_phone='', notes='',
             event=event,
             node=node,
             created_by=user,
+            contact_email=contact_email,
             contact_phone=contact_phone,
             notes=notes,
             consent_attested=consent_attested,

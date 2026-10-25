@@ -119,8 +119,8 @@ class Event(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     payment_instructions = models.TextField(blank=True)
 
     # Coordinators may register a group (a headcount) and pay for it at once:
-    # `events/batches.py`.
-    group_registration_enabled = models.BooleanField(default=False)
+    # `events/batches.py`. On unless the organiser turns it off.
+    group_registration_enabled = models.BooleanField(default=True)
 
     # Eligibility
     #
@@ -721,6 +721,10 @@ class RegistrationBatch(UUIDMixin, TimestampMixin):
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
         related_name='registration_batches')
+    # Where to reach the coordinator about this group. Asked for on every
+    # group, because the email on a coordinator's account is not always one
+    # they read: everything about the group is sent here.
+    contact_email = models.EmailField(blank=True)
     contact_phone = models.CharField(max_length=20, blank=True)
 
     male_count = models.PositiveIntegerField(default=0)
@@ -754,6 +758,11 @@ class RegistrationBatch(UUIDMixin, TimestampMixin):
     @property
     def balance(self):
         return max(self.amount_due - self.amount_paid, 0)
+
+    @property
+    def reply_email(self):
+        """The email given with the group, or the coordinator's account email."""
+        return self.contact_email or (self.created_by.email if self.created_by else '')
 
 
 class RegistrationAuditLog(UUIDMixin):

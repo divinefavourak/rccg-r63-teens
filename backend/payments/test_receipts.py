@@ -140,6 +140,18 @@ class VerifyTests(ReceiptTestCase):
         self.event.refresh_from_db()
         self.assertEqual(self.event.registration_count, 3)
 
+    def test_the_coordinator_is_emailed_at_the_address_given_with_the_group(self):
+        RegistrationBatch.objects.filter(pk=self.batch.pk).update(
+            contact_email='working@example.com')
+        receipt = self.send()
+        with patch('events.email_service._send_in_thread') as sent, \
+                self.captureOnCommitCallbacks(execute=True):
+            receipts.verify(self.regional, receipt)
+        recipients = [call.args[2] for call in sent.call_args_list]
+        self.assertIn(['working@example.com'], recipients)
+        self.assertNotIn([self.coordinator.email], recipients)
+        self.assertEqual(Payment.objects.get().payer_email, 'working@example.com')
+
     def test_part_of_the_money_then_the_rest(self):
         receipts.verify(self.regional, self.send(amount=PRICE * 3), amount=PRICE)
         batch = self.batch_now()

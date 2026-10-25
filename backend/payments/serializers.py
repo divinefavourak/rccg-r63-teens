@@ -101,6 +101,7 @@ class PaymentReceiptSerializer(serializers.ModelSerializer):
                 'node': batch.node.name, 'headcount': batch.headcount,
                 'amount_due': str(batch.amount_due), 'amount_paid': str(batch.amount_paid),
                 'balance': str(batch.balance), 'status': batch.status,
+                'contact_email': batch.reply_email, 'contact_phone': batch.contact_phone,
             }
         registration = obj.registration
         return {

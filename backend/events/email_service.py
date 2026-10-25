@@ -227,7 +227,8 @@ class EventEmailService:
         is 'paid' (with the ticket sheet), 'part_paid' or 'rejected'.
         """
         coordinator = batch.created_by
-        if coordinator is None or not coordinator.email:
+        recipient = batch.reply_email
+        if not recipient:
             return None
         subjects = {
             'paid': f'{batch.event.title}: your group {batch.reference} is paid',
@@ -244,14 +245,14 @@ class EventEmailService:
             'outcome': outcome,
             'note': note,
             'seats': seats,
-            'coordinator_name': coordinator.get_full_name(),
+            'coordinator_name': coordinator.get_full_name() if coordinator else '',
             'batch_url': EventEmailService._batch_url(batch),
             'frontend_url': _get_frontend_url(),
             'logo_url': _LOGO_URL,
             'faith_logo_url': _FAITH_LOGO_URL,
         }
         html = render_to_string('emails/group_payment_update.html', context)
-        return _send_in_thread(subjects[outcome], html, [coordinator.email], sender='no_reply')
+        return _send_in_thread(subjects[outcome], html, [recipient], sender='no_reply')
 
     @staticmethod
     def send_batch_paid(batch):

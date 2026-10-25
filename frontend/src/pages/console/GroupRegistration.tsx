@@ -79,6 +79,8 @@ const TAB_PARAMS: Record<Tab, Record<string, string>> = {
 
 const PAGE_SIZE = 20;
 
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 const FIELD =
   'mt-1 w-full rounded-console-md border-2 border-transparent bg-console-tinted px-3.5 py-2.5 text-[16px] leading-6 text-console-text outline-none transition-colors focus:border-console-text';
 const LABEL =
@@ -123,7 +125,7 @@ const NewGroup = ({
   onClose: () => void;
   onCreated: (batch: BatchDetail) => void;
 }) => {
-  const { scopeNode, permissionsAt } = useConsoleAuth();
+  const { me, scopeNode, permissionsAt } = useConsoleAuth();
   const { nodes, ancestorIdsOf } = useHierarchy();
   const events = useConsoleList<EventOption>('/events/events/', {
     params: { upcoming: 'true', ordering: 'start_datetime', page_size: 100 },
@@ -146,6 +148,9 @@ const NewGroup = ({
   const [nodeId, setNodeId] = useState('');
   const [male, setMale] = useState('');
   const [female, setFemale] = useState('');
+  // Started from the account, but asked for every time: the email on some
+  // coordinators' accounts is not one they read.
+  const [email, setEmail] = useState(me?.email ?? '');
   const [phone, setPhone] = useState('');
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -163,6 +168,7 @@ const NewGroup = ({
   const counts = { male: Number(male) || 0, female: Number(female) || 0 };
   const headcount = counts.male + counts.female;
   const event = open.find((e) => e.id === eventId);
+  const contactReady = EMAIL.test(email.trim()) && phone.trim().length >= 7;
 
   const quote = useQuery({
     queryKey: ['batch-quote', eventId, counts.male, counts.female],
@@ -186,7 +192,8 @@ const NewGroup = ({
         node: nodeId,
         male_count: counts.male,
         female_count: counts.female,
-        contact_phone: phone,
+        contact_email: email.trim(),
+        contact_phone: phone.trim(),
         consent_attested: consent,
       });
       onCreated(data);
@@ -211,7 +218,7 @@ const NewGroup = ({
           <Btn
             variant="primary"
             size="md"
-            disabled={busy || !eventId || !nodeId || headcount < 1}
+            disabled={busy || !eventId || !nodeId || headcount < 1 || !contactReady}
             onClick={create}
           >
             {busy ? 'Registering…' : `Register ${headcount || ''} ${headcount === 1 ? 'person' : 'people'}`}
@@ -282,16 +289,39 @@ const NewGroup = ({
           </label>
         </div>
 
-        <label className="block">
-          <span className={LABEL}>Your phone number</span>
-          <input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            className={FIELD}
-            placeholder="So the organisers can reach you about this group"
-            maxLength={20}
-          />
-        </label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className={LABEL}>Your email</span>
+            <input
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={FIELD}
+              placeholder="you@example.com"
+            />
+            <span className="mt-0.5 block text-[12px] leading-4 text-console-subtle">
+              One you check: the tickets and payment updates are sent here.
+            </span>
+          </label>
+          <label className="block">
+            <span className={LABEL}>Your phone number</span>
+            <input
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className={FIELD}
+              placeholder="0803 000 0000"
+              maxLength={20}
+            />
+            <span className="mt-0.5 block text-[12px] leading-4 text-console-subtle">
+              So the organisers can reach you about this group.
+            </span>
+          </label>
+        </div>
 
         <label className="flex items-start gap-2 text-[14px] leading-5 text-console-body">
           <input
@@ -393,6 +423,73 @@ const Resize = ({
         <label className="block">
           <span className={LABEL}>Girls</span>
           <input type="number" min="0" value={female} onChange={(e) => setFemale(e.target.value)} className={FIELD} />
+        </label>
+      </div>
+    </Modal>
+  );
+};
+
+// ─── Who to reach ────────────────────────────────────────────────────────────
+
+const ContactEditor = ({
+  batch,
+  onClose,
+  onSaved,
+}: {
+  batch: BatchDetail;
+  onClose: () => void;
+  onSaved: (batch: BatchDetail) => void;
+}) => {
+  const [email, setEmail] = useState(batch.contact_email);
+  const [phone, setPhone] = useState(batch.contact_phone);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const { data } = await api.patch<BatchDetail>(`/events/batches/${batch.id}/`, {
+        contact_email: email.trim(),
+        contact_phone: phone.trim(),
+      });
+      onSaved(data);
+    } catch (err) {
+      setError(errorDetail(err, "We couldn't save the contact details. Try again."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal
+      title="Contact for this group"
+      subtitle="The tickets and every payment update for this group go to this email."
+      onClose={onClose}
+      width={480}
+      footer={
+        <>
+          <Btn variant="ghost" onClick={onClose}>
+            Cancel
+          </Btn>
+          <Btn
+            variant="primary"
+            size="md"
+            disabled={busy || !EMAIL.test(email.trim()) || phone.trim().length < 7}
+            onClick={save}
+          >
+            {busy ? 'Saving…' : 'Save'}
+          </Btn>
+        </>
+      }
+    >
+      {error && <AlertBanner kind="error" className="mb-3">{error}</AlertBanner>}
+      <div className="space-y-3">
+        <label className="block">
+          <span className={LABEL}>Email</span>
+          <input type="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} className={FIELD} />
+        </label>
+        <label className="block">
+          <span className={LABEL}>Phone number</span>
+          <input type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={FIELD} maxLength={20} />
         </label>
       </div>
     </Modal>
@@ -855,6 +952,7 @@ const GroupDetail = ({
   };
 
   const [resizing, setResizing] = useState(false);
+  const [contact, setContact] = useState(false);
   const [naming, setNaming] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -917,8 +1015,11 @@ const GroupDetail = ({
       subtitle={`${b.event_title} · ${b.node_detail?.name ?? ''} · registered by ${b.created_by_name || 'a coordinator'} on ${dayOf(b.created_at)}`}
       readOnly={readOnly}
       hideScope
-      actions={
-        <>
+    >
+      <div className="space-y-4">
+        {/* In the page rather than the header's action row, which does not
+            wrap: on a phone the third button fell off the edge. */}
+        <div className="flex flex-wrap gap-2">
           <Btn variant="ghost" size="md" onClick={onBack}>
             <ArrowLeft size={16} /> All groups
           </Btn>
@@ -928,10 +1029,7 @@ const GroupDetail = ({
           <Btn variant="soft" size="md" onClick={() => downloadTicketsPdf(b)}>
             <Download size={16} /> Tickets PDF
           </Btn>
-        </>
-      }
-    >
-      <div className="space-y-4">
+        </div>
         {notice && (
           <AlertBanner
             kind="success"
@@ -953,11 +1051,26 @@ const GroupDetail = ({
             ['bg-pop-green', naira(b.amount_paid), 'Received'],
             ['bg-pop-amber', naira(b.balance), 'Still to pay'],
           ].map(([tone, value, label]) => (
-            <div key={label} className={`rounded-console-lg px-4 py-3 text-pop-on ${tone}`}>
-              <p className="text-[28px] font-extrabold leading-9 tabular-nums">{value}</p>
+            <div key={label} className={`min-w-0 rounded-console-lg px-4 py-3 text-pop-on ${tone}`}>
+              <p className="break-words text-[22px] font-extrabold leading-8 tabular-nums sm:text-[28px] sm:leading-9">
+                {value}
+              </p>
               <p className="text-[14px] leading-5">{label}</p>
             </div>
           ))}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-console-lg bg-console-surface px-4 py-3 text-[14px] leading-5 shadow-console-card">
+          <span className="text-console-muted">Contact</span>
+          <span className="min-w-0 break-all font-semibold text-console-text">
+            {b.contact_email || 'No email given'}
+          </span>
+          <span className="font-semibold text-console-text">{b.contact_phone || 'No phone given'}</span>
+          {canChange && (
+            <Btn variant="ghost" className="ml-auto" onClick={() => setContact(true)}>
+              <Pencil size={14} /> Change
+            </Btn>
+          )}
         </div>
 
         <PaymentCard batch={b} readOnly={readOnly} onChanged={reload} />
@@ -1059,6 +1172,17 @@ const GroupDetail = ({
             set(data);
             setResizing(false);
             setNotice(`${data.reference} now has ${data.headcount} seats.`);
+          }}
+        />
+      )}
+      {contact && (
+        <ContactEditor
+          batch={b}
+          onClose={() => setContact(false)}
+          onSaved={(data) => {
+            set(data);
+            setContact(false);
+            setNotice('Contact details saved.');
           }}
         />
       )}

@@ -74,7 +74,7 @@ def start(batch, callback_url):
             currency='NGN',
             batch=batch,
             description=f'{batch.event.title}: group {batch.reference} ({batch.headcount} seats)',
-            payer_email=(coordinator.email if coordinator else '') or '',
+            payer_email=batch.reply_email,
             payer_name=coordinator.get_full_name() if coordinator else '',
             payer_phone=batch.contact_phone,
             metadata={'batch_id': str(batch.pk), 'batch_reference': batch.reference,

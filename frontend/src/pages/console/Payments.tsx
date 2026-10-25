@@ -131,9 +131,9 @@ const ReceiptFile = ({ receipt }: { receipt: Receipt }) => {
   return (
     <div className="space-y-2">
       {isPdf ? (
-        <iframe title="Receipt" src={url} className="h-[420px] w-full rounded-console-lg border border-console-border" />
+        <iframe title="Receipt" src={url} className="h-[300px] w-full rounded-console-lg border border-console-border md:h-[420px]" />
       ) : (
-        <img src={url} alt="The transfer receipt" className="max-h-[420px] w-full rounded-console-lg bg-console-tinted object-contain" />
+        <img src={url} alt="The transfer receipt" className="max-h-[240px] w-full rounded-console-lg bg-console-tinted object-contain md:max-h-[420px]" />
       )}
       <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[13px] font-semibold text-console-action hover:underline">
         <ExternalLink size={14} /> Open full size
@@ -218,7 +218,9 @@ const Review = ({
     >
       <div className="grid gap-4 md:grid-cols-[1fr_280px]">
         <ReceiptFile receipt={receipt} />
-        <div className="space-y-3">
+        {/* On a phone the amounts and the decision come before the picture,
+            which would otherwise push them off the screen. */}
+        <div className="order-first space-y-3 md:order-none">
           {error && <AlertBanner kind="error">{error}</AlertBanner>}
           {receipt.duplicates.length > 0 && (
             <AlertBanner kind="caution">
@@ -235,11 +237,13 @@ const Review = ({
               ['Paid on', dayOf(receipt.paid_on)],
               ['From', receipt.payer_name || '—'],
               ['Reference', receipt.bank_reference || '—'],
+              ...(t.contact_email ? [['Coordinator', t.contact_email]] : []),
+              ...(t.contact_phone ? [['Phone', t.contact_phone]] : []),
               ...(t.kind === 'batch' ? [['Seats', String(t.headcount ?? '')]] : [['Attendee', t.attendee_name ?? '']]),
             ].map(([label, value]) => (
               <div key={label} className="flex justify-between gap-3 border-t border-console-border py-2 first:border-t-0">
                 <dt className="text-console-muted">{label}</dt>
-                <dd className="text-right font-semibold text-console-text">{value}</dd>
+                <dd className="min-w-0 break-all text-right font-semibold text-console-text">{value}</dd>
               </div>
             ))}
           </dl>
@@ -457,7 +461,7 @@ export const Payments = () => {
         </AlertBanner>
       )}
 
-      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div className="mb-4 grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-5">
         <MetricTile label="Expected" value={s && naira(s.expected)} loading={loadingSummary} />
         <MetricTile label="Received online" value={s && naira(s.received_online)} loading={loadingSummary} />
         <MetricTile label="Received by transfer" value={s && naira(s.received_manual)} loading={loadingSummary} />
@@ -571,7 +575,16 @@ export const Payments = () => {
                     <Td>{b.node_detail?.name}</Td>
                     <Td>
                       {b.created_by_name}
-                      {b.contact_phone && <span className="block text-[12px] text-console-muted">{b.contact_phone}</span>}
+                      {b.contact_email && (
+                        <a href={`mailto:${b.contact_email}`} className="block text-[12px] text-console-muted hover:underline">
+                          {b.contact_email}
+                        </a>
+                      )}
+                      {b.contact_phone && (
+                        <a href={`tel:${b.contact_phone}`} className="block text-[12px] text-console-muted hover:underline">
+                          {b.contact_phone}
+                        </a>
+                      )}
                     </Td>
                     <Td className="tabular-nums">
                       {naira(b.balance)}

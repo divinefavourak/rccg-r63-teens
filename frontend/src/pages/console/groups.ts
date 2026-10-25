@@ -26,6 +26,8 @@ export interface BatchRow {
   node: string;
   node_detail: { id: string; name: string; node_type: string } | null;
   created_by_name: string;
+  /** Where to reach the coordinator about this group; asked for on every group. */
+  contact_email: string;
   contact_phone: string;
   male_count: number;
   female_count: number;
@@ -74,6 +76,8 @@ export interface Receipt {
     amount_paid: string;
     balance?: string;
     status: string;
+    contact_email?: string;
+    contact_phone?: string;
   };
   submitted_by_name: string;
   amount_claimed: string;

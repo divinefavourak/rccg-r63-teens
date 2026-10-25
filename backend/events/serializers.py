@@ -903,7 +903,7 @@ class RegistrationBatchSerializer(serializers.ModelSerializer):
         model = RegistrationBatch
         fields = [
             'id', 'reference', 'event', 'event_title', 'event_start', 'payment_method',
-            'node', 'node_detail', 'created_by', 'created_by_name', 'contact_phone',
+            'node', 'node_detail', 'created_by', 'created_by_name', 'contact_email', 'contact_phone',
             'male_count', 'female_count', 'headcount', 'unit_price', 'amount_due',
             'amount_paid', 'balance', 'status', 'receipts_waiting', 'paid_at', 'created_at',
         ]
@@ -972,7 +972,9 @@ class RegistrationBatchCreateSerializer(serializers.Serializer):
     node = serializers.PrimaryKeyRelatedField(queryset=HierarchyNode.objects.all())
     male_count = serializers.IntegerField(min_value=0)
     female_count = serializers.IntegerField(min_value=0)
-    contact_phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    # Asked for every time: a coordinator's account email is not always right.
+    contact_email = serializers.EmailField()
+    contact_phone = serializers.CharField(max_length=20)
     notes = serializers.CharField(required=False, allow_blank=True)
     consent_attested = serializers.BooleanField(required=False, default=False)
 
@@ -980,7 +982,8 @@ class RegistrationBatchCreateSerializer(serializers.Serializer):
 class RegistrationBatchUpdateSerializer(serializers.Serializer):
     male_count = serializers.IntegerField(min_value=0, required=False)
     female_count = serializers.IntegerField(min_value=0, required=False)
-    contact_phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    contact_email = serializers.EmailField(required=False)
+    contact_phone = serializers.CharField(max_length=20, required=False)
     notes = serializers.CharField(required=False, allow_blank=True)
 
 
