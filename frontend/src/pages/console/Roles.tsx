@@ -1,5 +1,5 @@
 /**
- * Roles & permissions — the 21 × N matrix.
+ * Roles & permissions — the permissions × roles matrix.
  *
  * This is the screen where the Console explains itself: every other screen's
  * shape is derived from what this table says. Read by anyone with `roles.view`;
@@ -191,7 +191,7 @@ export const Roles = () => {
                         {r.label}
                       </span>
                       <span className="mt-0.5 block text-[12px] tabular-nums text-console-subtle">
-                        {r.permissions?.length ?? 0}/21
+                        {r.permissions?.length ?? 0}/{ALL_PERMISSIONS.length}
                       </span>
                       {!isGrantableAnywhere(r) && (
                         <span

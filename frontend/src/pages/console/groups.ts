@@ -46,7 +46,8 @@ export interface BatchRow {
 export interface Seat {
   id: string;
   registration_id: string;
-  claim_code: string;
+  /** Only sent to the group's coordinators: it is what proves a seat is yours. */
+  claim_code?: string;
   attendee_gender: string;
   attendee_name: string;
   attendee_phone: string;
@@ -171,7 +172,7 @@ export function downloadTicketsCsv(batch: BatchDetail) {
     ['Ticket', 'Claim code', 'Gender', 'Name', 'Phone', 'Claimed'],
     ...batch.seats.map((s) => [
       s.registration_id,
-      s.claim_code,
+      s.claim_code ?? '',
       gender(s.attendee_gender),
       s.attendee_name,
       s.attendee_phone ?? '',
@@ -260,7 +261,7 @@ export async function downloadTicketsPdf(batch: BatchDetail) {
     const values = [
       String(index + 1),
       seat.registration_id,
-      seat.claim_code,
+      seat.claim_code ?? '',
       gender(seat.attendee_gender),
       seat.claimed ? `${seat.attendee_name} (claimed)` : seat.attendee_name,
     ];

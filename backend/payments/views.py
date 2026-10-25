@@ -1,6 +1,8 @@
 import logging
+import uuid
 
 from rest_framework import viewsets, generics, status, permissions
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import action
@@ -685,6 +687,10 @@ class PaymentReceiptViewSet(viewsets.GenericViewSet):
         queryset = base.filter(mine | Q(pk__in=reviewed.values('pk')))
         event = self.request.query_params.get('event')
         if event:
+            try:
+                event = uuid.UUID(str(event))
+            except ValueError:
+                raise ValidationError({'event': ['That is not an event id.']})
             queryset = queryset.filter(Q(batch__event_id=event) | Q(registration__event_id=event))
         return queryset
 
@@ -782,9 +788,12 @@ class ReceiptFileView(APIView):
             logger.exception('Could not open receipt %s', receipt.pk)
             return Response({'detail': 'The file could not be opened.'},
                             status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        # A type we checked is shown in the browser; anything else (a row from
+        # before the type was checked) is only ever downloaded.
+        safe = receipt.file_type in receipts.SAFE_TYPES.values()
         response = FileResponse(
-            handle, content_type=receipt.file_type or 'application/octet-stream',
-            filename=receipt.file_name or 'receipt', as_attachment=False)
+            handle, content_type=receipt.file_type if safe else 'application/octet-stream',
+            filename=receipt.file_name or 'receipt', as_attachment=not safe)
         response['Cache-Control'] = 'private, no-store'
         response['X-Content-Type-Options'] = 'nosniff'
         return response

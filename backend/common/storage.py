@@ -17,7 +17,11 @@ def private_storage():
     domain; without it the files share the media bucket, private by ACL and
     under unguessable names, which is weaker if that bucket is public.
     """
-    if getattr(settings, 'R2_ACCESS_KEY_ID', None) and getattr(settings, 'R2_ACCOUNT_ID', None):
+    if (
+        getattr(settings, 'R2_ACCESS_KEY_ID', None)
+        and getattr(settings, 'R2_SECRET_ACCESS_KEY', None)
+        and getattr(settings, 'R2_ACCOUNT_ID', None)
+    ):
         from storages.backends.s3boto3 import S3Boto3Storage
         return S3Boto3Storage(
             bucket_name=settings.R2_PRIVATE_BUCKET_NAME or settings.R2_BUCKET_NAME,

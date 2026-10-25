@@ -866,6 +866,14 @@ class BatchSeatSerializer(serializers.ModelSerializer):
     def get_claimed(self, obj):
         return obj.claimed_at is not None
 
+    def to_representation(self, obj):
+        data = super().to_representation(obj)
+        # The code is what proves a seat is yours. Only the group's
+        # coordinators see it, not someone who can only check its payments.
+        if not self.context.get('show_claim_codes'):
+            data.pop('claim_code', None)
+        return data
+
     class Meta:
         model = EventRegistration
         fields = [
@@ -924,7 +932,10 @@ class RegistrationBatchDetailSerializer(RegistrationBatchSerializer):
     def get_seats(self, obj):
         seats = obj.seats.select_related('bed', 'bed__hostel').exclude(
             status=EventRegistration.Status.CANCELLED).order_by('registration_id')
-        return BatchSeatSerializer(seats, many=True).data
+        from . import batches
+        request = self.context.get('request')
+        show = bool(request and batches.can_manage(request.user, obj))
+        return BatchSeatSerializer(seats, many=True, context={'show_claim_codes': show}).data
 
     def get_receipts(self, obj):
         from payments.serializers import PaymentReceiptSerializer
@@ -948,8 +959,10 @@ class RegistrationBatchDetailSerializer(RegistrationBatchSerializer):
                 and obj.amount_paid == 0)
 
     def get_can_cancel(self, obj):
-        return obj.status != RegistrationBatch.Status.CANCELLED and (
-            obj.amount_paid == 0 or obj.event.is_free)
+        return (
+            obj.status != RegistrationBatch.Status.CANCELLED
+            and not obj.receipts.filter(status='submitted').exists()
+            and (obj.amount_paid == 0 or obj.event.is_free))
 
     def get_can_pay_online(self, obj):
         from payments import batch_payments

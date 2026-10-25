@@ -713,6 +713,8 @@ class RegistrationBatchViewSet(viewsets.GenericViewSet):
     """
 
     permission_classes = [permissions.IsAuthenticated]
+    # A malformed id is a 404 from the router, not a 500 from the database.
+    lookup_value_regex = '[0-9a-fA-F-]{32,36}'
     filterset_fields = ['event', 'status', 'node']
     search_fields = ['reference', 'node__name', 'created_by__first_name', 'created_by__last_name']
     ordering = ['-created_at']

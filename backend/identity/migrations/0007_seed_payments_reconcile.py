@@ -1,44 +1,31 @@
 """
-Re-reconcile RBAC after the registry gained `payments.reconcile`, which super
-admins, national coordinators and regional coordinators hold.
+Add `payments.reconcile` and give it to the three roles that check transfer
+receipts: super admin, national coordinator and regional coordinator.
 
-The same idempotent seed as 0006.
+Only that. The earlier seeds (0004, 0006) reconcile every system role with
+the registry, which would also undo any permission an administrator has
+since added or removed on the Roles screen. Fixed codes, not the live
+registry, so the migration means the same thing whenever it runs.
 """
 from django.db import migrations
 
+CODE = 'payments.reconcile'
+LABEL = 'Verify transfer receipts and reconcile payments'
+ROLES = ('super_admin', 'national_coordinator', 'regional_coordinator')
+
 
 def seed(apps, schema_editor):
-    from identity.permissions_registry import REGISTRY, ROLE_SEED
-
     Permission = apps.get_model('identity', 'Permission')
     Role = apps.get_model('identity', 'Role')
     RolePermission = apps.get_model('identity', 'RolePermission')
 
-    perm_by_code = {}
-    for code, label in REGISTRY:
-        perm, _ = Permission.objects.update_or_create(code=code, defaults={'label': label})
-        perm_by_code[code] = perm
-
-    for spec in ROLE_SEED:
-        defaults = {
-            'label': spec['label'],
-            'allowed_node_types': spec['allowed_node_types'],
-            'is_system': spec.get('is_system', False),
-        }
-        if 'description' in spec:
-            defaults['description'] = spec['description']
-        role, _ = Role.objects.update_or_create(code=spec['code'], defaults=defaults)
-        desired = set(spec['permissions'])
-        existing = set(role.role_permissions.values_list('permission__code', flat=True))
-        for code in desired - existing:
-            RolePermission.objects.get_or_create(role=role, permission=perm_by_code[code])
-        if role.is_system:
-            for code in existing - desired:
-                RolePermission.objects.filter(role=role, permission__code=code).delete()
+    permission, _ = Permission.objects.update_or_create(code=CODE, defaults={'label': LABEL})
+    for role in Role.objects.filter(code__in=ROLES):
+        RolePermission.objects.get_or_create(role=role, permission=permission)
 
 
 def unseed(apps, schema_editor):
-    pass  # keep seeded roles on reverse
+    pass  # keep seeded permissions on reverse
 
 
 class Migration(migrations.Migration):

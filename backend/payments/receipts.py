@@ -36,6 +36,16 @@ logger = logging.getLogger(__name__)
 
 ReceiptStatus = PaymentReceipt.Status
 
+# The only types a receipt is ever stored or served as. Decided from what the
+# file turned out to be, never from what the uploader's browser said: a PDF
+# that is really HTML, sent as text/html, would otherwise be served as a page.
+SAFE_TYPES = {
+    'PDF': 'application/pdf',
+    'PNG': 'image/png',
+    'JPEG': 'image/jpeg',
+    'WEBP': 'image/webp',
+}
+
 
 class ReceiptError(Exception):
     """The request cannot be done. The message is for the person asking."""
@@ -46,7 +56,8 @@ class ReceiptError(Exception):
 def validate_file(upload):
     """
     Refuse anything that is not a photo or PDF of a sensible size. Checked by
-    what the file is, not only what it is called. Returns the sha256 of it.
+    what the file is, not only what it is called. Returns its sha256 and the
+    type it is to be served as.
     """
     if upload is None:
         raise ReceiptError('Attach a photo or PDF of the receipt.')
@@ -66,21 +77,25 @@ def validate_file(upload):
     if ext == '.pdf':
         if not head.startswith(b'%PDF-'):
             raise ReceiptError('That file is not a PDF.')
+        kind = 'PDF'
     else:
         from PIL import Image
         try:
             with Image.open(upload) as image:
+                kind = (image.format or '').upper()
                 image.verify()
         except Exception:
             raise ReceiptError('That file is not a picture we can open.')
         finally:
             upload.seek(0)
+        if kind not in SAFE_TYPES:
+            raise ReceiptError('Use a JPG, PNG, WebP or PDF file.')
 
     digest = hashlib.sha256()
     for chunk in upload.chunks():
         digest.update(chunk)
     upload.seek(0)
-    return digest.hexdigest()
+    return digest.hexdigest(), SAFE_TYPES[kind]
 
 
 # ── Who may ──────────────────────────────────────────────────────────────────
@@ -222,7 +237,7 @@ def submit(user, target, *, amount, paid_on, file, payer_name='', bank_reference
         raise ReceiptError('Enter the amount you transferred.')
     if paid_on > timezone.localdate():
         raise ReceiptError('The date of the transfer cannot be in the future.')
-    digest = validate_file(file)
+    digest, content_type = validate_file(file)
 
     with transaction.atomic():
         receipt = PaymentReceipt.objects.create(
@@ -235,7 +250,7 @@ def submit(user, target, *, amount, paid_on, file, payer_name='', bank_reference
             bank_reference=bank_reference.strip()[:100],
             file=file,
             file_name=os.path.basename(file.name or '')[:255],
-            file_type=(getattr(file, 'content_type', '') or '')[:100],
+            file_type=content_type,
             file_sha256=digest,
         )
         if receipt.batch_id:

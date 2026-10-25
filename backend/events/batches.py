@@ -249,8 +249,11 @@ def resize(user, batch, male, female):
             if wanted[gender] > have:
                 _add_seats(batch, event, gender, wanted[gender] - have, user)
             elif wanted[gender] < have:
+                # Locked, so a teen claiming one of these at the same moment
+                # either gets it first (and it is not removed) or waits.
                 spare = list(
-                    held.filter(attendee_gender=gender, claimed_at__isnull=True)
+                    held.select_for_update(of=('self',))
+                    .filter(attendee_gender=gender, claimed_at__isnull=True)
                     .order_by('-created_at', '-registration_id')[:have - wanted[gender]])
                 if len(spare) < have - wanted[gender]:
                     raise BatchError(
@@ -271,6 +274,10 @@ def cancel(user, batch, reason=''):
             raise BatchError(
                 'Money has been received for this group. Ask the organisers to refund it '
                 'before it is cancelled.')
+        if batch.receipts.filter(status='submitted').exists():
+            # Verifying it afterwards would record money against a group
+            # that no longer exists.
+            raise BatchError('A receipt for this group is being checked. Wait for it first.')
         for seat in batch.seats.exclude(status=Status.CANCELLED):
             seat.cancel(user, reason=reason or 'The group registration was cancelled.')
         batch.status = BatchStatus.CANCELLED
@@ -396,7 +403,9 @@ def claim(user, ticket, code):
 
     with transaction.atomic():
         seat = (
-            EventRegistration.objects.select_for_update()
+            # The seat alone: locking the event too would make every claim at
+            # the gate wait on every other, and can deadlock with `resize`.
+            EventRegistration.objects.select_for_update(of=('self',))
             .select_related('event')
             .filter(registration_id__iexact=ticket, batch__isnull=False).first())
         # The same answer for a ticket that is not a seat and a wrong code, so

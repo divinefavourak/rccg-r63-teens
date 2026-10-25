@@ -7,9 +7,9 @@ import io
 import shutil
 import tempfile
 from datetime import date, timedelta
-from decimal import Decimal
 from unittest.mock import patch
 
+from django.core.files.storage import FileSystemStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from PIL import Image
@@ -19,6 +19,7 @@ from events import batches
 from events.models import Event, EventRegistration, RegistrationBatch
 from events.test_batches import PRICE, grant, group_event
 from events.test_registration_counters import make_registration
+from identity.models import Permission, Role, RolePermission
 from identity.tests.base import build_tree, make_user, seed_rbac
 from payments import receipts, registrations
 from payments.models import Payment, PaymentReceipt
@@ -29,7 +30,26 @@ Status = EventRegistration.Status
 Paid = EventRegistration.PaymentStatus
 BatchStatus = RegistrationBatch.Status
 
-_PRIVATE = tempfile.mkdtemp(prefix='receipts-test-')
+class TempReceiptStorage:
+    """
+    Receipts go to a temporary folder for the class, not `PRIVATE_MEDIA_ROOT`.
+    `override_settings` cannot do this: the field's storage was built when the
+    model was imported.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._folder = tempfile.mkdtemp(prefix='receipts-test-')
+        field = PaymentReceipt._meta.get_field('file')
+        cls._storage = field.storage
+        field.storage = FileSystemStorage(location=cls._folder)
+
+    @classmethod
+    def tearDownClass(cls):
+        PaymentReceipt._meta.get_field('file').storage = cls._storage
+        shutil.rmtree(cls._folder, ignore_errors=True)
+        super().tearDownClass()
 
 
 def png(name='receipt.png'):
@@ -48,13 +68,7 @@ def manual_event(**kwargs):
         bank_account_number='1234567890', bank_account_name='RCCG Teens', **kwargs)
 
 
-@override_settings(PRIVATE_MEDIA_ROOT=_PRIVATE)
-class ReceiptTestCase(TestCase):
-    @classmethod
-    def tearDownClass(cls):
-        super().tearDownClass()
-        shutil.rmtree(_PRIVATE, ignore_errors=True)
-
+class ReceiptTestCase(TempReceiptStorage, TestCase):
     def setUp(self):
         seed_rbac()
         self.tree = build_tree()
@@ -100,6 +114,21 @@ class SubmitTests(ReceiptTestCase):
         with override_settings(MAX_RECEIPT_SIZE=10):
             with self.assertRaisesMessage(receipts.ReceiptError, 'larger than'):
                 self.send(file=pdf())
+
+    def test_the_stored_type_comes_from_the_file_not_the_browser(self):
+        lying = pdf(body=b'%PDF-1.4\n<html><script>alert(1)</script></html>')
+        lying.content_type = 'text/html'
+        receipt = self.send(file=lying)
+        self.assertEqual(receipt.file_type, 'application/pdf')
+        disguised = png(name='receipt.png')
+        disguised.content_type = 'text/html'
+        self.assertEqual(self.send(file=disguised).file_type, 'image/png')
+
+    def test_a_group_cannot_be_cancelled_while_a_receipt_is_checked(self):
+        self.send()
+        with self.assertRaisesMessage(batches.BatchError, 'being checked'):
+            batches.cancel(self.coordinator, self.batch)
+        self.assertEqual(self.batch_now().status, BatchStatus.UNDER_REVIEW)
 
     def test_a_future_date_is_refused(self):
         with self.assertRaisesMessage(receipts.ReceiptError, 'future'):
@@ -236,8 +265,7 @@ class HoldTests(ReceiptTestCase):
         self.assertIn('bank transfer', registrations.refusal(alone))
 
 
-@override_settings(PRIVATE_MEDIA_ROOT=_PRIVATE)
-class ReceiptApiTests(APITestCase):
+class ReceiptApiTests(TempReceiptStorage, APITestCase):
     def setUp(self):
         seed_rbac()
         self.tree = build_tree()
@@ -289,6 +317,35 @@ class ReceiptApiTests(APITestCase):
         csv = self.client.get('/api/v1/payments/reconciliation/',
                               {'event': str(self.event.id), 'export': 'csv'})
         self.assertIn(self.batch.reference, csv.content.decode('utf-8'))
+
+    def test_an_unchecked_type_is_only_ever_downloaded(self):
+        receipt_id = self.upload().data['id']
+        PaymentReceipt.objects.filter(pk=receipt_id).update(file_type='text/html')
+        self.client.force_authenticate(self.regional)
+        response = self.client.get(f'/api/v1/payments/receipts/{receipt_id}/file/')
+        self.assertEqual(response['Content-Type'], 'application/octet-stream')
+        self.assertIn('attachment', response['Content-Disposition'])
+
+    def test_claim_codes_are_for_the_groups_coordinators_only(self):
+        self.client.force_authenticate(self.coordinator)
+        mine = self.client.get(f'/api/v1/events/batches/{self.batch.id}/')
+        self.assertTrue(all(seat['claim_code'] for seat in mine.data['seats']))
+        viewer = make_user('viewer')
+        role = Role.objects.create(code='payments_viewer', label='Payments viewer',
+                                   allowed_node_types=['region'])
+        RolePermission.objects.create(
+            role=role, permission=Permission.objects.get(code='payments.reconcile'))
+        grant(viewer, 'payments_viewer', self.tree['r1'])
+        self.client.force_authenticate(viewer)
+        theirs = self.client.get(f'/api/v1/events/batches/{self.batch.id}/')
+        self.assertEqual(theirs.status_code, 200)
+        self.assertTrue(all('claim_code' not in seat for seat in theirs.data['seats']))
+
+    def test_ids_that_are_not_ids(self):
+        self.client.force_authenticate(self.coordinator)
+        self.assertEqual(self.client.get('/api/v1/events/batches/not-an-id/').status_code, 404)
+        response = self.client.get('/api/v1/payments/receipts/', {'event': 'abc'})
+        self.assertEqual(response.status_code, 400)
 
     def test_the_file_is_hidden_from_everyone_else(self):
         receipt_id = self.upload().data['id']

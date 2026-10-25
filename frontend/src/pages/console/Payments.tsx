@@ -104,6 +104,9 @@ const ReceiptPill = ({ status }: { status: Receipt['status'] }) => {
   );
 };
 
+/** What a receipt may be shown as. Anything else is treated as an opaque download. */
+const RECEIPT_TYPES = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
+
 /** The receipt itself, fetched with the session: it is never at a public address. */
 const ReceiptFile = ({ receipt }: { receipt: Receipt }) => {
   const [url, setUrl] = useState<string | null>(null);
@@ -115,7 +118,11 @@ const ReceiptFile = ({ receipt }: { receipt: Receipt }) => {
       .get(`/payments/receipts/${receipt.id}/file/`, { responseType: 'blob' })
       .then(({ data }) => {
         if (!alive) return;
-        made = URL.createObjectURL(data as Blob);
+        // Rebuilt with a type from the allow-list, so a file that is not what
+        // it claims can never be opened as a page in the Console.
+        const raw = data as Blob;
+        const type = RECEIPT_TYPES.includes(raw.type) ? raw.type : 'application/octet-stream';
+        made = URL.createObjectURL(new Blob([raw], { type }));
         setUrl(made);
       })
       .catch(() => alive && setFailed(true));
@@ -127,7 +134,7 @@ const ReceiptFile = ({ receipt }: { receipt: Receipt }) => {
 
   if (failed) return <AlertBanner kind="error">We couldn't open the receipt file.</AlertBanner>;
   if (!url) return <Skeleton className="h-64 w-full rounded-console-lg" />;
-  const isPdf = receipt.file_type === 'application/pdf' || receipt.file_name.toLowerCase().endsWith('.pdf');
+  const isPdf = receipt.file_type === 'application/pdf';
   return (
     <div className="space-y-2">
       {isPdf ? (
@@ -319,7 +326,17 @@ const ReceiptTable = ({
       {items.map((r) => (
         <tr key={r.id} className="cursor-pointer hover:bg-console-tinted" onClick={() => onOpen(r)}>
           <Td>
-            <span className="font-mono text-[13px] font-semibold text-console-text">{r.target.reference}</span>
+            {/* A real button, so a receipt opens from the keyboard too. */}
+            <button
+              type="button"
+              className="font-mono text-[13px] font-semibold text-console-text hover:underline"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpen(r);
+              }}
+            >
+              {r.target.reference}
+            </button>
             <span className="block text-[12px] text-console-muted">{r.target.event_title}</span>
           </Td>
           <Td>{r.target.node || '—'}</Td>
@@ -355,6 +372,7 @@ export const Payments = () => {
   const [eventId, setEventId] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const events = useConsoleList<EventOption>('/events/events/', {
     params: { ordering: '-start_datetime', page_size: 100 },
@@ -408,6 +426,7 @@ export const Payments = () => {
   const exportLedger = async () => {
     if (!eventId) return;
     setExporting(true);
+    setExportError(null);
     try {
       const { data } = await api.get('/payments/reconciliation/', {
         params: { event: eventId, export: 'csv' },
@@ -415,6 +434,9 @@ export const Payments = () => {
       });
       const title = paid.find((e) => e.id === eventId)?.title ?? 'event';
       save(data as Blob, `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-payments.csv`);
+    } catch {
+      // The error body is a blob here, so there is no server message to show.
+      setExportError("We couldn't export the ledger. Try again.");
     } finally {
       setExporting(false);
     }
@@ -455,6 +477,11 @@ export const Payments = () => {
         </label>
       </div>
 
+      {exportError && (
+        <AlertBanner kind="error" className="mb-4">
+          {exportError}
+        </AlertBanner>
+      )}
       {notice && (
         <AlertBanner kind="success" className="mb-4">
           {notice}

@@ -68,11 +68,12 @@ import {
   type NameRow,
 } from './groups';
 
-type Tab = 'open' | 'under_review' | 'paid' | 'all';
+type Tab = 'open' | 'under_review' | 'part_paid' | 'paid' | 'all';
 
 const TAB_PARAMS: Record<Tab, Record<string, string>> = {
   open: { status: 'awaiting_payment' },
   under_review: { status: 'under_review' },
+  part_paid: { status: 'part_paid' },
   paid: { status: 'paid' },
   all: {},
 };
@@ -972,6 +973,9 @@ const GroupDetail = ({
   }
   const b = batch.data;
   const canChange = !readOnly && b.status !== 'cancelled';
+  // The server sends the codes only to the group's coordinators. Without them
+  // there is no ticket sheet to hand out, so neither is offered.
+  const showCodes = b.seats.some((s) => s.claim_code);
 
   const saveNames = async () => {
     if (!editing) return;
@@ -1023,12 +1027,16 @@ const GroupDetail = ({
           <Btn variant="ghost" size="md" onClick={onBack}>
             <ArrowLeft size={16} /> All groups
           </Btn>
-          <Btn variant="soft" size="md" onClick={() => downloadTicketsCsv(b)}>
-            <Download size={16} /> Tickets CSV
-          </Btn>
-          <Btn variant="soft" size="md" onClick={() => downloadTicketsPdf(b)}>
-            <Download size={16} /> Tickets PDF
-          </Btn>
+          {showCodes && (
+            <>
+              <Btn variant="soft" size="md" onClick={() => downloadTicketsCsv(b)}>
+                <Download size={16} /> Tickets CSV
+              </Btn>
+              <Btn variant="soft" size="md" onClick={() => downloadTicketsPdf(b)}>
+                <Download size={16} /> Tickets PDF
+              </Btn>
+            </>
+          )}
         </div>
         {notice && (
           <AlertBanner
@@ -1119,7 +1127,7 @@ const GroupDetail = ({
               <thead>
                 <tr>
                   <Th>Ticket</Th>
-                  <Th>Code</Th>
+                  {showCodes && <Th>Code</Th>}
                   <Th>Gender</Th>
                   <Th>Name</Th>
                   <Th>Status</Th>
@@ -1131,7 +1139,9 @@ const GroupDetail = ({
                 {b.seats.map((s) => (
                   <tr key={s.id}>
                     <Td className="font-mono text-[13px] font-semibold">{s.registration_id}</Td>
-                    <Td className="font-mono text-[13px] font-bold tracking-[0.08em]">{s.claim_code}</Td>
+                    {showCodes && (
+                      <Td className="font-mono text-[13px] font-bold tracking-[0.08em]">{s.claim_code}</Td>
+                    )}
                     <Td className="capitalize">{s.attendee_gender}</Td>
                     <Td>
                       {editing && !s.claimed ? (
@@ -1268,6 +1278,7 @@ export const GroupRegistration = () => {
         tabs={[
           { id: 'open', label: 'Awaiting payment' },
           { id: 'under_review', label: 'Being checked' },
+          { id: 'part_paid', label: 'Part paid' },
           { id: 'paid', label: 'Paid' },
           { id: 'all', label: 'All' },
         ]}
@@ -1319,7 +1330,17 @@ export const GroupRegistration = () => {
                     onClick={() => setParams({ batch: b.id })}
                   >
                     <Td>
-                      <span className="font-mono text-[13px] font-semibold text-console-text">{b.reference}</span>
+                      {/* A real button, so the row opens from the keyboard too. */}
+                      <button
+                        type="button"
+                        className="font-mono text-[13px] font-semibold text-console-text hover:underline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setParams({ batch: b.id });
+                        }}
+                      >
+                        {b.reference}
+                      </button>
                       <span className="block text-[12px] text-console-muted">{b.node_detail?.name}</span>
                     </Td>
                     <Td>
