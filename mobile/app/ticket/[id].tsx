@@ -7,8 +7,15 @@ import QRCode from 'react-native-qrcode-svg';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useCheckPayment, useMyRegistrations, useStartPayment } from '../../src/api/queries';
+import {
+  useCheckPayment,
+  useEvent,
+  useMyReceipts,
+  useMyRegistrations,
+  useStartPayment,
+} from '../../src/api/queries';
 import { Icon } from '../../src/components/Icon';
+import { BankDetails, ReceiptList, ReceiptSheet } from '../../src/components/PaymentPieces';
 import {
   dayLabel,
   formatNaira,
@@ -114,6 +121,25 @@ export default function TicketScreen() {
   const canPay = !!ticket?.can_pay;
   const justPaid = sentToPay && ticket?.payment_status === 'paid';
 
+  // ── Paying by transfer ────────────────────────────────────────────────
+  // On a bank-transfer event there is no Squad button: the teen pays into the
+  // event's account and sends a photo of the receipt, which someone checks.
+  // A seat from a coordinator's group is paid for by the group, not here.
+  const manual = event?.payment_method === 'manual';
+  const fromGroup = !!ticket?.batch;
+  const owesTransfer =
+    manual &&
+    !fromGroup &&
+    !!ticket &&
+    ticket.payment_status !== 'paid' &&
+    ticket.payment_status !== 'not_required' &&
+    ticket.payment_status !== 'refunded' &&
+    ticket.status !== 'cancelled';
+  const eventDetail = useEvent(owesTransfer ? ticket?.event : undefined);
+  const receipts = useMyReceipts(id, manual && !fromGroup);
+  const [sending, setSending] = useState(false);
+  const waiting = (receipts.data ?? []).some((r) => r.status === 'submitted');
+
   useEffect(() => {
     if (!sentToPay || !canPay) return;
     // Coming back from the browser: ask Squad straight away, for the times
@@ -216,7 +242,14 @@ export default function TicketScreen() {
     );
   }
 
-  const status = ticketStatus(ticket);
+  const status = waiting && owesTransfer
+    ? { label: 'Receipt being checked', settled: false }
+    : ticketStatus(ticket);
+  const account = eventDetail.data;
+  const owed =
+    ticket.amount_due && ticket.amount_paid
+      ? String(Math.max(Number(ticket.amount_due) - Number(ticket.amount_paid), 0))
+      : ticket.amount_due;
   const start = event ? startOf(event) : null;
   const where = event ? whereLabel(event) : null;
   const line = [start ? dayLabel(start) : null, start ? timeLabel(start) : null, where]
@@ -384,6 +417,78 @@ export default function TicketScreen() {
               {sentToPay
                 ? 'This ticket updates by itself once the payment arrives. A transfer can take a few minutes.'
                 : 'You pay on Squad by card, bank transfer or USSD.'}
+            </Text>
+          </View>
+        )}
+
+        {owesTransfer && (
+          <View className="w-full gap-3 rounded-2xl bg-surf-sunken p-4">
+            <View className="gap-1">
+              <Text
+                accessibilityRole="header"
+                className="font-ui-b text-[17px] leading-6 text-ink-1"
+              >
+                {formatNaira(owed) ?? 'Payment'} to pay by transfer
+              </Text>
+              <Text className="font-ui text-[14px] leading-5 text-ink-2">
+                {waiting
+                  ? 'Your receipt is being checked. This ticket updates once it is.'
+                  : 'Transfer to this account, then send a photo of the receipt. Your place is confirmed once it is checked.'}
+              </Text>
+            </View>
+            {account?.bank_account_number ? (
+              <BankDetails
+                account={{
+                  bank_name: account.bank_name ?? '',
+                  account_number: account.bank_account_number,
+                  account_name: account.bank_account_name ?? '',
+                  instructions: account.payment_instructions,
+                }}
+                narration={ticket.registration_id}
+              />
+            ) : eventDetail.isPending ? (
+              <Skeleton height={150} />
+            ) : (
+              <View className="gap-2">
+                <Text className="font-ui text-[14px] leading-5 text-ink-2">
+                  The account details did not load. Check your connection, then try again.
+                </Text>
+                <Button
+                  label="Try again"
+                  variant="secondary"
+                  onPress={() => eventDetail.refetch()}
+                  loading={eventDetail.isFetching}
+                  className="h-12"
+                />
+              </View>
+            )}
+            <Button
+              label={(receipts.data ?? []).length ? 'Send another receipt' : 'Send your receipt'}
+              onPress={() => setSending(true)}
+              className="w-full"
+            />
+            <ReceiptList receipts={receipts.data ?? []} />
+            <ReceiptSheet
+              visible={sending}
+              onClose={() => setSending(false)}
+              target={{ registration: ticket.id }}
+              amount={owed}
+              payer={holder}
+            />
+          </View>
+        )}
+
+        {manual && !owesTransfer && !fromGroup && (receipts.data ?? []).length > 0 && (
+          <View className="w-full gap-3 rounded-2xl bg-surf-sunken p-4">
+            <ReceiptList receipts={receipts.data ?? []} />
+          </View>
+        )}
+
+        {fromGroup && ticket.payment_status !== 'paid' && ticket.payment_status !== 'not_required' && (
+          <View className="w-full gap-1 rounded-2xl bg-surf-sunken p-4">
+            <Text className="font-ui-b text-[17px] leading-6 text-ink-1">Paid for by your group</Text>
+            <Text className="font-ui text-[14px] leading-5 text-ink-2">
+              Your coordinator pays for this group. The ticket is confirmed once they have.
             </Text>
           </View>
         )}

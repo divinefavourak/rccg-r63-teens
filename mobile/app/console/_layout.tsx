@@ -8,7 +8,7 @@ import { BackHeader, EmptyState, Skeleton } from '../../src/ui/screen';
 import { useTokens } from '../../src/theme/ThemeProvider';
 
 /** Full-screen tasks, where the teacher nav would only be in the way. */
-const WITHOUT_NAV = ['/console/check-in', '/console/review'];
+const WITHOUT_NAV = ['/console/check-in', '/console/review', '/console/groups/new'];
 
 /**
  * Teacher tools (Figma page "Console · Teacher on phone").
@@ -78,6 +78,9 @@ export default function ConsoleLayout() {
         <Stack.Screen name="class/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="review" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="check-in" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="groups/index" />
+        <Stack.Screen name="groups/[id]" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="groups/new" options={{ animation: 'slide_from_bottom' }} />
       </Stack>
       {!WITHOUT_NAV.some((prefix) => path.startsWith(prefix)) && <TeacherNav tools={tools} />}
     </View>

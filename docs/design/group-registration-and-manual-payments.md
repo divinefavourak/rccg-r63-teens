@@ -38,9 +38,15 @@ All are under `/api/v1/` and need a signed-in user.
 
 `EventRegistrationDetailSerializer` (the phone's ticket) now also carries `batch` and `claimed_at`. `can_pay` is false for a seat, which is paid with its group, and for a manual-payment event, because the gateway is refused there. `EventListSerializer` and `EventDetailSerializer` carry `payment_method` and `group_registration_enabled`. The detail also carries the bank fields.
 
-## Mobile app guidelines (not built yet)
+## Mobile app
 
-The phone talks to the same endpoints. Nothing here needs a backend change.
+Built. The phone talks to the same endpoints:
+- `app/ticket/claim.tsx` claims a ticket, reached from the row at the top of My tickets.
+- `app/ticket/[id].tsx` shows the bank-transfer panel and receipts on a `manual` event.
+- `app/console/groups/` holds the coordinator's groups: the list, one group, and a new group.
+- `src/components/PaymentPieces.tsx` has the bank details, the receipt form and the receipt list, used by both the ticket and the group screens.
+
+Naming seats, changing a group's numbers, cancelling a group and verifying receipts stay on the web Console. The notes below are what the screens were built from.
 
 ### 1. A teen claims a seat: the priority for the camp
 

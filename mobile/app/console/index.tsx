@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
+  useBatches,
   useCheckInToday,
   useClassRoster,
   useCurrentLesson,
@@ -45,13 +46,15 @@ export default function TeacherHomeScreen() {
   const events = useCheckInToday(tools.checkIn);
   const roster = useClassRoster(tools.roster);
   const drafts = useDraftDevotionals(tools.review);
+  const groups = useBatches('', tools.groups);
 
   const refetch = useCallback(() => {
     if (tools.lesson) lesson.refetch();
     if (tools.checkIn) events.refetch();
     if (tools.roster) roster.refetch();
     if (tools.review) drafts.refetch();
-  }, [tools, lesson, events, roster, drafts]);
+    if (tools.groups) groups.refetch();
+  }, [tools, lesson, events, roster, drafts, groups]);
 
   const openTeen = useCallback(
     (member: ClassMember) =>
@@ -65,6 +68,9 @@ export default function TeacherHomeScreen() {
 
   const members = roster.data?.members ?? [];
   const waiting = drafts.data?.length ?? 0;
+  const owing = (groups.data ?? []).filter(
+    (g) => g.status === 'awaiting_payment' || g.status === 'part_paid',
+  ).length;
 
   return (
     <View className="flex-1 bg-surf-base">
@@ -285,6 +291,34 @@ export default function TeacherHomeScreen() {
                   : waiting === 0
                     ? 'Nothing is waiting on you'
                     : `${waiting} ${waiting === 1 ? 'devotional' : 'devotionals'} to publish`}
+              </Text>
+            </View>
+            <Icon name="chevronRight" size={20} color={tokens.text1} />
+          </Press>
+        )}
+
+        {/* ── Groups ─────────────────────────────────────────────────── */}
+        {tools.groups && (
+          <Press
+            onPress={() => router.push('/console/groups')}
+            scaleTo={0.985}
+            accessibilityLabel="Groups you registered"
+            className="w-full flex-row items-center gap-3 rounded-2xl bg-surf-raised p-4"
+            style={ELEVATION.card}
+          >
+            <View className="h-10 w-10 items-center justify-center rounded-full bg-pop-amber">
+              <Icon name="ticket" size={20} color={POP.on} />
+            </View>
+            <View className="min-w-0 flex-1">
+              <Text className="font-ui-sb text-[16px] leading-6 text-ink-1">Groups</Text>
+              <Text className="font-ui text-[14px] leading-5 text-ink-2">
+                {groups.isPending
+                  ? 'Checking your groups'
+                  : (groups.data ?? []).length === 0
+                    ? 'Register the teens from your area for an event'
+                    : owing === 0
+                      ? `${groups.data?.length} ${groups.data?.length === 1 ? 'group' : 'groups'}, nothing owed`
+                      : `${owing} ${owing === 1 ? 'group' : 'groups'} still to pay for`}
               </Text>
             </View>
             <Icon name="chevronRight" size={20} color={tokens.text1} />

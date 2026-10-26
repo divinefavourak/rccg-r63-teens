@@ -13,7 +13,7 @@ import { DateBadge } from '../src/ui/cards';
 import { Press } from '../src/ui/Press';
 import { BackHeader, EmptyState, Skeleton } from '../src/ui/screen';
 import { useTokens } from '../src/theme/ThemeProvider';
-import { ELEVATION, type PopColour } from '../src/theme/tokens';
+import { ELEVATION, POP, type PopColour } from '../src/theme/tokens';
 
 /**
  * My tickets: every event the teen holds a place for, soonest first. Reached
@@ -34,6 +34,7 @@ export default function TicketsScreen() {
   );
 
   const back = () => (router.canGoBack() ? router.back() : router.replace('/tribe'));
+  const claim = () => router.push('/ticket/claim');
 
   return (
     <View className="flex-1 bg-surf-base">
@@ -79,6 +80,7 @@ export default function TicketsScreen() {
           </View>
         ) : tickets.length === 0 ? (
           <View className="flex-1 justify-center">
+            <ClaimRow onPress={claim} />
             <EmptyState
               drawing="plant"
               message="No tickets yet. Register for an event and its ticket shows here."
@@ -87,17 +89,49 @@ export default function TicketsScreen() {
             />
           </View>
         ) : (
-          tickets.map((ticket, i) => (
-            <TicketRow
-              key={ticket.id}
-              ticket={ticket}
-              colour={ROW_COLOURS[i % ROW_COLOURS.length]}
-              onOpen={() => router.push({ pathname: '/ticket/[id]', params: { id: ticket.id } })}
-            />
-          ))
+          <>
+            <ClaimRow onPress={claim} />
+            {tickets.map((ticket, i) => (
+              <TicketRow
+                key={ticket.id}
+                ticket={ticket}
+                colour={ROW_COLOURS[i % ROW_COLOURS.length]}
+                onOpen={() => router.push({ pathname: '/ticket/[id]', params: { id: ticket.id } })}
+              />
+            ))}
+          </>
         )}
       </ScrollView>
     </View>
+  );
+}
+
+/**
+ * The way in for a seat a coordinator registered: they hand out a ticket
+ * number and a code, and the teen claims it here.
+ */
+function ClaimRow({ onPress }: { onPress: () => void }) {
+  const tokens = useTokens();
+  return (
+    <Press
+      onPress={onPress}
+      scaleTo={0.985}
+      accessibilityLabel="Got a ticket from your coordinator? Claim it"
+      className="w-full flex-row items-center gap-3 rounded-2xl bg-surf-sunken p-3"
+    >
+      <View className="h-11 w-11 items-center justify-center rounded-full bg-pop-sky">
+        <Icon name="ticket" size={20} color={POP.on} />
+      </View>
+      <View className="min-w-0 flex-1 gap-0.5">
+        <Text className="font-ui-sb text-[16px] leading-6 text-ink-1">
+          Got a ticket from your coordinator?
+        </Text>
+        <Text className="font-ui text-[14px] leading-5 text-ink-2">
+          Claim it with its number and code.
+        </Text>
+      </View>
+      <Icon name="chevronRight" size={20} color={tokens.text2} />
+    </Press>
   );
 }
 

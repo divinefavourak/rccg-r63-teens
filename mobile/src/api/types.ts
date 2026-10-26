@@ -236,6 +236,10 @@ export interface EventListItem {
   is_upcoming: boolean;
   is_featured: boolean;
   status: string;
+  /** `online` pays on Squad; `manual` is a bank transfer and a receipt. */
+  payment_method?: 'online' | 'manual';
+  /** Whether coordinators can register groups for it. */
+  group_registration_enabled?: boolean;
 }
 
 export interface EventDetail extends EventListItem {
@@ -249,6 +253,11 @@ export interface EventDetail extends EventListItem {
   requires_guardian_consent: boolean;
   min_age: number | null;
   max_age: number | null;
+  /** Where a transfer goes, on a `manual` event. Blank otherwise. */
+  bank_name?: string;
+  bank_account_number?: string;
+  bank_account_name?: string;
+  payment_instructions?: string;
 }
 
 // ─── Notifications (notifications/serializers.py) ──────────────────────────
@@ -446,6 +455,10 @@ export interface EventRegistration {
   pay_link?: string | null;
   checked_in_at: string | null;
   created_at: string;
+  /** The coordinator's group this seat belongs to; null for a teen's own sign-up. */
+  batch?: string | null;
+  /** When a seat from a group was claimed on this account. */
+  claimed_at?: string | null;
   /**
    * Where they sleep, on an event with bedspaces (`_bed_payload`). Null when
    * the event has none, or has run out. `is_firm` is false while a paid event
@@ -572,7 +585,16 @@ export interface Identity {
   is_superuser: boolean;
   permissions: string[];
   memberships: Membership[];
-  role_assignments: unknown[];
+  role_assignments: RoleAssignment[];
+}
+
+/** Where a person holds a role (identity RoleAssignmentSerializer), trimmed. */
+export interface RoleAssignment {
+  id: string;
+  node: string;
+  node_detail: { id: string; name: string; node_type?: string } | null;
+  role_detail?: { name?: string } | null;
+  is_active: boolean;
 }
 
 /** Where a person belongs in the church tree (identity MembershipSerializer). */
@@ -592,6 +614,7 @@ export const PERM = {
   eventsManage: 'events.manage',
   eventsCheckin: 'events.checkin',
   profilesView: 'profiles.view',
+  paymentsReconcile: 'payments.reconcile',
 } as const;
 
 // ─── Library (content/serializers.py, media/serializers.py) ────────────────
@@ -759,4 +782,111 @@ export interface CheckInResult {
   cancelled_at?: string | null;
   refunded?: boolean;
   amount_due?: string | null;
+}
+
+// ─── Groups and receipts (events/serializers.py, payments/serializers.py) ──
+
+export type BatchStatus = 'awaiting_payment' | 'under_review' | 'part_paid' | 'paid' | 'cancelled';
+export type ReceiptStatus = 'submitted' | 'verified' | 'rejected';
+
+/** A transfer receipt someone sent (`PaymentReceiptSerializer`), trimmed. */
+export interface Receipt {
+  id: string;
+  batch: string | null;
+  registration: string | null;
+  submitted_by_name: string;
+  amount_claimed: string;
+  paid_on: string;
+  payer_name: string;
+  bank_reference: string;
+  file_name: string;
+  status: ReceiptStatus;
+  amount_verified: string | null;
+  review_note: string;
+  created_at: string;
+}
+
+/** A coordinator's group (`RegistrationBatchSerializer`). */
+export interface BatchRow {
+  id: string;
+  reference: string;
+  event: string;
+  event_title: string;
+  event_start: string;
+  payment_method: 'online' | 'manual';
+  node: string;
+  node_detail: { id: string; name: string; node_type: string } | null;
+  created_by_name: string;
+  contact_email: string;
+  contact_phone: string;
+  male_count: number;
+  female_count: number;
+  headcount: number;
+  unit_price: string;
+  amount_due: string;
+  amount_paid: string;
+  balance: string;
+  status: BatchStatus;
+  receipts_waiting: number;
+  paid_at: string | null;
+  created_at: string;
+}
+
+/** One place in a group (`BatchSeatSerializer`). */
+export interface Seat {
+  id: string;
+  registration_id: string;
+  /** Only sent to the group's coordinators: it is what proves a seat is yours. */
+  claim_code?: string;
+  attendee_gender: string;
+  attendee_name: string;
+  status: string;
+  payment_status: string;
+  claimed: boolean;
+  claimed_at: string | null;
+}
+
+/** `RegistrationBatchDetailSerializer`. */
+export interface BatchDetail extends BatchRow {
+  notes: string;
+  seats: Seat[];
+  receipts: Receipt[];
+  bank_details: {
+    bank_name: string;
+    account_number: string;
+    account_name: string;
+    instructions: string;
+  } | null;
+  can_pay_online: boolean;
+  can_send_receipt: boolean;
+}
+
+/** `POST /events/batches/quote/`. */
+export interface BatchQuote {
+  headcount: number;
+  unit_price: string;
+  amount_due: string;
+  group_discount_applied: boolean;
+  regular_price: string;
+}
+
+export interface BatchInput {
+  event: string;
+  node: string;
+  male_count: number;
+  female_count: number;
+  contact_email: string;
+  contact_phone: string;
+  consent_attested: boolean;
+}
+
+/** What `POST /payments/receipts/` takes, beside the file. */
+export interface ReceiptInput {
+  registration?: string;
+  batch?: string;
+  amount: string;
+  paid_on: string;
+  payer_name: string;
+  bank_reference: string;
+  file: { uri: string; mimeType?: string; fileName?: string };
 }

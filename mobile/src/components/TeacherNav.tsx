@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { usePathname, useRouter, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -45,6 +45,14 @@ const TABS: Tab[] = [
     owns: (path) => path.startsWith('/console/class'),
     show: (tools) => tools.roster,
   },
+  {
+    key: 'groups',
+    label: 'Groups',
+    icon: 'ticket',
+    href: '/console/groups',
+    owns: (path) => path.startsWith('/console/groups'),
+    show: (tools) => tools.groups,
+  },
 ];
 
 /**
@@ -65,6 +73,10 @@ export function TeacherNav({ tools }: { tools: TeacherTools }) {
   const path = usePathname();
 
   const tabs = TABS.filter((tab) => tab.show(tools));
+  // Five tabs at full width do not fit a small phone; they share what there is.
+  const { width } = useWindowDimensions();
+  const count = tabs.length + (tools.checkIn ? 1 : 0);
+  const tabWidth = Math.min(TAB_WIDTH, Math.floor((width - NAV.paddingX * 2 - 12) / count));
 
   return (
     <View
@@ -97,6 +109,7 @@ export function TeacherNav({ tools }: { tools: TeacherTools }) {
               label={tab.label}
               icon={tab.icon}
               focused={focused}
+              width={tabWidth}
               plate={focused ? tokens.onInk : 'transparent'}
               colour={focused ? tokens.ink : tokens.onInk}
               // Tabs swap in place: going Home → Lesson → My class must not
@@ -110,6 +123,7 @@ export function TeacherNav({ tools }: { tools: TeacherTools }) {
             label="Check in"
             icon="scan"
             focused={false}
+            width={tabWidth}
             plate={POP.green}
             colour={POP.on}
             // Pushed, not swapped: the scanner is a full-screen task, and Back
@@ -126,6 +140,7 @@ const NavTab = memo(function NavTab({
   label,
   icon,
   focused,
+  width,
   plate,
   colour,
   onPress,
@@ -133,6 +148,7 @@ const NavTab = memo(function NavTab({
   label: string;
   icon: IconName;
   focused: boolean;
+  width: number;
   plate: string;
   colour: string;
   onPress: () => void;
@@ -145,7 +161,7 @@ const NavTab = memo(function NavTab({
       accessibilityLabel={label}
       hitSlop={{ top: 6, bottom: 6 }}
       style={{
-        width: TAB_WIDTH,
+        width,
         height: NAV.tabHeight,
         borderRadius: 999,
         alignItems: 'center',

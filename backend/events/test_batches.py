@@ -8,8 +8,9 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 from rest_framework.test import APIClient, APITestCase
 
-from events import batches
-from events.models import Event, EventRegistration, RegistrationBatch
+from events import batches, bedspaces
+from events.models import BedAssignment, Event, EventRegistration, RegistrationBatch
+from events.test_bedspaces import hostel
 from events.test_registration_counters import attendee, make_event, make_registration
 from hierarchy import services
 from hierarchy.models import NodeType
@@ -210,6 +211,50 @@ class ClaimTests(GroupTestCase):
         make_registration(self.event, email=self.teen.email)
         with self.assertRaisesMessage(batches.BatchError, 'already have a ticket'):
             batches.claim(self.teen, self.seat.registration_id, self.seat.claim_code)
+
+
+class BedTests(GroupTestCase):
+    """A seat's bed comes with the group; the teen who claims it takes it over."""
+
+    def setUp(self):
+        super().setUp()
+        self.event = group_event(bedspaces_enabled=True)
+        self.teen = make_user('ada', gender='female')
+        TeenProfile.objects.create(user=self.teen, gender='female')
+
+    def test_each_seat_gets_a_bed_in_its_own_hostel_held_until_paid(self):
+        hostel(self.event, 'HB', gender='male')
+        hostel(self.event, 'HG', gender='female')
+        batch = batches.create(self.coordinator, self.event, self.tree['prov'], 2, 1)
+        for seat in batch.seats.all():
+            bed = bedspaces.bed_of(seat)
+            self.assertIsNotNone(bed)
+            self.assertEqual(bed.hostel.gender, seat.attendee_gender)
+            self.assertFalse(bedspaces.is_firm(seat))
+
+    def test_claiming_keeps_the_same_bed(self):
+        hostel(self.event, 'HG', gender='female')
+        batch = batches.create(self.coordinator, self.event, self.tree['prov'], 0, 1)
+        seat = batch.seats.get()
+        before = bedspaces.bed_of(seat)
+        claimed = batches.claim(self.teen, seat.registration_id, seat.claim_code)
+        after = bedspaces.bed_of(claimed)
+        self.assertEqual(after.pk, before.pk)
+        self.assertEqual(after.registration.user, self.teen)
+
+    def test_a_seat_that_got_no_bed_gets_one_when_claimed(self):
+        batch = batches.create(self.coordinator, self.event, self.tree['prov'], 0, 1)
+        seat = batch.seats.get()
+        self.assertIsNone(bedspaces.bed_of(seat))
+        hostel(self.event, 'HG', gender='female')
+        claimed = batches.claim(self.teen, seat.registration_id, seat.claim_code)
+        self.assertIsNotNone(bedspaces.bed_of(claimed))
+
+    def test_cancelling_the_group_gives_the_beds_back(self):
+        hostel(self.event, 'HB', gender='male')
+        batch = batches.create(self.coordinator, self.event, self.tree['prov'], 2, 0)
+        batches.cancel(self.coordinator, batch)
+        self.assertFalse(BedAssignment.objects.filter(registration__batch=batch).exists())
 
 
 class IndividualRegistrationTests(GroupTestCase):

@@ -70,6 +70,7 @@ const OUTLINE = {
   info: 'alert-circle-outline',
   pause: 'pause',
   camera: 'camera-outline',
+  plus: 'add',
 } as const;
 
 // Only the icons that genuinely need a filled state are listed. Anything absent
