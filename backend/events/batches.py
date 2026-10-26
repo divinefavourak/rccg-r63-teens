@@ -455,6 +455,9 @@ def claim(user, ticket, code):
                 seat.save()
         except IntegrityError:
             raise BatchError('You already have a ticket for this event.')
+        # The seat keeps the bed it was given with the group. One that got
+        # none, because the hostels were full then, tries again now.
+        bedspaces.sync(seat)
         RegistrationAuditLog.objects.create(
             registration=seat,
             user=user,
