@@ -37,11 +37,15 @@ def refusal(batch):
     return None
 
 
-def start(batch, callback_url):
+def start(batch, callback_url='', return_url='', return_to=''):
     """
     The gateway's checkout for what the group still owes. Returns the
     `Payment`, whose `authorization_url` is the page to send the coordinator
-    to. `callback_url` is where the gateway sends them back.
+    to.
+
+    The gateway sends them back to `callback_url` (the web Console), or, with
+    `return_url`, to our own page there with the payment's reference on the
+    end. That page offers `return_to`, the phone app's address for the group.
     """
     try:
         service = PaymentService()
@@ -78,8 +82,10 @@ def start(batch, callback_url):
             payer_name=coordinator.get_full_name() if coordinator else '',
             payer_phone=batch.contact_phone,
             metadata={'batch_id': str(batch.pk), 'batch_reference': batch.reference,
-                      'event_id': str(batch.event_id)},
+                      'event_id': str(batch.event_id), 'return_to': return_to},
         )
+    if return_url:
+        callback_url = f'{return_url}{payment.reference}/'
 
     try:
         payment.authorization_url = service.squad.open_checkout(

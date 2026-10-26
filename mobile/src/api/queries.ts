@@ -548,7 +548,13 @@ export function useGroupEvents(enabled = true) {
           {},
           5,
         )
-      ).filter((e) => e.group_registration_enabled && e.registration_status === 'open'),
+      ).filter(
+        (e) =>
+          e.group_registration_enabled &&
+          e.registration_status === 'open' &&
+          // A manager's list includes drafts, which cannot take a group yet.
+          e.status === 'published',
+      ),
     enabled,
     staleTime: STALE.catalogue,
     retry: retryTransient,
@@ -584,13 +590,15 @@ export function useCreateBatch() {
 }
 
 /**
- * Squad's page for what a group still owes. Squad's last page goes back to the
- * Console on the website; the app notices the coordinator coming back instead.
+ * Squad's page for what a group still owes. `returnTo` is the app's own
+ * address for the group: the page Squad ends on links back to it.
  */
 export function useBatchCheckout(id: string | undefined) {
   return useMutation({
-    mutationFn: () =>
-      api.post<Omit<Checkout, 'pay_link'>>('/payments/batches/' + id + '/checkout/'),
+    mutationFn: (returnTo: string) =>
+      api.post<Omit<Checkout, 'pay_link'>>('/payments/batches/' + id + '/checkout/', {
+        return_to: returnTo,
+      }),
   });
 }
 

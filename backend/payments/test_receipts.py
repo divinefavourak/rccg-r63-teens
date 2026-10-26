@@ -24,7 +24,7 @@ from identity.tests.base import build_tree, make_user, seed_rbac
 from payments import receipts, registrations
 from payments.models import Payment, PaymentReceipt
 from payments.services import SquadService
-from payments.tests import squad_signature, squad_test_keys, squad_webhook
+from payments.tests import squad_charge, squad_signature, squad_test_keys, squad_webhook
 
 Status = EventRegistration.Status
 Paid = EventRegistration.PaymentStatus
@@ -398,6 +398,34 @@ class OnlineBatchTests(APITestCase):
         batch = RegistrationBatch.objects.get(pk=self.batch.pk)
         self.assertEqual(batch.status, BatchStatus.PAID)
         self.assertTrue(all(s.status == Status.CONFIRMED for s in batch.seats.all()))
+
+    @patch.object(SquadService, 'open_checkout',
+                  side_effect=lambda reference, **_: f'https://sandbox-pay.squadco.com/{reference}')
+    def test_from_the_app_the_gateway_comes_back_to_a_page_that_links_to_it(self, opened):
+        self.client.force_authenticate(self.coordinator)
+        app = f'faithtribe://console/groups/{self.batch.id}'
+        response = self.client.post(f'/api/v1/payments/batches/{self.batch.id}/checkout/',
+                                    {'return_to': app}, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        reference = response.data['reference']
+        callback = opened.call_args.kwargs['callback_url']
+        self.assertTrue(callback.endswith(f'/api/v1/payments/return/{reference}/'), callback)
+
+        payment = Payment.objects.get(reference=reference)
+        with patch.object(SquadService, 'verify_payment', return_value=squad_charge(reference, amount=2000000)):
+            page = self.client.get(f'/api/v1/payments/return/{reference}/')
+        self.assertContains(page, 'Payment received')
+        self.assertContains(page, self.batch.reference)
+        self.assertContains(page, f'href="{app}"')
+        self.batch.refresh_from_db()
+        self.assertEqual(self.batch.status, BatchStatus.PAID)
+
+    @patch.object(SquadService, 'open_checkout',
+                  side_effect=lambda reference, **_: f'https://sandbox-pay.squadco.com/{reference}')
+    def test_from_the_console_the_gateway_goes_back_to_the_console(self, opened):
+        self.client.force_authenticate(self.coordinator)
+        self.client.post(f'/api/v1/payments/batches/{self.batch.id}/checkout/')
+        self.assertIn('/admin/groups?batch=', opened.call_args.kwargs['callback_url'])
 
     def test_a_manual_event_has_no_gateway_checkout(self):
         Event.objects.filter(pk=self.event.pk).update(

@@ -65,6 +65,15 @@ picture for chat apps to preview (the event's flier), but does not show it.
     </dl>
     {% endif %}
 
+    {% if batch %}
+    <dl>
+      <div><dt>Event</dt><dd>{{ batch.event.title }}</dd></div>
+      <div><dt>Group</dt><dd>{{ batch.reference }}</dd></div>
+      <div><dt>Seats</dt><dd>{{ batch.headcount }}</dd></div>
+      {% if amount %}<div><dt>Amount</dt><dd>₦{{ amount|floatformat:"-2g" }}</dd></div>{% endif %}
+    </dl>
+    {% endif %}
+
     {% if can_pay %}
     <form method="post">
       <button class="button" type="submit">Pay ₦{{ amount|floatformat:"-2g" }}</button>

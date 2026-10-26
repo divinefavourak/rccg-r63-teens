@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AppState, Linking, Platform, RefreshControl, ScrollView, Share, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { createURL } from 'expo-linking';
 
 import { useBatch, useBatchCheckout, useCheckBatchPayment } from '../../../src/api/queries';
 import type { BatchDetail, Seat } from '../../../src/api/types';
@@ -86,14 +87,14 @@ export default function GroupScreen() {
   const onPay = useCallback(async () => {
     setPayError(null);
     try {
-      const page = await checkout.mutateAsync();
+      const page = await checkout.mutateAsync(createURL('/console/groups/' + id));
       setSentToPay(true);
       if (Platform.OS === 'web') window.location.assign(page.authorization_url);
       else await Linking.openURL(page.authorization_url);
     } catch (err) {
       setPayError(err instanceof Error ? err.message : 'That did not go through. Please try again.');
     }
-  }, [checkout]);
+  }, [checkout, id]);
 
   const onShare = useCallback(() => {
     if (!data) return;

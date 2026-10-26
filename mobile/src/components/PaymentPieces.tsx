@@ -187,6 +187,29 @@ export function ReceiptList({ receipts }: { receipts: Receipt[] }) {
 
 // ─── Sending one ───────────────────────────────────────────────────────────
 
+/** What is owed, as typed: "15000" for 15000.00, the exact figure otherwise. */
+function amountText(amount: string | null | undefined): string {
+  if (!amount) return '';
+  const value = Number(amount);
+  return Number.isInteger(value) ? String(value) : amount;
+}
+
+/**
+ * A name for the upload that matches what is in it. The picker's own name can
+ * be "IMG_0042.HEIC" for an image it has already turned into a JPEG, and the
+ * server goes by the extension before it looks inside.
+ */
+function uploadName(uri: string, mimeType: string | undefined): string {
+  const type = (mimeType ?? '').toLowerCase();
+  const fromUri = uri.split('?')[0].split('.').pop()?.toLowerCase() ?? '';
+  const ext = type.includes('png') || fromUri === 'png'
+    ? 'png'
+    : type.includes('webp') || fromUri === 'webp'
+      ? 'webp'
+      : 'jpg';
+  return `receipt.${ext}`;
+}
+
 function today(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -229,7 +252,7 @@ export function ReceiptSheet({
   // Start fresh each time it opens.
   useEffect(() => {
     if (!visible) return;
-    setValue(amount ? String(Math.round(Number(amount))) : '');
+    setValue(amountText(amount));
     setPaidOn(today());
     setName(payer ?? '');
     setReference('');
@@ -240,13 +263,21 @@ export function ReceiptSheet({
     // clear an error as it lands.
   }, [visible]);
 
+  /** A field's setter that also takes away an error the user is now fixing. */
+  const edit = (set: (value: string) => void) => (text: string) => {
+    set(text);
+    setError(null);
+  };
+
   const pick = async () => {
     setError(null);
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      // Below 1 so the system hands back a JPEG, never a HEIC the server
-      // would refuse.
+      // Below 1, and the compatible form, so the system hands back a JPEG
+      // and never a HEIC the server would refuse.
       quality: 0.8,
+      preferredAssetRepresentationMode:
+        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     });
     const asset = result.canceled ? null : result.assets[0];
     if (!asset) return;
@@ -254,7 +285,11 @@ export function ReceiptSheet({
       setError('That picture is bigger than 5MB. Try a screenshot of the receipt instead.');
       return;
     }
-    setFile({ uri: asset.uri, mimeType: asset.mimeType, fileName: asset.fileName ?? undefined });
+    setFile({
+      uri: asset.uri,
+      mimeType: asset.mimeType,
+      fileName: uploadName(asset.uri, asset.mimeType),
+    });
   };
 
   const submit = async () => {
@@ -300,13 +335,13 @@ export function ReceiptSheet({
         <TextField
           label="Amount transferred (₦)"
           value={value}
-          onChange={setValue}
-          keyboardType="number-pad"
+          onChange={edit(setValue)}
+          keyboardType="decimal-pad"
         />
         <TextField
           label="Day you paid"
           value={paidOn}
-          onChange={setPaidOn}
+          onChange={edit(setPaidOn)}
           hint="Year-month-day"
           keyboardType="numbers-and-punctuation"
           maxLength={10}
@@ -314,13 +349,13 @@ export function ReceiptSheet({
         <TextField
           label="Name on the transfer"
           value={name}
-          onChange={setName}
+          onChange={edit(setName)}
           autoCapitalize="words"
         />
         <TextField
           label="Bank reference (optional)"
           value={reference}
-          onChange={setReference}
+          onChange={edit(setReference)}
           autoCapitalize="characters"
         />
         {file ? (

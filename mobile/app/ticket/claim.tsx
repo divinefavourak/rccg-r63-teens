@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,10 +25,14 @@ export default function ClaimTicketScreen() {
   const [ticket, setTicket] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // The keyboard's Done can fire while a claim is still on its way; the
+  // button's spinner does not stop that.
+  const sending = useRef(false);
 
   const back = () => (router.canGoBack() ? router.back() : router.replace('/tickets'));
 
   const submit = async () => {
+    if (sending.current) return;
     const registration_id = ticket.trim().toUpperCase();
     const claim_code = code.replace(/\s/g, '').toUpperCase();
     if (!registration_id || claim_code.length !== 6) {
@@ -36,11 +40,14 @@ export default function ClaimTicketScreen() {
       return;
     }
     setError(null);
+    sending.current = true;
     try {
       const seat = await claim.mutateAsync({ registration_id, claim_code });
       router.replace({ pathname: '/ticket/[id]', params: { id: seat.id } });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'That did not work. Please try again.');
+    } finally {
+      sending.current = false;
     }
   };
 
@@ -99,11 +106,11 @@ export default function ClaimTicketScreen() {
           <TextField
             label="Code"
             value={code}
-            onChange={(v) => setCode(v.toUpperCase())}
+            // Spaces out first, then six: a code pasted as "3SQ QUY" still fits.
+            onChange={(v) => setCode(v.replace(/\s/g, '').toUpperCase().slice(0, 6))}
             placeholder="6 letters and numbers"
             autoCapitalize="characters"
             autoComplete="off"
-            maxLength={6}
             large
             returnKeyType="done"
             onSubmitEditing={submit}

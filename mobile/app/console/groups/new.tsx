@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   useBatchQuote,
+  useChurchNodes,
   useCreateBatch,
   useEvent,
   useGroupEvents,
@@ -22,8 +23,17 @@ import { BackHeader, EmptyState, KeyboardView, Skeleton } from '../../../src/ui/
 
 const EMAIL = /^\S+@\S+\.\S+$/;
 
-/** A count typed into a box: digits only, nothing silly. */
-const count = (text: string) => Math.min(Number(text.replace(/\D/g, '')) || 0, 2000);
+/** The most seats one group can ask for. */
+const MAX_SEATS = 2000;
+
+/**
+ * A count as it is typed: digits only, no leading zeros, never past the
+ * limit. Cleaned in the box itself, so what is shown is what is sent.
+ */
+const countText = (text: string) => {
+  const digits = text.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+  return digits && Number(digits) > MAX_SEATS ? String(MAX_SEATS) : digits;
+};
 
 /**
  * New group: a headcount of boys and girls for one event, from one part of the
@@ -49,6 +59,13 @@ export default function NewGroupScreen() {
     return [...seen].map(([id, name]) => ({ id, name }));
   }, [identity.data]);
 
+  // A superuser may hold no role anywhere and still manage events
+  // everywhere: they choose a region, and a province in it if they like.
+  const pickAnywhere = !!identity.data?.is_superuser && places.length === 0;
+  const [regionId, setRegionId] = useState('');
+  const regions = useChurchNodes(null, 'region', '', pickAnywhere);
+  const provinces = useChurchNodes(regionId || null, 'province', '', pickAnywhere && !!regionId);
+
   const [eventId, setEventId] = useState('');
   const [nodeId, setNodeId] = useState('');
   const [boys, setBoys] = useState('');
@@ -63,17 +80,25 @@ export default function NewGroupScreen() {
 
   const open = events.data ?? [];
   useEffect(() => {
+    // Nothing chosen yet, so there is no consent to clear.
     if (!eventId && open.length === 1) setEventId(open[0].id);
   }, [eventId, open]);
   useEffect(() => {
     if (!nodeId && places.length > 0) setNodeId(places[0].id);
   }, [nodeId, places]);
 
-  const male = count(boys);
-  const female = count(girls);
+  const male = Number(boys) || 0;
+  const female = Number(girls) || 0;
   const event = open.find((e) => e.id === eventId);
   const detail = useEvent(eventId || undefined);
   const needsConsent = !!detail.data?.requires_guardian_consent;
+
+  // Consent given for one event is not consent for another.
+  const pickEvent = (id: string) => {
+    if (id === eventId) return;
+    setEventId(id);
+    setConsent(false);
+  };
   const quote = useBatchQuote(eventId, male, female);
 
   const back = () => (router.canGoBack() ? router.back() : router.replace('/console/groups'));
@@ -81,10 +106,18 @@ export default function NewGroupScreen() {
   const submit = async () => {
     const number = toE164(phone, country.dial);
     if (!eventId) return setError('Choose the event.');
-    if (!nodeId) return setError('There is no part of the church you register groups for.');
+    if (!nodeId) {
+      return setError(
+        pickAnywhere
+          ? 'Choose the region or province the group is from.'
+          : 'There is no part of the church you register groups for.',
+      );
+    }
     if (male + female === 0) return setError('Enter how many boys and girls are coming.');
     if (!EMAIL.test(email.trim())) return setError('Enter an email address you read.');
     if (!number) return setError('Enter a phone number we can reach you on.');
+    // Until the event has loaded, whether it needs consent is not known.
+    if (!detail.data) return setError('The event’s details have not loaded yet. Try again.');
     if (needsConsent && !consent) {
       return setError('This event needs a parent or guardian’s consent for every teen.');
     }
@@ -160,7 +193,7 @@ export default function NewGroupScreen() {
                 title={e.title}
                 detail={dayLabel(new Date(e.start_datetime))}
                 selected={e.id === eventId}
-                onPress={() => setEventId(e.id)}
+                onPress={() => pickEvent(e.id)}
               />
             ))}
           </View>
@@ -180,6 +213,43 @@ export default function NewGroupScreen() {
               </View>
             </>
           )}
+          {pickAnywhere && (
+            <>
+              <Label>Region</Label>
+              <View className="gap-2">
+                {regions.isPending ? (
+                  <Skeleton height={60} />
+                ) : (
+                  (regions.data ?? []).map((r) => (
+                    <OptionRow
+                      key={r.id}
+                      title={r.name}
+                      selected={r.id === regionId}
+                      onPress={() => {
+                        setRegionId(r.id);
+                        setNodeId(r.id);
+                      }}
+                    />
+                  ))
+                )}
+              </View>
+              {!!regionId && (provinces.data ?? []).length > 0 && (
+                <>
+                  <Label>Province (or keep the whole region)</Label>
+                  <View className="gap-2">
+                    {(provinces.data ?? []).map((p) => (
+                      <OptionRow
+                        key={p.id}
+                        title={p.name}
+                        selected={p.id === nodeId}
+                        onPress={() => setNodeId(p.id === nodeId ? regionId : p.id)}
+                      />
+                    ))}
+                  </View>
+                </>
+              )}
+            </>
+          )}
           {places.length === 1 && (
             <Text className="font-ui text-[14px] leading-5 text-ink-2">
               Registering for {places[0].name}
@@ -188,10 +258,22 @@ export default function NewGroupScreen() {
 
           <View className="flex-row gap-3">
             <View className="flex-1">
-              <TextField label="Boys" value={boys} onChange={setBoys} keyboardType="number-pad" maxLength={4} large />
+              <TextField
+                label="Boys"
+                value={boys}
+                onChange={(v) => setBoys(countText(v))}
+                keyboardType="number-pad"
+                large
+              />
             </View>
             <View className="flex-1">
-              <TextField label="Girls" value={girls} onChange={setGirls} keyboardType="number-pad" maxLength={4} large />
+              <TextField
+                label="Girls"
+                value={girls}
+                onChange={(v) => setGirls(countText(v))}
+                keyboardType="number-pad"
+                large
+              />
             </View>
           </View>
 
@@ -236,6 +318,22 @@ export default function NewGroupScreen() {
           />
           <PhoneField country={country} onCountry={setCountry} value={phone} onChange={setPhone} />
 
+          {!!eventId && detail.isPending && <Skeleton height={64} />}
+          {!!eventId && detail.isError && !detail.data && (
+            <View className="gap-2 rounded-2xl bg-surf-sunken p-4">
+              <Text className="font-ui text-[14px] leading-5 text-ink-1">
+                The event’s details did not load, so we cannot tell whether it needs a parent
+                or guardian’s consent.
+              </Text>
+              <Button
+                label="Try again"
+                variant="secondary"
+                onPress={() => detail.refetch()}
+                loading={detail.isFetching}
+                className="h-12"
+              />
+            </View>
+          )}
           {needsConsent && (
             <View className="flex-row items-center gap-3 rounded-2xl bg-surf-sunken p-4">
               <Text className="flex-1 font-ui text-[14px] leading-5 text-ink-1">

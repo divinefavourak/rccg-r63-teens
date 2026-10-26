@@ -449,9 +449,18 @@ export default function TicketScreen() {
             ) : eventDetail.isPending ? (
               <Skeleton height={150} />
             ) : (
-              <Text className="font-ui text-[14px] leading-5 text-ink-2">
-                The account details did not load. Pull down on My tickets to try again.
-              </Text>
+              <View className="gap-2">
+                <Text className="font-ui text-[14px] leading-5 text-ink-2">
+                  The account details did not load. Check your connection, then try again.
+                </Text>
+                <Button
+                  label="Try again"
+                  variant="secondary"
+                  onPress={() => eventDetail.refetch()}
+                  loading={eventDetail.isFetching}
+                  className="h-12"
+                />
+              </View>
             )}
             <Button
               label={(receipts.data ?? []).length ? 'Send another receipt' : 'Send your receipt'}

@@ -566,9 +566,12 @@ class PaymentReturnView(View):
     def get(self, request, reference=''):
         reference = reference or _reference_from(request)
         payment = (
-            Payment.objects.select_related('registration__event')
-            .filter(reference=reference, registration__isnull=False).first()
+            Payment.objects.select_related('registration__event', 'batch__event')
+            .filter(reference=reference)
+            .filter(Q(registration__isnull=False) | Q(batch__isnull=False)).first()
         ) if reference else None
+        if payment is not None and payment.batch_id:
+            return self._group(request, payment)
         if payment is None:
             return _page(
                 request, 'We could not find that payment',
@@ -606,6 +609,33 @@ class PaymentReturnView(View):
             'updates by itself once the payment arrives; you do not need to pay again.',
             retry=True, **shared)
 
+    def _group(self, request, payment):
+        """The same page for a coordinator paying for a group."""
+        paid = registration_payments.check(payment)
+        payment.refresh_from_db()
+        batch = RegistrationBatch.objects.select_related('event').get(pk=payment.batch_id)
+        shared = {
+            'batch': batch,
+            'amount': payment.amount,
+            'return_to': (payment.metadata or {}).get('return_to', ''),
+        }
+        if paid:
+            message = (
+                f'Thank you. Group {batch.reference} is paid for, and every seat is confirmed.'
+                if batch.status == RegistrationBatch.Status.PAID else
+                f'Thank you. ₦{batch.balance:,.0f} is still to pay for group {batch.reference}.')
+            return _page(request, 'Payment received', message, tone='good', **shared)
+        if payment.status == Payment.Status.FAILED:
+            return _page(
+                request, 'The payment did not go through',
+                'Nothing was taken. You can try again from the group in the app.', **shared)
+        return _page(
+            request, 'We are waiting to hear from your bank',
+            'This can take a few minutes with a transfer or USSD. The group '
+            'updates by itself once the payment arrives; you do not need to pay again.',
+            retry=True, **shared)
+
+
 # =====================
 # GROUPS, TRANSFER RECEIPTS AND RECONCILIATION
 # =====================
@@ -632,7 +662,14 @@ class BatchCheckoutView(APIView):
         if batch is None:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
         try:
-            payment = batch_payments.start(batch, callback_url=_console_return(batch))
+            # From the phone app: back through our own page, which links to
+            # the group in the app. From the Console: straight back to it.
+            return_to = _safe_return_to(request.data.get('return_to'))
+            if return_to:
+                payment = batch_payments.start(
+                    batch, return_url=_absolute(request, _RETURN_PATH), return_to=return_to)
+            else:
+                payment = batch_payments.start(batch, callback_url=_console_return(batch))
         except registration_payments.NotPayable as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except registration_payments.BeingPrepared:
