@@ -24,6 +24,8 @@ export interface TeacherTools {
   checkIn: boolean;
   /** The queue of devotionals waiting to be published. */
   review: boolean;
+  /** Registering groups for an event, and paying for them. */
+  groups: boolean;
 }
 
 export function useTeacherTools(): TeacherTools {
@@ -34,13 +36,15 @@ export function useTeacherTools(): TeacherTools {
   const roster = useCan(PERM.profilesView, !isGuest);
   const checkIn = useCan(PERM.eventsCheckin, !isGuest);
   const review = useCan(PERM.contentManage, !isGuest);
+  const groups = useCan(PERM.eventsManage, !isGuest);
 
   return {
     ready: isGuest || !identity.isPending,
-    any: lesson || roster || checkIn || review,
+    any: lesson || roster || checkIn || review || groups,
     lesson,
     roster,
     checkIn,
     review,
+    groups,
   };
 }

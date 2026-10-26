@@ -204,6 +204,7 @@ function AppShell({ fontsSettled }: { fontsSettled: boolean }) {
             <Stack.Screen name="event/[id]/register" />
             <Stack.Screen name="events/past" />
             <Stack.Screen name="ticket/[id]" />
+            <Stack.Screen name="ticket/claim" />
             <Stack.Screen name="tickets" />
             <Stack.Screen name="progress" />
             <Stack.Screen name="saved" />

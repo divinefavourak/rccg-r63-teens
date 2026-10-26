@@ -7,6 +7,12 @@ import { STALE } from './config';
 import { readChapter, readList, writeChapter, writeList } from '../data/bibleStore';
 import type {
   AppNotification,
+  BatchDetail,
+  BatchInput,
+  BatchQuote,
+  BatchRow,
+  Receipt,
+  ReceiptInput,
   CheckInAttendee,
   CheckInEvent,
   CheckInResult,
@@ -64,6 +70,12 @@ export const keys = {
   notificationPrefs: ['notifications', 'preferences'] as const,
   favorites: ['favorites'] as const,
   myRegistrations: ['registrations', 'mine'] as const,
+  receipts: (registration: string) => ['receipts', registration] as const,
+  batches: (status: string) => ['batches', status] as const,
+  batch: (id: string) => ['batch', id] as const,
+  batchQuote: (event: string, male: number, female: number) =>
+    ['batches', 'quote', event, male, female] as const,
+  groupEvents: ['events', 'groups'] as const,
   church: (parent: string | null, level: string, search: string) =>
     ['church', parent ?? 'root', level, search] as const,
   translations: ['bible', 'translations'] as const,
@@ -421,6 +433,175 @@ export function useCheckPayment(id: string | undefined) {
         list?.map((r) => (r.id === fresh.id ? { ...r, ...fresh } : r)),
       );
       if (fresh.payment_status === 'paid') qc.invalidateQueries({ queryKey: keys.events });
+    },
+  });
+}
+
+// ─── Claiming a seat and paying by transfer ───────────────────────────────
+
+/** Said for a 429: the claim endpoint allows a few tries a minute. */
+const TOO_MANY = 'Too many tries. Wait a minute, then try again.';
+
+/**
+ * Take a seat a coordinator bought: the ticket number and the code they gave
+ * out. The seat comes back as one of the teen's own tickets.
+ */
+export function useClaimTicket() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { registration_id: string; claim_code: string }) => {
+      try {
+        return await api.post<EventRegistration>('/events/registrations/claim/', input);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 429) throw new ApiError(429, TOO_MANY);
+        throw err;
+      }
+    },
+    onSuccess: (seat) => {
+      qc.setQueryData<EventRegistration[]>(keys.myRegistrations, (list) =>
+        list ? [seat, ...list.filter((r) => r.id !== seat.id)] : list,
+      );
+      qc.invalidateQueries({ queryKey: keys.myRegistrations });
+    },
+  });
+}
+
+/** The transfer receipts sent for one of the teen's tickets, newest first. */
+export function useMyReceipts(registration: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: keys.receipts(registration ?? ''),
+    queryFn: async () =>
+      unwrap(
+        await api.get<Paginated<Receipt>>('/payments/receipts/?registration=' + registration),
+      ),
+    enabled: enabled && !!registration,
+    staleTime: STALE.inbox,
+    retry: retryTransient,
+  });
+}
+
+/**
+ * Send a transfer receipt for a ticket or a group. The picked photo goes the
+ * same way the profile photo does (see `useUploadAvatar`).
+ */
+export function useSendReceipt() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ file: asset, ...fields }: ReceiptInput) => {
+      const body = new FormData();
+      for (const [key, value] of Object.entries(fields)) {
+        if (value) body.append(key, value);
+      }
+      const name = asset.fileName ?? `receipt.${extensionFor(asset.mimeType)}`;
+      const file =
+        Platform.OS === 'web'
+          ? await (await fetch(asset.uri)).blob()
+          : (new File(asset.uri) as unknown as Blob);
+      body.append('file', file, name);
+      return api.post<Receipt>('/payments/receipts/', body);
+    },
+    onSuccess: (receipt) => {
+      if (receipt.registration) {
+        qc.invalidateQueries({ queryKey: keys.receipts(receipt.registration) });
+        qc.invalidateQueries({ queryKey: keys.myRegistrations });
+      }
+      if (receipt.batch) {
+        qc.invalidateQueries({ queryKey: keys.batch(receipt.batch) });
+        qc.invalidateQueries({ queryKey: ['batches'] });
+      }
+    },
+  });
+}
+
+// ─── Groups (coordinators) ─────────────────────────────────────────────────
+
+/** The groups this coordinator can see, newest first. `status` '' is all. */
+export function useBatches(status: string, enabled = true) {
+  return useQuery({
+    queryKey: keys.batches(status),
+    queryFn: () =>
+      fetchAllPages<BatchRow>('/events/batches/' + (status ? '?status=' + status : ''), {}, 10),
+    enabled,
+    staleTime: STALE.inbox,
+    retry: retryTransient,
+  });
+}
+
+export function useBatch(id: string | undefined) {
+  return useQuery({
+    queryKey: keys.batch(id ?? ''),
+    queryFn: () => api.get<BatchDetail>('/events/batches/' + id + '/'),
+    enabled: !!id,
+    staleTime: STALE.inbox,
+    retry: retryTransient,
+  });
+}
+
+/** Upcoming events that take groups and are open for registration now. */
+export function useGroupEvents(enabled = true) {
+  return useQuery({
+    queryKey: keys.groupEvents,
+    queryFn: async () =>
+      (
+        await fetchAllPages<EventListItem>(
+          '/events/events/?upcoming=true&ordering=start_datetime',
+          {},
+          5,
+        )
+      ).filter((e) => e.group_registration_enabled && e.registration_status === 'open'),
+    enabled,
+    staleTime: STALE.catalogue,
+    retry: retryTransient,
+  });
+}
+
+/** What a group of this size costs, group price included. */
+export function useBatchQuote(event: string, male: number, female: number) {
+  return useQuery({
+    queryKey: keys.batchQuote(event, male, female),
+    queryFn: () =>
+      api.post<BatchQuote>('/events/batches/quote/', {
+        event,
+        male_count: male,
+        female_count: female,
+      }),
+    enabled: !!event && male + female > 0,
+    staleTime: STALE.catalogue,
+    retry: retryTransient,
+  });
+}
+
+export function useCreateBatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: BatchInput) => api.post<BatchDetail>('/events/batches/', input),
+    onSuccess: (batch) => {
+      qc.setQueryData(keys.batch(batch.id), batch);
+      qc.invalidateQueries({ queryKey: ['batches'] });
+      qc.invalidateQueries({ queryKey: keys.events });
+    },
+  });
+}
+
+/**
+ * Squad's page for what a group still owes. Squad's last page goes back to the
+ * Console on the website; the app notices the coordinator coming back instead.
+ */
+export function useBatchCheckout(id: string | undefined) {
+  return useMutation({
+    mutationFn: () =>
+      api.post<Omit<Checkout, 'pay_link'>>('/payments/batches/' + id + '/checkout/'),
+  });
+}
+
+/** Ask the server to ask Squad whether the group has been paid for. */
+export function useCheckBatchPayment(id: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<BatchDetail>('/payments/batches/' + id + '/check/'),
+    onSuccess: (fresh) => {
+      qc.setQueryData(keys.batch(fresh.id), fresh);
+      qc.invalidateQueries({ queryKey: ['batches'] });
     },
   });
 }
