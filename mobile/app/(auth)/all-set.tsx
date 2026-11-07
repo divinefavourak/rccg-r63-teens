@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { RccgLogo } from '../../src/components/Logo';
+import { JuniorChurchLogo } from '../../src/components/Logo';
 import { useReminderInvite } from '../../src/components/ReminderInvite';
 import { useAuth } from '../../src/state/auth';
 import { CHURCH_STEPS, deepestChurch, useSignUp } from '../../src/state/signup';
@@ -78,7 +78,7 @@ export default function AllSetScreen() {
 
         {church && (
           <View className="w-full flex-row items-center gap-3 rounded-xl bg-green-tonal py-3 pl-3 pr-4">
-            <RccgLogo size={44} />
+            <JuniorChurchLogo size={44} />
             <View className="flex-1">
               <Text numberOfLines={1} className="font-ui-sb text-[16px] leading-6 text-ink-1">
                 {church.name}

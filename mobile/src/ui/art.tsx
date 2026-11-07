@@ -44,8 +44,8 @@ const DRAWINGS = {
   'reading-side': { source: require('../../assets/art/reading-side.svg'), ratio: 142.5 / 88.2 },
 } as const;
 
-/** The seal and the stand-in event photo: bundled, so they show with no signal. */
-export const RCCG_LOGO = require('../../assets/rccg-logo.png');
+/** The Junior Church Global badge and the stand-in event photo: bundled, so they show with no signal. */
+export const JUNIOR_CHURCH_LOGO = require('../../assets/junior-church-global-logo.png');
 export const EVENT_PHOTO = require('../../assets/photos/event.webp');
 
 export type ObjectName = keyof typeof OBJECTS;

@@ -13,9 +13,9 @@
  * export and is happier with a format it can decode synchronously.
  */
 export const BRAND = {
-  /** RCCG mark. */
-  rccg: '/img/rccgLogo-192.webp',
-  rccgPng: '/img/rccgLogo-fallback.png',
+  /** Junior Church Global mark, as a circular badge. */
+  juniorChurch: '/img/juniorChurchLogo-192.webp',
+  juniorChurchPng: '/img/juniorChurchLogo-fallback.png',
   /** Faith Tribe wordmark. */
   faith: '/img/faithLogo-192.webp',
   faithPng: '/img/faithLogo-fallback.png',

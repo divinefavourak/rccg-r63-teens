@@ -175,7 +175,7 @@ const sealAt = (iconX: number) => ({
   width: SEAL,
   height: SEAL,
 });
-const RCCG_SEAL = require('../../assets/rccg-logo.png');
+const JUNIOR_CHURCH_SEAL = require('../../assets/junior-church-global-logo.png');
 const JUNIOR_SEAL = require('../../assets/splash-seal-junior.png');
 
 /** Confetti: colour, size, direction in degrees and how far it flies. */
@@ -726,7 +726,7 @@ export function SplashAnimation({ clock, ready, onDone }: SplashAnimationProps) 
             </Moving>
 
             <Moving clock={clock} tracks={SEAL_TRACKS[0]} style={sealAt(436)}>
-              <Image source={RCCG_SEAL} contentFit="contain" transition={0} style={styles.seal} />
+              <Image source={JUNIOR_CHURCH_SEAL} contentFit="contain" transition={0} style={styles.seal} />
             </Moving>
             <Moving clock={clock} tracks={SEAL_TRACKS[1]} style={sealAt(589)}>
               <Image source={JUNIOR_SEAL} contentFit="contain" transition={0} style={styles.seal} />

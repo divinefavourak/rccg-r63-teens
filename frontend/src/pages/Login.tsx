@@ -26,7 +26,7 @@ import { BRAND } from '../constants/brand';
 import Seo from '../components/Seo';
 
 const faithTribeLogo = BRAND.faithTribe;
-const rccgLogo = BRAND.rccg;
+const juniorChurchLogo = BRAND.juniorChurch;
 
 interface FromState {
   from?: { pathname?: string };
@@ -84,8 +84,8 @@ const Login = () => {
         <div className="mb-7 text-center">
           <div className="mb-4 flex items-center justify-center gap-3">
             <img
-              src={rccgLogo}
-              alt="RCCG"
+              src={juniorChurchLogo}
+              alt="Junior Church Global"
               className="h-11 w-11 rounded-full object-cover"
             />
             <img

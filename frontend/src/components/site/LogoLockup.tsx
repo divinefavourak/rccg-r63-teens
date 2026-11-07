@@ -1,14 +1,14 @@
 import { LOGOS } from '../../assets/site';
 
 /**
- * Both seals overlapped, RCCG in front. Decorative here: wherever it appears the
- * words "Faith Tribe" sit next to it, so an alt would only make a screen reader
- * say the name twice.
+ * Both seals overlapped, Junior Church Global in front. Decorative here: wherever
+ * it appears the words "Faith Tribe" sit next to it, so an alt would only make a
+ * screen reader say the name twice.
  */
 const LogoLockup = () => (
   <span aria-hidden className="isolate flex shrink-0 items-start">
     <img
-      src={LOGOS.rccg}
+      src={LOGOS.juniorChurch}
       alt=""
       width={44}
       height={44}

@@ -18,7 +18,7 @@ import { PROVINCES } from '../../src/data/choices';
 import { isClosed, isLive, isPast, priceLabel, startOf, whereLabel } from '../../src/data/events';
 import { dayAgo } from '../../src/data/time';
 import { useAuth } from '../../src/state/auth';
-import { Object3D, RCCG_LOGO, type ObjectName } from '../../src/ui/art';
+import { Object3D, JUNIOR_CHURCH_LOGO, type ObjectName } from '../../src/ui/art';
 import { Button } from '../../src/ui/Button';
 import { DateBadge, PopCard, PopEyebrow } from '../../src/ui/cards';
 import { ChipRow } from '../../src/ui/inputs';
@@ -394,9 +394,9 @@ function MyChurch() {
     <>
       <View className="mt-3 w-full gap-2 rounded-3xl bg-pop-lime p-5">
         <Image
-          source={RCCG_LOGO}
+          source={JUNIOR_CHURCH_LOGO}
           contentFit="contain"
-          accessibilityLabel="The Redeemed Christian Church of God"
+          accessibilityLabel="Junior Church Global"
           style={{ width: 60, height: 60 }}
         />
         <Text
