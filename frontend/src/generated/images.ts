@@ -166,21 +166,21 @@ export const images = {
     },
     "fallback": "/img/faithTribeLogo-fallback.png"
   },
-  "rccgLogo": {
-    "width": 469,
-    "height": 469,
-    "lqip": "data:image/webp;base64,UklGRsAAAABXRUJQVlA4ILQAAACQBQCdASoUABQAPzmUwFmvKiajqAgB4CcJZADM0agrnkGRiEonLpm8/6KYq4osyLyzmTeDIAD+6/8DJ/XRI6QhVCY29GO7yB6sIQ56XMjqUovjPYirZ8I58n7xIUw6smdoTeSYXPJivvinTBckaMRuVjfVTHebHHDuNuSSRDduJbdGAblRXkMh1n4YnP2x0OmxXi9PsSu/TdO0bNF0T6bWT9ywkTmgP8Wh9X3Rrt8bTFYYAAA=",
+  "juniorChurchLogo": {
+    "width": 512,
+    "height": 512,
+    "lqip": "data:image/webp;base64,UklGRtwAAABXRUJQVlA4WAoAAAAQAAAAEwAAEwAAQUxQSFwAAAARJ0CYbZybzCj2PI2LiOBLMIhkq81BDFQBVUA1EHj+VfHfREJE/9W2bcPIU3o5A1jrOwJwSdIELGqUobQc9ApKZ6T7InOJHDXy6pec4VJcI3eRu9Jc7r5hP2S+BlZQOCBaAAAA0AMAnQEqFAAUAD85iLtVLyimIygNUeAnCUAKYAB6Jg7M9ecYgy1AAP7nJqqpqL+cIzCef7cLSgoRODvW5aBLkEtQWnHwAzQktq9+x6ZCLvBkNVtT8DgAAAAA",
     "avif": {
-      "96": "/img/rccgLogo-96.avif",
-      "192": "/img/rccgLogo-192.avif",
-      "288": "/img/rccgLogo-288.avif"
+      "96": "/img/juniorChurchLogo-96.avif",
+      "192": "/img/juniorChurchLogo-192.avif",
+      "288": "/img/juniorChurchLogo-288.avif"
     },
     "webp": {
-      "96": "/img/rccgLogo-96.webp",
-      "192": "/img/rccgLogo-192.webp",
-      "288": "/img/rccgLogo-288.webp"
+      "96": "/img/juniorChurchLogo-96.webp",
+      "192": "/img/juniorChurchLogo-192.webp",
+      "288": "/img/juniorChurchLogo-288.webp"
     },
-    "fallback": "/img/rccgLogo-fallback.png"
+    "fallback": "/img/juniorChurchLogo-fallback.png"
   }
 } as const satisfies Record<string, ImageAsset>;
 

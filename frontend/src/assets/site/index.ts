@@ -9,8 +9,9 @@
  * - objects/        3D objects (3dicons, CC0).
  * - illustrations/  Line drawings (Open Doodles, CC0). Stand-ins until there are
  *                   commissioned drawings of Nigerian teens.
- * - logos/          The two seals with real alpha. The copies in public/img/
- *                   sit on opaque squares, so they cannot go on a tinted page.
+ * - logos/          The Junior Church Global badge and the Faith Tribe seal, with
+ *                   real alpha. The copies in public/img/ sit on opaque squares,
+ *                   so they cannot go on a tinted page.
  * - avatars/        Stand-ins. Swap for real member photos when there are any.
  *
  * Objects and drawings are a library: `npm run art` downloads them from the
@@ -32,12 +33,12 @@ import zainab from './avatars/zainab.png';
 import heroEllipse from './illustrations/hero-ellipse.svg';
 
 import faithTribeLogo from './logos/faith-tribe.webp';
-import rccgLogo from './logos/rccg.webp';
+import juniorChurchLogo from './logos/junior-church-global.webp';
 
 export { ILLUSTRATIONS, OBJECTS, type Illustration } from './library';
 
 export const AVATARS = { amaka, chidi, ngozi, tolu, tunde, zainab } as const;
 
-export const LOGOS = { faithTribe: faithTribeLogo, rccg: rccgLogo } as const;
+export const LOGOS = { faithTribe: faithTribeLogo, juniorChurch: juniorChurchLogo } as const;
 
 export { heroEllipse };

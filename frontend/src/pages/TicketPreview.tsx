@@ -21,7 +21,7 @@ import { BRAND } from "../constants/brand";
 
 // PNG rather than WebP here: html2canvas rasterises this card for the PDF/image
 // export and decodes PNG most reliably across the browsers this audience uses.
-const rccgLogo = BRAND.rccgPng;
+const juniorChurchLogo = BRAND.juniorChurchPng;
 const faithLogo = BRAND.faithPng;
 
 // ── Normalised shape used by the card ─────────────────────────────────────────
@@ -205,7 +205,7 @@ const TicketPreview = () => {
           >
             {/* Watermark */}
             <div className="absolute inset-0 flex items-center justify-center opacity-[0.04] pointer-events-none select-none">
-              <img src={rccgLogo} alt="" className="w-80 h-80 object-contain" />
+              <img src={juniorChurchLogo} alt="" className="w-80 h-80 object-contain" />
             </div>
 
             {/* Confirmation overlay */}
@@ -222,7 +222,7 @@ const TicketPreview = () => {
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-gray-100 dark:border-gray-700 pb-6 mb-6">
                 <div className="flex items-center gap-4 mb-4 md:mb-0">
                   <div className="flex -space-x-3">
-                    <img src={rccgLogo}   alt="RCCG"       className="w-14 h-14 rounded-full border-2 border-white shadow-md bg-white object-cover z-10" />
+                    <img src={juniorChurchLogo} alt="Junior Church Global" className="w-14 h-14 rounded-full border-2 border-white shadow-md bg-white object-cover z-10" />
                     <img src={faithLogo} alt="Faith Tribe" className="w-14 h-14 rounded-full border-2 border-white shadow-md bg-white object-cover" />
                   </div>
                   <div>

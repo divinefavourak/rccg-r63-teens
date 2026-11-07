@@ -23,7 +23,7 @@ Never commit secret values. Set them in the deployment platform's secret store.
 | Variable | Notes |
 |---|---|
 | `SQUAD_SECRET_KEY` | Squad's secret key, from **Profile → API & Webhook** on its dashboard. Required for payment processing and webhooks. A sandbox key starts `sandbox_sk_` and is sent to `sandbox-api-d.squadco.com`; any other key is sent to live, `api-d.squadco.com`. It also signs the webhook, so a sandbox key and a live key are not interchangeable. Setting it switches on the release of unpaid places (see below). |
-| `PUBLIC_API_URL` | The API's own address from outside, e.g. `https://api.faithtribe.app`, with no path. Squad sends each payer back to `<this>/api/v1/payments/return/<reference>/`. Unset ⇒ the address of the request is used, which behind the host's proxy comes out as `http://`. |
+| `PUBLIC_API_URL` | The API's own address from outside, e.g. `https://api.thefaithtribe.live`, with no path. Squad sends each payer back to `<this>/api/v1/payments/return/<reference>/`. Unset ⇒ the address of the request is used, which behind the host's proxy comes out as `http://`. |
 | `UNPAID_REGISTRATION_HOLD_HOURS` | How long an unpaid place on a paid event is held. Default `24`. `0` never releases one. |
 | `R2_PRIVATE_BUCKET_NAME` | A Cloudflare R2 bucket with **no public domain**, for bank-transfer receipts (`common/storage.py`). Receipts are only ever streamed through `/api/v1/payments/receipts/<id>/file/` to someone allowed to see them. Unset ⇒ they go into `R2_BUCKET_NAME` with a private ACL under unguessable names, which is weaker if that bucket is public. Without R2 at all they go to `PRIVATE_MEDIA_ROOT` (default `backend/private_media/`), which must be on a persistent disk. |
 | `TICKET_CLAIM_THROTTLE_RATE` | How often one account may try to claim a group seat with a ticket number and code. Default `10/min`. |
@@ -104,12 +104,12 @@ first, and either confirm the ones that should stay or set
 ```bash
 SECRET_KEY=...
 DEBUG=False
-ALLOWED_HOSTS=faithtribe.app,api.faithtribe.app
+ALLOWED_HOSTS=thefaithtribe.live,api.thefaithtribe.live
 DATABASE_URL=postgres://...
 REDIS_URL=redis://...
-FRONTEND_URL=https://faithtribe.app
+FRONTEND_URL=https://www.thefaithtribe.live
 SQUAD_SECRET_KEY=...           # if paid events at launch
-PUBLIC_API_URL=https://api.faithtribe.app
+PUBLIC_API_URL=https://api.thefaithtribe.live
 BREVO_SMTP_KEY=...             # if email at launch
 BREVO_SMTP_USER=...
 ```

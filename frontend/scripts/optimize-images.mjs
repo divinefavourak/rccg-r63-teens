@@ -43,7 +43,7 @@ const JOBS = [
   { name: 'mummyJ', file: 'mummyJ.JPG', kind: 'photo' },
   { name: 'faithLogo', file: 'faith_logo.jpg', kind: 'logo' },
   { name: 'faithTribeLogo', file: 'faith_tribe_logo.jpg', kind: 'logo' },
-  { name: 'rccgLogo', file: 'logo.jpg', kind: 'logo' },
+  { name: 'juniorChurchLogo', file: 'junior-church-global-circle.png', kind: 'logo' },
 ];
 
 const PRESETS = {

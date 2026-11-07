@@ -8,8 +8,9 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { ticketService } from '../services/ticketService';
 
-// Get API URL from environment variables, fallback to the render URL if missing
-const API_URL = import.meta.env.VITE_API_URL || 'https://rccg-r63-teens-backend.onrender.com/api';
+// Get API URL from environment variables, fallback to the production API if missing.
+// The ticket endpoints live on the unversioned `/api/` paths, not `/api/v1/`.
+const API_URL = import.meta.env.VITE_API_URL || 'https://api.thefaithtribe.live/api';
 
 const UploadPayment = () => {
     const navigate = useNavigate();

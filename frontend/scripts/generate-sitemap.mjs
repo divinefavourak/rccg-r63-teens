@@ -12,7 +12,7 @@
 import { writeFile } from 'node:fs/promises';
 
 const SITE = process.env.SITE_URL || 'https://thefaithtribe.live';
-const API = process.env.VITE_API_URL || 'https://rccg-r63-teens-backend.onrender.com/api/v1';
+const API = process.env.VITE_API_URL || 'https://api.thefaithtribe.live/api/v1';
 const OUT = 'dist/sitemap.xml';
 
 /**

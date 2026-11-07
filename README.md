@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/rccg-junior-church-global.png" alt="The Redeemed Christian Church of God, Junior Church Global" width="213" height="96">
+  <img src="docs/assets/junior-church-global-logo.png" alt="The Redeemed Christian Church of God, Junior Church Global" height="96">
   &nbsp;&nbsp;&nbsp;
   <img src="frontend/src/assets/site/logos/faith-tribe.webp" alt="Faith Tribe, Region 63 Junior Church" width="96" height="96">
 </p>

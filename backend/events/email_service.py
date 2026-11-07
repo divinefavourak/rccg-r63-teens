@@ -26,7 +26,7 @@ _FAITH_LOGO_URL = 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/faith_log
 
 
 def _get_frontend_url():
-    return getattr(settings, 'FRONTEND_URL', None) or 'https://rccg-r63-juniorchurch.vercel.app'
+    return getattr(settings, 'FRONTEND_URL', None) or 'https://www.thefaithtribe.live'
 
 
 def _send_in_thread(subject, html_content, recipients, sender='default', fail_silently=True):

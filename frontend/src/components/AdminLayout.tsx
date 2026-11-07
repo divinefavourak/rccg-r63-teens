@@ -22,7 +22,7 @@ import {
 import api from '../api/axios';
 import { BRAND } from '../constants/brand';
 
-const logo = BRAND.rccg;
+const logo = BRAND.juniorChurch;
 
 interface NotifItem {
     id: string;
@@ -143,7 +143,7 @@ const AdminLayout = () => {
                 <div className="h-full flex flex-col">
                     {/* Brand */}
                     <div className="h-16 flex items-center px-6 border-b border-gray-200 dark:border-gray-700">
-                        <img src={logo} alt="RCCG" className="w-8 h-8 rounded-full mr-3" />
+                        <img src={logo} alt="Junior Church Global" className="w-8 h-8 rounded-full mr-3" />
                         <div>
                             <h1 className="font-bold text-lg text-gray-900 dark:text-white leading-none">RCCG R63 Teens</h1>
                             <span className="text-xs text-gray-500 dark:text-gray-400">Admin Panel</span>

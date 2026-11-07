@@ -5,7 +5,7 @@ import { Sun, Moon, Menu, X, ChevronRight, LogOut, LayoutDashboard, User, Bell, 
 import { cn } from "../lib/utils";
 import { BRAND } from "../constants/brand";
 
-const rccgLogo = BRAND.rccg;
+const juniorChurchLogo = BRAND.juniorChurch;
 const faithLogo = BRAND.faith;
 import { useAuthContext } from "../context/AuthContext";
 import api from "../api/axios";
@@ -127,8 +127,8 @@ const Navbar = () => {
           <Link to="/" className="flex items-center gap-3 group">
             <div className="flex items-center -space-x-3 transition-transform group-hover:scale-105">
               <img
-                src={rccgLogo}
-                alt="RCCG Logo"
+                src={juniorChurchLogo}
+                alt="Junior Church Global"
                 className="w-10 h-10 rounded-full border-2 border-white dark:border-gray-800 shadow-sm object-cover z-10"
               />
               <img

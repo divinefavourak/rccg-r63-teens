@@ -41,7 +41,7 @@ def send_daily_devotional_email(devotional_id):
         logger.info('No subscribed recipients for devotional email.')
         return {'success': True, 'sent': 0}
 
-    frontend_url = getattr(settings, 'FRONTEND_URL', None) or 'https://rccg-r63-juniorchurch.vercel.app'
+    frontend_url = getattr(settings, 'FRONTEND_URL', None) or 'https://www.thefaithtribe.live'
     devotional_url = f"{frontend_url}/devotional/{devotional.slug}"
 
     context = {

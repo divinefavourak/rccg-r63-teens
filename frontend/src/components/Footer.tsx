@@ -2,7 +2,7 @@ import { EVENT_DETAILS } from "../constants/eventDetails";
 import { Mail, Phone, User, ArrowUp } from "lucide-react";
 import { BRAND } from "../constants/brand";
 
-const rccgLogo = BRAND.rccg;
+const juniorChurchLogo = BRAND.juniorChurch;
 const faithLogo = BRAND.faith;
 
 const Footer = () => {
@@ -24,7 +24,7 @@ const Footer = () => {
           <div>
             <div className="flex items-center gap-3 mb-6">
               <div className="flex -space-x-3 hover:space-x-1 transition-all">
-                <img src={rccgLogo} alt="RCCG" className="w-10 h-10 rounded-full border-2 border-white dark:border-gray-800 shadow-md z-10" />
+                <img src={juniorChurchLogo} alt="Junior Church Global" className="w-10 h-10 rounded-full border-2 border-white dark:border-gray-800 shadow-md z-10" />
                 <img src={faithLogo} alt="Faith Tribe" className="w-10 h-10 rounded-full border-2 border-white dark:border-gray-800 shadow-md z-0" />
               </div>
               <span className="text-xl font-black tracking-tight text-gray-900 dark:text-white uppercase">FAITH TRIBE</span>

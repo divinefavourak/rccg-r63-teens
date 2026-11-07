@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthContext } from '../../context/AuthContext';
 import { BRAND } from '../../constants/brand';
 
-const rccgLogo = BRAND.rccg;
+const juniorChurchLogo = BRAND.juniorChurch;
 
 interface SidebarProps {
     isOpen: boolean;
@@ -111,7 +111,7 @@ const SidebarContent = ({ onClose }: { onClose: () => void }) => {
             {/* Header */}
             <div className={`p-6 flex items-center justify-between border-b ${theme.border}`}>
                 <div className="flex items-center gap-3">
-                    <img src={rccgLogo} alt="Logo" className={`w-10 h-10 rounded-full ring-2 ${theme.logo}`} />
+                    <img src={juniorChurchLogo} alt="Junior Church Global" className={`w-10 h-10 rounded-full ring-2 ${theme.logo}`} />
                     <div>
                         <h1 className={`font-bold text-base tracking-wide ${theme.text}`}>FAITH TRIBE</h1>
                         <p className={`text-[10px] font-bold uppercase tracking-wider ${theme.accent}`}>{theme.subtitle}</p>
