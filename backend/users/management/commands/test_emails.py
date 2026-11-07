@@ -167,7 +167,7 @@ class Command(BaseCommand):
         from django.template.loader import render_to_string
         from utils.email_senders import get_sender
 
-        frontend_url = getattr(settings, 'FRONTEND_URL', '') or 'https://rccg-r63-juniorchurch.vercel.app'
+        frontend_url = getattr(settings, 'FRONTEND_URL', '') or 'https://www.thefaithtribe.live'
         context = {
             'devotional':     devotional,
             'devotional_url': f"{frontend_url}/devotional/{devotional.slug}",

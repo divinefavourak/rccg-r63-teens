@@ -144,7 +144,7 @@ class EmailService:
             logger.error(f"Failed to generate QR code for ticket {ticket.ticket_id}: {e}")
         
         # Use FRONTEND_URL from settings, with reliable production fallback
-        frontend_url = getattr(settings, 'FRONTEND_URL', None) or 'https://rccg-r63-juniorchurch.vercel.app'
+        frontend_url = getattr(settings, 'FRONTEND_URL', None) or 'https://www.thefaithtribe.live'
         
         context = {
             'ticket': ticket,
@@ -171,7 +171,7 @@ class EmailService:
         """Send payment reminder email with upload instructions"""
         subject = f"⏰ Payment Reminder - R63 December Campout - {ticket.ticket_id}"
         
-        frontend_url = getattr(settings, 'FRONTEND_URL', None) or 'https://rccg-r63-juniorchurch.vercel.app'
+        frontend_url = getattr(settings, 'FRONTEND_URL', None) or 'https://www.thefaithtribe.live'
         
         context = {
             'ticket': ticket,
@@ -195,7 +195,7 @@ class EmailService:
         """Send welcome email with event details"""
         subject = f"🎄 Welcome to R63 December Campout - THE PRICELESS GIFT!"
         
-        frontend_url = getattr(settings, 'FRONTEND_URL', None) or 'https://rccg-r63-juniorchurch.vercel.app'
+        frontend_url = getattr(settings, 'FRONTEND_URL', None) or 'https://www.thefaithtribe.live'
         
         context = {
             'ticket': ticket,
@@ -219,7 +219,7 @@ class EmailService:
         """Send final instructions email before the event"""
         subject = f"📋 Final Instructions - R63 December Campout"
         
-        frontend_url = getattr(settings, 'FRONTEND_URL', None) or 'https://rccg-r63-juniorchurch.vercel.app'
+        frontend_url = getattr(settings, 'FRONTEND_URL', None) or 'https://www.thefaithtribe.live'
         
         context = {
             'ticket': ticket,
