@@ -1,8 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQueryClient } from '@tanstack/react-query';
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 
 import { api, ApiError, forgetResponses, onSessionExpired } from '../api/client';
+import { API_URL } from '../api/config';
 import { forgetQueries } from '../api/persist';
 import { clearTokens, getRefreshToken, loadTokens, saveTokens } from '../api/tokens';
 import { unregisterPushDevice } from './push';
@@ -17,6 +20,30 @@ import type { AuthUser, LoginResponse } from '../api/types';
  * screens, so signing in changes what the screens *render*, never which screens
  * exist.
  */
+/** What `POST /auth/google/signup/` returns after Google verified the identity. */
+export interface GoogleSignupDetails {
+  email: string;
+  first_name: string;
+  last_name: string;
+}
+
+/** The answers the app adds before `POST /auth/google/complete/` creates the account. */
+export interface GoogleSignupCompletion {
+  first_name: string;
+  last_name: string;
+  phone: string;
+  date_of_birth: string;
+  gender?: string;
+  church_node?: string;
+}
+
+/** How Google's browser flow ended on this phone. */
+export type GoogleSignInResult =
+  | { status: 'signed-in' }
+  | { status: 'cancelled' }
+  /** No account yet: the app must finish the sign-up questions first. */
+  | { status: 'new'; ticket: string };
+
 interface AuthValue {
   user: AuthUser | null;
   isGuest: boolean;
@@ -24,13 +51,25 @@ interface AuthValue {
   ready: boolean;
   /** `identifier` is an email address, a phone number or a username. */
   signIn: (identifier: string, password: string) => Promise<void>;
-  /** Sends one code to both the email address and the phone number. */
+  /** Sends the sign-up verification code. */
   startSignUp: (email: string, phone: string) => Promise<void>;
   /** Checks the code and creates the account, signed in. */
   completeSignUp: (details: SignUpDetails, code: string) => Promise<void>;
-  /** Sends a sign-in code to an existing account's email or phone. */
+  /** Sends a sign-in code to an existing account's email address. */
   requestLoginCode: (identifier: string) => Promise<void>;
   signInWithCode: (identifier: string, code: string) => Promise<void>;
+  /**
+   * Google's browser flow. Resolves `signed-in`, `cancelled`, or `new` with the
+   * ticket the sign-up form finishes.
+   */
+  signInWithGoogle: () => Promise<GoogleSignInResult>;
+  /** The name and email behind a new Google sign-up ticket. */
+  googleSignupDetails: (ticket: string) => Promise<GoogleSignupDetails>;
+  /** Creates the account from the sign-up answers and signs the teen in. */
+  completeGoogleSignup: (
+    ticket: string,
+    details: GoogleSignupCompletion,
+  ) => Promise<void>;
   signOut: () => Promise<void>;
   /** Set while a sign-in request is in flight. */
   pending: boolean;
@@ -78,14 +117,51 @@ export function toE164(input: string, dial = '+234'): string {
   return /^\+\d{9,15}$/.test(full) ? full : '';
 }
 
-/** Where a sign-in code goes: the address as typed, or the phone in `+234…` form. */
-export function codeDestination(input: string): { destination: string; channel: 'email' | 'sms' } | null {
+/**
+ * Where a sign-in code goes: an email address, or nothing.
+ *
+ * Email only on purpose. The app no longer offers a code by SMS: the same
+ * number can be a parent's or shared between siblings, and delivery is not
+ * reliable enough to be a way in. A phone number in the field is still fine
+ * for password sign-in — `_resolve_login_username` maps it to the account.
+ */
+export function codeDestination(input: string): { destination: string; channel: 'email' } | null {
   const value = input.trim();
-  if (value.includes('@')) {
-    return /^\S+@\S+\.\S+$/.test(value) ? { destination: value.toLowerCase(), channel: 'email' } : null;
+  if (!value.includes('@')) return null;
+  return /^\S+@\S+\.\S+$/.test(value)
+    ? { destination: value.toLowerCase(), channel: 'email' }
+    : null;
+}
+
+/** One query parameter from the address Google's callback sent back. */
+function queryParam(url: string, name: string): string | null {
+  const start = url.indexOf('?');
+  if (start === -1) return null;
+  const query = url.slice(start + 1).split('#')[0];
+  for (const pair of query.split('&')) {
+    const equals = pair.indexOf('=');
+    const key = decodeURIComponent(equals === -1 ? pair : pair.slice(0, equals));
+    if (key === name) {
+      return decodeURIComponent(equals === -1 ? '' : pair.slice(equals + 1));
+    }
   }
-  const phone = toE164(value);
-  return phone ? { destination: phone, channel: 'sms' } : null;
+  return null;
+}
+
+/** What to tell a teen when Google sent the app back with an error code. */
+function googleMessage(code: string): string {
+  switch (code) {
+    case 'no_account':
+      return 'No Faith Tribe account uses that Google email. Create an account first.';
+    case 'not_configured':
+      return 'Google sign-in is not available right now. Use your email instead.';
+    case 'google_error':
+      return 'Google could not complete the sign-in. Please try again.';
+    case 'server_error':
+      return 'Google sign-in is temporarily unavailable. Please try again in a moment.';
+    default:
+      return 'Could not sign in with Google. Please try again.';
+  }
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -288,7 +364,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       run(
         () => {
           const target = codeDestination(identifier);
-          if (!target) throw new ApiError(400, 'Enter your email address or phone number first.');
+          if (!target) throw new ApiError(400, 'Enter your email address first.');
           return api.post('/auth/otp/request/', { ...target, purpose: 'login' }, { anonymous: true });
         },
         'Could not send your code. Please try again.',
@@ -310,6 +386,78 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           );
         },
         'Could not sign in. Please try again.',
+        true,
+      ),
+    [run],
+  );
+
+  const signInWithGoogle = useCallback(async (): Promise<GoogleSignInResult> => {
+    setPending(true);
+    setError(null);
+    try {
+      // The API runs the OAuth flow and comes back to this app's own address
+      // with a short-lived ticket. The Google client secret never reaches the
+      // phone, and no Google client ID is compiled into the build.
+      const returnUrl = Linking.createURL('auth/google');
+      const result = await WebBrowser.openAuthSessionAsync(
+        `${API_URL}/auth/google/start/?return=${encodeURIComponent(returnUrl)}`,
+        returnUrl,
+      );
+      if (result.type !== 'success') return { status: 'cancelled' };
+
+      const failure = queryParam(result.url, 'error');
+      if (failure === 'google_denied') return { status: 'cancelled' };
+      if (failure) throw new ApiError(400, googleMessage(failure));
+
+      // No account yet: the sign-up screen creates it after asking the
+      // questions Google cannot answer (phone, birth date, parish).
+      const signup = queryParam(result.url, 'signup');
+      if (signup) return { status: 'new', ticket: signup };
+
+      const code = queryParam(result.url, 'code');
+      if (!code) throw new ApiError(400, 'Google did not finish signing you in. Please try again.');
+
+      const data = await api.post<LoginResponse>(
+        '/auth/google/exchange/',
+        { code },
+        { anonymous: true },
+      );
+      await saveTokens(data.access, data.refresh);
+      setUser(data.user);
+      startClean();
+      return { status: 'signed-in' };
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : 'Could not sign in with Google. Check your connection and try again.',
+      );
+      throw err;
+    } finally {
+      setPending(false);
+    }
+  }, [setUser, startClean]);
+
+  const googleSignupDetails = useCallback(
+    (ticket: string) =>
+      api.post<GoogleSignupDetails>(
+        '/auth/google/signup/',
+        { ticket },
+        { anonymous: true },
+      ),
+    [],
+  );
+
+  const completeGoogleSignup = useCallback(
+    (ticket: string, details: GoogleSignupCompletion) =>
+      run(
+        () =>
+          api.post<LoginResponse>(
+            '/auth/google/complete/',
+            { ticket, ...details },
+            { anonymous: true },
+          ),
+        'Could not create your account. Please try again.',
         true,
       ),
     [run],
@@ -350,13 +498,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       completeSignUp,
       requestLoginCode,
       signInWithCode,
+      signInWithGoogle,
+      googleSignupDetails,
+      completeGoogleSignup,
       signOut,
       pending,
       error,
       clearError,
     }),
     [user, ready, signIn, startSignUp, completeSignUp, requestLoginCode, signInWithCode,
-     signOut, pending, error, clearError],
+     signInWithGoogle, googleSignupDetails, completeGoogleSignup, signOut, pending, error,
+     clearError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

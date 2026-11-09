@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BackHandler, Text, TextInput, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { BackHandler, Pressable, Text, TextInput, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Image } from 'expo-image';
 
 import { useChurchNodes } from '../../src/api/queries';
 import type { ChurchLevel } from '../../src/api/types';
 import { ageGroupFor } from '../../src/data/choices';
 import { Icon } from '../../src/components/Icon';
 import { toE164, useAuth } from '../../src/state/auth';
+import { markWelcomed } from '../../src/state/welcome';
 import {
   ageFrom,
   birthDate,
@@ -31,6 +33,7 @@ import { useTokens } from '../../src/theme/ThemeProvider';
 import { POP, type PopColour } from '../../src/theme/tokens';
 
 const TOTAL = 8;
+const GOOGLE = require('../../assets/art/google.svg');
 
 interface StepCopy {
   title: string;
@@ -50,7 +53,7 @@ const STEPS: StepCopy[] = [
   },
   {
     title: 'How can we reach you?',
-    helper: 'We will send one code to both, to check it is really you.',
+    helper: 'We will email you a code to check it is really you. Your number is how we reach you about events.',
     badge: 'chat-bubble',
     colour: 'sky',
   },
@@ -86,8 +89,55 @@ const EMAIL = /^\S+@\S+\.\S+$/;
  */
 export default function SignUpScreen() {
   const router = useRouter();
-  const { form, step, direction, goTo, set, chooseChurch } = useSignUp();
-  const { startSignUp, pending, error, clearError } = useAuth();
+  const { google } = useLocalSearchParams<{ google?: string }>();
+  // A ticket means Google already verified the email; the rest of the form
+  // creates the account without asking for a code.
+  const googleTicket = typeof google === 'string' && google.length > 0 ? google : null;
+
+  const { form, step, direction, goTo, set, chooseChurch, reset } = useSignUp();
+  const {
+    startSignUp,
+    completeGoogleSignup,
+    googleSignupDetails,
+    signInWithGoogle,
+    pending,
+    error,
+    clearError,
+  } = useAuth();
+
+  const [googleBusy, setGoogleBusy] = useState(!!googleTicket);
+  const [googleError, setGoogleError] = useState(false);
+  // A retry after a dead connection; the ticket itself may still be good.
+  const [googleAttempt, setGoogleAttempt] = useState(0);
+
+  // A fresh Google sign-up starts from a clean form: an abandoned email
+  // sign-up must not leave its parish or phone behind. The name and email
+  // come from Google, and the teen can still correct the name.
+  useEffect(() => {
+    if (!googleTicket) return;
+    let cancelled = false;
+    setGoogleBusy(true);
+    setGoogleError(false);
+    reset();
+
+    googleSignupDetails(googleTicket)
+      .then((details) => {
+        if (cancelled) return;
+        set('firstName', details.first_name);
+        set('lastName', details.last_name);
+        set('email', details.email);
+      })
+      .catch(() => {
+        if (!cancelled) setGoogleError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setGoogleBusy(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [googleTicket, googleSignupDetails, reset, set, googleAttempt]);
 
   const churchLevel: ChurchLevel | null = step >= 5 ? CHURCH_STEPS[step - 5] : null;
 
@@ -120,7 +170,12 @@ export default function SignUpScreen() {
       case 1:
         return form.firstName.trim().length > 0 && form.lastName.trim().length > 0;
       case 3:
-        return EMAIL.test(form.email.trim()) && toE164(form.phone, form.country.dial) !== '';
+        // With Google the email is already verified and shown read-only; only
+        // the phone is left to type.
+        return (
+          (googleTicket ? !!form.email : EMAIL.test(form.email.trim())) &&
+          toE164(form.phone, form.country.dial) !== ''
+        );
       case 4:
         return ageGroup !== null && ageGroup.eligible;
       default:
@@ -128,18 +183,35 @@ export default function SignUpScreen() {
         // level with nothing to choose from lets the teen finish.
         return churchLevel ? levelEmpty || !!form.church[churchLevel] : true;
     }
-  }, [step, form, ageGroup, churchLevel, levelEmpty]);
+  }, [step, form, ageGroup, churchLevel, levelEmpty, googleTicket]);
 
-  /** Send the code and move to the code screen. */
+  /** Send the code — or, with Google, create the account straight away. */
   const submit = useCallback(async () => {
     const details = toDetails(form);
     try {
+      if (googleTicket) {
+        if (!details.date_of_birth) {
+          // The birth-date step guarantees this before the last question.
+          goTo(4);
+          return;
+        }
+        await completeGoogleSignup(googleTicket, {
+          first_name: details.first_name,
+          last_name: details.last_name,
+          phone: details.phone,
+          date_of_birth: details.date_of_birth,
+          gender: details.gender,
+          church_node: details.church_node,
+        });
+        router.replace('/all-set');
+        return;
+      }
       await startSignUp(details.email, details.phone);
       router.push('/verify');
     } catch {
       // `useAuth` holds the message; the step stays put.
     }
-  }, [form, startSignUp, router]);
+  }, [form, googleTicket, completeGoogleSignup, startSignUp, router, goTo]);
 
   const next = useCallback(() => {
     if (error) clearError();
@@ -160,6 +232,27 @@ export default function SignUpScreen() {
     else router.replace('/welcome');
   }, [error, clearError, step, goTo, router]);
 
+  /**
+   * The same Google flow from the sign-up side: an existing account is signed
+   * in, a new one restarts this screen with its name and email already filled.
+   */
+  const googleInstead = useCallback(async () => {
+    if (pending) return;
+    if (error) clearError();
+    try {
+      const result = await signInWithGoogle();
+      if (result.status === 'signed-in') {
+        markWelcomed();
+        router.dismissTo('/');
+      } else if (result.status === 'new') {
+        router.replace({ pathname: '/sign-up', params: { google: result.ticket } });
+      }
+      // 'cancelled' needs no message.
+    } catch {
+      // `useAuth` holds the message.
+    }
+  }, [pending, error, clearError, signInWithGoogle, router]);
+
   // Android's system back should step through the questions like the on-screen
   // arrow does, not drop the whole form on the first press.
   useEffect(() => {
@@ -173,6 +266,54 @@ export default function SignUpScreen() {
 
   const copy = STEPS[step - 1];
 
+  if (googleTicket && googleBusy) {
+    return (
+      <QuestionScreen
+        onBack={() => router.replace('/log-in')}
+        title="Getting you started"
+        helper="We are checking your Google account."
+        badge="lock"
+        badgeColour="lime"
+        footer={<View />}
+      >
+        <View className="items-center py-10">
+          <Spinner size={26} color={POP.green} />
+        </View>
+      </QuestionScreen>
+    );
+  }
+
+  if (googleTicket && googleError) {
+    return (
+      <QuestionScreen
+        onBack={() => router.replace('/log-in')}
+        title="That sign-up link expired"
+        helper="Google sign-up links last 30 minutes. Start again and we will pick up from the beginning."
+        badge="lock"
+        badgeColour="amber"
+        footer={
+          <View className="gap-2">
+            <Button
+              label="Try again"
+              onPress={() => setGoogleAttempt((n) => n + 1)}
+              className="w-full"
+            />
+            <Button
+              label="Back to log in"
+              variant="secondary"
+              onPress={() => router.replace('/log-in')}
+              className="w-full"
+            />
+          </View>
+        }
+      >
+        <Text className="font-ui text-[16px] leading-6 text-ink-2">
+          You can also create an account with your email address.
+        </Text>
+      </QuestionScreen>
+    );
+  }
+
   return (
     <QuestionScreen
       step={step}
@@ -181,7 +322,13 @@ export default function SignUpScreen() {
       onBack={back}
       eyebrow={`Step ${step} of ${TOTAL}`}
       title={copy.title}
-      helper={copy.helper}
+      helper={
+        googleTicket && step === 1
+          ? 'We filled this in from your Google account. Change it if you like.'
+          : googleTicket && step === 3
+            ? 'Your email is already verified with Google. Your phone is how we reach you about events.'
+            : copy.helper
+      }
       badge={copy.badge}
       badgeColour={copy.colour}
       footer={
@@ -216,6 +363,20 @@ export default function SignUpScreen() {
             returnKeyType="next"
             onSubmitEditing={canContinue ? next : undefined}
           />
+          {!googleTicket && (
+            <Pressable
+              onPress={googleInstead}
+              disabled={pending}
+              accessibilityRole="button"
+              accessibilityLabel="Continue with Google"
+              className="h-12 flex-row items-center justify-center gap-2"
+            >
+              <Image source={GOOGLE} style={{ width: 22, height: 22 }} contentFit="contain" />
+              <Text className="font-ui-sb text-[14px] leading-5 text-green">
+                Use Google instead
+              </Text>
+            </Pressable>
+          )}
         </>
       )}
 
@@ -232,16 +393,25 @@ export default function SignUpScreen() {
 
       {step === 3 && (
         <>
-          <TextField
-            label="Email address"
-            value={form.email}
-            onChange={(v) => set('email', v)}
-            placeholder="you@example.com"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoComplete="email"
-            autoFocus
-          />
+          {googleTicket ? (
+            <View className="gap-1 rounded-xl bg-surf-sunken px-4 py-3">
+              <Text className="font-ui-md text-[12px] uppercase leading-4 tracking-[1.44px] text-ink-3">
+                Email from Google
+              </Text>
+              <Text className="font-ui-sb text-[16px] leading-6 text-ink-1">{form.email}</Text>
+            </View>
+          ) : (
+            <TextField
+              label="Email address"
+              value={form.email}
+              onChange={(v) => set('email', v)}
+              placeholder="you@example.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
+              autoFocus
+            />
+          )}
           <PhoneField
             country={form.country}
             onCountry={(c) => set('country', c)}

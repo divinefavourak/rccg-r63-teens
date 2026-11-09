@@ -13,19 +13,15 @@ const CODE_LENGTH = 6;
 /** How long before "Send again" is offered. */
 const RESEND_SECONDS = 45;
 
-/** "+2348035550142" → "+234 803 555 0142". Anything else is shown as it is. */
-function prettyPhone(phone: string): string {
-  const match = /^\+234(\d{3})(\d{3})(\d{4})$/.exec(phone);
-  return match ? `+234 ${match[1]} ${match[2]} ${match[3]}` : phone;
-}
-
 /**
  * Enter the code.
  *
  * Two callers share it:
- * - sign-up (no params): the code went to both the email and the phone, and
- *   either copy creates the account;
- * - log in (`?to=<email or phone>`): the code went to that one place.
+ * - sign-up (no params): the code went to the email address on the form;
+ * - log in (`?to=<email>`): the code went to that email address.
+ *
+ * A phone number is never a destination here. SMS codes were removed from the
+ * app's interface; a link that still carries one goes back to log in.
  */
 export default function VerifyScreen() {
   const router = useRouter();
@@ -100,14 +96,17 @@ export default function VerifyScreen() {
   if (!isLogin && (!details.email || !details.phone)) return <Redirect href="/sign-up" />;
 
   const target = isLogin ? codeDestination(to) : null;
+  // A code to a phone number is no longer offered. An old link that still
+  // points at one has nowhere to send a new code, so send the teen back to the
+  // form rather than showing cells that can never be filled.
+  if (isLogin && !target) return <Redirect href="/log-in" />;
+
   // Log in cannot say "we sent it": the server answers the same whether or not
   // the account exists, so nobody can test which emails are registered. Saying
   // so plainly beats leaving someone waiting for a code that is not coming.
   const helper = isLogin
-    ? `If there is an account for ${
-        target?.channel === 'sms' ? prettyPhone(target.destination) : (target?.destination ?? to)
-      }, we have sent it 6 digits.`
-    : `We sent the same 6 digits to ${details.email} and ${prettyPhone(details.phone)}. Use whichever arrives first.`;
+    ? `If there is an account for ${target?.destination ?? to}, we have sent it 6 digits.`
+    : `We sent 6 digits to ${details.email}.`;
 
   const seconds = String(wait % 60).padStart(2, '0');
 

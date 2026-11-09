@@ -23,10 +23,13 @@ const GOOGLE = require('../../assets/art/google.svg');
 /**
  * Log in.
  *
- * Two ways in, because there are two kinds of account. Teens who joined in the
- * app have no password and sign in with a code; accounts made on the website
- * (and every leader) have one. The field takes an email or a phone for both.
- * A forgotten password is reset by an emailed link (`forgot-password.tsx`).
+ * Three ways in, because there are three kinds of account. Teens who joined in
+ * the app have no password and sign in with an emailed code; accounts made on
+ * the website (and every leader) have a password; and anyone whose Google email
+ * matches their account can use Google. The field takes an email or a phone for
+ * a password, but a code only ever goes to an email address — the app no longer
+ * offers a code by SMS. A forgotten password is reset by an emailed link
+ * (`forgot-password.tsx`).
  *
  * Dismissible like every auth screen: "Read today's devotional without signing
  * in" goes back to the guest experience (05-navigation.md).
@@ -35,7 +38,7 @@ export default function LogInScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const tokens = useTokens();
-  const { signIn, requestLoginCode, pending, error, clearError } = useAuth();
+  const { signIn, signInWithGoogle, requestLoginCode, pending, error, clearError } = useAuth();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -59,6 +62,22 @@ export default function LogInScreen() {
   // A new phone has never been asked about reminders, even for an old account.
   const invite = useReminderInvite(enter);
 
+  const google = useCallback(async () => {
+    if (pending) return;
+    try {
+      const result = await signInWithGoogle();
+      if (result.status === 'signed-in') invite.begin();
+      else if (result.status === 'new') {
+        // Google verified who they are; the sign-up form still asks the
+        // questions Google cannot answer (phone, birth date, parish).
+        router.push({ pathname: '/sign-up', params: { google: result.ticket } });
+      }
+      // 'cancelled' is not an error: they closed Google's screen.
+    } catch {
+      // `useAuth` holds the message.
+    }
+  }, [pending, signInWithGoogle, invite, router]);
+
   const logIn = useCallback(async () => {
     if (!identifier.trim() || !password || pending) return;
     try {
@@ -72,7 +91,7 @@ export default function LogInScreen() {
   const sendCode = useCallback(async () => {
     if (pending) return;
     if (!codeDestination(identifier)) {
-      setNotice('Enter your email address or phone number first, then we can send a code.');
+      setNotice('Enter your email address first, then we can send a code.');
       return;
     }
     try {
@@ -168,7 +187,7 @@ export default function LogInScreen() {
           </Pressable>
           <Pressable onPress={sendCode} accessibilityRole="button" hitSlop={10}>
             <Text className="font-ui-sb text-[14px] leading-5 text-green">
-              No password? Get a code
+              Email me a code
             </Text>
           </Pressable>
         </View>
@@ -194,7 +213,8 @@ export default function LogInScreen() {
 
         <View className="flex-row gap-4">
           <Press
-            onPress={() => setNotice('Google sign-in is coming soon. Use a code for now.')}
+            onPress={google}
+            disabled={pending}
             accessibilityLabel="Continue with Google"
             className="h-16 w-[72px] items-center justify-center rounded-xl border border-line bg-surf-raised"
             style={ELEVATION.card}
@@ -203,11 +223,11 @@ export default function LogInScreen() {
           </Press>
           <Press
             onPress={sendCode}
-            accessibilityLabel="Continue with a code"
+            accessibilityLabel="Continue with an emailed code"
             className="h-16 w-[72px] items-center justify-center rounded-xl border border-line bg-surf-raised"
             style={ELEVATION.card}
           >
-            <Icon name="phone" size={28} color={tokens.text1} />
+            <Icon name="mail" size={28} color={tokens.text1} />
           </Press>
         </View>
 

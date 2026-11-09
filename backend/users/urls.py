@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from . import signup, views
+from . import google_auth, signup, views
 
 router = DefaultRouter()
 router.register(r'users', views.UserViewSet, basename='user')
@@ -16,6 +16,11 @@ urlpatterns = [
     path('verify-email/', views.VerifyEmailView.as_view(), name='verify_email'),
     path('otp/request/', views.RequestOTPView.as_view(), name='otp_request'),
     path('otp/verify/', views.VerifyOTPView.as_view(), name='otp_verify'),
+    path('google/start/', google_auth.GoogleStartView.as_view(), name='google_start'),
+    path('google/callback/', google_auth.GoogleCallbackView.as_view(), name='google_callback'),
+    path('google/exchange/', google_auth.GoogleExchangeView.as_view(), name='google_exchange'),
+    path('google/signup/', google_auth.GoogleSignupDetailsView.as_view(), name='google_signup'),
+    path('google/complete/', google_auth.GoogleSignupCompleteView.as_view(), name='google_complete'),
     path('signup/start/', signup.SignupStartView.as_view(), name='signup_start'),
     path('signup/complete/', signup.SignupCompleteView.as_view(), name='signup_complete'),
 

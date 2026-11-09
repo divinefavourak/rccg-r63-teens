@@ -12,7 +12,7 @@ Format per feature: **Purpose · Problem solved · Acceptance criteria (AC) · D
 **Problem:** Teens abandon multi-step signups; email-centric auth fails an audience that lives on phone numbers.
 **AC**
 
-- Sign up with phone+OTP or email, or Google OAuth, in ≤2 screens.
+- Sign up with an emailed code or Google, or sign in with Google, in ≤2 screens.
 - Passwords hashed (argon2/bcrypt); sessions via short-lived access + rotating refresh tokens in HTTP-only cookies.
 - Under-13 birthdates blocked at signup with a kind message.
 - Password reset via OTP/link in ≤3 screens; rate-limited.

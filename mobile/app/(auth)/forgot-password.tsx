@@ -84,7 +84,7 @@ export default function ForgotPasswordScreen() {
         </Text>
         <Text className="font-ui text-[14px] leading-5 text-ink-2">
           Nothing after a few minutes? Your account may not have a password. Go back and choose
-          “No password? Get a code”.
+          “Email me a code”.
         </Text>
       </QuestionScreen>
     );

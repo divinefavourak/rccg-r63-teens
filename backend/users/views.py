@@ -569,23 +569,21 @@ def _find_user_by_destination(destination, channel):
     return find_by_phone(destination)
 
 
-def otp_login_response(user, otp):
-    """Sign ``user`` in on the strength of a verified one-time code.
+def session_response(user, *, verify_email=False):
+    """Sign ``user`` in, with the checks every passwordless route shares.
 
-    Shared by OTP login and by sign-up, so there is exactly one place that
-    decides what a code is allowed to do. Full parity with password login (no
-    weaker parallel auth path): lockout and email-verification enforcement both
-    apply.
+    Used by an email one-time code and by Google, so there is exactly one place
+    that decides sign-in parity: lockout and email-verification enforcement both
+    apply, and login state is reset the same way as the password path.
     """
     from django.conf import settings as dj_settings
-    from .models import OTPCode
 
     if user.account_locked_until and user.account_locked_until > timezone.now():
         return Response({"detail": "Account is temporarily locked. Try again later."},
                         status=status.HTTP_423_LOCKED)
-    # An email OTP proves email ownership → mark verified rather than block.
+    # A verified email proves ownership → mark it verified rather than block.
     newly_verified = False
-    if otp.channel == OTPCode.Channel.EMAIL and not user.is_verified:
+    if verify_email and not user.is_verified:
         user.is_verified = True
         newly_verified = True
     if getattr(dj_settings, 'ENFORCE_EMAIL_VERIFICATION', False) and not user.is_verified:
@@ -607,6 +605,22 @@ def otp_login_response(user, otp):
     })
     set_auth_cookies(resp, access=str(refresh.access_token), refresh=str(refresh))
     return resp
+
+
+def otp_login_response(user, otp):
+    """Sign ``user`` in on the strength of a verified one-time code.
+
+    Shared by OTP login and by sign-up, so there is exactly one place that
+    decides what a code is allowed to do.
+    """
+    from .models import OTPCode
+
+    return session_response(user, verify_email=otp.channel == OTPCode.Channel.EMAIL)
+
+
+def google_login_response(user):
+    """Sign ``user`` in after Google has verified their email address."""
+    return session_response(user, verify_email=True)
 
 
 class RequestOTPView(APIView):

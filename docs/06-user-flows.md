@@ -31,8 +31,8 @@ Flows are written as numbered steps with decision points (◇), system actions (
 Optimized for teens on shared devices; minimal fields.
 
 1. Entry: contextual prompt or Me tab → **Sign up**.
-2. Fields, one screen: first name, phone number *or* email, password. Alternative: **Continue with Google** (one tap).
-3. ⚙ OTP verification via SMS (phone) or link (email). ✖ OTP not received → resend with 60s cooldown; switch to email path offered after two failures.
+2. Fields: first name, email address, phone number (contact, not identity), or **Continue with Google** to carry the verified name and email into the form.
+3. ⚙ OTP verification by email. ✖ OTP not received → resend with 60s cooldown. The phone number is how leaders reach the teen; it is never a sign-in channel.
 4. Screen two: date of birth (age-band logic: under-13 blocked with a kind message; 13–19 standard; 20+ flagged for role assignment), gender (optional), **parish selection** (region → searchable parish list; "I'm not sure" allowed — assigns region-level default, coordinator can correct later).
 5. ⚙ Account created; guest local data migrated; role = Teen; landing on Today with streak card active: "Day 1 starts today 🌱".
 6. ✖ Existing phone/email → inline "Looks like you already have an account — log in?" with prefilled identifier.

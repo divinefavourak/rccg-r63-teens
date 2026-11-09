@@ -95,7 +95,7 @@ rccg-r63-teens/
 | API | Django 5.2, Django REST Framework, drf-spectacular |
 | Database | PostgreSQL 16 |
 | Cache and queue | Redis, Celery |
-| Sign-in | JWT (`djangorestframework-simplejwt`), one-time codes by email |
+| Sign-in | JWT (`djangorestframework-simplejwt`), one-time codes by email, Google sign-in |
 | Payments | Squad |
 | File storage | Cloudflare R2, through `django-storages` |
 | Email | Brevo |
@@ -218,6 +218,7 @@ Each part has an `.env.example` to copy. These are the settings you are most lik
 | `BREVO_SMTP_USER`, `BREVO_SMTP_KEY`, `BREVO_API_KEY`, `DEFAULT_FROM_EMAIL` | Email. |
 | `OTP_PROVIDER` | How one-time codes are sent. |
 | `SQUAD_SECRET_KEY`, `PUBLIC_API_URL`, `PAY_LINK_BASE` | Payments. A key starting `sandbox_sk_` goes to Squad's sandbox. |
+| `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | Google sign-in and sign-up. A **Web application** OAuth client; its callback is `<PUBLIC_API_URL>/api/v1/auth/google/callback/`. Unset, the app says Google is not available. |
 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ACCOUNT_ID`, `R2_BUCKET_NAME`, `R2_PUBLIC_DOMAIN` | File storage. |
 | `SCHEDULER_SECRET`, `CELERY_TASK_ALWAYS_EAGER` | Timed tasks where there is no Celery worker. |
 
@@ -273,7 +274,7 @@ Everything current is under `/api/v1/`:
 
 | Path | Covers |
 |---|---|
-| `/api/v1/auth/` | Sign-up, log in, one-time codes, token refresh |
+| `/api/v1/auth/` | Sign-up, log in, one-time codes, Google sign-in and sign-up, token refresh |
 | `/api/v1/identity/` | Roles, permissions, a teacher's class |
 | `/api/v1/hierarchy/` | The church tree |
 | `/api/v1/profiles/` | Profiles and saved items |
