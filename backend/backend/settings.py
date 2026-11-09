@@ -635,6 +635,18 @@ UNPAID_REGISTRATION_HOLD_HOURS = int(os.getenv("UNPAID_REGISTRATION_HOLD_HOURS",
 # to the app only at an address that starts with it, or at one of our sites.
 MOBILE_APP_SCHEME = os.getenv("MOBILE_APP_SCHEME", "faithtribe")
 
+# Sign in with Google. Create a **Web application** OAuth client in Google Cloud
+# (APIs & Services → Credentials), put its ID and secret here, and add this
+# API's callback address to its authorised redirect URIs:
+#   <PUBLIC_API_URL>/api/v1/auth/google/callback/
+# The secret stays on the server; the app only ever opens a browser.
+GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "").strip()
+GOOGLE_OAUTH_CLIENT_SECRET = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", "").strip()
+# Only needed when the public callback address cannot be worked out from the
+# request (a proxy that rewrites the host, or a local HTTPS tunnel). It must
+# match the URI entered in Google Cloud exactly.
+GOOGLE_OAUTH_REDIRECT_URI = os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "").strip()
+
 # Logging
 LOGGING = {
     'version': 1,

@@ -40,6 +40,23 @@ of the body keyed with the secret key, which the server checks.
 
 Going live needs a live Squad account with its KYC completed.
 
+## Sign in with Google — optional
+
+| Variable | Notes |
+|---|---|
+| `GOOGLE_OAUTH_CLIENT_ID` | The client ID of a **Web application** OAuth client in Google Cloud (APIs & Services → Credentials). Unset, the app tells the teen Google is not available and offers email instead. |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | That client's secret. It stays on the server: the app only opens a browser, and Google returns to this API. |
+| `GOOGLE_OAUTH_REDIRECT_URI` | Optional. The exact callback, when it cannot be worked out from the request (a proxy that rewrites the host, or a local HTTPS tunnel). Defaults to `<PUBLIC_API_URL>/api/v1/auth/google/callback/`. |
+
+In the Google Cloud console, add the same callback to the client's
+**Authorised redirect URIs**. Google only accepts `https` redirects (and
+`http://localhost` in development), so a physical phone testing against a
+laptop needs `PUBLIC_API_URL` set to an HTTPS tunnel and that tunnel's callback
+entered in the console. The flow works in a development build, an installed app and the web build; no
+Google client ID is compiled into the app. A Google email with no account is
+held in a short-lived sign-up ticket while the app asks for the phone, date of
+birth and parish, then creates the account. Google never skips those questions.
+
 **Before the keys go in on a database that already has registrations:** the
 task that releases unpaid places starts working the moment
 `SQUAD_SECRET_KEY` is set, and it counts 24 hours from when a registration

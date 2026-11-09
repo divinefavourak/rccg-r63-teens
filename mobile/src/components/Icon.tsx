@@ -71,6 +71,7 @@ const OUTLINE = {
   pause: 'pause',
   camera: 'camera-outline',
   plus: 'add',
+  expand: 'expand-outline',
 } as const;
 
 // Only the icons that genuinely need a filled state are listed. Anything absent
