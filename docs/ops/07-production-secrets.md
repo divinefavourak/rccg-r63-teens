@@ -57,6 +57,13 @@ Google client ID is compiled into the app. A Google email with no account is
 held in a short-lived sign-up ticket while the app asks for the phone, date of
 birth and parish, then creates the account. Google never skips those questions.
 
+There is **no separate iOS OAuth client**. The iPhone experience is the web app,
+and it returns to `https://app.thefaithtribe.live/auth/google`, so that origin
+must be in `CORS_ALLOWED_ORIGINS` (or `FRONTEND_URL`). The API refuses to send
+the ticket to an origin it does not know. A native iOS build would use the same
+Web application client and the `faithtribe://` scheme, again with no extra
+Google client.
+
 **Before the keys go in on a database that already has registrations:** the
 task that releases unpaid places starts working the moment
 `SQUAD_SECRET_KEY` is set, and it counts 24 hours from when a registration

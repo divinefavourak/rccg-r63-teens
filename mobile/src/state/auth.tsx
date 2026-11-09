@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQueryClient } from '@tanstack/react-query';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
+import { Platform } from 'react-native';
 
 import { api, ApiError, forgetResponses, onSessionExpired } from '../api/client';
 import { API_URL } from '../api/config';
@@ -70,6 +71,8 @@ interface AuthValue {
     ticket: string,
     details: GoogleSignupCompletion,
   ) => Promise<void>;
+  /** The web/PWA callback's one-time code, exchanged for a session. */
+  completeGoogleRedirect: (code: string) => Promise<void>;
   signOut: () => Promise<void>;
   /** Set while a sign-in request is in flight. */
   pending: boolean;
@@ -149,12 +152,14 @@ function queryParam(url: string, name: string): string | null {
 }
 
 /** What to tell a teen when Google sent the app back with an error code. */
-function googleMessage(code: string): string {
+export function googleErrorMessage(code: string): string {
   switch (code) {
     case 'no_account':
       return 'No Faith Tribe account uses that Google email. Create an account first.';
     case 'not_configured':
       return 'Google sign-in is not available right now. Use your email instead.';
+    case 'google_denied':
+      return 'Google sign-in was cancelled.';
     case 'google_error':
       return 'Google could not complete the sign-in. Please try again.';
     case 'server_error':
@@ -392,6 +397,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signInWithGoogle = useCallback(async (): Promise<GoogleSignInResult> => {
+    // On the web — including an iPhone Home Screen app — a popup cannot pass
+    // the result back reliably (Safari gives a standalone app its own storage).
+    // Navigate the whole window instead; `/auth/google` finishes the exchange.
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      setError(null);
+      const returnUrl = Linking.createURL('auth/google');
+      window.location.assign(
+        `${API_URL}/auth/google/start/?return=${encodeURIComponent(returnUrl)}`,
+      );
+      return { status: 'cancelled' };
+    }
+
     setPending(true);
     setError(null);
     try {
@@ -407,7 +424,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const failure = queryParam(result.url, 'error');
       if (failure === 'google_denied') return { status: 'cancelled' };
-      if (failure) throw new ApiError(400, googleMessage(failure));
+      if (failure) throw new ApiError(400, googleErrorMessage(failure));
 
       // No account yet: the sign-up screen creates it after asking the
       // questions Google cannot answer (phone, birth date, parish).
@@ -463,6 +480,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [run],
   );
 
+  const completeGoogleRedirect = useCallback(
+    (code: string) =>
+      run(
+        () =>
+          api.post<LoginResponse>(
+            '/auth/google/exchange/',
+            { code },
+            { anonymous: true },
+          ),
+        'Could not sign in with Google. Please try again.',
+        true,
+      ),
+    [run],
+  );
+
   const signOut = useCallback(async () => {
     // While the session still exists: stop this account's notifications
     // reaching this phone. Best effort, like the blacklist below.
@@ -501,14 +533,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signInWithGoogle,
       googleSignupDetails,
       completeGoogleSignup,
+      completeGoogleRedirect,
       signOut,
       pending,
       error,
       clearError,
     }),
     [user, ready, signIn, startSignUp, completeSignUp, requestLoginCode, signInWithCode,
-     signInWithGoogle, googleSignupDetails, completeGoogleSignup, signOut, pending, error,
-     clearError],
+     signInWithGoogle, googleSignupDetails, completeGoogleSignup, completeGoogleRedirect,
+     signOut, pending, error, clearError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
