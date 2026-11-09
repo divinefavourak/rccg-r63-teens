@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BackHandler, Pressable, Text, TextInput, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { Image } from 'expo-image';
 
 import { useChurchNodes } from '../../src/api/queries';
@@ -8,6 +8,7 @@ import type { ChurchLevel } from '../../src/api/types';
 import { ageGroupFor } from '../../src/data/choices';
 import { Icon } from '../../src/components/Icon';
 import { toE164, useAuth } from '../../src/state/auth';
+import { takeDestination } from '../../src/state/destination';
 import { markWelcomed } from '../../src/state/welcome';
 import {
   ageFrom,
@@ -243,7 +244,7 @@ export default function SignUpScreen() {
       const result = await signInWithGoogle();
       if (result.status === 'signed-in') {
         markWelcomed();
-        router.dismissTo('/');
+        router.dismissTo(takeDestination('/') as Href);
       } else if (result.status === 'new') {
         router.replace({ pathname: '/sign-up', params: { google: result.ticket } });
       }

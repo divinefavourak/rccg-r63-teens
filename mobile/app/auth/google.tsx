@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Platform, Text, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 
 import { LogoLockup } from '../../src/components/Logo';
 import { googleErrorMessage, useAuth } from '../../src/state/auth';
+import { takeDestination } from '../../src/state/destination';
 import { Button } from '../../src/ui/Button';
 
 /**
@@ -58,7 +59,7 @@ export default function GoogleCallbackScreen() {
     }
 
     completeGoogleRedirect(code)
-      .then(() => router.replace('/'))
+      .then(() => router.replace(takeDestination('/') as Href))
       .catch((err) => {
         setStatus('failed');
         setMessage(

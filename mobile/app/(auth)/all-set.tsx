@@ -1,12 +1,13 @@
 import { useCallback } from 'react';
 import { Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { JuniorChurchLogo } from '../../src/components/Logo';
 import { useReminderInvite } from '../../src/components/ReminderInvite';
 import { useAuth } from '../../src/state/auth';
+import { takeDestination } from '../../src/state/destination';
 import { CHURCH_STEPS, deepestChurch, useSignUp } from '../../src/state/signup';
 import { markWelcomed } from '../../src/state/welcome';
 import { Drawing, Object3D } from '../../src/ui/art';
@@ -35,8 +36,9 @@ export default function AllSetScreen() {
   const start = useCallback(() => {
     markWelcomed();
     reset();
-    // Drop the whole sign-up stack: Back from Today must not return to it.
-    router.dismissTo('/');
+    // Drop the whole sign-up stack, then continue wherever they were before
+    // signing up. Back from there must not return to the form.
+    router.dismissTo(takeDestination('/') as Href);
   }, [reset, router]);
 
   // The last step of joining: offer a daily reminder, then on to the reading.

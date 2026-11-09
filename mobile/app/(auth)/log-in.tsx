@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '../../src/components/Icon';
 import { FaithTribeLogo } from '../../src/components/Logo';
 import { codeDestination, useAuth } from '../../src/state/auth';
+import { takeDestination } from '../../src/state/destination';
 import { useReminderInvite } from '../../src/components/ReminderInvite';
 import { markWelcomed } from '../../src/state/welcome';
 import { FormError } from '../../src/ui/AuthShell';
@@ -57,7 +58,8 @@ export default function LogInScreen() {
 
   const enter = useCallback(() => {
     markWelcomed();
-    router.dismissTo('/');
+    // Back to the event, saved item or page that asked them to sign in.
+    router.dismissTo(takeDestination('/') as Href);
   }, [router]);
   // A new phone has never been asked about reminders, even for an old account.
   const invite = useReminderInvite(enter);

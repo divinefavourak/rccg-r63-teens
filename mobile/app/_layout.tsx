@@ -2,7 +2,7 @@ import '../global.css';
 
 import { useCallback, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import Animated, { useSharedValue } from 'react-native-reanimated';
@@ -35,6 +35,7 @@ import { installAppStateBridges, queryClient } from '../src/api/queryClient';
 import { startWebApp } from '../src/state/install';
 import { usePushSync } from '../src/state/push';
 import { loadWelcomed } from '../src/state/welcome';
+import { rememberDestination } from '../src/state/destination';
 import { SplashAnimation, useSplashEntrance } from '../src/splash/SplashAnimation';
 
 // Hold the native splash until the animated one is on screen to take over
@@ -135,6 +136,14 @@ function AppShell({ fontsSettled }: { fontsSettled: boolean }) {
   const { scheme, tokens, ready } = useTheme();
   const { ready: authReady, user } = useAuth();
   const { ready: readerReady } = useReader();
+  const pathname = usePathname();
+
+  // Remember where a sign-in should return to. Auth screens are ignored, so
+  // the last real page survives the trip through Google or the code screen.
+  useEffect(() => {
+    rememberDestination(pathname);
+  }, [pathname]);
+
   // Hold the splash until the stored session has been read too, so a signed-in
   // teen never sees the guest version of Today flash before their own.
   // ...and until the "seen the welcome pages?" flag is known, so a first
