@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { ScrollView, Share, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,6 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiError } from '../../../src/api/client';
 import { useEvent, useMyRegistrations } from '../../../src/api/queries';
 import { EventPhoto } from '../../../src/components/EventPieces';
+import { Icon } from '../../../src/components/Icon';
+import { PhotoViewer } from '../../../src/components/PhotoViewer';
 import {
   closedLabel,
   isClosed,
@@ -16,9 +18,10 @@ import {
   whereLabel,
 } from '../../../src/data/events';
 import { useAuth } from '../../../src/state/auth';
-import { Object3D } from '../../../src/ui/art';
+import { EVENT_PHOTO, Object3D } from '../../../src/ui/art';
 import { Button } from '../../../src/ui/Button';
 import { DateBadge, FactChip, PopCard, PopEyebrow } from '../../../src/ui/cards';
+import { Press } from '../../../src/ui/Press';
 import { BackHeader, EmptyState, GuestBanner, Skeleton } from '../../../src/ui/screen';
 import { ELEVATION } from '../../../src/theme/tokens';
 
@@ -34,6 +37,7 @@ export default function EventDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isGuest } = useAuth();
+  const [photoOpen, setPhotoOpen] = useState(false);
 
   const query = useEvent(id);
   const mine = useMyRegistrations(!isGuest);
@@ -117,12 +121,26 @@ export default function EventDetailScreen() {
           />
         )}
 
-        <View>
+        <Press
+          onPress={() => setPhotoOpen(true)}
+          accessibilityLabel={`View the photo for ${event.title} full screen`}
+          accessibilityRole="button"
+          className="w-full"
+        >
           <EventPhoto event={event} style={{ width: '100%', height: 208, borderRadius: 28 }} />
           <View style={{ position: 'absolute', left: 16, top: 16 }}>
             <DateBadge date={startOf(event)} />
           </View>
-        </View>
+          {/* The photo is a control, not decoration. Without a visible cue a
+              teen has no reason to try tapping it. */}
+          <View
+            pointerEvents="none"
+            className="absolute h-10 w-10 items-center justify-center rounded-full bg-black/55"
+            style={{ right: 14, bottom: 14 }}
+          >
+            <Icon name="expand" size={20} color="#FFFFFF" />
+          </View>
+        </Press>
 
         {!!event.organizer_name && (
           <View className="self-start rounded-sm bg-surf-sunken px-2 py-1">
@@ -185,6 +203,13 @@ export default function EventDetailScreen() {
           </PopCard>
         )}
       </ScrollView>
+
+      <PhotoViewer
+        visible={photoOpen}
+        source={event.cover_image || EVENT_PHOTO}
+        label={`Photo for ${event.title}`}
+        onClose={() => setPhotoOpen(false)}
+      />
 
       {/* The one action, docked where a thumb reaches it. */}
       <View className="px-5 pt-3" style={{ paddingBottom: Math.max(insets.bottom, 16) }}>
