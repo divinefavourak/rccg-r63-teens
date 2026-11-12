@@ -386,6 +386,9 @@ export interface TeenProfile {
   user_email: string;
   user_username: string;
   full_name: string;
+  first_name: string;
+  last_name: string;
+  phone: string;
 
   date_of_birth: string | null;
   age: number | null;
@@ -403,6 +406,17 @@ export interface TeenProfile {
   guardian_phone: string | null;
   guardian_email: string | null;
   guardian_relationship: string | null;
+  department: string | null;
+
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  emergency_contact_relationship: string | null;
+
+  medical_conditions: string | null;
+  allergies: string | null;
+  medications: string | null;
+  dietary_restrictions: string | null;
+  blood_group: string | null;
 
   devotionals_read_count: number;
   events_attended_count: number;

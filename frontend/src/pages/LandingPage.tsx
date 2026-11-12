@@ -30,11 +30,9 @@ const LandingPage = () => {
   return (
     <MotionRoot>
       <div className="min-h-screen bg-surface-base font-sans text-content-primary antialiased">
-        <Seo
-          title="Faith Tribe"
-          description="A few minutes with God, every day. One short reading, one verse to keep, and the whole Bible, made for teens across RCCG Region 63."
-          path="/"
-        />
+        {/* The title, description and canonical for `/` live in seo/site.mjs,
+            which is also what the build wrote into dist/index.html. */}
+        <Seo path="/" />
         <ScrollProgress />
         <SiteNav />
         <main>

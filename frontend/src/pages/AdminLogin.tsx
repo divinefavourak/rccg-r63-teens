@@ -80,7 +80,7 @@ const AdminLogin = () => {
 
   return (
     <>
-      <Seo title="Console login" description="Sign in to the Faith Tribe Console." noindex />
+      <Seo path="/admin-login" noindex />
     <div className="flex min-h-screen items-center justify-center bg-console-canvas px-4 py-10">
       <div className="w-full max-w-[380px]">
         <div className="mb-6 text-center">

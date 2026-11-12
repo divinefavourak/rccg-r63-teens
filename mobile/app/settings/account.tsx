@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useProfile, useUpdateProfile } from '../../src/api/queries';
 import type { TeenProfile } from '../../src/api/types';
 import { Icon } from '../../src/components/Icon';
-import { GUARDIAN_RELATIONSHIPS } from '../../src/data/choices';
+import { GUARDIAN_RELATIONSHIPS, PROVINCES } from '../../src/data/choices';
 import { useAuth } from '../../src/state/auth';
 import { useChangePhoto } from '../../src/state/photo';
 import { Button } from '../../src/ui/Button';
@@ -24,6 +24,11 @@ import { ELEVATION } from '../../src/theme/tokens';
  * server would silently discard never enters the form in the first place.
  */
 const WRITABLE = [
+  'first_name',
+  'last_name',
+  'phone',
+  'date_of_birth',
+  'province',
   'bio',
   'zone',
   'area',
@@ -50,11 +55,12 @@ type Form = Record<Field, string>;
  * Your profile (reached from the profile row on Settings).
  *
  * The fields here are exactly the ones `TeenProfileUpdateSerializer` accepts —
- * no more. Name, date of birth, gender and province are deliberately *not*
- * writable on that serializer, and DRF drops unknown fields silently rather
- * than erroring, so offering them would have produced a Save button that
- * appeared to work while discarding half of what was typed. They are shown
- * read-only instead, with who to ask.
+ * no more. First and last name and phone are written to the account; the rest
+ * belong to the teen profile. Date of birth and province are self-service: a
+ * teen knows both, and they are corrected often. The server derives the age
+ * group from the date, so the group is never set here. Gender remains a
+ * leader's correction. DRF drops unknown fields silently rather than erroring,
+ * which is why anything outside this list is read-only with who to ask.
  *
  * Everything writable here is also what prefills an event registration, so
  * filling it in once saves a teen typing it at every camp sign-up.
@@ -63,7 +69,7 @@ export default function AccountSettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const tokens = useTokens();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
 
   const profile = useProfile();
   const update = useUpdateProfile();
@@ -86,7 +92,19 @@ export default function AccountSettingsScreen() {
   const save = async () => {
     if (!form) return;
     try {
-      await update.mutateAsync(form as Partial<TeenProfile>);
+      // A cleared birthday is `null` to the API, not an empty string: DRF's
+      // DateField rejects `''` even though the model column is nullable.
+      await update.mutateAsync({
+        ...form,
+        date_of_birth: form.date_of_birth || null,
+      } as Partial<TeenProfile>);
+      // The name and phone live on the account. Without this the tab header
+      // keeps the old name until the next cold start.
+      try {
+        await refreshUser();
+      } catch {
+        // Saved anyway; the next launch re-reads the account.
+      }
       back();
     } catch {
       // Shown above the button; the form stays as typed.
@@ -167,17 +185,45 @@ export default function AccountSettingsScreen() {
           {/* What only a leader can change. Shown so the teen can check it is
               right and knows who to ask, not left invisible. */}
           <View className="w-full rounded-2xl bg-surf-raised px-4 pb-4 pt-2" style={ELEVATION.card}>
-            <ReadOnly label="Name" value={p.full_name} />
             <ReadOnly label="Username" value={user?.username} />
-            <ReadOnly label="Date of birth" value={formatDate(p.date_of_birth)} />
             <ReadOnly label="Age group" value={humanise(p.age_group)} />
-            <ReadOnly label="Province" value={humanise(p.province)} />
             <Text className="pt-3 font-ui text-[14px] leading-5 text-ink-3">
-              Your teen leader sets these. Ask them if anything is wrong.
+              Your age group is worked out from your birthday. Your username and gender are set
+              by your teen leader; ask them if either is wrong. Everything below is yours to
+              change.
             </Text>
           </View>
 
           <SectionTitle>About you</SectionTitle>
+          <TextField
+            label="Date of birth"
+            value={form.date_of_birth}
+            onChange={(v) => set('date_of_birth', v)}
+            placeholder="2012-05-12"
+            hint="Use YYYY-MM-DD. Your age group updates when you save."
+            autoCapitalize="none"
+          />
+          <TextField
+            label="First name"
+            value={form.first_name}
+            onChange={(v) => set('first_name', v)}
+            autoCapitalize="words"
+            placeholder="Ada"
+          />
+          <TextField
+            label="Last name"
+            value={form.last_name}
+            onChange={(v) => set('last_name', v)}
+            autoCapitalize="words"
+            placeholder="Okafor"
+          />
+          <TextField
+            label="Phone"
+            value={form.phone}
+            onChange={(v) => set('phone', v)}
+            keyboardType="phone-pad"
+            placeholder="+234 800 000 0000"
+          />
           <TextField
             label="Bio"
             value={form.bio}
@@ -187,6 +233,15 @@ export default function AccountSettingsScreen() {
           />
 
           <SectionTitle>Your church</SectionTitle>
+          <View className="gap-2">
+            <Text className="font-ui-sb text-[14px] leading-5 text-ink-2">Province</Text>
+            <ChipRow
+              wrap
+              options={PROVINCES}
+              value={form.province}
+              onChange={(v) => set('province', v)}
+            />
+          </View>
           <TextField
             label="Parish"
             value={form.parish}
@@ -205,6 +260,13 @@ export default function AccountSettingsScreen() {
             value={form.area}
             onChange={(v) => set('area', v)}
             autoCapitalize="words"
+          />
+          <TextField
+            label="Department"
+            value={form.department}
+            onChange={(v) => set('department', v)}
+            autoCapitalize="words"
+            hint="Choir, ushering, media — whatever you serve in, if any."
           />
 
           <SectionTitle>Parent or guardian</SectionTitle>
@@ -255,10 +317,37 @@ export default function AccountSettingsScreen() {
             keyboardType="phone-pad"
           />
           <TextField
+            label="Who are they to you?"
+            value={form.emergency_contact_relationship}
+            onChange={(v) => set('emergency_contact_relationship', v)}
+            autoCapitalize="words"
+            placeholder="Aunt, neighbour, family friend"
+          />
+          <TextField
             label="Allergies"
             value={form.allergies}
             onChange={(v) => set('allergies', v)}
             multiline
+          />
+          <TextField
+            label="Medication you take"
+            value={form.medications}
+            onChange={(v) => set('medications', v)}
+            multiline
+            hint="Only what the team would need to know at camp."
+          />
+          <TextField
+            label="Food you do not eat"
+            value={form.dietary_restrictions}
+            onChange={(v) => set('dietary_restrictions', v)}
+            multiline
+          />
+          <TextField
+            label="Blood group"
+            value={form.blood_group}
+            onChange={(v) => set('blood_group', v)}
+            autoCapitalize="characters"
+            placeholder="e.g. O+"
           />
           <TextField
             label="Anything else the team should know"
@@ -310,12 +399,7 @@ function ReadOnly({ label, value }: { label: string; value?: string | null }) {
   );
 }
 
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '';
-  const d = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
-}
+
 
 function humanise(value: string | null | undefined): string {
   if (!value) return '';

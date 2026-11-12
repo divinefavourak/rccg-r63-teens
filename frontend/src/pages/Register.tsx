@@ -145,7 +145,7 @@ const Register = () => {
 
   return (
     <>
-      <Seo title="Create your account" description="Join the Faith Tribe — daily devotionals, Bible study manuals and events." noindex />
+      <Seo path="/register" noindex />
     <AuthShell
       title="Join Faith Tribe"
       subtitle={STEPS[step]}

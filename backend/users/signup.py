@@ -227,7 +227,7 @@ class SignupCompleteView(APIView):
             otp = verify_otp(email, OTPCode.Purpose.LOGIN, code)
             if otp is None:
                 return Response(_BAD_CODE, status=status.HTTP_400_BAD_REQUEST)
-            return otp_login_response(existing, otp)
+            return otp_login_response(existing, otp, request)
 
         # Either copy of the code will do. Whichever matched, the other is
         # retired so it cannot be used a second time.
@@ -252,7 +252,7 @@ class SignupCompleteView(APIView):
             )
 
         UserEmailService.send_welcome_email(user)
-        response = otp_login_response(user, otp)
+        response = otp_login_response(user, otp, request)
         response.status_code = status.HTTP_201_CREATED
         return response
 

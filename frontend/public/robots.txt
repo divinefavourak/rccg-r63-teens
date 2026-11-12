@@ -1,11 +1,28 @@
-# thefaithtribe.live
+# www.thefaithtribe.live
 #
 # The teen-facing content is meant to be found: a devotional or an event should
 # be shareable and searchable. Everything behind an account, and every surface
 # that only makes sense mid-flow, is not.
+#
+# The short host (thefaithtribe.live) redirects here. The sitemap and every
+# canonical name this host, because a crawler that follows a canonical into a
+# redirect learns to distrust both.
 
+# Answer engines are named in the same group as the wildcard on purpose. A
+# named group does not inherit the wildcard's rules: giving GPTBot its own
+# `Allow: /` would let it crawl the account and payment routes again. Several
+# User-agent lines followed by one rule set is the syntax for "these agents,
+# these rules".
 User-agent: *
+User-agent: GPTBot
+User-agent: ClaudeBot
+User-agent: PerplexityBot
+User-agent: Google-Extended
 Allow: /
+
+# The rewrite target for paths that have no file of their own. It is a shell,
+# not a page, and it must never appear in a result.
+Disallow: /app.html
 
 # Authenticated surfaces. These render the SPA shell and then redirect, so a
 # crawler that fetched them would index an empty frame under a real URL.
@@ -31,4 +48,6 @@ Disallow: /coordinator-login
 Disallow: /forgot-password
 Disallow: /reset-password
 
-Sitemap: https://thefaithtribe.live/sitemap.xml
+# A future decision to block an answer engine is a change to the group above.
+
+Sitemap: https://www.thefaithtribe.live/sitemap.xml

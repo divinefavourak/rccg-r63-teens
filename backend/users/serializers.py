@@ -107,6 +107,9 @@ class UserCreateSerializer(serializers.ModelSerializer):
 
 class UserUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating users"""
+
+    MAX_PICTURE_BYTES = 5 * 1024 * 1024
+
     current_password = serializers.CharField(
         write_only=True,
         required=False,
@@ -138,11 +141,19 @@ class UserUpdateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"current_password": "Current password is incorrect."})
         
         return data
-    
+
+    def validate_profile_picture(self, value):
+        if value and value.size > self.MAX_PICTURE_BYTES:
+            raise serializers.ValidationError(
+                'That photo is larger than 5 MB. Choose a smaller one.'
+            )
+        return value
+
     def update(self, instance, validated_data):
         # Handle password change
         new_password = validated_data.pop('new_password', None)
         validated_data.pop('current_password', None)
+        picture_supplied = 'profile_picture' in validated_data
         
         if new_password:
             instance.set_password(new_password)
@@ -151,6 +162,22 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         
         instance.save()
+
+        # Keep the teen profile's `avatar` in step. The app writes that field;
+        # this one is what the website and older tools write. Without the
+        # mirror, a photo changed in one client disappears from the other.
+        if picture_supplied:
+            from profiles.models import TeenProfile
+
+            try:
+                profile = instance.teen_profile
+            except TeenProfile.DoesNotExist:
+                profile = None
+            if profile is not None:
+                # Use the stored name, not the upload, so the file is stored once.
+                profile.avatar = instance.profile_picture.name if instance.profile_picture else None
+                profile.save(update_fields=['avatar'])
+
         return instance
 
 

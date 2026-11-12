@@ -1,3 +1,5 @@
+import { SITE } from '../../seo/site.mjs';
+
 export const EVENT_DETAILS = {
   title: "THE PRICELESS",
   subtitle: "RCCG Region 63 Junior Church | Faith Tribe",
@@ -8,8 +10,8 @@ export const EVENT_DETAILS = {
   location: "@GLORY ARENA, REDEMPTION CITY",
   address: "KM 46, LAGOS-IBADAN EXPRESSWAY, OGUN STATE",
   contact: {
-    phone: "+234 806 425 4001",
-    email: "region63juniorchurch@gmail.com",
+    phone: SITE.contact.phone,
+    email: SITE.contact.email,
     pastor: "A/P Joy Oladipupo Tobi",
   },
   features: [

@@ -121,7 +121,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         # Generate tokens
         refresh = RefreshToken.for_user(user)
         
-        user_data = UserSerializer(user).data
+        user_data = UserSerializer(user, context={'request': request}).data
         response_data = {
             'access': str(refresh.access_token),
             'refresh': str(refresh),
@@ -367,7 +367,7 @@ class CurrentUserView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        serializer = UserSerializer(request.user)
+        serializer = UserSerializer(request.user, context={'request': request})
         return Response(serializer.data)
 
     def patch(self, request):
@@ -379,7 +379,7 @@ class CurrentUserView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(UserSerializer(request.user).data)
+        return Response(UserSerializer(request.user, context={'request': request}).data)
 
     def put(self, request):
         return self.patch(request)
@@ -569,7 +569,7 @@ def _find_user_by_destination(destination, channel):
     return find_by_phone(destination)
 
 
-def session_response(user, *, verify_email=False):
+def session_response(user, *, verify_email=False, request=None):
     """Sign ``user`` in, with the checks every passwordless route shares.
 
     Used by an email one-time code and by Google, so there is exactly one place
@@ -601,13 +601,13 @@ def session_response(user, *, verify_email=False):
     resp = Response({
         'access': str(refresh.access_token),
         'refresh': str(refresh),
-        'user': UserSerializer(user).data,
+        'user': UserSerializer(user, context={'request': request}).data,
     })
     set_auth_cookies(resp, access=str(refresh.access_token), refresh=str(refresh))
     return resp
 
 
-def otp_login_response(user, otp):
+def otp_login_response(user, otp, request=None):
     """Sign ``user`` in on the strength of a verified one-time code.
 
     Shared by OTP login and by sign-up, so there is exactly one place that
@@ -615,12 +615,16 @@ def otp_login_response(user, otp):
     """
     from .models import OTPCode
 
-    return session_response(user, verify_email=otp.channel == OTPCode.Channel.EMAIL)
+    return session_response(
+        user,
+        verify_email=otp.channel == OTPCode.Channel.EMAIL,
+        request=request,
+    )
 
 
-def google_login_response(user):
+def google_login_response(user, request=None):
     """Sign ``user`` in after Google has verified their email address."""
-    return session_response(user, verify_email=True)
+    return session_response(user, verify_email=True, request=request)
 
 
 class RequestOTPView(APIView):
@@ -684,7 +688,7 @@ class VerifyOTPView(APIView):
             if user is None:
                 return Response({"detail": "No account for that destination."},
                                 status=status.HTTP_400_BAD_REQUEST)
-            return otp_login_response(user, otp)
+            return otp_login_response(user, otp, request)
 
         return Response({"detail": "Verified."})
 

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-NG">
 
 <head>
   <meta charset="UTF-8" />
@@ -15,6 +15,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
 
   <!--
     Self-hosted Inter. This replaces an @import of fonts.googleapis.com inside
@@ -26,54 +27,53 @@
   -->
   <link rel="preload" href="/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin />
 
-  <title>RCCG Region 63 Teens — Faith Tribe</title>
-  <meta name="description"
-    content="The Faith Tribe platform for RCCG Region 63 Teens. Daily devotionals, Bible study manuals, worship media and camp events for teenagers across the region." />
-  <link rel="canonical" href="https://thefaithtribe.live/" />
-
-  <!-- Open Graph. Absent before, so every WhatsApp forward rendered as a bare link. -->
-  <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="RCCG Region 63 Teens" />
-  <meta property="og:title" content="RCCG Region 63 Teens — Faith Tribe" />
-  <meta property="og:description"
-    content="Daily devotionals, Bible study manuals, worship media and camp events for teenagers across RCCG Region 63." />
-  <meta property="og:url" content="https://thefaithtribe.live/" />
-  <meta property="og:image" content="https://thefaithtribe.live/og-image.jpg" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
-  <meta property="og:locale" content="en_NG" />
-
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="RCCG Region 63 Teens — Faith Tribe" />
-  <meta name="twitter:description"
-    content="Daily devotionals, Bible study manuals, worship media and camp events for teenagers across RCCG Region 63." />
-  <meta name="twitter:image" content="https://thefaithtribe.live/og-image.jpg" />
-
   <!--
-    Organization only. The Event JSON-LD that lived here was hardcoded to a camp
-    with startDate 2025-12-22 — it kept advertising an event that had been over
-    for twenty months, on every route on the site. Event structured data now
-    renders from real data in pages/EventDetail.tsx.
+    The head of a page lives between these two comments.
+
+    Everything in the region below is the fallback: it is what the dev server
+    serves, and it is what a browser sees if the build script ever fails to run.
+    `scripts/generate-site.mjs` replaces the whole region, per route, with the
+    tags `seo/site.mjs` describes — so the copy lives in exactly one place and a
+    static file cannot drift from what React renders.
+
+    Do not add tags of your own inside the region; they will be replaced. Tags
+    that belong on every page (charset, icons, font preload) go above it.
   -->
-  <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "Organization",
-      "name": "RCCG Region 63 Junior Church",
-      "alternateName": "Faith Tribe",
-      "url": "https://thefaithtribe.live",
-      "logo": "https://thefaithtribe.live/img/faithTribeLogo-fallback.png",
-      "parentOrganization": {
-        "@type": "Organization",
-        "name": "The Redeemed Christian Church of God",
-        "url": "https://rccg.org"
-      }
-    }
-  </script>
+  <!--seo:start-->
+  <title>Faith Tribe — Daily Devotionals &amp; Bible for RCCG Teens</title>
+  <meta name="description"
+    content="A few minutes with God, every day. Free daily devotionals, the Bible, study manuals and camp registration for teenagers in RCCG Region 63 Junior Church." />
+  <meta name="robots" content="index, follow" />
+  <!--seo:end-->
 </head>
 
 <body>
   <div id="root"></div>
+
+  <!--
+    What a reader without JavaScript gets. One paragraph and the four links that
+    lead into the site, written per route by the build script — not a sales page
+    hidden from people. It is here because the app is client-rendered: without
+    it, a crawler that does not execute JavaScript sees an empty body under a
+    perfectly good title.
+  -->
+  <noscript>
+    <!--seo:noscript:start-->
+    <div>
+      <h1>Faith Tribe</h1>
+      <p>A few minutes with God, every day. Free daily devotionals, the Bible, study manuals and camp registration for
+        teenagers in RCCG Region 63 Junior Church.</p>
+      <ul>
+        <li><a href="/devotionals">Today’s devotional</a></li>
+        <li><a href="/events">Events and camps</a></li>
+        <li><a href="/manuals">Bible study manuals</a></li>
+        <li><a href="/media">Podcasts and videos</a></li>
+        <li><a href="/help">Help</a></li>
+      </ul>
+    </div>
+    <!--seo:noscript:end-->
+  </noscript>
+
   <script type="module" src="/src/main.tsx"></script>
 </body>
 

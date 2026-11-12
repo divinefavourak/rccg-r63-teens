@@ -781,18 +781,26 @@ export function useUpdateProfile() {
 export function useUploadAvatar() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (asset: { uri: string; mimeType?: string; fileName?: string }) => {
+    mutationFn: async (asset: {
+      uri: string;
+      mimeType?: string;
+      fileName?: string;
+      /** The web picker hands back the browser File; use it when present. */
+      file?: Blob;
+    }) => {
       const body = new FormData();
       const name = asset.fileName ?? `avatar.${extensionFor(asset.mimeType)}`;
 
       // The global fetch here is Expo's, which cannot send React Native's old
       // `{ uri, name, type }` file object: it throws before any request goes
       // out. It sends an expo-file-system `File`, read from the picked image.
-      // The web preview has no such file, so it sends the picked image's bytes.
+      // On the web the picker already has the browser File, and sending that
+      // avoids re-reading a blob URL, which some iOS Safari versions refuse.
       const file =
-        Platform.OS === 'web'
+        asset.file ??
+        (Platform.OS === 'web'
           ? await (await fetch(asset.uri)).blob()
-          : (new File(asset.uri) as unknown as Blob);
+          : (new File(asset.uri) as unknown as Blob));
       body.append('avatar', file, name);
 
       return api.patch<TeenProfile>('/profiles/me/', body);

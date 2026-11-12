@@ -70,7 +70,7 @@ const ForgotPassword = () => {
 
   return (
     <>
-      <Seo title="Reset your password" description="Request a password reset link." noindex />
+      <Seo path="/forgot-password" noindex />
     <AuthShell
       title="Forgot your password?"
       subtitle="We'll email you a link to set a new one."

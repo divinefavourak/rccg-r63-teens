@@ -134,9 +134,17 @@ const AvatarDropdown = ({ onClose }: { onClose: () => void }) => {
             {/* Profile Info */}
             <div className="px-4 py-4 border-b border-gray-100 dark:border-gray-700">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 ring-2 ring-primary-200 dark:ring-primary-800">
-                        {initials}
-                    </div>
+                    {user?.profile_picture ? (
+                        <img
+                            src={user.profile_picture}
+                            alt={`${displayName}'s profile photo`}
+                            className="w-10 h-10 rounded-full object-cover flex-shrink-0 ring-2 ring-primary-200 dark:ring-primary-800"
+                        />
+                    ) : (
+                        <div className="w-10 h-10 rounded-full bg-primary-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 ring-2 ring-primary-200 dark:ring-primary-800">
+                            {initials}
+                        </div>
+                    )}
                     <div className="min-w-0">
                         <p className="font-bold text-gray-900 dark:text-white text-sm truncate">{displayName}</p>
                         <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email || ''}</p>
@@ -285,9 +293,17 @@ const DashboardLayout = () => {
                                 onClick={toggleAvatarMenu}
                                 className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                             >
-                                <div className="w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center text-white font-bold text-xs ring-2 ring-primary-200 dark:ring-primary-800">
-                                    {initials}
-                                </div>
+                                {user?.profile_picture ? (
+                                    <img
+                                        src={user.profile_picture}
+                                        alt={`${displayName}'s profile photo`}
+                                        className="w-8 h-8 rounded-full object-cover ring-2 ring-primary-200 dark:ring-primary-800"
+                                    />
+                                ) : (
+                                    <div className="w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center text-white font-bold text-xs ring-2 ring-primary-200 dark:ring-primary-800">
+                                        {initials}
+                                    </div>
+                                )}
                                 <span className="hidden sm:block text-sm font-medium text-gray-700 dark:text-gray-200 max-w-[100px] truncate">
                                     {displayName.split(' ')[0]}
                                 </span>

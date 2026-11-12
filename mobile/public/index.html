@@ -11,6 +11,9 @@
       content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
     />
     <title>%WEB_TITLE%</title>
+    <!-- The app is for using, not for searching. Its public content lives on
+         the website; this keeps a login-gated shell out of search results. -->
+    <meta name="robots" content="noindex, nofollow" />
 
     <!-- What "Add to Home Screen" reads. iOS takes the name and icon from the
          apple-* tags, Android from the manifest. -->

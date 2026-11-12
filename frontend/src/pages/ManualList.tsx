@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import api from '../api/axios';
 import { type Manual } from '../types';
@@ -23,7 +24,7 @@ const ManualList = () => {
 
     const fetchManuals = async () => {
         try {
-            const { data } = await api.get('/content/manuals/');
+            const { data } = await api.get('/content/manuals/?page_size=60&ordering=-week_start_date');
             setManuals(Array.isArray(data) ? data : data.results || []);
         } catch (error) {
             console.error("Failed to fetch manuals");
@@ -34,17 +35,21 @@ const ManualList = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-            <Seo title="Study Manuals" description="Weekly Bible study manuals for RCCG Region 63 Teens, organised by series and week." path="/manuals" />
+            <Seo path="/manuals" />
             <Navbar />
             <div className="container mx-auto px-4 py-24">
 
                 <div className="text-center mb-12">
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary-600 dark:text-primary-400 mb-3">
+                        RCCG Region 63 Junior Church
+                    </p>
                     <h1 className="text-4xl font-black text-gray-900 dark:text-white uppercase mb-4">
-                        TEACHING MANUALS(Upload for categories)
+                        Teaching Manuals
                     </h1>
-                    <div className="w-24 h-1 bg-yellow-500 mx-auto rounded-full"></div>
-                    <p className="mt-4 text-gray-600 dark:text-gray-400">
-                        Resources for teachers and students.
+                    <div className="w-24 h-1 bg-yellow-500 mx-auto rounded-full mb-4"></div>
+                    <p className="mt-4 text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+                        The study manual used in Junior Church classes, week by week and by age group. Open one in the
+                        browser or download the PDF — free, for teachers and for the teens they teach.
                     </p>
                 </div>
 
@@ -113,6 +118,45 @@ const ManualList = () => {
                         ))}
                     </div>
                 )}
+
+                {!loading && manuals.length === 0 && (
+                    <p className="text-center text-gray-500 dark:text-gray-400 py-16">
+                        No manuals have been published yet. They appear here as each week&rsquo;s edition is released.
+                    </p>
+                )}
+
+                {/*
+                    A teacher arrives here mid-week with a class on Sunday and no
+                    idea which edition is current. This says what the manual is,
+                    how it is organised, and what to do when the week's edition
+                    is missing from the list.
+                */}
+                <section aria-labelledby="about-manuals" className="mt-20 max-w-3xl mx-auto">
+                    <h2 id="about-manuals" className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+                        About the weekly manual
+                    </h2>
+                    <div className="space-y-4 text-gray-600 dark:text-gray-400 leading-relaxed">
+                        <p>
+                            Every week, RCCG Junior Church publishes a teaching manual for each age group — children,
+                            pre-teens, teens and superteens. Each edition carries a theme, a Scripture passage, the
+                            lesson itself and questions for the class, and it is studied on the same Sunday across the
+                            region so that a teen who moves parish does not fall behind.
+                        </p>
+                        <p>
+                            Teachers use the PDF to prepare and to print. Teens who missed the class, or who want to
+                            read the lesson again, can open the same file here. If this week&rsquo;s edition is not
+                            listed yet, it has not been uploaded — check back, or ask your parish coordinator.
+                        </p>
+                        <p>
+                            The manual is not the same as the{' '}
+                            <Link to="/devotionals" className="text-primary-600 dark:text-primary-400 underline">
+                                daily devotional
+                            </Link>
+                            . The devotional is read at home, one short reading a day; the manual is the class
+                            lesson.
+                        </p>
+                    </div>
+                </section>
             </div>
         </div>
     );

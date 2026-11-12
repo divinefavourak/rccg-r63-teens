@@ -78,7 +78,7 @@ const Login = () => {
 
   return (
     <>
-      <Seo title="Log in" description="Log in to your Faith Tribe account." noindex />
+      <Seo path="/login" noindex />
     <div className="flex min-h-screen items-center justify-center bg-console-canvas px-4 py-10">
       <div className="w-full max-w-[400px]">
         <div className="mb-7 text-center">

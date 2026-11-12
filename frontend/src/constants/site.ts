@@ -1,19 +1,20 @@
-import { EVENT_DETAILS } from './eventDetails';
+import { SITE } from '../../seo/site.mjs';
 
 /**
  * How to reach the people behind Faith Tribe. One place, so the privacy notice,
- * the terms and the help page cannot drift apart.
+ * the terms, the help page, robots and the structured data cannot drift apart.
  *
- * The values come from EVENT_DETAILS because that is where the church's contact
- * details already live. Change them there.
+ * The values live in `seo/site.mjs` because the build scripts need the same
+ * email and telephone in the JSON-LD they write, and a second copy in the app
+ * is a copy that eventually disagrees.
  */
 export const SITE_CONTACT = {
-  organisation: 'RCCG Region 63 Junior Church',
-  email: EVENT_DETAILS.contact.email,
-  phone: EVENT_DETAILS.contact.phone,
+  organisation: SITE.legalName,
+  email: SITE.contact.email,
+  phone: SITE.contact.phone,
   /** The phone number in a form a tel: link accepts. */
-  phoneHref: `tel:${EVENT_DETAILS.contact.phone.replace(/\s+/g, '')}`,
-} as const;
+  phoneHref: SITE.contact.phoneHref,
+};
 
 /** Shown on the privacy notice and the terms. Update it whenever either changes. */
 export const LEGAL_UPDATED = '1 October 2026';
@@ -36,5 +37,5 @@ export const APP_LINKS = {
     import.meta.env.VITE_ANDROID_APP_URL ||
     'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/apps/android/faith-tribe-latest.apk',
   /** The web app, for iPhones. */
-  web: import.meta.env.VITE_WEB_APP_URL || 'https://app.thefaithtribe.live',
-} as const;
+  web: import.meta.env.VITE_WEB_APP_URL || SITE.webApp,
+};

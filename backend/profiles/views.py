@@ -101,6 +101,21 @@ class MyProfileView(generics.RetrieveUpdateAPIView):
         return get_object_or_404(
             TeenProfile.objects.select_related('user'), user=self.request.user)
 
+    def update(self, request, *args, **kwargs):
+        """Save, then answer with the read serializer.
+
+        `TeenProfileUpdateSerializer` is a write shape: its name and phone
+        fields belong to `User`, not to the profile row. Returning that shape
+        would omit the values the app caches, and the next profile screen would
+        open with them blank. The read serializer is the one the GET returns.
+        """
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(TeenProfileSerializer(instance).data)
+
 
 class RepairProfileView(generics.GenericAPIView):
     """Create a person's missing profile, or fill in what it is missing.

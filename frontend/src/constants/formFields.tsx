@@ -58,21 +58,30 @@ export const PERSONAL_INFO_FIELDS = [
   }
 ];
 
+/**
+ * `TeenProfile.province` choices, mirrored from the Django model.
+ *
+ * Kept here as one export so registration, the profile editor and the bulk
+ * tools cannot drift. The hierarchy work replaces this list with the church
+ * tree; until then, a value that is not in this list is a 400 from the API.
+ */
+export const PROVINCES = [
+  { value: "lagos_province_9", label: "Lagos Province 9" },
+  { value: "lagos_province_28", label: "Lagos Province 28" },
+  { value: "lagos_province_69", label: "Lagos Province 69" },
+  { value: "lagos_province_84", label: "Lagos Province 84" },
+  { value: "lagos_province_86", label: "Lagos Province 86" },
+  { value: "lagos_province_104", label: "Lagos Province 104" },
+  { value: "regional_hq", label: "Regional Headquarter" },
+];
+
 export const CHURCH_INFO_FIELDS = [
   {
     name: "province",
     label: "Province",
     type: "select",
     required: true,
-    options: [
-      { value: "lagos_province_9", label: "Lagos Province 9" },
-      { value: "lagos_province_28", label: "Lagos Province 28" },
-      { value: "lagos_province_69", label: "Lagos Province 69" },
-      { value: "lagos_province_84", label: "Lagos Province 84" },
-      { value: "lagos_province_86", label: "Lagos Province 86" },
-      { value: "lagos_province_104", label: "Lagos Province 104" },
-      { value: "regional_hq", label: "Regional Headquarter" },
-    ]
+    options: PROVINCES
   },
   {
     name: "zone",

@@ -510,7 +510,7 @@ class GoogleExchangeView(APIView):
                 {"detail": "That sign-in link has expired. Try again."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        return google_login_response(user)
+        return google_login_response(user, request)
 
 
 class GoogleSignupDetailsView(APIView):
@@ -588,6 +588,6 @@ class GoogleSignupCompleteView(APIView):
 
         _consume_signup_ticket(ticket)
         UserEmailService.send_welcome_email(user)
-        response = session_response(user, verify_email=True)
+        response = session_response(user, verify_email=True, request=request)
         response.status_code = status.HTTP_201_CREATED
         return response
