@@ -39,8 +39,17 @@ async function fetchAll(path, label) {
       // one carries `next`.
       url = Array.isArray(data) ? null : data.next;
     } catch (error) {
-      console.warn(`  ${label} -> ${error.message}, skipping`);
-      break;
+      // A backend that was down from the start leaves the site's static pages
+      // intact, so an empty list is a safe fallback. A failure *between* pages
+      // is different: publishing page 1 as if it were the whole archive would
+      // silently drop content and take withdrawn pages' replacements with it.
+      if (rows.length === 0) {
+        console.warn(`  ${label} -> ${error.message}, skipping`);
+        return [];
+      }
+      throw new Error(
+        `${label} failed after ${rows.length} rows; refusing to publish a partial list (${error.message})`,
+      );
     }
   }
 

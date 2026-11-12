@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     User as UserIcon, Mail, Phone, Lock, Eye, EyeOff, Save, Loader, Shield, LogOut,
     Camera, MapPin, HeartPulse, Users, CalendarDays,
@@ -32,7 +32,7 @@ const Field = ({
     const isPassword = type === 'password';
     return (
         <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+            <label htmlFor={name} className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
                 {label} {required && <span className="text-red-500">*</span>}
             </label>
             <div className="relative">
@@ -41,6 +41,7 @@ const Field = ({
                 </div>
                 <input
                     type={isPassword && show ? 'text' : type}
+                    id={name}
                     name={name}
                     value={value}
                     onChange={onChange}
@@ -68,8 +69,9 @@ const TextArea = ({
     placeholder?: string; hint?: string; rows?: number;
 }) => (
     <div>
-        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">{label}</label>
+        <label htmlFor={name} className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">{label}</label>
         <textarea
+            id={name}
             name={name}
             value={value}
             onChange={onChange}
@@ -172,6 +174,7 @@ const Settings = () => {
 
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
     const [photoLoading, setPhotoLoading] = useState(false);
+    const [photoNeedsRefresh, setPhotoNeedsRefresh] = useState(false);
     const photoInput = useRef<HTMLInputElement>(null);
 
     const [passwordData, setPasswordData] = useState({
@@ -191,23 +194,26 @@ const Settings = () => {
     // The teen profile is a second record. Load it once so the form opens with
     // what the app already knows, rather than a blank page that would overwrite
     // a guardian's phone number with an empty string on save.
-    useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            try {
-                const { data } = await api.get<TeenProfile>('/profiles/me/');
-                if (!cancelled) setTeen(teenFormFrom(data));
-            } catch (err) {
-                if (!cancelled) {
-                    setTeenError(errorMessage(err, 'We could not load your church and contact details.'));
-                    setTeen(EMPTY_TEEN);
-                }
-            } finally {
-                if (!cancelled) setTeenLoading(false);
-            }
-        })();
-        return () => { cancelled = true; };
+    const loadTeen = useCallback(async () => {
+        setTeenLoading(true);
+        setTeenError(null);
+        try {
+            const { data } = await api.get<TeenProfile>('/profiles/me/');
+            setTeen(teenFormFrom(data));
+        } catch (err) {
+            // Do not hand back an editable empty form. Saving it would send ''
+            // for every guardian, emergency and medical field the teen already
+            // had, and the PATCH would overwrite them.
+            setTeen(null);
+            setTeenError(errorMessage(err, 'We could not load your church and contact details.'));
+        } finally {
+            setTeenLoading(false);
+        }
     }, []);
+
+    useEffect(() => {
+        void loadTeen();
+    }, [loadTeen]);
 
     // A chosen file is shown immediately; the old object URL is released when
     // the next photo replaces it or the page closes.
@@ -264,6 +270,7 @@ const Settings = () => {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
             setTeen((current) => (current ? { ...current, ...teenFormFrom(data) } : current));
+            setPhotoNeedsRefresh(false);
             toast.success('Photo updated.');
         } catch (err) {
             URL.revokeObjectURL(preview);
@@ -275,12 +282,24 @@ const Settings = () => {
         }
 
         // The API mirrors the profile photo onto the account. Re-read it so the
-        // header, the dropdown and this page all show the same picture. A
-        // failure here does not undo the upload; the next page load re-reads it.
+        // header, the dropdown and this page all show the same picture. The
+        // upload already succeeded; a failure here is a stale header, not a
+        // lost photo, so it gets its own warning and retry below.
         try {
             await refreshUser();
+            setPhotoNeedsRefresh(false);
         } catch {
-            // Ignored on purpose.
+            setPhotoNeedsRefresh(true);
+        }
+    };
+
+    const retryPhotoRefresh = async () => {
+        try {
+            await refreshUser();
+            setPhotoNeedsRefresh(false);
+            toast.success('Header updated.');
+        } catch {
+            toast.error('Still could not refresh the header. Reload the page.');
         }
     };
 
@@ -297,6 +316,14 @@ const Settings = () => {
             });
             setTeen(teenFormFrom(data));
             setTeenError(null);
+            // A birthday edit changes the derived age group, and a province edit
+            // changes the account field registrations prefill from. Both live on
+            // the cached account, so re-read it. The save itself already worked.
+            try {
+                await refreshUser();
+            } catch {
+                // Ignored: the next page load re-reads the account.
+            }
             toast.success('Your details were saved.');
         } catch (err) {
             toast.error(errorMessage(err, 'Those details did not save. Try again.'));
@@ -406,6 +433,18 @@ const Settings = () => {
                             {avatarUrl ? 'Change photo' : 'Add a photo'}
                         </button>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">JPG, PNG or WebP, up to 5 MB.</p>
+                        {photoNeedsRefresh && (
+                            <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">
+                                The photo saved, but the header could not refresh.{' '}
+                                <button
+                                    type="button"
+                                    onClick={retryPhotoRefresh}
+                                    className="font-bold underline"
+                                >
+                                    Retry
+                                </button>
+                            </p>
+                        )}
                     </div>
                 </div>
             </Section>
@@ -420,8 +459,9 @@ const Settings = () => {
                     <Field label="Email Address" icon={Mail} type="email" name="email" value={profileData.email} onChange={handleProfileChange} placeholder="you@example.com" required />
                     <Field label="Phone Number" icon={Phone} type="tel" name="phone" value={profileData.phone} onChange={handleProfileChange} placeholder="+234 800 000 0000" />
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Gender</label>
+                        <label htmlFor="gender" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Gender</label>
                         <select
+                            id="gender"
                             name="gender"
                             value={profileData.gender}
                             onChange={(e) => setProfileData(prev => ({ ...prev, gender: e.target.value }))}
@@ -447,19 +487,30 @@ const Settings = () => {
             </Section>
 
             {/* Church + contact details */}
-            <Section title="Your church and contact details" description="These are used on event registrations, so you do not type them every time">
+            <Section title="Your church and contact details" description="Keep these up to date. The app uses them to prefill event registration.">
                 {teenLoading ? (
                     <div className="py-8 flex items-center justify-center text-gray-400">
                         <Loader size={22} className="animate-spin" />
                     </div>
+                ) : teenError ? (
+                    <div className="space-y-3">
+                        <p className="text-sm text-amber-700 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-300 rounded-xl px-3 py-2">
+                            {teenError}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                            The form stays locked until your saved details load, so saving it
+                            cannot overwrite them with blanks.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => void loadTeen()}
+                            className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white text-sm font-bold rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                        >
+                            Try again
+                        </button>
+                    </div>
                 ) : teen ? (
                     <form onSubmit={saveTeen} className="space-y-5">
-                        {teenError && (
-                            <p className="text-sm text-amber-700 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-300 rounded-xl px-3 py-2">
-                                {teenError}
-                            </p>
-                        )}
-
                         <div>
                             <h4 className="flex items-center gap-2 text-sm font-bold text-gray-800 dark:text-white mb-3">
                                 <CalendarDays size={16} className="text-primary-600" /> About you
@@ -475,8 +526,9 @@ const Settings = () => {
                                     hint="Your age group updates when you save."
                                 />
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Province</label>
+                                    <label htmlFor="province" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Province</label>
                                     <select
+                                        id="province"
                                         name="province"
                                         value={teen.province}
                                         onChange={(e) => setTeen(prev => (prev ? { ...prev, province: e.target.value } : prev))}

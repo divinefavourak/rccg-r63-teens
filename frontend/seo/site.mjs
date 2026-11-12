@@ -214,7 +214,7 @@ export const DYNAMIC_ROUTES = [
     type: 'article',
     priority: 0.8,
     changeFrequency: 'monthly',
-    lastModified: (item) => item.date || item.updated_at,
+    lastModified: (item) => item.updated_at || item.date,
   },
   {
     collection: 'events',
@@ -294,6 +294,25 @@ export function devotionalDescription(item) {
 }
 
 /**
+ * The price a reader would actually pay.
+ *
+ * `current_price` is the early-bird or tier price when one is active; `price`
+ * is the base. A null base price with a live current price is a paid event, so
+ * treating the missing base as 0 would advertise it as free.
+ */
+export function eventPrice(event) {
+  const raw = event?.current_price ?? event?.price;
+  if (raw === null || raw === undefined || raw === '') return null;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
+/** Free only when the organiser says so or the effective price is zero. */
+export function eventIsFree(event) {
+  return event?.is_free === true || eventPrice(event) === 0;
+}
+
+/**
  * The meta description for one event.
  *
  * Event rows carry a `short_description` that is sometimes a sentence and
@@ -319,7 +338,7 @@ export function eventDescription(event) {
   return [
     lead,
     supplied.length > 24 ? supplied : null,
-    event?.is_free || Number(event?.price) === 0
+    eventIsFree(event)
       ? 'Free admission. See what is on and register online.'
       : 'See the ticket price and register online.',
   ]
@@ -495,7 +514,14 @@ const VOID = new Set(['meta', 'link', 'base', 'br', 'hr', 'img', 'input']);
 export function headToHtml(meta, indent = '  ') {
   return buildHead(meta)
     .map(({ tag, attrs, children, html }) => {
-      const rendered = Object.entries(attrs || {})
+      const renderedAttrs = { ...(attrs || {}) };
+      // Mark JSON-LD written into the static document. `Seo.tsx` removes only
+      // these when the client takes over, so a direct load does not leave two
+      // copies of the same route's schema in <head>.
+      if (tag === 'script' && renderedAttrs.type === 'application/ld+json') {
+        renderedAttrs['data-seo-static'] = '1';
+      }
+      const rendered = Object.entries(renderedAttrs)
         .map(([key, value]) => `${key}="${escapeAttribute(value)}"`)
         .join(' ');
       if (VOID.has(tag)) return `${indent}<${tag}${rendered ? ` ${rendered}` : ''} />`;

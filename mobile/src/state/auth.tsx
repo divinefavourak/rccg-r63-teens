@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQueryClient } from '@tanstack/react-query';
 import * as Linking from 'expo-linking';
@@ -205,6 +205,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient();
   const [user, setUserState] = useState<AuthUser | null>(null);
   const [ready, setReady] = useState(false);
+  /**
+   * Bumped whenever the signed-in identity changes. A `refreshUser()` request
+   * that started before a sign-out (or a new sign-in) must not write its old
+   * answer back into memory after the session it belongs to has ended.
+   */
+  const sessionEpoch = useRef(0);
 
   /** Every change of who is signed in goes through here, so it is remembered. */
   const setUser = useCallback((next: AuthUser | null) => {
@@ -281,6 +287,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(
     () =>
       onSessionExpired(() => {
+        sessionEpoch.current += 1;
         setUser(null);
         startClean();
       }),
@@ -300,6 +307,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           { anonymous: true },
         );
         await saveTokens(data.access, data.refresh);
+        sessionEpoch.current += 1;
         setUser(data.user);
         // Guest and member see different payloads from the same endpoints, so
         // nothing cached while signed out should survive signing in.
@@ -332,6 +340,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (establish) {
           const session = data as LoginResponse;
           await saveTokens(session.access, session.refresh);
+          sessionEpoch.current += 1;
           setUser(session.user);
           startClean();
         }
@@ -442,6 +451,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         { anonymous: true },
       );
       await saveTokens(data.access, data.refresh);
+      sessionEpoch.current += 1;
       setUser(data.user);
       startClean();
       return { status: 'signed-in' };
@@ -505,11 +515,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    * header until the next cold start.
    */
   const refreshUser = useCallback(async () => {
+    const epoch = sessionEpoch.current;
     const me = await api.get<AuthUser>('/auth/me/');
+    // The session may have ended, or been replaced, while the request was out.
+    if (sessionEpoch.current !== epoch) return;
     setUser(me);
   }, [setUser]);
 
   const signOut = useCallback(async () => {
+    // Any account refresh already in flight belongs to the session that is
+    // ending; its answer must not sign the teen back in after this.
+    sessionEpoch.current += 1;
     // While the session still exists: stop this account's notifications
     // reaching this phone. Best effort, like the blacklist below.
     await unregisterPushDevice();

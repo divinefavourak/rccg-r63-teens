@@ -9,6 +9,7 @@
     "art": "node scripts/fetch-site-art.mjs",
     "build": "vite build && node scripts/generate-site.mjs && node scripts/check-seo.mjs",
     "seo": "node scripts/generate-site.mjs && node scripts/check-seo.mjs",
+    "seo:check": "node scripts/check-seo.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc -b"

@@ -110,6 +110,8 @@ export function devotionalDescription(item: {
   memory_verse_passage?: string;
   memory_verse_content?: string;
 }): string;
+export function eventPrice(event: Record<string, unknown>): number | null;
+export function eventIsFree(event: Record<string, unknown>): boolean;
 export function eventDescription(event: Record<string, unknown>): string;
 export function metaFor(input?: MetaInput): ResolvedMeta;
 export function buildHead(meta: ResolvedMeta): HeadTag[];

@@ -105,6 +105,11 @@ class TeenProfile(UUIDMixin, TimestampMixin):
                 (self.date_of_birth.month, self.date_of_birth.day)
             )
             self.age_group = self._calculate_age_group(age)
+        else:
+            # Clearing a birthday must not leave the group derived from the old
+            # one behind. The group is always a function of the date, never an
+            # independent field a client can set.
+            self.age_group = ''
         super().save(*args, **kwargs)
     
     def _calculate_age_group(self, age):

@@ -26,7 +26,7 @@
  *
  * Run as part of `npm run build`.
  */
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import {
   ROBOTS_NOINDEX,
@@ -36,6 +36,7 @@ import {
   devotionalDescription,
   devotionalTitle,
   eventDescription,
+  eventIsFree,
   headToHtml,
   metaFor,
 } from '../seo/site.mjs';
@@ -171,7 +172,18 @@ function staticNoscript(route, content) {
       items: content.events.slice(0, 25).map((item) => ({
         href: `/events/${item.id}`,
         label: item.title,
-        note: [item.start_datetime ? new Date(item.start_datetime).toDateString() : null, item.venue]
+        note: [
+          item.start_datetime
+            ? new Date(item.start_datetime).toLocaleDateString('en-GB', {
+                timeZone: 'Africa/Lagos',
+                weekday: 'short',
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              })
+            : null,
+          item.venue,
+        ]
           .filter(Boolean)
           .join(', '),
       })),
@@ -259,8 +271,51 @@ async function writeStaticPages(shell, content) {
 
 /* ------------------------------------------------------------------ dynamic */
 
+/** Detail pages are UUID directories; archives and tags, when they land, are not. */
+const DETAIL_DIR = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * Remove detail pages for rows that are no longer published.
+ *
+ * A fresh `vite build` empties `dist/`, but `npm run seo` can run again on an
+ * existing one. Without this, an unpublished devotional keeps its old file and
+ * the checker happily reports it as a valid page. Only UUID folders are
+ * removed; `index.html` and any future archive/tag folder stay.
+ */
+async function pruneDetailPages(collection, keep) {
+  const dir = join(DIST, collection);
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+
+  let removed = 0;
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !DETAIL_DIR.test(entry.name) || keep.has(entry.name)) continue;
+    await rm(join(dir, entry.name), { recursive: true, force: true });
+    removed += 1;
+  }
+  return removed;
+}
+
 async function writeDynamicPages(shell, content) {
   const counts = { devotionals: 0, events: 0 };
+
+  // Never prune from an empty collection: that is what a build looks like when
+  // the API was unreachable, and deleting every page would be worse than
+  // leaving yesterday's.
+  if (content.devotionals.length) {
+    const keep = new Set(content.devotionals.filter((item) => item?.id).map((item) => item.id));
+    const removed = await pruneDetailPages('devotionals', keep);
+    if (removed) console.log(`  removed ${removed} withdrawn devotional page(s)`);
+  }
+  if (content.events.length) {
+    const keep = new Set(content.events.filter((item) => item?.id).map((item) => item.id));
+    const removed = await pruneDetailPages('events', keep);
+    if (removed) console.log(`  removed ${removed} withdrawn event page(s)`);
+  }
 
   for (const devotional of content.devotionals) {
     if (!devotional?.id) continue;
@@ -274,7 +329,7 @@ async function writeDynamicPages(shell, content) {
       description,
       image: devotional.cover_image || undefined,
       type: 'article',
-      lastModified: isoDate(devotional.date || devotional.updated_at) || undefined,
+      lastModified: isoDate(devotional.updated_at || devotional.date) || undefined,
     });
 
     const extra = [
@@ -345,10 +400,10 @@ async function writeDynamicPages(shell, content) {
       intro: description,
       paragraphs: [
         event.start_datetime
-          ? `Starts ${new Date(event.start_datetime).toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' })}.`
+          ? `Starts ${new Date(event.start_datetime).toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short', timeZone: 'Africa/Lagos' })}.`
           : '',
         event.venue ? `Venue: ${event.venue}${event.city ? `, ${event.city}` : ''}.` : '',
-        event.is_free || Number(event.price) === 0
+        eventIsFree(event)
           ? 'Admission is free.'
           : `Admission: ₦${Number(event.current_price ?? event.price ?? 0).toLocaleString('en-NG')}.`,
       ].filter(Boolean),
@@ -390,8 +445,13 @@ async function writeSitemap(content) {
       .sort()
       .pop();
 
-  const latestDevotional = latestOf(content.devotionals, 'date')
-    || latestOf(content.devotionals, 'updated_at');
+  // A devotional edited yesterday is newer than one published today, so take
+// the later of its publication date and its last edit across the whole set.
+const latestDevotional = content.devotionals
+  .flatMap((item) => [isoDate(item.date), isoDate(item.updated_at)])
+  .filter(Boolean)
+  .sort()
+  .pop();
   const latestEvent = latestOf(content.events, 'updated_at')
     || latestOf(content.events, 'start_datetime');
 
@@ -420,7 +480,7 @@ async function writeSitemap(content) {
     entries.push(
       urlEntry({
         loc: absoluteUrl(`/devotionals/${devotional.id}`),
-        lastmod: isoDate(devotional.date || devotional.updated_at),
+        lastmod: isoDate(devotional.updated_at || devotional.date),
         changefreq: 'monthly',
         priority: '0.7',
       }),

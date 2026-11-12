@@ -14,27 +14,45 @@ const EventList = () => {
     const [filter, setFilter] = useState<'all' | 'upcoming' | 'past'>('upcoming');
 
     useEffect(() => {
-        fetchEvents();
-    }, []);
+        let cancelled = false;
 
-    const fetchEvents = async () => {
-        try {
-            const { data } = await api.get('/events/events/?status=published&page_size=60&ordering=start_datetime');
-            setEvents(Array.isArray(data) ? data : data.results || []);
-        } catch {
-            console.error('Failed to fetch events');
-        } finally {
-            setLoading(false);
-        }
-    };
+        const load = async () => {
+            setLoading(true);
+            try {
+                // Filter on the server before the 60-row page is cut. The old
+                // client-side filter saw only the first 60 ever-published
+                // events, so once those had started the Upcoming tab was empty
+                // even when newer events existed.
+                const params = new URLSearchParams({
+                    status: 'published',
+                    page_size: '60',
+                    ordering: 'start_datetime',
+                });
+                if (filter !== 'all') params.set('upcoming', String(filter === 'upcoming'));
+
+                const { data } = await api.get(`/events/events/?${params.toString()}`);
+                if (!cancelled) setEvents(Array.isArray(data) ? data : data.results || []);
+            } catch {
+                if (!cancelled) {
+                    console.error('Failed to fetch events');
+                    setEvents([]);
+                }
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        };
+
+        load();
+        return () => { cancelled = true; };
+    }, [filter]);
 
     const now = new Date();
+    // The server has already applied the upcoming/past boundary (it uses the
+    // event's end time, so an event in progress stays in Upcoming). Searching
+    // only narrows the page that was returned.
     const filtered = events.filter(e => {
         const matchesSearch = e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (e.venue || '').toLowerCase().includes(searchQuery.toLowerCase());
-        const isUpcoming = new Date(e.start_datetime) >= now;
-        if (filter === 'upcoming') return matchesSearch && isUpcoming;
-        if (filter === 'past') return matchesSearch && !isUpcoming;
         return matchesSearch;
     });
 
@@ -125,7 +143,7 @@ const EventList = () => {
                 ) : (
                     <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
                         {filtered.map(event => {
-                            const isUpcoming = new Date(event.start_datetime) >= now;
+                            const isUpcoming = new Date(event.end_datetime || event.start_datetime) >= now;
                             return (
                                 <div
                                     key={event.id}

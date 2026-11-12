@@ -127,9 +127,16 @@ class TeenProfileUpdateSerializer(serializers.ModelSerializer):
 
     MAX_AVATAR_BYTES = 5 * 1024 * 1024
 
-    first_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
-    last_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
-    phone = serializers.CharField(required=False, allow_blank=True, max_length=20)
+    first_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    last_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    phone = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=20,
+        # The same rule the account enforces, so a number that a profile accepts
+        # cannot fail when it is written to User.phone.
+        validators=list(User._meta.get_field('phone').validators),
+    )
 
     class Meta:
         model = TeenProfile
@@ -186,6 +193,13 @@ class TeenProfileUpdateSerializer(serializers.ModelSerializer):
         ]
         for field in user_fields:
             setattr(user, field, validated_data.pop(field))
+
+        # The website's registration form prefills its province from
+        # `User.province`, not from the teen profile. Keep the two in step so a
+        # province corrected here is the one the next registration starts with.
+        if 'province' in validated_data:
+            user.province = validated_data['province']
+            user_fields.append('province')
 
         # `avatar` is the field the app writes. The account's `profile_picture`
         # is what older tools and the website read, so keep the two pointing at

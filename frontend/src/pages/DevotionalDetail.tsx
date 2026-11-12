@@ -48,7 +48,7 @@ const DevotionalDetail = () => {
             const { data } = await api.get(`/content/devotionals/${id}/`);
             setDevotional(data);
             setLikesCount(data.likes_count ?? 0);
-        } catch (error) {
+        } catch {
             toast.error('Devotional not found');
             navigate('/devotionals');
         } finally {
@@ -101,8 +101,8 @@ const DevotionalDetail = () => {
             }
             // Record the share on the backend (best-effort)
             api.post(`/content/devotionals/${id}/record_share/`).catch(() => {});
-        } catch (err: any) {
-            if (err?.name !== 'AbortError') {
+        } catch (err) {
+            if ((err as { name?: string })?.name !== 'AbortError') {
                 toast.error('Could not share');
             }
         }
@@ -159,7 +159,7 @@ const DevotionalDetail = () => {
                 <div className="relative z-10 container mx-auto max-w-4xl">
                     {/* The visible half of the BreadcrumbList in the head. It is
                         also the fastest way out of a long reading. */}
-                    <nav aria-label="Breadcrumb" className="absolute top-0 left-0 mb-4 md:mb-0">
+                    <nav aria-label="Breadcrumb" className="mb-4">
                         <ol className="flex flex-wrap items-center gap-2 text-sm text-white/80">
                             <li><Link to="/" className="hover:text-white transition-colors">Home</Link></li>
                             <li aria-hidden>/</li>

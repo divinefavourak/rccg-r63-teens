@@ -16,7 +16,7 @@
  *   - Optional fields are dropped when the data is absent rather than padded
  *     with a placeholder.
  */
-import { SITE, absoluteUrl } from './site.mjs';
+import { SITE, absoluteUrl, eventIsFree, eventPrice } from './site.mjs';
 
 const ORGANIZATION_ID = `${SITE.origin}/#organization`;
 const WEBSITE_ID = `${SITE.origin}/#website`;
@@ -167,8 +167,11 @@ export function articleLd({ url, title, description, datePublished, dateModified
  */
 export function eventLd(event, url) {
   const pageUrl = absoluteUrl(url);
-  const free = event.is_free === true || Number(event.price ?? 0) === 0;
+  const free = eventIsFree(event);
+  const price = eventPrice(event);
   const soldOut = event.spots_remaining === 0;
+  const organizerName = event.organizer_name || SITE.legalName;
+  const siteOrganizer = organizerName === SITE.name || organizerName === SITE.legalName;
 
   return compact({
     '@context': 'https://schema.org',
@@ -200,20 +203,24 @@ export function eventLd(event, url) {
           },
         }
       : undefined,
-    offers: {
-      '@type': 'Offer',
-      url: pageUrl,
-      price: free ? '0' : String(event.current_price ?? event.price ?? '0'),
-      priceCurrency: 'NGN',
-      availability: soldOut ? 'https://schema.org/SoldOut' : 'https://schema.org/InStock',
-      validFrom: event.registration_opens_at,
-    },
-    organizer: compact({
-      '@id': ORGANIZATION_ID,
-      '@type': 'Organization',
-      name: event.organizer_name || SITE.legalName,
-      url: SITE.origin,
-    }),
+    offers: free || price !== null
+      ? {
+          '@type': 'Offer',
+          url: pageUrl,
+          price: free ? '0' : String(price),
+          priceCurrency: 'NGN',
+          availability: soldOut ? 'https://schema.org/SoldOut' : 'https://schema.org/InStock',
+          validFrom: event.registration_opens_at,
+        }
+      : undefined,
+    organizer: siteOrganizer
+      ? compact({
+          '@id': ORGANIZATION_ID,
+          '@type': 'Organization',
+          name: organizerName,
+          url: SITE.origin,
+        })
+      : compact({ '@type': 'Organization', name: organizerName }),
   });
 }
 

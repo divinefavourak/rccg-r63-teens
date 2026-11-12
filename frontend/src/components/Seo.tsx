@@ -1,4 +1,4 @@
-import { createElement, Fragment, type ReactNode } from 'react';
+import { createElement, Fragment, useEffect, type ReactNode } from 'react';
 import { buildHead, metaFor, type HeadTag, type SiteImage } from '../../seo/site.mjs';
 import { breadcrumbLd, organizationLd, webPageLd, websiteLd } from '../../seo/schema.mjs';
 
@@ -67,6 +67,16 @@ const Seo = ({
     bare,
     lastModified,
   });
+
+  // The build writes this route's JSON-LD into the static <head>. On a direct
+// load React renders its own nodes too, and a client-side navigation leaves the
+// old static ones behind. They are marked at generation time, so only the
+// duplicates this component did not create are removed.
+useEffect(() => {
+    document
+      .querySelectorAll('script[data-seo-static]')
+      .forEach((node) => node.remove());
+  }, [path, title]);
 
   const pageNodes = Array.isArray(jsonLd) ? jsonLd : jsonLd ? [jsonLd] : [];
   const nodes = [

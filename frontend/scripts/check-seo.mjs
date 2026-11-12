@@ -120,7 +120,9 @@ async function checkHtml(files) {
     if (!ogImage) fail(name, 'no og:image');
     else if (!/^https?:\/\//.test(ogImage)) fail(name, `og:image is not an absolute URL: ${ogImage}`);
 
-    for (const block of html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)) {
+    // The generated tag carries `data-seo-static`, so match the type attribute
+// wherever it sits in the opening tag rather than requiring it to be first.
+    for (const block of html.matchAll(/<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)) {
       try {
         JSON.parse(block[1].replace(/\\u003c/g, '<'));
       } catch {
@@ -128,7 +130,7 @@ async function checkHtml(files) {
       }
     }
 
-    if (!/<script type="application\/ld\+json">/.test(html)) warn(name, 'no structured data');
+    if (!/<script[^>]*type="application\/ld\+json"/.test(html)) warn(name, 'no structured data');
   }
 
   return titles.size;

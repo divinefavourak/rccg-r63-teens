@@ -18,6 +18,34 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * Merge account fields without losing a token the interceptor just renewed.
+ *
+ * `api` refreshes an expired access token in localStorage before replaying a
+ * 401. The `current` value in React state can still be the pre-refresh copy;
+ * writing that back would put the old token in storage and make the next
+ * request refresh again — or, if the refresh token rotated, end the session.
+ */
+function mergeWithLatestSession(current: User, changes: Partial<User>): User {
+  try {
+    const raw = localStorage.getItem("rccg_user");
+    if (raw) {
+      const latest = JSON.parse(raw) as User;
+      if (latest?.id === current.id) {
+        return {
+          ...current,
+          ...changes,
+          token: latest.token ?? current.token,
+          refreshToken: latest.refreshToken ?? current.refreshToken,
+        };
+      }
+    }
+  } catch {
+    // A corrupt store is handled by the sign-in path, not here.
+  }
+  return { ...current, ...changes };
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -104,7 +132,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       setUser((current) => {
         if (!current) return current;
-        const updatedUser = { ...current, ...response.data };
+        const updatedUser = mergeWithLatestSession(current, response.data);
         localStorage.setItem("rccg_user", JSON.stringify(updatedUser));
         return updatedUser;
       });
@@ -126,7 +154,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const { data } = await api.get<User>('/auth/me/');
     setUser((current) => {
       if (!current) return current;
-      const updatedUser = { ...current, ...data };
+      const updatedUser = mergeWithLatestSession(current, data);
       localStorage.setItem("rccg_user", JSON.stringify(updatedUser));
       return updatedUser;
     });

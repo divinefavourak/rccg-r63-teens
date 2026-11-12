@@ -122,7 +122,7 @@ const Help = () => {
             </div>
           ) : (
             <div className="grid gap-10 lg:grid-cols-2 lg:gap-x-16 lg:gap-y-16">
-              {FAQ_TOPICS.map((topic) => (
+              {topics.map((topic) => (
                 // Keyed on the search term as well, so a filtered list replays
                 // its entrance instead of staying wherever the old one left it.
                 <m.section
