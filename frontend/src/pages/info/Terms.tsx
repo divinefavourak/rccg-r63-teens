@@ -234,8 +234,6 @@ const Terms = () => {
 
   return (
     <InfoShell
-      seoTitle="Terms"
-      seoDescription="The rules for using Faith Tribe: accounts, how to behave, content, events and payments, and what leaders agree to."
       path="/terms"
       eyebrow="TERMS"
       title="The rules, kept short."

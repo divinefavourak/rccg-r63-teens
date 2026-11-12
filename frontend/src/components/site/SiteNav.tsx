@@ -12,6 +12,24 @@ const LINK =
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink';
 
 /**
+ * The pages the nav links to, in reading order.
+ *
+ * These two used to be missing. The landing page linked to the devotional list
+ * from one button in the hero and to nothing else, which left the events, the
+ * manuals and the media reachable only by sitemap — and a page that nothing
+ * links to is a page a search engine treats as unimportant. The nav is the
+ * cheapest place to say they matter.
+ *
+ * Anchors on the home page are written as `/#…` so they work from any route.
+ */
+const NAV_LINKS = [
+  { label: 'Devotionals', to: '/devotionals' },
+  { label: 'Events', to: '/events' },
+  { label: 'How it works', to: '/#how-it-works' },
+  { label: 'For leaders', to: '/#leaders' },
+];
+
+/**
  * The website's top bar. Static, not fixed: the page opens on a full-bleed
  * colour card and a bar pinned over it would need a backdrop, which the design
  * does not have.
@@ -54,13 +72,12 @@ const SiteNav = () => {
           </span>
         </Link>
 
-        <nav aria-label="Main" className="hidden flex-1 items-center justify-end gap-8 lg:flex">
-          <Link to="/#how-it-works" className={LINK}>
-              How it works
+        <nav aria-label="Main" className="hidden flex-1 items-center justify-end gap-6 lg:flex xl:gap-8">
+          {NAV_LINKS.map((link) => (
+            <Link key={link.to} to={link.to} className={LINK}>
+              {link.label}
             </Link>
-          <Link to="/#leaders" className={LINK}>
-              For leaders
-            </Link>
+          ))}
           <Link to={account.to} className={LINK}>
             {account.label}
           </Link>
@@ -94,12 +111,11 @@ const SiteNav = () => {
             aria-label="Main"
             className="mx-auto flex max-w-[640px] flex-col gap-1 rounded-[28px] bg-surface-raised p-3 shadow-elevation-3"
           >
-            <Link to="/#how-it-works" onClick={close} className={clsx(LINK, 'px-4 py-3')}>
-              How it works
-            </Link>
-            <Link to="/#leaders" onClick={close} className={clsx(LINK, 'px-4 py-3')}>
-              For leaders
-            </Link>
+            {NAV_LINKS.map((link) => (
+              <Link key={link.to} to={link.to} onClick={close} className={clsx(LINK, 'px-4 py-3')}>
+                {link.label}
+              </Link>
+            ))}
             <Link to={account.to} onClick={close} className={clsx(LINK, 'px-4 py-3')}>
               {account.label}
             </Link>

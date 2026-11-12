@@ -8,10 +8,16 @@ import SiteNav from './SiteNav';
 import { fadeUp, stagger } from './motion';
 
 type Props = {
-  /** Browser tab title and search-result title. */
-  seoTitle: string;
-  seoDescription: string;
+  /**
+   * Browser tab title and search-result title. Leave it out and the title comes
+   * from `seo/site.mjs`, which is what the build wrote into the HTML file for
+   * this route — one source, so the tab and the file cannot disagree.
+   */
+  seoTitle?: string;
+  seoDescription?: string;
   path: string;
+  /** schema.org objects for this page, e.g. the help page's FAQPage. */
+  seoJsonLd?: Record<string, unknown>;
   /** Small caps tag above the heading, e.g. "PRIVACY". */
   eyebrow: string;
   title: string;
@@ -36,6 +42,7 @@ const InfoShell = ({
   seoTitle,
   seoDescription,
   path,
+  seoJsonLd,
   eyebrow,
   title,
   intro,
@@ -46,7 +53,7 @@ const InfoShell = ({
 }: Props) => (
   <MotionRoot>
     <div className="flex min-h-screen flex-col bg-surface-base font-sans text-content-primary antialiased">
-      <Seo title={seoTitle} description={seoDescription} path={path} />
+      <Seo path={path} title={seoTitle} description={seoDescription} jsonLd={seoJsonLd} />
       <ScrollProgress />
       <SiteNav />
       <main className="flex-1">

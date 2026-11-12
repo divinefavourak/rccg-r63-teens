@@ -73,6 +73,8 @@ interface AuthValue {
   ) => Promise<void>;
   /** The web/PWA callback's one-time code, exchanged for a session. */
   completeGoogleRedirect: (code: string) => Promise<void>;
+  /** Re-read the account card after the profile screen changed it. */
+  refreshUser: () => Promise<void>;
   signOut: () => Promise<void>;
   /** Set while a sign-in request is in flight. */
   pending: boolean;
@@ -495,6 +497,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [run],
   );
 
+  /**
+   * Re-read who is signed in.
+   *
+   * The profile screen writes name and phone to the account. Every other screen
+   * shows the cached card, so without this the new name would not reach the tab
+   * header until the next cold start.
+   */
+  const refreshUser = useCallback(async () => {
+    const me = await api.get<AuthUser>('/auth/me/');
+    setUser(me);
+  }, [setUser]);
+
   const signOut = useCallback(async () => {
     // While the session still exists: stop this account's notifications
     // reaching this phone. Best effort, like the blacklist below.
@@ -534,6 +548,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       googleSignupDetails,
       completeGoogleSignup,
       completeGoogleRedirect,
+      refreshUser,
       signOut,
       pending,
       error,
@@ -541,7 +556,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }),
     [user, ready, signIn, startSignUp, completeSignUp, requestLoginCode, signInWithCode,
      signInWithGoogle, googleSignupDetails, completeGoogleSignup, completeGoogleRedirect,
-     signOut, pending, error, clearError],
+     refreshUser, signOut, pending, error, clearError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -8,10 +8,12 @@ import { type Devotional } from '../types';
 import toast from 'react-hot-toast';
 import { useAuthContext } from '../context/AuthContext';
 import {
-    FaCalendarAlt, FaShare, FaHeart, FaChevronLeft,
+    FaCalendarAlt, FaShare, FaHeart,
     FaCheckCircle, FaBookOpen, FaMusic, FaUserEdit
 } from 'react-icons/fa';
 import Seo from '../components/Seo';
+import { articleLd } from '../../seo/schema.mjs';
+import { devotionalDescription, devotionalTitle } from '../../seo/site.mjs';
 import { formatAPIDate } from '../utils/dates';
 
 const DevotionalDetail = () => {
@@ -109,36 +111,40 @@ const DevotionalDetail = () => {
     if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900"><div className="animate-spin h-10 w-10 border-4 border-primary-500 border-t-transparent rounded-full"></div></div>;
     if (!devotional) return null;
 
+    const canonicalPath = `/devotionals/${devotional.id}`;
+    // The same function the build used to write this page's file, so the meta
+    // description a crawler reads and the one React sets are the same sentence.
+    const description = devotionalDescription(devotional);
+
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors pb-20">
+            {/*
+                The head is built from the same module the build script uses, so
+                the file a crawler fetches and the document a browser renders
+                describe the same article with the same canonical. `trail` gives
+                both a BreadcrumbList and the visible trail below.
+            */}
             <Seo
-                title={devotional.title}
-                description={
-                    devotional.key_point ||
-                    (devotional.content || '').replace(/<[^>]*>/g, '').slice(0, 160) ||
-                    `A daily devotional for teenagers — ${devotional.title}.`
-                }
-                path={`/devotionals/${devotional.id}`}
+                path={canonicalPath}
+                title={devotionalTitle(devotional)}
+                description={description}
                 image={devotional.cover_image || undefined}
                 type="article"
-                jsonLd={{
-                    '@context': 'https://schema.org',
-                    '@type': 'Article',
-                    headline: devotional.title,
+                lastModified={devotional.updated_at || devotional.date}
+                trail={[
+                    { name: 'Home', path: '/' },
+                    { name: 'Teenage Open Heavens', path: '/devotionals' },
+                    { name: devotional.title, path: canonicalPath },
+                ]}
+                jsonLd={articleLd({
+                    url: canonicalPath,
+                    title: devotional.title,
+                    description,
                     datePublished: devotional.date,
-                    description: devotional.key_point || undefined,
-                    image: devotional.cover_image ? [devotional.cover_image] : undefined,
-                    author: {
-                        '@type': devotional.author ? 'Person' : 'Organization',
-                        name: devotional.author || 'RCCG Region 63 Junior Church',
-                    },
-                    publisher: {
-                        '@type': 'Organization',
-                        name: 'RCCG Region 63 Junior Church',
-                        url: 'https://thefaithtribe.live',
-                    },
-                    isAccessibleForFree: true,
-                }}
+                    dateModified: devotional.updated_at,
+                    image: devotional.cover_image || undefined,
+                    author: devotional.author,
+                })}
             />
             <Navbar />
 
@@ -151,12 +157,17 @@ const DevotionalDetail = () => {
                 )}
                 
                 <div className="relative z-10 container mx-auto max-w-4xl">
-                    <button
-                        onClick={() => navigate('/devotionals')}
-                        className="absolute top-0 left-0 text-white/80 hover:text-white flex items-center gap-2 transition-colors mb-4 md:mb-0"
-                    >
-                        <FaChevronLeft /> Back
-                    </button>
+                    {/* The visible half of the BreadcrumbList in the head. It is
+                        also the fastest way out of a long reading. */}
+                    <nav aria-label="Breadcrumb" className="absolute top-0 left-0 mb-4 md:mb-0">
+                        <ol className="flex flex-wrap items-center gap-2 text-sm text-white/80">
+                            <li><Link to="/" className="hover:text-white transition-colors">Home</Link></li>
+                            <li aria-hidden>/</li>
+                            <li><Link to="/devotionals" className="hover:text-white transition-colors">Devotionals</Link></li>
+                            <li aria-hidden>/</li>
+                            <li aria-current="page" className="max-w-[240px] truncate text-white/90">{devotional.title}</li>
+                        </ol>
+                    </nav>
 
                     <div className="flex flex-wrap justify-center gap-3 mb-6">
                         <span className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md px-4 py-1 rounded-full text-white text-sm font-medium">

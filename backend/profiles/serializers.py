@@ -14,6 +14,12 @@ class TeenProfileSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(source='user.email', read_only=True)
     user_username = serializers.CharField(source='user.username', read_only=True)
     full_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    # Name and phone live on the account, but a profile screen edits them next
+    # to the teen data, so they are exposed here rather than making every client
+    # talk to two endpoints to render one form.
+    first_name = serializers.CharField(source='user.first_name', read_only=True)
+    last_name = serializers.CharField(source='user.last_name', read_only=True)
+    phone = serializers.CharField(source='user.phone', read_only=True)
     age = serializers.IntegerField(read_only=True)
     
     class Meta:
@@ -24,6 +30,9 @@ class TeenProfileSerializer(serializers.ModelSerializer):
             'user_email',
             'user_username',
             'full_name',
+            'first_name',
+            'last_name',
+            'phone',
             
             # Personal
             'date_of_birth',
@@ -106,11 +115,30 @@ class TeenProfileCreateSerializer(serializers.ModelSerializer):
 
 
 class TeenProfileUpdateSerializer(serializers.ModelSerializer):
-    """Serializer for updating a teen profile."""
-    
+    """Serializer for updating a teen profile.
+
+    Name and phone are declared without a model source on purpose: they live on
+    `User`, and `update()` writes them there. Date of birth and province are
+    self-service too: a teen knows their birthday and which province they are
+    in, and both are corrected often at the start of a new session. The profile
+    model recalculates `age_group` from the new date on save, so a teen never
+    sets the group directly. Gender remains a leader's correction.
+    """
+
+    MAX_AVATAR_BYTES = 5 * 1024 * 1024
+
+    first_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    last_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    phone = serializers.CharField(required=False, allow_blank=True, max_length=20)
+
     class Meta:
         model = TeenProfile
         fields = [
+            'first_name',
+            'last_name',
+            'phone',
+            'date_of_birth',
+            'province',
             'bio',
             'avatar',
             'zone',
@@ -132,6 +160,49 @@ class TeenProfileUpdateSerializer(serializers.ModelSerializer):
             'favorite_devotional_topics',
             'notification_preferences',
         ]
+
+    def validate_avatar(self, value):
+        if value and value.size > self.MAX_AVATAR_BYTES:
+            raise serializers.ValidationError(
+                'That photo is larger than 5 MB. Choose a smaller one.'
+            )
+        return value
+
+    def to_internal_value(self, data):
+        # A form that has never had a birthday sends the field as ''. DRF's
+        # DateField rejects that before any field validator runs, so turn it
+        # into the null the model actually stores.
+        if data.get('date_of_birth') == '':
+            data = data.copy()
+            data['date_of_birth'] = None
+        return super().to_internal_value(data)
+
+    def update(self, instance, validated_data):
+        user = instance.user
+        user_fields = [
+            field
+            for field in ('first_name', 'last_name', 'phone')
+            if field in validated_data
+        ]
+        for field in user_fields:
+            setattr(user, field, validated_data.pop(field))
+
+        # `avatar` is the field the app writes. The account's `profile_picture`
+        # is what older tools and the website read, so keep the two pointing at
+        # the same file instead of letting one screen show a stale photo.
+        avatar_supplied = 'avatar' in validated_data
+        profile = super().update(instance, validated_data)
+
+        if user_fields:
+            user.save(update_fields=user_fields)
+
+        if avatar_supplied:
+            # The file itself was saved by `super()`. Copy its stored name, not
+            # the upload, so there is one file in the bucket rather than two.
+            user.profile_picture = profile.avatar.name if profile.avatar else None
+            user.save(update_fields=['profile_picture'])
+
+        return profile
 
 
 class TeenProfileListSerializer(serializers.ModelSerializer):

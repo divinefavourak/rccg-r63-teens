@@ -1,0 +1,11 @@
+# app.thefaithtribe.live
+#
+# This is the app, not the website. Every screen here is either an account
+# surface or a signed-in view of content that the website already publishes in
+# a crawlable form. Indexing it would put a thin, login-gated copy of the site
+# into search results and compete with the pages that can actually be read.
+#
+# The website is https://www.thefaithtribe.live and its robots.txt is there.
+
+User-agent: *
+Disallow: /

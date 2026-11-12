@@ -131,7 +131,7 @@ const ResetPassword = () => {
 
   return (
     <>
-      <Seo title="Set a new password" description="Choose a new password for your account." noindex />
+      <Seo path="/reset-password" noindex />
     <AuthShell
       title="Set a new password"
       subtitle={`At least ${MIN_LENGTH} characters.`}

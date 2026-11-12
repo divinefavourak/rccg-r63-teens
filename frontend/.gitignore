@@ -12,6 +12,14 @@ dist
 dist-ssr
 *.local
 
+# The bundle report from rollup-plugin-visualizer. Kept out of dist/ so it is
+# not deployed as a page; kept out of git because it changes every build.
+stats.html
+
+# The pristine built shell `scripts/generate-site.mjs` keeps so `npm run seo`
+# can run again on a `dist/` whose HTML has already been generated.
+.seo-shell.html
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

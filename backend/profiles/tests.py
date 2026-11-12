@@ -1,8 +1,28 @@
+import shutil
+import tempfile
+import unittest
+from io import BytesIO
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
+from PIL import Image
 from rest_framework.test import APITestCase
 
 from users.models import User
 
 from .models import TeenProfile
+
+# Uploaded photos are written to the storage backend. Point the tests at a
+# throwaway directory rather than the developer's media folder.
+TEST_MEDIA_ROOT = tempfile.mkdtemp(prefix='faithtribe-avatar-tests-')
+unittest.addModuleCleanup(shutil.rmtree, TEST_MEDIA_ROOT, ignore_errors=True)
+
+
+def tiny_png(name='avatar.png'):
+    """A real PNG, because ImageField validates the bytes, not the extension."""
+    buffer = BytesIO()
+    Image.new('RGB', (10, 10), 'red').save(buffer, 'PNG')
+    return SimpleUploadedFile(name, buffer.getvalue(), content_type='image/png')
 
 
 class ProfileNameTests(APITestCase):
@@ -37,6 +57,129 @@ class ProfileNameTests(APITestCase):
     def test_full_name_with_only_a_first_name_has_no_trailing_space(self):
         self.user.last_name = ''
         self.assertEqual(self.user.get_full_name(), 'Chife')
+
+
+class ProfileEditTests(APITestCase):
+    """A teen can edit the details that describe them.
+
+    The form in the app and on the website shows name and phone beside the
+    teen fields, so the profile endpoint writes them to the account rather than
+    making the client call two endpoints and risk saving half a form.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='editme', email='edit@example.com', password='testpass123',
+            first_name='Old', last_name='Name', phone='+2348000000000',
+        )
+        TeenProfile.objects.create(user=self.user, gender='female', parish='Old Parish')
+
+    def test_profile_shows_the_account_name_and_phone(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get('/api/v1/profiles/me/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['first_name'], 'Old')
+        self.assertEqual(response.data['last_name'], 'Name')
+        self.assertEqual(response.data['phone'], '+2348000000000')
+
+    def test_patch_updates_name_phone_and_teen_fields_together(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.patch(
+            '/api/v1/profiles/me/',
+            {
+                'first_name': 'Ada',
+                'last_name': 'Okafor',
+                'phone': '+2348111111111',
+                'bio': 'Loves the Psalms.',
+                'parish': 'Grace Parish',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.first_name, 'Ada')
+        self.assertEqual(self.user.last_name, 'Okafor')
+        self.assertEqual(self.user.phone, '+2348111111111')
+        self.assertEqual(response.data['full_name'], 'Ada Okafor')
+        self.assertEqual(response.data['bio'], 'Loves the Psalms.')
+        self.assertEqual(response.data['parish'], 'Grace Parish')
+
+    def test_date_of_birth_and_province_are_editable(self):
+        # A teen knows their birthday and their province, and both are corrected
+        # often. The age group is derived from the date by the model, never set
+        # by the client.
+        self.client.force_authenticate(user=self.user)
+        response = self.client.patch(
+            '/api/v1/profiles/me/',
+            {'date_of_birth': '2012-05-12', 'province': 'lagos_province_9'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.profile = TeenProfile.objects.get(user=self.user)
+        self.assertEqual(str(self.profile.date_of_birth), '2012-05-12')
+        self.assertEqual(self.profile.province, 'lagos_province_9')
+        self.assertEqual(self.profile.age_group, 'teen')
+
+    def test_gender_stays_out_of_the_teen_form(self):
+        # Gender is a leader's correction; a self-service PATCH must not move it.
+        self.client.force_authenticate(user=self.user)
+        response = self.client.patch(
+            '/api/v1/profiles/me/',
+            {'gender': 'male'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.profile = TeenProfile.objects.get(user=self.user)
+        self.assertEqual(self.profile.gender, 'female')
+
+
+@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+class ProfilePhotoTests(APITestCase):
+    """One photo, whichever endpoint the client used.
+
+    The app writes `TeenProfile.avatar`; the website and older tools write
+    `User.profile_picture`. A photo set through one must appear through the
+    other, or the same teen has two different faces depending on the screen.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='photo12345', email='photo@example.com', password='testpass123',
+            first_name='Photo', last_name='Teen',
+        )
+        self.profile = TeenProfile.objects.create(user=self.user, gender='female')
+
+    def test_app_avatar_is_mirrored_onto_the_account(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.patch(
+            '/api/v1/profiles/me/',
+            {'avatar': tiny_png('app-avatar.png')},
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.profile.refresh_from_db()
+        self.user.refresh_from_db()
+        self.assertTrue(self.profile.avatar.name)
+        self.assertEqual(self.user.profile_picture.name, self.profile.avatar.name)
+
+    def test_account_picture_is_mirrored_onto_the_profile(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.patch(
+            '/api/v1/auth/me/',
+            {'profile_picture': tiny_png('web-avatar.png')},
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.profile.refresh_from_db()
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.profile_picture.name)
+        self.assertEqual(self.profile.avatar.name, self.user.profile_picture.name)
 
 
 class RepairProfileTests(APITestCase):

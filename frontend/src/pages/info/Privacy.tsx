@@ -323,8 +323,6 @@ const Privacy = () => {
 
   return (
     <InfoShell
-      seoTitle="Privacy"
-      seoDescription="What Faith Tribe collects, why, who can see it, and how to have it corrected or deleted. Written to be read by teenagers and their parents."
       path="/privacy"
       eyebrow="PRIVACY"
       title="Your information, in plain words."

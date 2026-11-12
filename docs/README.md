@@ -36,7 +36,8 @@ New team members should read in this order:
 | 14 | analytics.md | Product / Data | Metrics framework and dashboards |
 | 15 | technical-architecture.md | Engineering | Architecture, multi-region, offline, PWA |
 | 16 | release-checklist.md | All | Launch gate for Region 63 |
-| — | CHANGELOG.md | Product | Revision history of major product decisions |
+| - | CHANGELOG.md | Product | Revision history of major product decisions |
+| - | [reports/seo-audit-2026-11-11.md](reports/seo-audit-2026-11-11.md) | Engineering | Live SEO audit, what was fixed, and the prioritised roadmap |
 
 ## Non-negotiables
 

@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 import api from "../api/axios";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import Seo from "../components/Seo";
 import {
   PERSONAL_INFO_FIELDS,
   CHURCH_INFO_FIELDS,
@@ -248,6 +249,7 @@ const TicketForm = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white transition-colors duration-500">
+      <Seo path="/get-ticket" />
       <Navbar />
       {(user as any)?.role === 'coordinator' && (
         <div className="pt-20 px-6 max-w-4xl mx-auto">

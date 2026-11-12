@@ -1,11 +1,19 @@
-# thefaithtribe.live
+# www.thefaithtribe.live
 #
 # The teen-facing content is meant to be found: a devotional or an event should
 # be shareable and searchable. Everything behind an account, and every surface
 # that only makes sense mid-flow, is not.
+#
+# The short host (thefaithtribe.live) redirects here. The sitemap and every
+# canonical name this host, because a crawler that follows a canonical into a
+# redirect learns to distrust both.
 
 User-agent: *
 Allow: /
+
+# The rewrite target for paths that have no file of their own. It is a shell,
+# not a page, and it must never appear in a result.
+Disallow: /app.html
 
 # Authenticated surfaces. These render the SPA shell and then redirect, so a
 # crawler that fetched them would index an empty frame under a real URL.
@@ -31,4 +39,19 @@ Disallow: /coordinator-login
 Disallow: /forgot-password
 Disallow: /reset-password
 
-Sitemap: https://thefaithtribe.live/sitemap.xml
+# Answer engines. Named so the decision is visible: this site wants to be read
+# by them, because a parent asking an assistant what Faith Tribe is should get
+# the help page's answer. A future decision to block one is a change here.
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+Sitemap: https://www.thefaithtribe.live/sitemap.xml

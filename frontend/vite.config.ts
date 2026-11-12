@@ -10,11 +10,12 @@ export default defineConfig({
     // devDependency and simply unused; it compiles the same output faster.
     react(),
     qrcode(),
-    // Writes dist/stats.html. Bundle size was previously unobservable — there
-    // was no analyzer of any kind, which is how a 614KB route chunk went
-    // unnoticed.
+    // Writes stats.html. Bundle size was previously unobservable — there was no
+    // analyzer of any kind, which is how a 614KB route chunk went unnoticed.
+    // Deliberately outside `dist/`: the report was being deployed as a public
+    // page with no title, no canonical and a complete map of the app's modules.
     visualizer({
-      filename: 'dist/stats.html',
+      filename: 'stats.html',
       gzipSize: true,
       brotliSize: true,
     }),

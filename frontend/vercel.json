@@ -1,9 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "trailingSlash": false,
   "rewrites": [
     { "source": "/p/:code", "destination": "https://api.thefaithtribe.live/api/v1/payments/pay/:code/" },
     { "source": "/p/:code/", "destination": "https://api.thefaithtribe.live/api/v1/payments/pay/:code/" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    {
+      "source": "/((?!api/|assets/|img/|fonts/).*)",
+      "destination": "/app.html"
+    }
   ],
   "headers": [
     {
@@ -68,11 +72,46 @@
       ]
     },
     {
+      "source": "/app.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, follow"
+        }
+      ]
+    },
+    {
       "source": "/sitemap.xml",
       "headers": [
         {
           "key": "Cache-Control",
           "value": "public, max-age=3600"
+        }
+      ]
+    },
+    {
+      "source": "/feed.xml",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600"
+        },
+        {
+          "key": "Content-Type",
+          "value": "application/rss+xml; charset=utf-8"
+        }
+      ]
+    },
+    {
+      "source": "/(admin|console|legacy-admin|coordinator|dashboard)(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
         }
       ]
     }

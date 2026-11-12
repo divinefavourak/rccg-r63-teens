@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import api from '../api/axios';
 import { type Event } from '../types';
 import toast from 'react-hot-toast';
 import {
-    Calendar, MapPin, Clock, Ticket, ChevronLeft,
+    Calendar, MapPin, Clock, Ticket,
     Users, X, User, Phone, Mail, Hash, AlertTriangle,
-    Info, Link, BookOpen, Globe
+    Info, Link as LinkIcon, BookOpen, Globe
 } from 'lucide-react';
 import { useAuthContext } from '../context/AuthContext';
 import Seo from '../components/Seo';
+import { eventLd } from '../../seo/schema.mjs';
+import { eventDescription } from '../../seo/site.mjs';
 
 // Correct province values matching the Django backend Province choices
 const PROVINCES = [
@@ -165,6 +167,10 @@ const EventDetail = () => {
     const regOpen = event.registration_status === 'open';
     const canRegister = isUpcoming && regOpen && !registered;
 
+    const canonicalPath = `/events/${event.id}`;
+    // Shared with the build, so the file and the document agree.
+    const description = eventDescription(event);
+
     const formatDate = (dt: string) =>
         new Date(dt).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
     const formatTime = (dt: string) =>
@@ -177,62 +183,26 @@ const EventDetail = () => {
 
                 index.html used to carry a hardcoded schema.org/Event for a camp
                 with startDate 2025-12-22 — on every route of the site, long after
-                the camp had ended. Generating it here means it describes the event
-                the reader is actually looking at, and disappears on pages that
-                have no event.
+                the camp had ended. Generating it here (and in the file the build
+                writes) means it describes the event the reader is actually
+                looking at, and disappears on pages that have no event.
+
+                The builder lives in seo/schema.mjs because the build script
+                needs the identical node without React in the way.
             */}
             <Seo
+                path={canonicalPath}
                 title={event.title}
-                description={
-                    event.short_description ||
-                    (event.description || '').slice(0, 160) ||
-                    `${event.title} — an RCCG Region 63 Teens event.`
-                }
-                path={`/events/${event.id}`}
+                description={description}
                 image={event.cover_image || undefined}
-                type="article"
-                jsonLd={{
-                    '@context': 'https://schema.org',
-                    '@type': 'Event',
-                    name: event.title,
-                    startDate: event.start_datetime,
-                    endDate: event.end_datetime || undefined,
-                    eventStatus: 'https://schema.org/EventScheduled',
-                    eventAttendanceMode: event.is_virtual
-                        ? 'https://schema.org/OnlineEventAttendanceMode'
-                        : event.is_hybrid
-                            ? 'https://schema.org/MixedEventAttendanceMode'
-                            : 'https://schema.org/OfflineEventAttendanceMode',
-                    location: event.venue
-                        ? {
-                            '@type': 'Place',
-                            name: event.venue,
-                            address: {
-                                '@type': 'PostalAddress',
-                                addressLocality: event.city || undefined,
-                                addressRegion: event.state || undefined,
-                                addressCountry: 'NG',
-                            },
-                        }
-                        : undefined,
-                    image: event.cover_image ? [event.cover_image] : undefined,
-                    description: event.short_description || event.description || undefined,
-                    offers: {
-                        '@type': 'Offer',
-                        url: `https://thefaithtribe.live/events/${event.id}`,
-                        price: event.is_free ? '0' : String(event.price ?? '0'),
-                        priceCurrency: 'NGN',
-                        availability:
-                            event.spots_remaining === 0
-                                ? 'https://schema.org/SoldOut'
-                                : 'https://schema.org/InStock',
-                    },
-                    organizer: {
-                        '@type': 'Organization',
-                        name: event.organizer_name || 'RCCG Region 63 Junior Church',
-                        url: 'https://thefaithtribe.live',
-                    },
-                }}
+                type="website"
+                lastModified={event.updated_at || event.start_datetime}
+                trail={[
+                    { name: 'Home', path: '/' },
+                    { name: 'Events', path: '/events' },
+                    { name: event.title, path: canonicalPath },
+                ]}
+                jsonLd={eventLd(event, canonicalPath)}
             />
             <Navbar />
 
@@ -245,14 +215,17 @@ const EventDetail = () => {
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/50 to-transparent" />
 
-                {/* Back button */}
+                {/* Back button and the visible breadcrumb trail */}
                 <div className="absolute top-24 left-0 w-full container mx-auto px-4">
-                    <button
-                        onClick={() => navigate('/events')}
-                        className="text-white/80 hover:text-white flex items-center gap-2 bg-black/20 px-3 py-2 rounded-lg backdrop-blur-sm w-fit transition-colors"
-                    >
-                        <ChevronLeft size={16} /> Back to Events
-                    </button>
+                    <nav aria-label="Breadcrumb">
+                        <ol className="flex flex-wrap items-center gap-2 text-sm text-white/80">
+                            <li><Link to="/" className="hover:text-white transition-colors">Home</Link></li>
+                            <li aria-hidden>/</li>
+                            <li><Link to="/events" className="hover:text-white transition-colors">Events</Link></li>
+                            <li aria-hidden>/</li>
+                            <li aria-current="page" className="max-w-[280px] truncate text-white/90">{event.title}</li>
+                        </ol>
+                    </nav>
                 </div>
 
                 {/* Event title bar */}
@@ -362,7 +335,7 @@ const EventDetail = () => {
                                     </div>
                                     <a href={event.virtual_link} target="_blank" rel="noopener noreferrer"
                                         className="text-sm text-blue-600 dark:text-blue-400 hover:underline break-all flex items-center gap-1">
-                                        <Link size={12} /> {event.virtual_link}
+                                        <LinkIcon size={12} /> {event.virtual_link}
                                     </a>
                                 </div>
                             )}

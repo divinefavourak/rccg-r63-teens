@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import api from '../api/axios';
 import { type MediaEpisode } from '../types';
@@ -45,15 +46,22 @@ const MediaList = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-            <Seo title="Media" description="Worship music, podcasts and video from the Faith Tribe community." path="/media" />
+            <Seo path="/media" />
             <Navbar />
             <div className="container mx-auto px-4 py-24">
 
                 <div className="text-center mb-12">
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary-600 dark:text-primary-400 mb-3">
+                        RCCG Region 63 Junior Church
+                    </p>
                     <h1 className="text-4xl font-black text-gray-900 dark:text-white uppercase mb-4">
-                        MEDIA LIBRARY
+                        Podcasts &amp; Worship Video
                     </h1>
                     <div className="w-24 h-1 bg-primary-500 mx-auto rounded-full"></div>
+                    <p className="mt-4 text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+                        Messages, choir ministrations and teaching from the region, free to stream in your browser.
+                        Filter by audio or video.
+                    </p>
 
                     <div className="mt-8 inline-flex bg-white dark:bg-gray-800 p-1 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
                         {(['all', 'audio', 'video'] as const).map((type) => (
@@ -130,6 +138,30 @@ const MediaList = () => {
                         })}
                     </div>
                 )}
+
+                <section aria-labelledby="about-media" className="mt-20 max-w-3xl mx-auto">
+                    <h2 id="about-media" className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+                        What is in the library
+                    </h2>
+                    <div className="space-y-4 text-gray-600 dark:text-gray-400 leading-relaxed">
+                        <p>
+                            The library holds what the region has already recorded: messages from camps and
+                            conferences, choir and worship ministrations, and teaching series. It is not a live
+                            stream — everything here plays from the beginning, at whatever hour suits you.
+                        </p>
+                        <p>
+                            For the written side of the same ministry, the{' '}
+                            <Link to="/devotionals" className="text-primary-600 dark:text-primary-400 underline">
+                                daily devotional
+                            </Link>{' '}
+                            is published every morning, and the{' '}
+                            <Link to="/manuals" className="text-primary-600 dark:text-primary-400 underline">
+                                weekly teaching manual
+                            </Link>{' '}
+                            is what classes study on Sunday.
+                        </p>
+                    </div>
+                </section>
             </div>
         </div>
     );

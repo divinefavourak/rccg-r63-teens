@@ -12,6 +12,8 @@ interface AuthContextType {
   register: (credentials: RegisterCredentials) => Promise<void>;
   logout: () => void;
   updateProfile: (data: Partial<User>) => Promise<void>;
+  /** Re-read the account after a photo upload or a profile edit. */
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -100,16 +102,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const response = await api.patch('/auth/me/', data);
 
-      if (user) {
-        const updatedUser = { ...user, ...response.data };
+      setUser((current) => {
+        if (!current) return current;
+        const updatedUser = { ...current, ...response.data };
         localStorage.setItem("rccg_user", JSON.stringify(updatedUser));
-        setUser(updatedUser);
-      }
+        return updatedUser;
+      });
     } catch (error) {
       console.error("Profile update failed:", error);
       throw error;
     }
-  }, [user]);
+  }, []);
+
+  /**
+   * Re-read the account.
+   *
+   * A photo uploaded to the teen profile is mirrored onto the account by the
+   * API, but the copy in localStorage (and therefore in every header) is the
+   * one read at sign-in. Fetching it again is what makes the new picture appear
+   * without a reload.
+   */
+  const refreshUser = useCallback(async () => {
+    const { data } = await api.get<User>('/auth/me/');
+    setUser((current) => {
+      if (!current) return current;
+      const updatedUser = { ...current, ...data };
+      localStorage.setItem("rccg_user", JSON.stringify(updatedUser));
+      return updatedUser;
+    });
+  }, []);
 
   /*
     Previously a fresh object literal on every render, with four freshly-created
@@ -117,8 +138,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     anything above the provider did, which is every navigation.
   */
   const value = useMemo(
-    () => ({ user, isAuthenticated: !!user, isLoading, needsGender, ageGroup, login, register, logout, updateProfile }),
-    [user, isLoading, needsGender, ageGroup, login, register, logout, updateProfile],
+    () => ({ user, isAuthenticated: !!user, isLoading, needsGender, ageGroup, login, register, logout, updateProfile, refreshUser }),
+    [user, isLoading, needsGender, ageGroup, login, register, logout, updateProfile, refreshUser],
   );
 
   return (

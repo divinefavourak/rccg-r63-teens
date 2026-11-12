@@ -5,6 +5,7 @@ import { type Event } from '../types';
 import { Calendar, MapPin, Users, ArrowRight, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Seo from '../components/Seo';
+import { itemListLd } from '../../seo/schema.mjs';
 
 const EventList = () => {
     const [events, setEvents] = useState<Event[]>([]);
@@ -18,9 +19,9 @@ const EventList = () => {
 
     const fetchEvents = async () => {
         try {
-            const { data } = await api.get('/events/events/');
+            const { data } = await api.get('/events/events/?status=published&page_size=60&ordering=start_datetime');
             setEvents(Array.isArray(data) ? data : data.results || []);
-        } catch (error) {
+        } catch {
             console.error('Failed to fetch events');
         } finally {
             setLoading(false);
@@ -45,18 +46,39 @@ const EventList = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-            <Seo title="Events" description="Camps, hangouts and gatherings for RCCG Region 63 teens. Browse upcoming events and register." path="/events" />
+            <Seo
+                path="/events"
+                jsonLd={
+                    events.length
+                        ? itemListLd({
+                            url: '/events',
+                            name: 'Camps, retreats and events for RCCG Region 63 teenagers',
+                            itemType: 'Event',
+                            items: events.slice(0, 20).map((item) => ({
+                                url: `/events/${item.id}`,
+                                name: item.title,
+                                startDate: item.start_datetime,
+                                image: item.cover_image,
+                            })),
+                        })
+                        : undefined
+                }
+            />
             <Navbar />
             <div className="container mx-auto px-4 py-24">
 
                 {/* Header */}
                 <div className="text-center mb-12">
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary-600 dark:text-primary-400 mb-3">
+                        RCCG Region 63 Junior Church
+                    </p>
                     <h1 className="text-4xl font-black text-gray-900 dark:text-white uppercase mb-4">
-                        UPCOMING EVENTS
+                        Camps, Retreats &amp; Events
                     </h1>
                     <div className="w-24 h-1 bg-yellow-500 mx-auto rounded-full mb-4"></div>
-                    <p className="text-gray-600 dark:text-gray-400">
-                        Join us for life-changing programs and gatherings.
+                    <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+                        Everything Region 63 is running for teenagers, in one place. Register online, pay by card or
+                        bank transfer, and carry your ticket on your phone to the door.
                     </p>
                 </div>
 
@@ -185,6 +207,62 @@ const EventList = () => {
                         })}
                     </div>
                 )}
+
+                {/*
+                    What the cards cannot say: who runs these, what the money is
+                    for, and what happens after you register. A parent deciding
+                    whether to send a 14-year-old to a four-day camp needs this
+                    before they need a button.
+                */}
+                <section aria-labelledby="about-events" className="mt-20 max-w-3xl mx-auto">
+                    <h2 id="about-events" className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+                        How a Region 63 event works
+                    </h2>
+                    <div className="space-y-4 text-gray-600 dark:text-gray-400 leading-relaxed">
+                        <p>
+                            Events are run by the parishes, areas and provinces of RCCG Region 63 Junior Church, and
+                            coordinated by the region&rsquo;s teen leaders. Camps and retreats are residential and
+                            usually run for three or four days; hangouts and competitions are single days. Each
+                            listing says which, where, and what it costs.
+                        </p>
+                        <p>
+                            Registration is a short form — the teenager&rsquo;s details, and for anyone under
+                            eighteen, a parent or guardian&rsquo;s name, phone number and consent. If there is a
+                            price, you pay at the end through Squad, or upload proof of a bank transfer. Your ticket
+                            arrives on the screen and by email, and a leader scans it at the door.
+                        </p>
+                        <p>
+                            Nothing is shared publicly: only the leaders for that event see the registrations, and
+                            the health details on the form exist so that someone can act if a teen is taken ill at
+                            camp. What is collected, and who can see it, is set out in the{' '}
+                            <Link to="/privacy" className="text-primary-600 dark:text-primary-400 underline">
+                                privacy notice
+                            </Link>
+                            .
+                        </p>
+                    </div>
+
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mt-10 mb-3">Before you ask</h2>
+                    <ul className="list-disc pl-5 space-y-2 text-gray-600 dark:text-gray-400">
+                        <li>
+                            <strong className="text-gray-900 dark:text-white">Can I pay at the venue?</strong> Ask the
+                            organisers for that event — the listing names them, with an email and a phone number.
+                        </li>
+                        <li>
+                            <strong className="text-gray-900 dark:text-white">I registered and have no ticket.</strong>{' '}
+                            Check the ticket first; confirmation can take a few minutes after a payment.{' '}
+                            <Link to="/ticket-not-found" className="text-primary-600 dark:text-primary-400 underline">
+                                Look up a ticket
+                            </Link>
+                            .
+                        </li>
+                        <li>
+                            <strong className="text-gray-900 dark:text-white">I need to change a registration.</strong>{' '}
+                            Write to the event&rsquo;s organisers as early as you can. Changes and refunds are their
+                            decision, not the site&rsquo;s.
+                        </li>
+                    </ul>
+                </section>
             </div>
         </div>
     );
