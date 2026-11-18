@@ -3,6 +3,7 @@ from rest_framework.exceptions import PermissionDenied
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from .models import User, LoginHistory, AuditLog
+from .usernames import clean_username
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -126,11 +127,16 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
+            'username',
             'first_name', 'last_name', 'phone', 'email', 'gender',
             'zone', 'area', 'parish', 'profile_picture', 'bio',
             'email_notifications', 'sms_notifications',
             'current_password', 'new_password'
         ]
+
+    def validate_username(self, value):
+        # Anyone may change their own (users/usernames.py has the rules).
+        return clean_username(value, self.instance)
     
     def validate(self, data):
         request = self.context.get('request')
@@ -200,15 +206,7 @@ class AdminUserUpdateSerializer(serializers.ModelSerializer):
         ]
 
     def validate_username(self, value):
-        # Sign-in matches a username exactly, so two that differ only in
-        # capitals ("Ada", "ada") would be two accounts nobody can tell apart.
-        value = value.strip()
-        taken = User.objects.filter(username__iexact=value)
-        if self.instance is not None:
-            taken = taken.exclude(pk=self.instance.pk)
-        if taken.exists():
-            raise serializers.ValidationError('That username is taken. Try another.')
-        return value
+        return clean_username(value, self.instance)
 
     def validate(self, attrs):
         # The legacy `role` field carries superuser with it (see update), so

@@ -24,6 +24,7 @@ import { ELEVATION } from '../../src/theme/tokens';
  * server would silently discard never enters the form in the first place.
  */
 const WRITABLE = [
+  'username',
   'first_name',
   'last_name',
   'phone',
@@ -50,6 +51,9 @@ const WRITABLE = [
 
 type Field = (typeof WRITABLE)[number];
 type Form = Record<Field, string>;
+
+/** The server's rule (users.User.username): 3+ of letters, digits and @ . + - _. */
+const USERNAME = /^[\w.@+-]{3,150}$/;
 
 /**
  * Your profile (reached from the profile row on Settings).
@@ -80,7 +84,13 @@ export default function AccountSettingsScreen() {
   // Seed once so a slow refetch never overwrites something being typed.
   useEffect(() => {
     if (form || !profile.data) return;
-    setForm(pickWritable(profile.data as unknown as Record<string, unknown>));
+    // The read shape calls it `user_username`; the write shape `username`.
+    setForm(
+      pickWritable({
+        ...(profile.data as unknown as Record<string, unknown>),
+        username: profile.data.user_username,
+      }),
+    );
   }, [profile.data, form]);
 
   const set = useCallback((key: Field, value: string) => {
@@ -90,7 +100,7 @@ export default function AccountSettingsScreen() {
   const back = () => (router.canGoBack() ? router.back() : router.replace('/settings'));
 
   const save = async () => {
-    if (!form) return;
+    if (!form || !USERNAME.test(form.username.trim())) return;
     try {
       // A cleared birthday is `null` to the API, not an empty string: DRF's
       // DateField rejects `''` even though the model column is nullable.
@@ -185,16 +195,26 @@ export default function AccountSettingsScreen() {
           {/* What only a leader can change. Shown so the teen can check it is
               right and knows who to ask, not left invisible. */}
           <View className="w-full rounded-2xl bg-surf-raised px-4 pb-4 pt-2" style={ELEVATION.card}>
-            <ReadOnly label="Username" value={user?.username} />
             <ReadOnly label="Age group" value={humanise(p.age_group)} />
             <Text className="pt-3 font-ui text-[14px] leading-5 text-ink-3">
-              Your age group is worked out from your birthday. Your username and gender are set
-              by your teen leader; ask them if either is wrong. Everything below is yours to
-              change.
+              Your age group is worked out from your birthday. Your gender is set by your teen
+              leader; ask them if it is wrong. Everything below is yours to change.
             </Text>
           </View>
 
           <SectionTitle>About you</SectionTitle>
+          <TextField
+            label="Username"
+            value={form.username}
+            onChange={(v) => set('username', v.replace(/\s/g, ''))}
+            autoCapitalize="none"
+            error={
+              USERNAME.test(form.username.trim())
+                ? undefined
+                : 'At least 3 characters: letters, numbers and . _ - @ + only.'
+            }
+            hint="Letters, numbers and . _ - @ + only, with no spaces."
+          />
           <TextField
             label="Date of birth"
             value={form.date_of_birth}
@@ -368,7 +388,13 @@ export default function AccountSettingsScreen() {
                 : 'That did not save. Check your connection and try again.'}
             </Text>
           )}
-          <Button label="Save changes" onPress={save} loading={update.isPending} className="w-full" />
+          <Button
+            label="Save changes"
+            onPress={save}
+            loading={update.isPending}
+            disabled={!USERNAME.test(form.username.trim())}
+            className="w-full"
+          />
         </View>
       </KeyboardView>
     </View>
