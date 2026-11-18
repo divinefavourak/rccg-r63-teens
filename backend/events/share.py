@@ -99,6 +99,9 @@ def preview_image_url(event, request=None):
 # WhatsApp leaves the picture out of a preview when the image is much over
 # about 300 KB, and fliers are often exported at several MB.
 FLIER_EDGE = 1200
+# A JPEG already within the budget is sent as uploaded up to this size. The
+# budget is what chat apps care about; this only stops an outsized one.
+FLIER_PASS_EDGE = 2048
 FLIER_BUDGET = 300 * 1024
 FLIER_CACHE_SECONDS = 60 * 60 * 24 * 30
 
@@ -111,8 +114,8 @@ def flier_jpeg(event):
     """
     if not event.cover_image:
         return None
-    # v2: v1 re-encoded fliers that were already small, and made them bigger.
-    cache_key = f'events:share-flier:v2:{event.pk}:{event.cover_image.name}'
+    # v3: v1 and v2 re-encoded fliers that were already small, and made them bigger.
+    cache_key = f'events:share-flier:v3:{event.pk}:{event.cover_image.name}'
     data = cache.get(cache_key)
     if data:
         return data
@@ -124,13 +127,13 @@ def flier_jpeg(event):
             raw = file.read()
         image = Image.open(io.BytesIO(raw))
 
-        # Already fit to send: a JPEG within the budget and the size, and
-        # upright. Most fliers arrive through WhatsApp like this, and encoding
-        # one again only makes it bigger (a 98 KB flier came back as 142 KB).
+        # Already fit to send: a JPEG within the budget, upright and not
+        # outsized. Most fliers arrive through WhatsApp like this (the NYLR one
+        # is 980x1281, 98 KB), and encoding one again only makes it bigger.
         if (
             image.format == 'JPEG'
             and len(raw) <= FLIER_BUDGET
-            and max(image.size) <= FLIER_EDGE
+            and max(image.size) <= FLIER_PASS_EDGE
             and image.getexif().get(_EXIF_ORIENTATION, 1) == 1
         ):
             data = raw
