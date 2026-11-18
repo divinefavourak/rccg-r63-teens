@@ -2,6 +2,7 @@ import { Redirect, Tabs } from 'expo-router';
 
 import BottomNav from '../../src/components/BottomNav';
 import { useAuth } from '../../src/state/auth';
+import { useLeaderLanding } from '../../src/state/landing';
 import { needsWelcome } from '../../src/state/welcome';
 import { useTokens } from '../../src/theme/ThemeProvider';
 
@@ -13,6 +14,9 @@ import { useTokens } from '../../src/theme/ThemeProvider';
 export default function TabsLayout() {
   const tokens = useTokens();
   const { isGuest } = useAuth();
+
+  // A teacher or coordinator opens on their dashboard (src/state/landing.ts).
+  useLeaderLanding();
 
   // First launch on this device: start on the welcome pages. They mark
   // themselves seen on the way out, so this fires once.

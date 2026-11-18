@@ -9,14 +9,18 @@ import { useTokens } from '../../src/theme/ThemeProvider';
 
 /** Full-screen tasks, where the teacher nav would only be in the way. */
 const WITHOUT_NAV = ['/console/check-in', '/console/review', '/console/groups/new'];
+/** Editing, giving a role to, or moving one person: the id sits mid-path. */
+const PERSON_TASK = /^\/console\/people\/[^/]+\/(edit|role|move)$/;
 
 /**
  * Teacher tools (Figma page "Console · Teacher on phone").
  *
  * 05-navigation.md: "Leaders keep the full teen experience; a coordinator has a
  * streak too. The Console is an *additional* place, entered deliberately, never
- * mixed into teen surfaces." So this is its own stack with its own nav, reached
- * from a card on Me, and the teen tabs know nothing about it.
+ * mixed into teen surfaces." So this is its own stack with its own nav, and the
+ * teen tabs know nothing about it. Since November 2026 leaders open here on
+ * launch (src/state/landing.ts); "My Faith Tribe" on the home screen takes them
+ * to the teen side and the card on Me brings them back.
  *
  * The nav lives here rather than in each screen, so it stays put while the
  * screens above it change.
@@ -81,8 +85,15 @@ export default function ConsoleLayout() {
         <Stack.Screen name="groups/index" />
         <Stack.Screen name="groups/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="groups/new" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="people/index" />
+        <Stack.Screen name="people/[id]/index" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="people/[id]/edit" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="people/[id]/role" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="people/[id]/move" options={{ animation: 'slide_from_bottom' }} />
       </Stack>
-      {!WITHOUT_NAV.some((prefix) => path.startsWith(prefix)) && <TeacherNav tools={tools} />}
+      {!WITHOUT_NAV.some((prefix) => path.startsWith(prefix)) && !PERSON_TASK.test(path) && (
+        <TeacherNav tools={tools} />
+      )}
     </View>
   );
 }

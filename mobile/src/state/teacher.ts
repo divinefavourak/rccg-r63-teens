@@ -26,6 +26,20 @@ export interface TeacherTools {
   review: boolean;
   /** Registering groups for an event, and paying for them. */
   groups: boolean;
+  /**
+   * Everyone in their part of the church, not only the teens in a class.
+   * Shown in place of My class for whoever has it (a coordinator), so the
+   * nav keeps to five places.
+   */
+  people: boolean;
+  /** Which roles each person holds. */
+  seeRoles: boolean;
+  /** Correcting someone's name and contact, or switching an account off. */
+  editPeople: boolean;
+  /** Giving someone a role, such as Teacher, or taking it away. */
+  assignRoles: boolean;
+  /** Moving someone to another province, zone, area or parish. */
+  movePeople: boolean;
 }
 
 export function useTeacherTools(): TeacherTools {
@@ -37,14 +51,24 @@ export function useTeacherTools(): TeacherTools {
   const checkIn = useCan(PERM.eventsCheckin, !isGuest);
   const review = useCan(PERM.contentManage, !isGuest);
   const groups = useCan(PERM.eventsManage, !isGuest);
+  const people = useCan(PERM.membershipsView, !isGuest);
+  const seeRoles = useCan(PERM.rolesView, !isGuest);
+  const editPeople = useCan(PERM.usersManage, !isGuest);
+  const assignRoles = useCan(PERM.rolesAssign, !isGuest);
+  const movePeople = useCan(PERM.membershipsManage, !isGuest);
 
   return {
     ready: isGuest || !identity.isPending,
-    any: lesson || roster || checkIn || review || groups,
+    any: lesson || roster || checkIn || review || groups || people,
     lesson,
     roster,
     checkIn,
     review,
     groups,
+    people,
+    seeRoles,
+    editPeople,
+    assignRoles,
+    movePeople,
   };
 }

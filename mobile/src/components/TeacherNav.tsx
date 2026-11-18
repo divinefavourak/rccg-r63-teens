@@ -43,7 +43,17 @@ const TABS: Tab[] = [
     icon: 'people',
     href: '/console/class',
     owns: (path) => path.startsWith('/console/class'),
-    show: (tools) => tools.roster,
+    // A coordinator gets People in this place instead: everyone in their
+    // part of the church, each with a link to their reading.
+    show: (tools) => tools.roster && !tools.people,
+  },
+  {
+    key: 'people',
+    label: 'People',
+    icon: 'people',
+    href: '/console/people',
+    owns: (path) => path.startsWith('/console/people') || path.startsWith('/console/class'),
+    show: (tools) => tools.people,
   },
   {
     key: 'groups',

@@ -97,7 +97,9 @@ Roles add capability; they never fork the teen experience.
 Rules:
 
 - Role capabilities are **scope-aware** (a coordinator's Console shows only their area — `15-technical-architecture.md`).
-- Leaders keep the full teen experience; a coordinator has a streak too. The Console is an *additional* place, entered deliberately, never mixed into teen surfaces.
+- Leaders keep the full teen experience; a coordinator has a streak too. The Console is an *additional* place, never mixed into teen surfaces: it has its own stack and its own nav.
+- **Leaders land on their dashboard** (changed November 2026, at a coordinator's request). Anyone with a leader tool who signs in, or opens the app already signed in, starts on the teacher tools' home rather than Today; a launch from a notification still goes where the notification points. **My Faith Tribe** on that home takes them to the teen side, where they stay until the next launch or sign-in, and the card on Me brings them back. Whether someone is a leader is read from their permissions, never their role's name (`mobile/src/state/landing.ts`).
+- On a phone, a coordinator's Console nav shows **People** in place of My class: everyone in their part of the church, with Edit details, Give a role / Remove, and Move, each shown only to someone who holds the permission behind it (`users.manage`, `roles.assign`, `memberships.manage`). The server enforces the same scope.
 - Role-gated items are invisible (not disabled) to those without the role — no locked doors to rattle.
 
 ## Deep linking
