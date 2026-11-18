@@ -299,6 +299,20 @@ def scope_queryset(queryset, user, permission_code, node_field='node'):
     return queryset.filter(query)
 
 
+def users_in_scope(user, permission_code):
+    """The ids of people with an active membership inside a subtree where
+    ``user`` holds ``permission_code``, as a subquery for ``id__in=``.
+
+    For views over people themselves (accounts, login history), which carry no
+    node of their own: a person is where their membership is."""
+    from identity.models import Membership
+    memberships = scope_queryset(
+        Membership.objects.filter(is_active=True), user, permission_code,
+        node_field='organization_node',
+    )
+    return memberships.values('user_id')
+
+
 # ---------------------------------------------------------------------------
 # Mutations with validation (duplicate / invalid-assignment / escalation)
 # ---------------------------------------------------------------------------

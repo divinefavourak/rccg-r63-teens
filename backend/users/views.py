@@ -21,7 +21,9 @@ from .serializers import (
     AdminUserUpdateSerializer, LoginSerializer, TokenResponseSerializer,
     LoginHistorySerializer, AuditLogSerializer
 )
-from identity.authorization import HasPermission, IsSelfOrHasPermission, has_any_permission
+from identity.authorization import (
+    HasPermission, IsSelfOrHasPermission, has_any_permission, users_in_scope,
+)
 from identity.permissions_registry import Perm
 
 
@@ -230,10 +232,22 @@ class UserViewSet(viewsets.ModelViewSet):
         # listing users ran one query per user across the entire table.
         base = User.objects.select_related('teen_profile')
 
-        # User managers see all users; everyone else sees only themselves.
-        # (Node-scoped user visibility via Membership is a documented follow-up.)
-        if has_any_permission(user, Perm.USERS_MANAGE):
+        if user.is_superuser:
             return base
+
+        # A holder of users.manage sees the people placed in the part of the
+        # tree where they hold it, and themselves; everyone else only
+        # themselves. Every action on one person (read, edit, delete, resend
+        # the welcome email) finds them through this queryset, so this is
+        # where the scope is enforced: outside it is a 404.
+        #
+        # It used to return every user to anyone holding users.manage
+        # anywhere, which made a province or regional coordinator able to edit
+        # and delete accounts in other regions. Sign-up always places a person
+        # (users/signup.py), and derive_hierarchy puts anyone without a place
+        # in the "Unassigned" province, so nobody falls outside every scope.
+        if has_any_permission(user, Perm.USERS_MANAGE):
+            return base.filter(Q(id__in=users_in_scope(user, Perm.USERS_MANAGE)) | Q(id=user.id))
 
         return base.filter(id=user.id)
 
@@ -441,6 +455,10 @@ class LoginHistoryView(generics.ListAPIView):
         # LoginHistorySerializer reads a dotted `user_username` source, so each
         # row cost a query without this join.
         queryset = LoginHistory.objects.select_related('user')
+        # Only the sign-ins of people in the requester's part of the tree.
+        if not self.request.user.is_superuser:
+            queryset = queryset.filter(
+                user_id__in=users_in_scope(self.request.user, Perm.USERS_MANAGE))
 
         user_id = self.kwargs.get('user_id')
         if user_id:
@@ -741,7 +759,14 @@ class AuditLogView(generics.ListAPIView):
     def get_queryset(self):
         # AuditLogSerializer.get_user_display dereferences obj.user.
         queryset = AuditLog.objects.select_related('user')
-        
+        # An entry records who did something, not where; so a leader sees what
+        # was done by the people in their part of the tree (themselves
+        # included). Only a superuser sees the whole log.
+        if not self.request.user.is_superuser:
+            queryset = queryset.filter(
+                Q(user_id__in=users_in_scope(self.request.user, Perm.USERS_MANAGE))
+                | Q(user_id=self.request.user.id))
+
         # Filter by entity type
         entity_type = self.request.query_params.get('entity_type')
         if entity_type:

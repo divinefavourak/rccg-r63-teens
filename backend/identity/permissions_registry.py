@@ -146,9 +146,15 @@ ROLE_SEED = [
         'label': 'Province Coordinator',
         'allowed_node_types': [_PROVINCE],
         'permissions': [
-            Perm.USERS_VIEW, Perm.PROFILES_VIEW,
+            # users.manage and roles.assign since November 2026 (migration
+            # identity/0008): a province coordinator corrects their people's
+            # details and appoints teachers and parish leaders in their own
+            # province. Both reach only their province: user management is
+            # scoped by membership (users.views.UserViewSet), and a grant by
+            # the subset and node rules (authorization.can_assign).
+            Perm.USERS_VIEW, Perm.USERS_MANAGE, Perm.PROFILES_VIEW,
             Perm.MEMBERSHIPS_VIEW, Perm.MEMBERSHIPS_MANAGE,
-            Perm.ROLES_VIEW, Perm.HIERARCHY_VIEW,
+            Perm.ROLES_VIEW, Perm.ROLES_ASSIGN, Perm.HIERARCHY_VIEW,
             Perm.CONTENT_VIEW, Perm.EVENTS_VIEW, Perm.EVENTS_MANAGE,
             Perm.EVENTS_CHECKIN, Perm.PAYMENTS_VIEW,
         ],
@@ -168,7 +174,10 @@ ROLE_SEED = [
     {
         'code': 'teacher',
         'label': 'Teacher',
-        'allowed_node_types': [_PARISH, _AREA],
+        # Province as well since November 2026 (migration identity/0008):
+        # Region 63 had no areas or parishes loaded, so nobody could be made a
+        # teacher. Move them down to their parish once the list is imported.
+        'allowed_node_types': [_PARISH, _AREA, _PROVINCE],
         'permissions': [
             Perm.USERS_VIEW, Perm.PROFILES_VIEW,
             Perm.CONTENT_VIEW, Perm.EVENTS_CHECKIN,
