@@ -30,6 +30,22 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',') if os.getenv('ALLOWED_HOSTS') else ['*']
 
+# HTTPS ends at the proxy in front (Caddy on the VPS, Render's router before
+# it), which talks plain HTTP to gunicorn and says so in X-Forwarded-Proto.
+# Without this Django believes every request is http: addresses built from the
+# request (the Google callback, Squad's return address) come out as http://,
+# and the CSRF origin check refuses the Django admin's own forms. Safe only
+# because gunicorn is never reachable except through that proxy
+# (deploy/docker-compose.yml publishes no port for it).
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# Origins allowed to POST forms to Django itself, e.g.
+# https://api.thefaithtribe.live. The API's own JSON endpoints authenticate by
+# token and do not need this; the Django admin does.
+CSRF_TRUSTED_ORIGINS = [
+    o.strip() for o in os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',') if o.strip()
+]
+
 # Email-verification enforcement at login. Off by default (non-breaking); turn on
 # once the verification email flow and frontend are ready. Foundation: is_verified
 # field on User + /verify-email/ endpoint.

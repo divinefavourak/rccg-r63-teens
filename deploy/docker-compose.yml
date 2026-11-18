@@ -1,0 +1,123 @@
+# Production on one VPS: the API, its database, Redis, the Celery worker and
+# beat, and Caddy in front for HTTPS. The website and the web app stay on
+# Vercel. Full procedure: docs/ops/11-vps-deployment.md.
+#
+#   cd /srv/faithtribe
+#   docker compose -f deploy/docker-compose.yml build
+#   docker compose -f deploy/docker-compose.yml run --rm web ./release.sh
+#   docker compose -f deploy/docker-compose.yml up -d
+#
+# Secrets live in deploy/.env (copied from deploy/.env.example, mode 600, never
+# committed). Only Caddy publishes ports; Postgres, Redis and gunicorn are
+# reachable on the compose network alone.
+
+name: faithtribe
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-app: &app
+  build:
+    context: ../backend
+  image: faithtribe-api:latest
+  env_file: .env
+  restart: unless-stopped
+  logging: *logging
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  db:
+    # Same major version as Neon (17.12 on 2026-11-18), so a dump from there
+    # restores here without surprises.
+    image: postgres:17-alpine
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_USER: faithtribe
+      POSTGRES_DB: faithtribe
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    shm_size: 256mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U faithtribe -d faithtribe"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    logging: *logging
+    # One Redis holds the cache (db 0) and the Celery queue (db 1).
+    # volatile-lru evicts only keys with an expiry when memory runs out: cache
+    # entries always have one, queued tasks never do, so a full Redis drops
+    # cache and never work. Append-only keeps queued tasks across a restart.
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy volatile-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    <<: *app
+    # The command is the Dockerfile's gunicorn line. The healthcheck only
+    # proves gunicorn accepts connections: an HTTP request to 127.0.0.1 would
+    # be refused by ALLOWED_HOSTS, which is the point of setting it.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), 5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  worker:
+    <<: *app
+    # -Q default is not optional: every entry in the beat schedule
+    # (backend/backend/celery.py) sends to the queue named "default", and a
+    # worker with no -Q listens only to "celery". Both, so a task sent without
+    # a queue is collected too.
+    command: celery -A backend worker -Q default,celery --concurrency 2 -l info
+
+  beat:
+    <<: *app
+    # Exactly one beat, ever: two would send every scheduled task twice.
+    command: celery -A backend beat -l info -s /beat/celerybeat-schedule
+    volumes:
+      - beat-data:/beat
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    logging: *logging
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - web
+
+volumes:
+  db-data:
+  redis-data:
+  beat-data:
+  caddy-data:
+  caddy-config:

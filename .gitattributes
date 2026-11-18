@@ -1,0 +1,5 @@
+# Scripts and server config run on Linux; a CRLF there breaks the shebang
+# ("bad interpreter") or the parse. Keep them LF whatever the checkout machine.
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+Caddyfile   text eol=lf

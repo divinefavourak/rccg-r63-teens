@@ -1,0 +1,18 @@
+# Never in the image: secrets, the local virtualenv, and anything generated.
+.env
+.env.*
+venv/
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+htmlcov/
+.coverage
+media/
+private_media/
+staticfiles/
+debug.log
+db.sqlite3
+celerybeat-schedule*
+docker-compose*.yml
