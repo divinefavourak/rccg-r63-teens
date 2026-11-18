@@ -102,7 +102,7 @@ rccg-r63-teens/
 | Push | Expo push (Android), Web Push (the web app) |
 | Website and Console | React 19, TypeScript, Vite 7, Tailwind, Zustand, React Query, React Hook Form, Zod |
 | App | Expo SDK 57, React Native 0.86, expo-router, NativeWind, Reanimated, React Query |
-| Hosting | Render (API), Vercel (website and web app), Expo EAS (Android builds) |
+| Hosting | A VPS under Docker Compose (API, Postgres, Redis, Celery), Vercel (website and web app), Cloudflare R2 (files), Expo EAS (Android builds) |
 
 ## Running it locally
 
@@ -307,12 +307,12 @@ The design is in [`docs/design/phase1-hierarchy-rbac.md`](docs/design/phase1-hie
 
 | Part | Host | How it deploys |
 |---|---|---|
-| API | Render | Builds `main` and runs [`backend/build.sh`](backend/build.sh): install, collect static files, migrate, then a few safe-to-repeat repair commands. |
+| API, database, Redis, Celery | A VPS, Docker Compose ([`deploy/`](deploy)) | By hand: `git pull`, build the image, run [`backend/release.sh`](backend/release.sh) (migrate, then a few safe-to-repeat repair commands), restart. Steps in [`docs/ops/11-vps-deployment.md`](docs/ops/11-vps-deployment.md). |
 | Website and Console | Vercel, root `frontend` | Builds `main`. |
 | Web app | Vercel, root `mobile` | A second Vercel project. It is the app exported for the web. |
 | Android app | Expo EAS | Built on Expo, then copied into the R2 bucket with `npm run release`, so the download address never changes. Steps in [`mobile/README.md`](mobile/README.md#releasing-an-android-build). |
 
-There is no Celery worker in production. An outside timer calls `POST /api/v1/scheduler/tick/` every five minutes and the API runs whatever is due. See [`docs/ops/10-scheduler-without-a-worker.md`](docs/ops/10-scheduler-without-a-worker.md).
+Timed work (reminders, the devotional scrape, releasing unpaid places) runs on a Celery worker and beat beside the API. Before the move to the VPS it ran from an outside timer instead; that route is still described in [`docs/ops/10-scheduler-without-a-worker.md`](docs/ops/10-scheduler-without-a-worker.md).
 
 After any deployment, run:
 

@@ -15,8 +15,15 @@ Never commit secret values. Set them in the deployment platform's secret store.
 | `SECRET_KEY` | Django signing key. Unset ⇒ sessions, password-reset tokens, and signed cookies all break. **No default — must be set.** |
 | `DEBUG` | Must be `False` in production. `True` leaks tracebacks and settings. Default is `False`; `verify_deployment` fails if it is on. |
 | `ALLOWED_HOSTS` | Comma-separated real hostnames. **Defaults to `*`**, which defeats Host-header validation — the single most likely thing to be wrong on launch day. `verify_deployment` fails on `*`. |
-| `DATABASE_URL` | Postgres connection string. Unset ⇒ falls back to local SQLite, which several migrations cannot run on. |
-| `REDIS_URL` | Cache + Celery broker. Backs DRF throttling (fails open if Redis blips) and every scheduled task. |
+| `CSRF_TRUSTED_ORIGINS` | Comma-separated origins, with scheme, allowed to post forms to Django itself, e.g. `https://api.thefaithtribe.live`. Needed by the Django admin; the JSON API authenticates by token and ignores it. Default empty. |
+| `DATABASE_URL` | Postgres connection string. Unset ⇒ falls back to local SQLite, which several migrations cannot run on. On the VPS: `postgres://faithtribe:<POSTGRES_PASSWORD>@db:5432/faithtribe`. |
+| `POSTGRES_PASSWORD` | VPS only. The password `deploy/docker-compose.yml` gives the `db` container; the same value goes in `DATABASE_URL`. |
+| `REDIS_URL` | Cache + Celery broker. Backs DRF throttling (fails open if Redis blips) and every scheduled task. On the VPS: `redis://redis:6379/0`. |
+
+Django trusts `X-Forwarded-Proto: https` from the proxy in front
+(`SECURE_PROXY_SSL_HEADER`, always on). That is only safe while gunicorn cannot
+be reached except through that proxy, as in `deploy/docker-compose.yml`, which
+publishes no port for it.
 
 ## Payments — required before events with paid tickets
 

@@ -25,7 +25,10 @@ data layer and offline, `MR` mobile rendering, startup and bundle.
 
 These decide priority or cannot be answered from the repo.
 
-- [ ] **Gunicorn start command.** No Procfile, `render.yaml` or gunicorn config
+- [x] **Gunicorn start command.** _Answered 2026-11-18 with the move to a VPS:
+  `backend/Dockerfile` runs gthread, 2 workers × 4 threads, 60 s timeout, behind
+  Caddy. A slow client on `/bible/pack/` holds one thread, not a worker (BS-06)._
+  No Procfile, `render.yaml` or gunicorn config
   is in the repo. Worker class and count decide whether a slow client on
   `/bible/pack/` can pin a worker (BS-06).
 - [ ] **Is the legacy tickets and Paystack flow still live?** Decides whether

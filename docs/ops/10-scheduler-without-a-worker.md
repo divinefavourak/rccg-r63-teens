@@ -1,5 +1,11 @@
 # 10 — Timed tasks without a worker
 
+> **Not how production runs since November 2026.** On the VPS
+> ([11](11-vps-deployment.md)) a Celery worker and beat run beside the API, so
+> `CELERY_TASK_ALWAYS_EAGER` and `SCHEDULER_SECRET` are unset there and the
+> cron-job.org timer is switched off. This page stays for any deployment
+> that has only a web service.
+
 The timed work — daily reminders, the end-of-day close-out, event reminders,
 expiring unpaid registrations, the devotional scrape and its gap alert — is a
 Celery beat schedule (`backend/backend/celery.py`). Beat needs a worker and a
