@@ -650,6 +650,17 @@ UNPAID_REGISTRATION_HOLD_HOURS = int(os.getenv("UNPAID_REGISTRATION_HOLD_HOURS",
 # The phone app's link scheme (mobile/app.json). A payer is offered a way back
 # to the app only at an address that starts with it, or at one of our sites.
 MOBILE_APP_SCHEME = os.getenv("MOBILE_APP_SCHEME", "faithtribe")
+# Where the link to share an event by starts, e.g.
+# https://www.thefaithtribe.live/e. The site there must pass `/e/<slug>` on to
+# this API's `/api/v1/events/share/<slug>/` (frontend/vercel.json does).
+# Unset, the link is on the API's own address.
+EVENT_LINK_BASE = os.getenv("EVENT_LINK_BASE", "").rstrip("/")
+# The Android app (mobile/app.json `android.package`). A shared event's page
+# opens it there, and falls back to the web app on a phone without it.
+ANDROID_APP_PACKAGE = os.getenv("ANDROID_APP_PACKAGE", "org.rccgregion63.faithtribe")
+# The web app (the Expo build in mobile/, for iPhones and anyone without the
+# Android app). A shared event opens there when the app cannot.
+WEB_APP_URL = os.getenv("WEB_APP_URL", "https://app.thefaithtribe.live").rstrip("/")
 
 # Sign in with Google. Create a **Web application** OAuth client in Google Cloud
 # (APIs & Services → Credentials), put its ID and secret here, and add this

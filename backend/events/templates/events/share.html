@@ -1,0 +1,102 @@
+{% comment %}
+The page behind a shared event link (events/share.py).
+
+Read by two kinds of visitor. A chat app's preview fetcher runs no script and
+takes the og: tags: title, a line about it, and the flier. A person runs the
+script at the bottom, which sends them straight on: into the Android app where
+it is installed (Chrome goes to the web app by itself where it is not), or the
+web app anywhere else. What is drawn below is for the moment between, and for
+a browser that stops the hand-over: the same two ways on, as buttons.
+
+Self-contained like payments/page.html, since it often opens inside a chat
+app's browser: no web font, no other file but the flier.
+{% endcomment %}{% load tz %}{% timezone "Africa/Lagos" %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+{% if missing %}
+<title>Event not found · Faith Tribe</title>
+{% else %}
+<title>{{ event.title }} · Faith Tribe</title>
+<meta name="description" content="{{ summary }}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Faith Tribe">
+<meta property="og:url" content="{{ share_url }}">
+<meta property="og:title" content="{{ event.title }}">
+<meta property="og:description" content="{{ event.start_datetime|date:'D j M, g:i a' }}{% if event.venue %} · {{ event.venue }}{% endif %}{% if summary %}. {{ summary }}{% endif %}">
+{% if image %}<meta property="og:image" content="{{ image }}">
+<meta property="og:image:alt" content="The flier for {{ event.title }}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="{{ image }}">{% endif %}
+{% endif %}
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px 40px; background: #F9F6F1; color: #1C1916;
+    font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px; line-height: 24px;
+  }
+  main { max-width: 440px; margin: 0 auto; }
+  .brand { font-size: 19px; line-height: 24px; font-weight: 800; letter-spacing: -0.4px; margin: 0 4px 16px; }
+  .brand span { font-size: 12px; font-weight: 400; color: #6F6862; letter-spacing: 0; padding-left: 8px; }
+  .card { background: #FFFFFF; border-radius: 24px; overflow: hidden; }
+  .card img { display: block; width: 100%; height: auto; max-height: 480px; object-fit: cover; background: #ECE6DD; }
+  .body { padding: 24px; }
+  h1 { font-size: 28px; line-height: 34px; letter-spacing: -0.5px; margin: 0 0 8px; }
+  p { margin: 0 0 16px; color: #4A443F; }
+  dl { margin: 0 0 16px; border-top: 1px solid #ECE6DD; }
+  dl div { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid #ECE6DD; }
+  dt { color: #6F6862; }
+  dd { margin: 0; font-weight: 600; text-align: right; }
+  .button {
+    display: block; width: 100%; border: 0; border-radius: 999px; padding: 16px 20px; margin-top: 12px;
+    background: #1C1916; color: #FFFFFF; font: inherit; font-weight: 700; text-align: center;
+    text-decoration: none;
+  }
+  .button.quiet { background: #ECE6DD; color: #1C1916; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <div class="brand">Faith Tribe<span>RCCG Region 63</span></div>
+  <div class="card">
+    {% if missing %}
+    <div class="body">
+      <h1>This event is not here any more</h1>
+      <p>It may have finished or been taken down. See what else is coming up.</p>
+      <a class="button" href="{{ web_url }}">See events</a>
+    </div>
+    {% else %}
+    {% if event.cover_image %}<img src="{{ image }}" alt="The flier for {{ event.title }}">{% endif %}
+    <div class="body">
+      <h1>{{ event.title }}</h1>
+      <dl>
+        <div><dt>When</dt><dd>{{ event.start_datetime|date:"D j M, g:i a" }}</dd></div>
+        {% if event.venue %}<div><dt>Where</dt><dd>{{ event.venue }}{% if event.city %}, {{ event.city }}{% endif %}</dd></div>{% endif %}
+        <div><dt>Price</dt><dd>{% if event.is_free %}Free{% else %}₦{{ event.current_price|floatformat:"-2g" }}{% endif %}</dd></div>
+      </dl>
+      {% if summary %}<p>{{ summary }}</p>{% endif %}
+      <a class="button" id="open-app" href="{{ intent_url }}" hidden>Open in the app</a>
+      <a class="button" id="open-web" href="{{ web_url }}">Open the event</a>
+    </div>
+    {% endif %}
+  </div>
+</main>
+{% if not missing %}
+<script>
+(function () {
+  var android = /Android/i.test(navigator.userAgent);
+  if (android) {
+    document.getElementById('open-app').hidden = false;
+    document.getElementById('open-web').className = 'button quiet';
+  }
+  location.replace(android ? '{{ intent_url|escapejs }}' : '{{ web_url|escapejs }}');
+})();
+</script>
+{% endif %}
+</body>
+</html>
+{% endtimezone %}

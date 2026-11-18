@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useAuthContext } from '../context/AuthContext';
 import Seo from '../components/Seo';
+import Markdown from '../components/Markdown';
 import { eventLd } from '../../seo/schema.mjs';
 import { eventDescription } from '../../seo/site.mjs';
 
@@ -269,7 +270,8 @@ const EventDetail = () => {
                             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">About this Event</h2>
                             <div className="prose dark:prose-invert max-w-none text-gray-700 dark:text-gray-300">
                                 {event.description ? (
-                                    <p className="whitespace-pre-line">{event.description}</p>
+                                    // Written in the small Markdown of lib/markdown.ts.
+                                    <Markdown source={event.description} tone="site" />
                                 ) : event.short_description ? (
                                     <p>{event.short_description}</p>
                                 ) : (

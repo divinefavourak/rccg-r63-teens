@@ -240,9 +240,15 @@ export interface EventListItem {
   payment_method?: 'online' | 'manual';
   /** Whether coordinators can register groups for it. */
   group_registration_enabled?: boolean;
+  /**
+   * The page to share it by: the flier as a chat preview, then on into the
+   * app or the web app. Absent from a server older than it.
+   */
+  share_url?: string;
 }
 
 export interface EventDetail extends EventListItem {
+  /** Written in the small Markdown of `data/markdown.ts`. */
   description: string | null;
   address: string | null;
   virtual_link: string | null;

@@ -16,10 +16,10 @@
  * `events.manage`, so it is not offered to anyone else; the door has its own
  * endpoints and its own screen.
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, CalendarDays, Check, Download, Lock, Pencil, Plus, ScanLine, Trash2, X } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Check, Download, Link2, Lock, Pencil, Plus, ScanLine, Trash2, X } from 'lucide-react';
 import api from '../../api/axios';
 import EventEditor, {
   type EventDraft,
@@ -77,6 +77,11 @@ interface EventRow {
   is_free?: boolean;
   scope_node_detail: { id: string; name: string; node_type: string } | null;
   bedspaces_enabled?: boolean;
+  /**
+   * The link to post it by (a WhatsApp status, say): the flier shows as the
+   * preview, and a tap opens the event in the app. Only works once published.
+   */
+  share_url?: string;
 }
 
 /** One hostel in the `bedspaces` summary. */
@@ -973,6 +978,24 @@ export const Events = () => {
   const [deleting, setDeleting] = useState<EventRow | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleted, setDeleted] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!copiedId) return;
+    const timer = setTimeout(() => setCopiedId(null), 2500);
+    return () => clearTimeout(timer);
+  }, [copiedId]);
+
+  const copyLink = async (row: EventRow) => {
+    if (!row.share_url) return;
+    try {
+      await navigator.clipboard.writeText(row.share_url);
+      setCopiedId(row.id);
+    } catch {
+      // No clipboard (an old browser, or permission refused): show it to copy by hand.
+      setOpenError(`Copy this link to share ${row.title}: ${row.share_url}`);
+    }
+  };
 
   /**
    * Open an event for editing from its full record. A list row leaves out the
@@ -1229,6 +1252,18 @@ export const Events = () => {
                             <Btn variant="soft" onClick={() => setOpen(e)}>
                               Registrations
                             </Btn>
+                            {/* Only a published event has a page to share. */}
+                            {e.status === 'published' && e.share_url && (
+                              <Btn
+                                variant="ghost"
+                                aria-label={`Copy the share link for ${e.title}`}
+                                title="Copy the link to post: the flier shows as the preview"
+                                onClick={() => copyLink(e)}
+                              >
+                                {copiedId === e.id ? <Check size={14} /> : <Link2 size={14} />}
+                                {copiedId === e.id && <span className="sr-only">Link copied</span>}
+                              </Btn>
+                            )}
                             <Btn
                               variant="ghost"
                               aria-label={`Edit ${e.title}`}
