@@ -46,6 +46,20 @@ dc ps                            # all running, web healthy
 collecting static files (the image does both). It prints the email self-test
 at the end.
 
+While `web` is recreated (about 10 seconds), Caddy holds incoming requests and
+retries them rather than failing them (`lb_try_duration` in the Caddyfile), so
+a deploy makes the app pause, not error.
+
+**If the pull changed `deploy/Caddyfile`**, `dc up -d` does not pick it up: the
+file is mounted on its own, and `git pull` replaces it with a new file the
+running container cannot see. Recreate Caddy (its certificates are kept in the
+`caddy-data` volume, so none are fetched again):
+
+```bash
+dc up -d --force-recreate caddy
+dc exec caddy cat /etc/caddy/Caddyfile   # shows the new version
+```
+
 ## Logs
 
 ```bash
