@@ -284,3 +284,16 @@ class RepairProfileTests(APITestCase):
         delete.assert_called_once_with(name)
         self.assertFalse(TeenProfile.objects.get(user=self.user).avatar)
         storage.delete(name)
+
+
+class AgeGroupBandTests(unittest.TestCase):
+    """Where each birthday lands. No database: the rule is pure arithmetic."""
+
+    def test_bands_at_their_edges(self):
+        group = TeenProfile()._calculate_age_group
+        self.assertEqual(group(19), 'teen')
+        self.assertEqual(group(20), 'superteen')
+        self.assertEqual(group(25), 'superteen')
+        # Teachers and coordinators sign up too; 26 and over is an adult.
+        self.assertEqual(group(26), 'adult')
+        self.assertEqual(group(48), 'adult')

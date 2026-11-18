@@ -45,6 +45,7 @@ const AGE_GROUP: Record<string, string> = {
   pre_teen: 'Pre-teen',
   teen: 'Teen',
   superteen: 'Superteen',
+  adult: 'Adult',
 };
 
 function MemberMe() {

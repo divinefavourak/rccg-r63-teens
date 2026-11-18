@@ -349,7 +349,8 @@ class Manual(UUIDMixin, TimestampMixin, PublishableMixin, ReviewableMixin,
         CHILDREN    = 'children',  'Children (6-8)'
         PRE_TEEN    = 'pre_teen',  'Pre-Teen (9-12)'
         TEEN        = 'teen',      'Teens (13-19)'
-        SUPERTEEN   = 'superteen', 'Superteen (19+)'
+        SUPERTEEN   = 'superteen', 'Superteen (20-25)'
+        ADULT       = 'adult',     'Adult (26+)'
     
     # Series relationship
     series = models.ForeignKey(
