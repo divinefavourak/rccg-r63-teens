@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import {
   personName,
+  useDeclineTeaching,
   usePeopleRoles,
   usePersonAccount,
   usePersonMembership,
@@ -53,6 +54,7 @@ export default function PersonScreen() {
   const account = usePersonAccount(userId, tools.editPeople);
   const roles = usePeopleRoles(userId ? [userId] : [], tools.seeRoles);
   const revoke = useRevokeRole();
+  const decline = useDeclineTeaching(id ?? '');
   const [removing, setRemoving] = useState<PersonRole | null>(null);
   const [revokeError, setRevokeError] = useState<string | null>(null);
 
@@ -147,6 +149,39 @@ export default function PersonScreen() {
             </View>
           )}
         </View>
+
+        {/* ── Said "I teach" at sign-up, waiting for an answer ──────── */}
+        {!!m.asked_to_teach_at && tools.assignRoles && (
+          <View className="w-full gap-3 rounded-2xl bg-amber-tonal p-4">
+            <View className="gap-1">
+              <Text className="font-ui-sb text-[16px] leading-6 text-ink-1">
+                {name} says they teach
+              </Text>
+              <Text className="font-ui text-[14px] leading-5 text-ink-2">
+                They said so when they joined on {joinedOn(m.asked_to_teach_at)}. Giving them a
+                role answers it; until then they see the app as a member.
+              </Text>
+            </View>
+            <Button label="Give the Teacher role" onPress={() => go('role')} className="w-full" />
+            <Button
+              label="Not a teacher"
+              variant="secondary"
+              onPress={() => decline.mutate()}
+              loading={decline.isPending}
+              className="w-full"
+            />
+            {decline.isError && (
+              <Text
+                accessibilityLiveRegion="polite"
+                className="font-ui-md text-[14px] leading-5 text-feedback-error"
+              >
+                {decline.error instanceof Error
+                  ? decline.error.message
+                  : 'That did not work. Please try again.'}
+              </Text>
+            )}
+          </View>
+        )}
 
         {/* ── Contact (only for someone who may correct it) ─────────── */}
         {tools.editPeople && (
@@ -274,6 +309,13 @@ export default function PersonScreen() {
       </Sheet>
     </View>
   );
+}
+
+function joinedOn(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime())
+    ? 'sign-up'
+    : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
 }
 
 function Line({

@@ -19,6 +19,10 @@ export function routeFor(link: string | null | undefined): Href | null {
   const event = /^\/events\/([^/]+)\/?$/.exec(link);
   if (event) return { pathname: '/event/[id]', params: { id: event[1] } };
 
+  const person = /^\/console\/people\/([^/]+)\/?$/.exec(link);
+  if (person) return { pathname: '/console/people/[id]', params: { id: person[1] } };
+  if (link.startsWith('/console/people')) return '/console/people';
+
   if (link.startsWith('/settings/notifications')) return '/settings/notifications';
   if (link.startsWith('/settings')) return '/settings';
   if (link.startsWith('/notifications')) return '/notifications';

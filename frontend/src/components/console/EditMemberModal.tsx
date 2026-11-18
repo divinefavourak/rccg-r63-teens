@@ -24,6 +24,7 @@ import { Btn, ErrorState, Modal, Skeleton } from './primitives';
 /** `UserSerializer`, the fields this form reads. */
 interface Account {
   id: string;
+  username: string;
   first_name: string;
   last_name: string;
   email: string;
@@ -38,6 +39,7 @@ const INPUT =
   'mt-1 w-full rounded-console-md border-2 border-transparent bg-console-tinted px-3.5 py-2.5 text-[16px] leading-6 text-console-text outline-none transition-colors focus:border-console-text';
 
 const NAMES: Record<string, string> = {
+  username: 'Username',
   first_name: 'First name',
   last_name: 'Last name',
   email: 'Email',
@@ -56,6 +58,7 @@ const Form = ({
   onSaved: (name: string) => void;
 }) => {
   const [form, setForm] = useState({
+    username: account.username ?? '',
     first_name: account.first_name ?? '',
     last_name: account.last_name ?? '',
     email: account.email ?? '',
@@ -72,7 +75,7 @@ const Form = ({
 
   const name = `${form.first_name} ${form.last_name}`.trim() || account.email;
   const turningOff = account.is_active && !form.is_active;
-  const ready = form.first_name.trim() && form.email.trim();
+  const ready = form.first_name.trim() && form.email.trim() && form.username.trim();
 
   const save = async () => {
     // Turning an account off is asked about once, in the footer, before it goes.
@@ -213,6 +216,18 @@ const Form = ({
             autoComplete="off"
           />
           {fieldError('phone')}
+        </label>
+        <label className="block">
+          <span className={LABEL}>Username</span>
+          <input
+            className={INPUT}
+            value={form.username}
+            onChange={(e) => set('username', e.target.value.replace(/\s/g, ''))}
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+          />
+          {fieldError('username')}
         </label>
         <label className="block">
           <span className={LABEL}>Gender</span>

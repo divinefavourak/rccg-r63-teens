@@ -33,7 +33,7 @@ Optimized for teens on shared devices; minimal fields.
 1. Entry: contextual prompt or Me tab → **Sign up**.
 2. Fields: first name, email address, phone number (contact, not identity), or **Continue with Google** to carry the verified name and email into the form.
 3. ⚙ OTP verification by email. ✖ OTP not received → resend with 60s cooldown. The phone number is how leaders reach the teen; it is never a sign-in channel.
-4. Screen two: date of birth (age-band logic: under-13 blocked with a kind message; 13–19 standard; 20+ flagged for role assignment. The group shown and stored is derived from the date: Children 6–8, Pre-teen 9–12, Teen 13–19, Superteen 20–25, Adult 26+), gender (optional), **parish selection** (region → searchable parish list; "I'm not sure" allowed — assigns region-level default, coordinator can correct later).
+4. Screen two: date of birth (age-band logic: under-13 blocked with a kind message; 13–19 standard; 20+ flagged for role assignment. The group shown and stored is derived from the date: Children 6–8, Pre-teen 9–12, Teen 13–19, Superteen 20–25, Adult 26+. From 20 the same screen asks **"Do you teach at church?"**: yes grants nothing by itself, it records a request and notifies the coordinators nearest the chosen church, who answer it in People by giving a role or with "Not a teacher" (`backend/identity/teach_requests.py`)), gender (optional), **parish selection** (region → searchable parish list; "I'm not sure" allowed — assigns region-level default, coordinator can correct later).
 5. ⚙ Account created; guest local data migrated; role = Teen; landing on Today with streak card active: "Day 1 starts today 🌱".
 6. ✖ Existing phone/email → inline "Looks like you already have an account — log in?" with prefilled identifier.
 

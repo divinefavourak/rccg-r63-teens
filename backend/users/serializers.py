@@ -191,12 +191,24 @@ class AdminUserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
+            'username',
             'first_name', 'last_name', 'email', 'phone', 'gender',
             'role', 'province', 'is_active',
             'zone', 'area', 'parish', 'bio',
             'email_notifications', 'sms_notifications',
             'date_of_birth',
         ]
+
+    def validate_username(self, value):
+        # Sign-in matches a username exactly, so two that differ only in
+        # capitals ("Ada", "ada") would be two accounts nobody can tell apart.
+        value = value.strip()
+        taken = User.objects.filter(username__iexact=value)
+        if self.instance is not None:
+            taken = taken.exclude(pk=self.instance.pk)
+        if taken.exists():
+            raise serializers.ValidationError('That username is taken. Try another.')
+        return value
 
     def validate(self, attrs):
         # The legacy `role` field carries superuser with it (see update), so

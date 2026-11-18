@@ -349,6 +349,7 @@ class GoogleSignupCompleteSerializer(serializers.Serializer):
         choices=User.Gender.choices, required=False, allow_blank=True
     )
     church_node = serializers.UUIDField(required=False, allow_null=True)
+    asks_to_teach = serializers.BooleanField(required=False, default=False)
 
     def validate_phone(self, value):
         phone = normalize_phone(value)
@@ -573,6 +574,7 @@ class GoogleSignupCompleteView(APIView):
             "date_of_birth": data["date_of_birth"],
             "gender": data.get("gender") or "",
             "church_node": data.get("church_node"),
+            "asks_to_teach": data.get("asks_to_teach", False),
         }
         try:
             with transaction.atomic():

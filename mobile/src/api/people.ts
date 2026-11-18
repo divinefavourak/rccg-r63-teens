@@ -27,7 +27,8 @@ const PAGE_SIZE = 30;
 
 export const peopleKeys = {
   all: ['console', 'people'] as const,
-  list: (search: string) => ['console', 'people', 'list', search] as const,
+  list: (search: string, asked = false) =>
+    ['console', 'people', 'list', search, asked ? 'asked' : 'all'] as const,
   membership: (id: string) => ['console', 'people', 'membership', id] as const,
   account: (userId: string) => ['console', 'people', 'account', userId] as const,
   roles: (userIds: string) => ['console', 'people', 'roles', userIds] as const,
@@ -42,10 +43,10 @@ export const peopleKeys = {
  * listed once. The server searches first name, last name, username, e-mail
  * and display name.
  */
-export function usePeople(search: string, enabled = true) {
+export function usePeople(search: string, enabled = true, askedToTeach = false) {
   const query = search.trim();
   return useInfiniteQuery({
-    queryKey: peopleKeys.list(query),
+    queryKey: peopleKeys.list(query, askedToTeach),
     initialPageParam: 1,
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams({
@@ -55,6 +56,8 @@ export function usePeople(search: string, enabled = true) {
         page_size: String(PAGE_SIZE),
       });
       if (query) params.set('search', query);
+      // Adults who said "I teach" at sign-up, waiting longest first.
+      if (askedToTeach) params.set('asked_to_teach', 'true');
       return api.get<Paginated<PersonMembership>>(`/identity/memberships/?${params}`);
     },
     getNextPageParam: (last, pages) => (last.next ? pages.length + 1 : undefined),
@@ -135,7 +138,10 @@ function useRefreshPeople() {
 }
 
 export type AccountPatch = Partial<
-  Pick<PersonAccount, 'first_name' | 'last_name' | 'email' | 'phone' | 'gender' | 'is_active'>
+  Pick<
+    PersonAccount,
+    'username' | 'first_name' | 'last_name' | 'email' | 'phone' | 'gender' | 'is_active'
+  >
 >;
 
 export function useUpdateAccount(userId: string) {
@@ -160,6 +166,19 @@ export function useRevokeRole() {
   const refresh = useRefreshPeople();
   return useMutation({
     mutationFn: (assignmentId: string) => api.delete(`/identity/role-assignments/${assignmentId}/`),
+    onSuccess: refresh,
+  });
+}
+
+/**
+ * "Not a teacher": answer someone's "I teach" from sign-up without giving them
+ * a role. Giving any role answers it too, on the server.
+ */
+export function useDeclineTeaching(membershipId: string) {
+  const refresh = useRefreshPeople();
+  return useMutation({
+    mutationFn: () =>
+      api.post<PersonMembership>(`/identity/memberships/${membershipId}/decline-teaching/`, {}),
     onSuccess: refresh,
   });
 }

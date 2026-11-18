@@ -128,6 +128,11 @@ class User(AbstractBaseUser, PermissionsMixin):
     password_reset_required = models.BooleanField(default=False)
     failed_login_attempts = models.IntegerField(default=0)
     account_locked_until = models.DateTimeField(null=True, blank=True)
+
+    # Said "I teach" at sign-up (adults only). It grants nothing: a coordinator
+    # over their church answers it by giving them a role, which clears it, or
+    # by declining. See identity/teach_requests.py.
+    asked_to_teach_at = models.DateTimeField(null=True, blank=True)
     
     # Audit fields
     created_by = models.ForeignKey(

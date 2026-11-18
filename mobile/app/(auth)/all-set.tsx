@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { JuniorChurchLogo } from '../../src/components/Logo';
 import { useReminderInvite } from '../../src/components/ReminderInvite';
 import { useAuth } from '../../src/state/auth';
-import { CHURCH_STEPS, deepestChurch, useSignUp } from '../../src/state/signup';
+import { asksToTeach, CHURCH_STEPS, deepestChurch, useSignUp } from '../../src/state/signup';
 import { markWelcomed } from '../../src/state/welcome';
 import { Drawing, Object3D } from '../../src/ui/art';
 import { Button } from '../../src/ui/Button';
@@ -90,6 +90,13 @@ export default function AllSetScreen() {
               )}
             </View>
           </View>
+        )}
+
+        {asksToTeach(form) && (
+          <Text className="text-center font-ui text-[14px] leading-5 text-ink-2">
+            We’ve told your coordinator you teach. Your teacher tools appear here once they
+            confirm.
+          </Text>
         )}
 
         <Button label="Start today’s reading" onPress={invite.begin} className="w-full" />

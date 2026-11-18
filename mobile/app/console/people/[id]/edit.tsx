@@ -17,6 +17,9 @@ import { ChipRow, TextField, Toggle } from '../../../../src/ui/inputs';
 import { BackHeader, EmptyState, KeyboardView, SectionTitle, Skeleton } from '../../../../src/ui/screen';
 import { ELEVATION } from '../../../../src/theme/tokens';
 
+/** The server's rule (users.User.username): 3+ of letters, digits and @ . + - _. */
+const USERNAME = /^[\w.@+-]{3,150}$/;
+
 const GENDERS = [
   { value: 'female', label: 'Female' },
   { value: 'male', label: 'Male' },
@@ -24,6 +27,7 @@ const GENDERS = [
 ] as const;
 
 type Form = {
+  username: string;
   first_name: string;
   last_name: string;
   email: string;
@@ -102,7 +106,8 @@ export default function EditPersonScreen() {
     if (form[key] !== original[key]) (patch as Record<string, unknown>)[key] = form[key];
   });
   const changed = Object.keys(patch).length > 0;
-  const ready = form.first_name.trim() !== '' && form.email.trim() !== '';
+  const usernameOk = USERNAME.test(form.username.trim());
+  const ready = form.first_name.trim() !== '' && form.email.trim() !== '' && usernameOk;
 
   const save = async () => {
     try {
@@ -156,6 +161,23 @@ export default function EditPersonScreen() {
             keyboardType="phone-pad"
             placeholder="+234 800 000 0000"
           />
+          <View className="gap-1">
+            <TextField
+              label="Username"
+              value={form.username}
+              onChange={(v) => set('username', v.replace(/\s/g, ''))}
+              autoCapitalize="none"
+            />
+            <Text
+              className={`font-ui text-[12px] leading-4 ${
+                usernameOk ? 'text-ink-3' : 'text-feedback-error'
+              }`}
+            >
+              {usernameOk
+                ? 'They can sign in with it. Letters, numbers and . _ - @ + only.'
+                : 'At least 3 characters: letters, numbers and . _ - @ + only.'}
+            </Text>
+          </View>
           <View className="gap-2">
             <Text className="font-ui-sb text-[14px] leading-5 text-ink-2">Gender</Text>
             <ChipRow wrap options={GENDERS} value={form.gender as (typeof GENDERS)[number]['value']} onChange={(v) => set('gender', v)} />
@@ -206,6 +228,7 @@ export default function EditPersonScreen() {
 
 function toForm(a: PersonAccount): Form {
   return {
+    username: a.username ?? '',
     first_name: a.first_name ?? '',
     last_name: a.last_name ?? '',
     email: a.email ?? '',

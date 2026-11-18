@@ -358,6 +358,11 @@ def assign_role(user, role, node, appointed_by=None, start_date=None, end_date=N
             'end_date': end_date,
         },
     )
+    # Giving someone a role that does something answers their "I teach" from
+    # sign-up, whichever role it is: the coordinator has decided.
+    if role.permission_codes():
+        type(user).objects.filter(pk=user.pk, asked_to_teach_at__isnull=False).update(
+            asked_to_teach_at=None)
     # Allow (re)scheduling an end date on an existing active assignment without
     # disturbing its start_date.
     if not created and end_date is not None and assignment.end_date != end_date:
