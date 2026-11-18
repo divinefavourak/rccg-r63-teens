@@ -89,14 +89,28 @@ export const MediaUploader = ({
       });
       onUploaded();
     } catch (err: unknown) {
-      const data = (err as { response?: { data?: Record<string, unknown> } })
-        ?.response?.data;
+      const response = (
+        err as { response?: { status?: number; data?: unknown } }
+      )?.response;
+      const data = response?.data;
+      // Only a JSON object is a DRF validation error; an HTML error page from
+      // the proxy would otherwise be spelled out character by character.
       const detail =
-        data &&
-        Object.entries(data)
-          .map(([k, v]) => `${k}: ${Array.isArray(v) ? v[0] : v}`)
-          .join(' · ');
-      setError(detail || 'The upload failed. Check the file type and size.');
+        data && typeof data === 'object' && !Array.isArray(data)
+          ? Object.entries(data as Record<string, unknown>)
+              .map(([k, v]) => `${k}: ${Array.isArray(v) ? v[0] : v}`)
+              .join(' · ')
+          : '';
+      let message = detail;
+      if (!message && response?.status === 413) {
+        message = `This file${file ? ` (${formatBytes(file.size)})` : ''} is larger than the server accepts.`;
+      } else if (!message && !response) {
+        // No response at all: the connection dropped, or the proxy refused the
+        // body without CORS headers (which the browser reports the same way).
+        message =
+          'The upload did not reach the server. Check your connection and try again; if it keeps failing, the file may be too large.';
+      }
+      setError(message || 'The upload failed. Check the file type and size.');
       setProgress(null);
     }
   };

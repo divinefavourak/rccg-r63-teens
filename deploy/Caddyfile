@@ -13,7 +13,20 @@
 # the first through SECURE_PROXY_SSL_HEADER, DRF's throttles the second.
 
 {$CADDY_HOSTS} {
-	request_body {
+	# Podcast episodes and videos are uploaded through the API (MediaUploader
+	# in the console), and a 30-minute MP3 is already ~25 MB. The 25MB cap
+	# below rejected those with a bare 413 that carries no CORS headers, so
+	# the console could only say "The upload failed" (seen 18 November 2026
+	# with a 24 MiB MP3 — Caddy's MB is 10^6 bytes, so 24 MiB is over 25MB).
+	# Only these paths get the large limit; Django streams files above
+	# FILE_UPLOAD_MAX_MEMORY_SIZE to a temp file, not RAM.
+	@media_upload path /api/v1/media/* /api/media/*
+	request_body @media_upload {
+		max_size 500MB
+	}
+
+	@other_requests not path /api/v1/media/* /api/media/*
+	request_body @other_requests {
 		# Above Django's own limits (DATA_UPLOAD_MAX_MEMORY_SIZE, receipts at
 		# 5 MB), so Django gives the error, not a bare 413 from here.
 		max_size 25MB
