@@ -275,8 +275,19 @@ will only talk to an app it knows about.
 `google-services.json` identifies the app to Google. It is not a password: the
 same values are inside every copy of the installed app. It is still left out of
 this repository for now, because the repository is public and the file holds an
-API key that scanners will flag. EAS builds pick it up from your folder whether
-or not it is committed. The file in the next step is a different matter.
+API key that scanners will flag. EAS Build uploads only files git tracks, so
+the builds read it from an EAS **file variable** instead: `app.config.js`
+points `googleServicesFile` at `GOOGLE_SERVICES_JSON` when it is set, and at
+the local file otherwise. It was created once with:
+
+```powershell
+npx eas env:create --name GOOGLE_SERVICES_JSON --type file --value ./google-services.json --environment production --environment preview --environment development --visibility sensitive
+```
+
+If the Firebase project changes, update that variable (`npx eas env:update`)
+as well as the local file. Without it a build stops at once with
+`EAS_BUILD_MISSING_GOOGLE_SERVICES_JSON_ERROR`. The file in the next step is a
+different matter.
 
 ### 5. Give Expo the key to send through Firebase
 
