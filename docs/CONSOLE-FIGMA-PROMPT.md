@@ -73,11 +73,13 @@
 | **Super Admin** | National | **21 / 21** | 12 | Owns the platform. The only role that can edit what other roles mean. |
 | **National Coordinator** | National | **19 / 21** | 12 | Runs the country. Everything except redefining roles and editing others' profiles. |
 | **Regional Coordinator** | Region | **16 / 21** | 10 | Runs Region 63. Publishes content, appoints coordinators, cannot reshape the tree. |
-| **Province Coordinator** | Province | **11 / 21** | 7 | Runs a province's people and events. Reads content, never publishes it. |
+| **Province Coordinator** | Province | **13 / 21** | 7 | Runs a province's people and events, and appoints its teachers and parish leaders. Reads content, never publishes it. |
 | **Parish Leader** | Parish | **7 / 21** | 5 | Runs one parish. Sees their people, runs the door at events. |
-| **Teacher** | Parish **or** Area | **4 / 21** | 3 | Teaches a class. Lesson material, their teens, and check-in. |
+| **Teacher** | Parish, Area **or** Province | **4 / 21** | 3 | Teaches a class. Lesson material, their teens, and check-in. |
 
 Two further roles exist in the backend — **Teen** and **Parent** — and hold no Console permissions at all. They never see this product. Do not design for them here.
+
+> **Changed November 2026:** Province Coordinators gained `users.manage` and `roles.assign`, scoped to their province, and a Teacher may also be appointed at a province (`identity/0008`). The counts for the other roles in this brief predate later additions; the live matrix is the Roles screen.
 
 ### B.2 The permission matrix (normative — 21 permissions × 6 roles)
 
@@ -86,13 +88,13 @@ Two further roles exist in the backend — **Teen** and **Parent** — and hold 
 | # | Permission | What it unlocks | Super Admin | National Coord. | Regional Coord. | Province Coord. | Parish Leader | Teacher |
 |---|---|---|:--:|:--:|:--:|:--:|:--:|:--:|
 | 1 | `users.view` | See the people list | ● | ● | ● | ● | ● | ● |
-| 2 | `users.manage` | Create/edit/deactivate accounts | ● | ● | ● | — | — | — |
+| 2 | `users.manage` | Create/edit/deactivate accounts | ● | ● | ● | ● | — | — |
 | 3 | `profiles.view` | Open a member's profile | ● | ● | ● | ● | ● | ● |
 | 4 | `profiles.manage` | Edit someone else's profile | ● | — | — | — | — | — |
 | 5 | `memberships.view` | See who belongs where | ● | ● | ● | ● | ● | — |
 | 6 | `memberships.manage` | Add / move / transfer members | ● | ● | ● | ● | — | — |
 | 7 | `roles.view` | See roles and who holds them | ● | ● | ● | ● | — | — |
-| 8 | `roles.assign` | Grant and revoke roles | ● | ● | ● | — | — | — |
+| 8 | `roles.assign` | Grant and revoke roles | ● | ● | ● | ● | — | — |
 | 9 | `roles.manage` | Change what a role *means* | ● | — | — | — | — | — |
 | 10 | `hierarchy.view` | See the church tree | ● | ● | ● | ● | ● | — |
 | 11 | `hierarchy.manage` | Add / rename / move nodes | ● | ● | — | — | — | — |
@@ -227,7 +229,7 @@ Each screen below states its **base design**, then its **role variants**, then i
 > |---|---|
 > | Super Admin | Full table. Toolbar: Search · Filters · **Add member** · **Bulk actions** · Columns · Export CSV. Tabs: Members · Roles · Assignments · Transfers. Row menu: View, Edit profile, Change membership, Transfer, Assign role, Revoke role, Deactivate. |
 > | National / Regional | Same, minus **Edit profile** (that needs `profiles.manage`, which only Super Admin holds). |
-> | Province Coordinator | Table + Transfers tab. Toolbar: Search · Filters · Columns · Export. **No Add member, no Assign role** (no `users.manage`, no `roles.assign`). Row menu: View, Change membership, Transfer. The Roles tab is present but read-only — they can see who holds what, not change it. |
+> | Province Coordinator | Table + Transfers tab. Toolbar: Search · Filters · Columns · Export · Add member · Assign role, all inside their province (they hold `users.manage` and `roles.assign` since November 2026). Row menu: View, Edit details, Change membership, Transfer. |
 > | Parish Leader | **Read-only roster** of their parish. Search and Export only. No row menu; row click opens the drawer with Profile and Activity tabs only. No Roles tab, no Transfers tab (`memberships.view` yes, `roles.view` no). |
 > | Teacher | Not in the sidebar. Their equivalent is **My Class** (C12) — the same data, one node, no admin verbs. |
 >
@@ -424,11 +426,11 @@ Each screen below states its **base design**, then its **role variants**, then i
 | View member list | `users.view` | ● | ● | ● | ● | ● | ●¹ |
 | Search / filter / sort / column visibility | `users.view` | ● | ● | ● | ● | ● | — |
 | Export CSV | `users.view` | ● | ● | ● | ● | ● | — |
-| Add member | `users.manage` | ● | ● | ● | — | — | — |
-| Edit account (email, status) | `users.manage` | ● | ● | ● | — | — | — |
-| Deactivate account | `users.manage` | ● | ● | ● | — | — | — |
-| Send welcome email | `users.manage` | ● | ● | ● | — | — | — |
-| Resend verification / trigger reset | `users.manage` | ● | ● | ● | — | — | — |
+| Add member | `users.manage` | ● | ● | ● | ● | — | — |
+| Edit account (email, status) | `users.manage` | ● | ● | ● | ● | — | — |
+| Deactivate account | `users.manage` | ● | ● | ● | ● | — | — |
+| Send welcome email | `users.manage` | ● | ● | ● | ● | — | — |
+| Resend verification / trigger reset | `users.manage` | ● | ● | ● | ● | — | — |
 | View profile | `profiles.view` | ● | ● | ● | ● | ● | ● |
 | Edit another person's profile | `profiles.manage` | ● | — | — | — | — | — |
 | View memberships | `memberships.view` | ● | ● | ● | ● | ● | — |
@@ -437,7 +439,7 @@ Each screen below states its **base design**, then its **role variants**, then i
 | Transfer member | `memberships.manage` | ● | ● | ● | ● | — | — |
 | View transfer history | `memberships.view` | ● | ● | ● | ● | ● | — |
 | View roles & holders | `roles.view` | ● | ● | ● | ● | — | — |
-| Assign role | `roles.assign` + subset rule | ● | ● | ● | — | — | — |
+| Assign role | `roles.assign` + subset rule | ● | ● | ● | ● | — | — |
 | Revoke role | `roles.assign` | ● | ● | ● | — | — | — |
 | Set / change role end date | `roles.assign` | ● | ● | ● | — | — | — |
 | Create custom role | `roles.manage` | ● | — | — | — | — | — |

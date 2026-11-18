@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from .models import User, LoginHistory, AuditLog
@@ -197,14 +198,32 @@ class AdminUserUpdateSerializer(serializers.ModelSerializer):
             'date_of_birth',
         ]
 
+    def validate(self, attrs):
+        # The legacy `role` field carries superuser with it (see update), so
+        # anyone who could edit users could once make themselves or anyone else
+        # a superuser by sending role=admin. Only a superuser may now give or
+        # take away that role, or edit a superuser's account at all.
+        request = self.context.get('request')
+        actor = getattr(request, 'user', None)
+        if not (actor and actor.is_superuser):
+            if self.instance is not None and self.instance.is_superuser:
+                raise PermissionDenied('Only a superuser can change a superuser’s account.')
+            if attrs.get('role') == User.Role.ADMIN:
+                raise serializers.ValidationError(
+                    {'role': 'Only a superuser can make someone an administrator.'})
+        return attrs
+
     def update(self, instance, validated_data):
         date_of_birth = validated_data.pop('date_of_birth', None)
-        new_role = validated_data.get('role', instance.role)
+        role_changed = 'role' in validated_data and validated_data['role'] != instance.role
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-        # Keep is_staff / is_superuser in sync with role
-        instance.is_staff = (new_role == User.Role.ADMIN)
-        instance.is_superuser = (new_role == User.Role.ADMIN)
+        # Keep is_staff / is_superuser in step with the legacy role, but only
+        # when the role is what changed. Recomputing on every edit meant that
+        # correcting a superuser's phone number took their superuser away
+        # unless their legacy role happened to be `admin`.
+        if role_changed:
+            instance.is_staff = instance.is_superuser = (instance.role == User.Role.ADMIN)
         instance.save()
         # Update TeenProfile DOB and recalculate age_group if provided
         if date_of_birth is not None:
