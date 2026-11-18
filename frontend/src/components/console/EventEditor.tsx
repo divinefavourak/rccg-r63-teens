@@ -15,6 +15,7 @@
 import { useState } from 'react';
 import api from '../../api/axios';
 import { Btn, Modal } from './primitives';
+import { MarkdownField } from './MarkdownField';
 import { useConsoleAuth } from '../../context/ConsoleAuthContext';
 
 /** `Event.EventType` choices. */
@@ -362,18 +363,29 @@ export const EventEditor = ({
           </Field>
         </div>
 
-        <Field
-          label="Description"
-          required
-          hint="What is this, who is it for, and why should a teen come?"
-        >
-          <textarea
-            rows={3}
-            value={form.description}
-            onChange={(e) => set('description', e.target.value)}
+        {/* Not a <Field>: that is a <label>, which would pass a click in the
+            preview on to the Bold button. */}
+        <div>
+          <label
+            htmlFor="event-description"
+            className="block text-[12px] font-medium uppercase leading-4 tracking-[0.06em] text-console-muted"
+          >
+            Description<span className="ml-0.5 text-console-danger">*</span>
+          </label>
+          <MarkdownField
+            id="event-description"
+            rows={6}
+            value={form.description ?? ''}
+            onChange={(next) => set('description', next)}
             className={inputCls}
+            placeholder="What is this, who is it for, and why should a teen come?"
           />
-        </Field>
+          <span className="mt-0.5 block text-[12px] leading-4 text-console-subtle">
+            What is this, who is it for, and why should a teen come? Teens see it
+            formatted in the app, and the first lines go under the flier when the
+            event is shared.
+          </span>
+        </div>
 
         {/* Off unless the organiser turns it on. The hostels themselves are
             set up from the event's Registrations screen once it is saved. */}

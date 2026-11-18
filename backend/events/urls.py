@@ -3,7 +3,7 @@ URL routing for the events app.
 """
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from . import checkin_views, views
+from . import checkin_views, share_views, views
 
 router = DefaultRouter()
 router.register(r'events', views.EventViewSet, basename='event')
@@ -20,5 +20,10 @@ urlpatterns = [
     path('checkin/search/', checkin_views.CheckInSearchView.as_view(), name='checkin-search'),
     # Before the router, whose `registrations/<pk>/` would take it.
     path('registrations/claim/', views.ClaimSeatView.as_view(), name='registration-claim'),
+    # A shared event: the page a link in a WhatsApp status opens, and the
+    # flier it shows as the preview. No login (events/share.py).
+    path('share/<str:key>/', share_views.EventSharePageView.as_view(), name='event-share'),
+    path('share/<str:key>/flier.jpg', share_views.EventShareFlierView.as_view(),
+         name='event-share-flier'),
     path('', include(router.urls)),
 ]

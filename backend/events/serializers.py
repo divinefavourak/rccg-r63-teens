@@ -11,6 +11,7 @@ from hierarchy.models import HierarchyNode
 from identity.authorization import has_any_permission
 from identity.permissions_registry import Perm
 from . import bedspaces
+from . import share
 from .models import (
     BedAssignment, BulkUpload, Event, EventRegistration, Hostel, RegistrationAuditLog,
     RegistrationBatch,
@@ -29,6 +30,11 @@ class EventListSerializer(serializers.ModelSerializer):
     current_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     registration_count = serializers.SerializerMethodField()
     scope_node_detail = serializers.SerializerMethodField()
+    share_url = serializers.SerializerMethodField()
+
+    def get_share_url(self, obj):
+        """The link to share it by (events/share.py)."""
+        return share.link(obj, self.context.get('request'))
 
     def get_registration_count(self, obj):
         """Return live annotation if available, else fall back to stored field."""
@@ -69,6 +75,7 @@ class EventListSerializer(serializers.ModelSerializer):
             'payment_method',
             'group_registration_enabled',
             'status',
+            'share_url',
         ]
 
 
@@ -82,9 +89,13 @@ class EventDetailSerializer(serializers.ModelSerializer):
     is_full = serializers.BooleanField(read_only=True)
     current_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     registration_count = serializers.SerializerMethodField()
+    share_url = serializers.SerializerMethodField()
 
     def get_registration_count(self, obj):
         return getattr(obj, 'live_registration_count', obj.registration_count)
+
+    def get_share_url(self, obj):
+        return share.link(obj, self.context.get('request'))
 
     class Meta:
         model = Event
@@ -92,6 +103,7 @@ class EventDetailSerializer(serializers.ModelSerializer):
             'id',
             'title',
             'slug',
+            'share_url',
             'event_type',
             'description',
             'short_description',

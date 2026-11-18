@@ -4,6 +4,8 @@
   "rewrites": [
     { "source": "/p/:code", "destination": "https://api.thefaithtribe.live/api/v1/payments/pay/:code/" },
     { "source": "/p/:code/", "destination": "https://api.thefaithtribe.live/api/v1/payments/pay/:code/" },
+    { "source": "/e/:key", "destination": "https://api.thefaithtribe.live/api/v1/events/share/:key/" },
+    { "source": "/e/:key/", "destination": "https://api.thefaithtribe.live/api/v1/events/share/:key/" },
     {
       "source": "/((?!api/|assets/|img/|fonts/).*)",
       "destination": "/app.html"

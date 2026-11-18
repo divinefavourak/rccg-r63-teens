@@ -122,6 +122,8 @@ The foundation. Full spec: `08-bible-experience.md`. Summary AC for V1: reader w
 **AC**
 
 - Event: title, banner, description, venue, datetime, scope audience, capacity, price (free/paid), custom form fields, deadline, organizer identity displayed.
+- The description is written in a small Markdown: `#`/`##`/`###` headings, `**bold**`, `*italic*`, `~~struck~~`, `-` and `1.` lists, `>` quotes, `---`, `[words](link)` and bare links. A single line break stays a line break, so older plain-text descriptions read as before. The Console's editor has buttons and Ctrl/⌘ + B, I, K for the marks, with the result drawn beneath as it is typed. The app, the web app and the website draw it from one parser, kept as two identical files (`mobile/src/data/markdown.ts`, `frontend/src/lib/markdown.ts`). Anything outside the subset shows as typed, and links open only for http(s), mailto and tel.
+- Sharing an event sends a link that previews with its flier and opens the event in the app or web app (`05-navigation.md`, Deep linking).
 - Registration pre-fills profile data; guest hitting Register gets signup-then-resume.
 - Payments via Squad (card/bank/USSD/transfer); webhook-driven confirmation; **shareable payment link for parent payment**; automatic receipt.
 - Pending unpaid registrations expire after 24h, releasing capacity; waitlist with auto-promotion.

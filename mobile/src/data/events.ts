@@ -90,6 +90,27 @@ export function payLink(registration: EventRegistration): string | null {
   return `${API_URL}/payments/pay/${registration.pay_token}/`;
 }
 
+/**
+ * The address to share an event by. The server draws that page: the flier as
+ * the chat app's preview, then on into the app, or the web app on a phone
+ * without it. The server says where it is (a short link on our own site); a
+ * server too old to say is asked on the API's own address.
+ */
+export function eventLink(event: EventListItem): string {
+  return event.share_url || `${API_URL}/events/share/${event.slug || event.id}/`;
+}
+
+/**
+ * What goes out when a teen shares an event, written for a WhatsApp status:
+ * what and when on top, then the link on its own line. WhatsApp draws its
+ * preview from the first link in a message, so there is only the one.
+ */
+export function shareMessage(event: EventListItem): string {
+  const details = [whenLabel(event), whereLabel(event)].filter(Boolean).join(' · ');
+  const ask = isClosed(event) || isPast(event) ? 'Details' : 'Register here';
+  return `${event.title}\n${details}\n\n${ask}: ${eventLink(event)}`;
+}
+
 /** What the panel under an unpaid ticket says about the time left. */
 export function payHint(registration: EventRegistration): string {
   if (registration.status === 'cancelled') {

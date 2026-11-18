@@ -1,5 +1,6 @@
-import { useCallback, useState } from 'react';
-import { ScrollView, Share, Text, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Platform, ScrollView, Share, Text, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -7,12 +8,14 @@ import { ApiError } from '../../../src/api/client';
 import { useEvent, useMyRegistrations } from '../../../src/api/queries';
 import { EventPhoto } from '../../../src/components/EventPieces';
 import { Icon } from '../../../src/components/Icon';
+import { Markdown } from '../../../src/components/Markdown';
 import { PhotoViewer } from '../../../src/components/PhotoViewer';
 import {
   closedLabel,
   isClosed,
   isLive,
   priceLabel,
+  shareMessage,
   startOf,
   whenLabel,
   whereLabel,
@@ -38,6 +41,7 @@ export default function EventDetailScreen() {
   const insets = useSafeAreaInsets();
   const { isGuest } = useAuth();
   const [photoOpen, setPhotoOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const query = useEvent(id);
   const mine = useMyRegistrations(!isGuest);
@@ -49,11 +53,25 @@ export default function EventDetailScreen() {
     [router],
   );
 
+  // The link carries the flier with it: a chat app draws its preview from the
+  // page it points to, and that page sends whoever taps it on into the app.
   const onShare = useCallback(() => {
     if (!event) return;
-    const lines = [event.title, whenLabel(event), whereLabel(event)].filter(Boolean);
-    Share.share({ message: lines.join('\n') }).catch(() => {});
+    const message = shareMessage(event);
+    // A desktop browser often has no share sheet, where Share.share would
+    // quietly do nothing. Copy it instead, and say so.
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && !navigator.share) {
+      Clipboard.setStringAsync(message).then(() => setCopied(true), () => {});
+      return;
+    }
+    Share.share({ message }).catch(() => {});
   }, [event]);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 2500);
+    return () => clearTimeout(timer);
+  }, [copied]);
 
   if (query.isPending) {
     return (
@@ -113,6 +131,18 @@ export default function EventDetailScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ gap: 16, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 24 }}
       >
+        {copied && (
+          <View
+            accessibilityLiveRegion="polite"
+            className="flex-row items-center gap-2 self-center rounded-full bg-ink px-4 py-2"
+          >
+            <Icon name="check" size={16} color="#FFFFFF" />
+            <Text className="font-ui-sb text-[14px] leading-5 text-on-ink">
+              Link copied. Paste it anywhere.
+            </Text>
+          </View>
+        )}
+
         {isGuest && (
           <GuestBanner
             title="Want to come?"
@@ -189,7 +219,7 @@ export default function EventDetailScreen() {
           </View>
         )}
 
-        {!!about && <Text className="font-ui text-[16px] leading-6 text-ink-2">{about}</Text>}
+        {!!about && <Markdown source={about} />}
 
         {bring.length > 0 && (
           <PopCard colour="violet" className="w-full gap-1">

@@ -112,7 +112,7 @@ Every meaningful entity has a stable, shareable URL. Deep links are a growth cha
 | Verse of the Day | `/today/2026-07-07/verse` (share-card target; resolves to the devotional's memory verse) |
 | Bible passage | `/bible/jhn/3/16` (+ `?t=web` translation, `?v=16-18` range) |
 | Library item | `/library/{slug}` |
-| Event | `/events/{slug}` |
+| Event | Shared as `www.thefaithtribe.live/e/{slug}` (see below); opens at `/event/{id}` in the app and web app |
 | Ticket | `/me/tickets/{id}` |
 | Journey ✧ | `/journeys/{slug}` |
 | Friend invite ✧ | `/friends/invite/{code}` (auth-then-resume; lands on a request-confirmation screen, never auto-friends) |
@@ -122,6 +122,7 @@ Behavior rules:
 
 - Deep links open **in context with a working back path** to the entity's natural parent (a shared verse link back-navigates to the Bible Reader, not a dead end).
 - Unauthenticated users hitting an auth-required link get the guest view where possible, or auth-then-resume (post-login redirect to the original target) where not.
+- **A shared event link** (`/e/{slug}`, passed by the website to the API's `/api/v1/events/share/{slug}/`, `backend/events/share.py`) is a page with two readers. A chat app's preview fetcher gets the title, a plain-text line from the description and the event's flier as `og:image`, shrunk to under 300 KB so WhatsApp shows it. A person is sent straight on: on Android into the app (`intent://event/{id}`, scheme `faithtribe`), which Chrome swaps for the web app (`app.thefaithtribe.live/event/{id}`) when the app is not installed; anywhere else into the web app. Drafts are not shown. The app's share message is the title, when and where, then `Register here: <link>` on its own line, because WhatsApp previews the first link in a message. The Console's events list has a copy-link button for organisers.
 - Links carry region context implicitly via the entity; a Region 63 event link opened by a future Region 30 user shows the event with a "hosted by Region 63" frame, not an error (`15-technical-architecture.md`).
 
 ## Back navigation
