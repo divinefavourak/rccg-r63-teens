@@ -1,14 +1,18 @@
 # HTTPS in front of the API. Caddy fetches and renews the certificates itself
-# (Let's Encrypt, HTTP-01 on port 80), so both names must point at this server
-# before the first request, and ports 80 and 443 must be open.
+# (Let's Encrypt, HTTP-01 on port 80), so every name it serves must already
+# point at this server, and ports 80 and 443 must be open.
 #
-# api-new is the rehearsal name used before the real one is moved over. Remove
-# it here and in DNS once the cutover is settled (docs/ops/11 §After).
+# The names come from CADDY_HOSTS (deploy/docker-compose.yml, default
+# api.thefaithtribe.live). During a rehearsal set it in deploy/.env to a name
+# that already points here, e.g. CADDY_HOSTS=api-new.thefaithtribe.live: Caddy
+# asks for a certificate for every name at start-up, and each one whose DNS
+# still points elsewhere fails, counting against Let's Encrypt's limit of 5
+# failed validations per name per hour, which can block the real one.
 #
 # Caddy sets X-Forwarded-Proto and X-Forwarded-For on the way in; Django reads
 # the first through SECURE_PROXY_SSL_HEADER, DRF's throttles the second.
 
-api.thefaithtribe.live, api-new.thefaithtribe.live {
+{$CADDY_HOSTS} {
 	request_body {
 		# Above Django's own limits (DATA_UPLOAD_MAX_MEMORY_SIZE, receipts at
 		# 5 MB), so Django gives the error, not a bare 413 from here.

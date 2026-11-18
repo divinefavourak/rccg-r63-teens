@@ -112,6 +112,9 @@ services:
       - "80:80"
       - "443:443"
       - "443:443/udp"
+    environment:
+      # The names Caddy serves and fetches certificates for (see Caddyfile).
+      CADDY_HOSTS: ${CADDY_HOSTS:-api.thefaithtribe.live}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

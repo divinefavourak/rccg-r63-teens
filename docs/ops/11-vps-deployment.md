@@ -146,19 +146,33 @@ Then `dc run --rm web ./release.sh` and `dc up -d`.
 
 ## The cutover from Render and Neon (November 2026)
 
-Rehearse the copy above first against `api-new.thefaithtribe.live` (an A record
-to the VPS; the Caddyfile serves both names) while Render still serves real
-traffic. When the rehearsal is clean:
+**Rehearse first**, while Render still serves real traffic, on
+`api-new.thefaithtribe.live` (an A record to the VPS):
+
+- In `deploy/.env`, `CADDY_HOSTS=api-new.thefaithtribe.live`, so Caddy does
+  not ask for a certificate for `api` while it still points at Render.
+- Copy the database as above, `dc run --rm web ./release.sh`, then
+  **`dc up -d web caddy` only. Do not start `worker`:** its beat would run the
+  reminder sweep on the copy while Render's timer runs it on Neon, and teens
+  would get every notification twice.
+- Check the worker boots without running anything on a schedule:
+  `dc run --rm worker timeout 30 celery -A backend worker -Q default,celery --concurrency 1 -l info`
+  should print `ready.`
+
+When the rehearsal is clean:
 
 1. Disable the cron-job.org timer ([10](10-scheduler-without-a-worker.md)).
 2. **Suspend the Render service.** From here Neon gets no writes; anything it
    received after the final dump would be lost.
 3. Run the copy above again (the final dump), and check the counts match.
-4. `dc run --rm web ./release.sh` and `dc up -d`.
+4. `dc run --rm web ./release.sh` and `dc up -d` (now including `worker`).
 5. At the DNS host, replace the `api` CNAME to Render with an **A record to
    `162.35.99.77`**. (Lower its TTL to 300 a few hours before.)
-6. Once `nslookup api.thefaithtribe.live` shows the VPS, open
-   `https://api.thefaithtribe.live/api/v1/` and run the checks below.
+6. Once `nslookup api.thefaithtribe.live` shows the VPS, set
+   `CADDY_HOSTS=api.thefaithtribe.live, api-new.thefaithtribe.live` in
+   `deploy/.env` and `dc up -d caddy`. Caddy fetches the certificate within a
+   few seconds; then open `https://api.thefaithtribe.live/api/v1/` and run the
+   checks below.
 
 Nothing else needs editing: the Squad webhook, the Google OAuth redirect, the
 Vercel settings and the `/p/:code` rewrite all name `api.thefaithtribe.live`.
@@ -169,7 +183,8 @@ Render. Anything written on the VPS since the cutover is lost, because Neon
 only has what was there before the final dump. After that, fix forward.
 
 **After a week** with no problems: delete the Render service, the cron-job.org
-job and the Neon project, and remove `api-new` from DNS and the Caddyfile.
+job and the Neon project, remove `api-new` from DNS, and delete the
+`CADDY_HOSTS` line from `deploy/.env` (it defaults to `api.thefaithtribe.live`).
 
 ### Checks
 
