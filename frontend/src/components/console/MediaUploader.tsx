@@ -102,13 +102,17 @@ export const MediaUploader = ({
               .join(' · ')
           : '';
       let message = detail;
-      if (!message && response?.status === 413) {
-        message = `This file${file ? ` (${formatBytes(file.size)})` : ''} is larger than the server accepts.`;
+      if (response?.status === 413) {
+        // The limit is on the whole request (file, thumbnail and form fields),
+        // so a readable 413 wins over any body it carries.
+        const size = file ? ` (${formatBytes(file.size + (thumbnail?.size ?? 0))})` : '';
+        message = `This upload${size} is larger than the server accepts. Use a smaller media file or thumbnail.`;
       } else if (!message && !response) {
-        // No response at all: the connection dropped, or the proxy refused the
-        // body without CORS headers (which the browser reports the same way).
+        // No response at all: the connection dropped (maybe after the server
+        // saved the episode), or the proxy refused the body without CORS
+        // headers, which the browser reports the same way.
         message =
-          'The upload did not reach the server. Check your connection and try again; if it keeps failing, the file may be too large.';
+          'The Console could not confirm the upload. Check the episode list before trying again. If it is not there and this keeps happening, the file may be too large.';
       }
       setError(message || 'The upload failed. Check the file type and size.');
       setProgress(null);
@@ -167,11 +171,13 @@ export const MediaUploader = ({
               value={mediaType}
               onChange={(e) => {
                 setMediaType(e.target.value as 'audio' | 'video');
+                setError(null);
                 // The accepted extensions change, so an already-picked file may
                 // no longer be valid. Clearing is less confusing than leaving a
                 // .mp3 selected under "video".
                 setFile(null);
               }}
+              disabled={progress !== null}
               className={inputCls}
             >
               <option value="audio">Audio / podcast</option>
@@ -207,12 +213,16 @@ export const MediaUploader = ({
             ref={fileInput}
             type="file"
             accept={mediaType === 'audio' ? 'audio/*' : 'video/*'}
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            onChange={(e) => {
+              setFile(e.target.files?.[0] ?? null);
+              setError(null);
+            }}
             className="hidden"
           />
           <button
             type="button"
             onClick={() => fileInput.current?.click()}
+            disabled={progress !== null}
             className="mt-1 flex w-full items-center gap-3 rounded-console-md border border-dashed border-console-border-strong px-3 py-3 text-left transition-colors hover:bg-console-tinted"
           >
             <FileIcon size={18} className="shrink-0 text-console-subtle" />
@@ -236,7 +246,9 @@ export const MediaUploader = ({
                 className="shrink-0 text-console-subtle"
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (progress !== null) return;
                   setFile(null);
+                  setError(null);
                 }}
               />
             )}
@@ -252,13 +264,17 @@ export const MediaUploader = ({
             ref={thumbInput}
             type="file"
             accept="image/*"
-            onChange={(e) => setThumbnail(e.target.files?.[0] ?? null)}
+            onChange={(e) => {
+              setThumbnail(e.target.files?.[0] ?? null);
+              setError(null);
+            }}
             className="hidden"
           />
           <div className="mt-1 flex items-center gap-3">
             <button
               type="button"
               onClick={() => thumbInput.current?.click()}
+              disabled={progress !== null}
               className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-console-md border border-dashed border-console-border-strong transition-colors hover:bg-console-tinted"
             >
               {thumbPreview ? (
@@ -280,7 +296,11 @@ export const MediaUploader = ({
               {thumbnail && (
                 <button
                   type="button"
-                  onClick={() => setThumbnail(null)}
+                  onClick={() => {
+                    setThumbnail(null);
+                    setError(null);
+                  }}
+                  disabled={progress !== null}
                   className="mt-0.5 text-[12px] text-console-danger hover:underline"
                 >
                   Remove
