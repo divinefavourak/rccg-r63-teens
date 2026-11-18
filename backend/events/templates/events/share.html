@@ -25,7 +25,7 @@ app's browser: no web font, no other file but the flier.
 <meta property="og:site_name" content="Faith Tribe">
 <meta property="og:url" content="{{ share_url }}">
 <meta property="og:title" content="{{ event.title }}">
-<meta property="og:description" content="{{ event.start_datetime|date:'D j M, g:i a' }}{% if event.venue %} · {{ event.venue }}{% endif %}{% if summary %}. {{ summary }}{% endif %}">
+<meta property="og:description" content="{{ event.start_datetime|date:'D j M, g:i a' }}{% if venue %} · {{ venue }}{% endif %}{% if summary %}. {{ summary }}{% endif %}">
 {% if image %}<meta property="og:image" content="{{ image }}">
 <meta property="og:image:alt" content="The flier for {{ event.title }}">
 <meta name="twitter:card" content="summary_large_image">

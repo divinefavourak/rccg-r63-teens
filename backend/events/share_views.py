@@ -37,6 +37,8 @@ class EventSharePageView(View):
             'image': share.preview_image_url(event, request),
             'web_url': share.web_app_url(event),
             'intent_url': share.android_intent_url(event),
+            # For the preview line, which adds its own full stop after it.
+            'venue': (event.venue or '').strip().rstrip('.'),
         })
         response['Cache-Control'] = _PAGE_CACHE
         return response

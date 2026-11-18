@@ -111,46 +111,68 @@ def flier_jpeg(event):
     """
     if not event.cover_image:
         return None
-    cache_key = f'events:share-flier:{event.pk}:{event.cover_image.name}'
+    # v2: v1 re-encoded fliers that were already small, and made them bigger.
+    cache_key = f'events:share-flier:v2:{event.pk}:{event.cover_image.name}'
     data = cache.get(cache_key)
     if data:
         return data
 
     try:
-        from PIL import Image, ImageOps
+        from PIL import Image
 
         with event.cover_image.open('rb') as file:
-            image = Image.open(file)
-            # Lets the JPEG decoder scale down as it reads, so a photo from a
-            # phone camera is never held in memory at full size.
-            image.draft('RGB', (FLIER_EDGE, FLIER_EDGE))
-            image = ImageOps.exif_transpose(image)
-            image.thumbnail((FLIER_EDGE, FLIER_EDGE))
-            if image.mode != 'RGB':
-                # A transparent PNG goes onto white, not the black JPEG gives it.
-                rgba = image.convert('RGBA')
-                image = Image.new('RGB', rgba.size, (255, 255, 255))
-                image.paste(rgba, mask=rgba.getchannel('A'))
+            raw = file.read()
+        image = Image.open(io.BytesIO(raw))
 
-        # Lower the quality first, then the size: a busy flier full of small
-        # text can still be too big at 1200px, and a smaller picture beats none.
-        data = None
-        for edge in (FLIER_EDGE, 900, 700, 500):
-            if max(image.size) > edge:
-                image.thumbnail((edge, edge))
-            for quality in (82, 70, 58):
-                out = io.BytesIO()
-                image.save(out, 'JPEG', quality=quality, optimize=True, progressive=True)
-                data = out.getvalue()
-                if len(data) <= FLIER_BUDGET:
-                    break
-            if len(data) <= FLIER_BUDGET:
-                break
+        # Already fit to send: a JPEG within the budget and the size, and
+        # upright. Most fliers arrive through WhatsApp like this, and encoding
+        # one again only makes it bigger (a 98 KB flier came back as 142 KB).
+        if (
+            image.format == 'JPEG'
+            and len(raw) <= FLIER_BUDGET
+            and max(image.size) <= FLIER_EDGE
+            and image.getexif().get(_EXIF_ORIENTATION, 1) == 1
+        ):
+            data = raw
+        else:
+            data = _shrink(image)
     except Exception:  # A broken upload or storage: the page still works without it.
         logger.exception('Could not make a share preview from the flier of event %s', event.pk)
         return None
 
     cache.set(cache_key, data, FLIER_CACHE_SECONDS)
+    return data
+
+
+_EXIF_ORIENTATION = 0x0112
+
+
+def _shrink(image):
+    """`image` as an upright RGB JPEG within `FLIER_EDGE` and `FLIER_BUDGET`."""
+    from PIL import Image, ImageOps
+
+    # Lets the JPEG decoder scale down as it reads, so a photo from a phone
+    # camera is never held in memory at full size.
+    image.draft('RGB', (FLIER_EDGE, FLIER_EDGE))
+    image = ImageOps.exif_transpose(image)
+    image.thumbnail((FLIER_EDGE, FLIER_EDGE))
+    if image.mode != 'RGB':
+        # A transparent PNG goes onto white, not the black JPEG gives it.
+        rgba = image.convert('RGBA')
+        image = Image.new('RGB', rgba.size, (255, 255, 255))
+        image.paste(rgba, mask=rgba.getchannel('A'))
+
+    # Lower the quality first, then the size: a busy flier full of small text
+    # can still be too big at 1200px, and a smaller picture beats none.
+    for edge in (FLIER_EDGE, 900, 700, 500):
+        if max(image.size) > edge:
+            image.thumbnail((edge, edge))
+        for quality in (82, 70, 58):
+            out = io.BytesIO()
+            image.save(out, 'JPEG', quality=quality, optimize=True, progressive=True)
+            data = out.getvalue()
+            if len(data) <= FLIER_BUDGET:
+                return data
     return data
 
 

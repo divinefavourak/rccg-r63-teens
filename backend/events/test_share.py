@@ -98,6 +98,13 @@ class SharePageTests(TestCase):
         self.assertContains(
             response, '<meta property="og:url" content="https://www.example.com/e/teens-camp">')
 
+    def test_a_venue_ending_in_a_full_stop_gets_only_one(self):
+        make_event(slug='nylr', venue='New Jerusalem, Redemption City.', description='Come.')
+        response = self.page('nylr')
+
+        self.assertContains(response, ' · New Jerusalem, Redemption City. Come.')
+        self.assertNotContains(response, 'City..')
+
     def test_without_a_flier_the_preview_is_the_sites_card(self):
         make_event(slug='teens-camp')
         self.assertContains(
@@ -150,6 +157,21 @@ class FlierTests(TestCase):
         page = self.client.get('/api/v1/events/share/teens-camp/')
         self.assertContains(
             page, 'content="https://api.example.com/api/v1/events/share/teens-camp/flier.jpg?v=')
+
+    def test_a_flier_already_fit_to_send_is_sent_as_it_is(self):
+        # As fliers arrive from WhatsApp: a small JPEG. Encoding it again
+        # made a 98 KB flier 142 KB in production.
+        out = io.BytesIO()
+        Image.linear_gradient('L').resize((980, 1281)).convert('RGB').save(out, 'JPEG', quality=60)
+        original = out.getvalue()
+        self.assertLess(len(original), share.FLIER_BUDGET)
+        make_event(
+            slug='teens-camp',
+            cover_image=SimpleUploadedFile('flier.jpg', original, content_type='image/jpeg'))
+
+        response = self.client.get('/api/v1/events/share/teens-camp/flier.jpg')
+
+        self.assertEqual(response.content, original)
 
     def test_no_flier_no_picture(self):
         make_event(slug='teens-camp')
