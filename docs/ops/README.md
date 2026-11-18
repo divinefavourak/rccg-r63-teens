@@ -43,6 +43,7 @@ description of it.
 | [09](09-migration-rehearsal.md) | Migration rehearsal | Dry-run the migrations against a throwaway copy of production **before** the real deploy |
 | [10](10-scheduler-without-a-worker.md) | Timed tasks without a worker | Driving reminders and the other scheduled work from a free outside timer, where a Celery worker costs money (how production ran on Render; retired with the move to the VPS) |
 | [11](11-vps-deployment.md) | Running the API on a VPS | How production runs now: deploying a change, logs, setting up a server, copying a database in, backups and restores |
+| [12](12-media-uploads.md) | Media uploads | Upload limits for podcasts and videos, guidance for whoever uploads, changing the limit, and diagnosing a failed upload |
 
 ## The commands, at a glance
 
