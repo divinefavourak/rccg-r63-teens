@@ -89,14 +89,32 @@ export const MediaUploader = ({
       });
       onUploaded();
     } catch (err: unknown) {
-      const data = (err as { response?: { data?: Record<string, unknown> } })
-        ?.response?.data;
+      const response = (
+        err as { response?: { status?: number; data?: unknown } }
+      )?.response;
+      const data = response?.data;
+      // Only a JSON object is a DRF validation error; an HTML error page from
+      // the proxy would otherwise be spelled out character by character.
       const detail =
-        data &&
-        Object.entries(data)
-          .map(([k, v]) => `${k}: ${Array.isArray(v) ? v[0] : v}`)
-          .join(' · ');
-      setError(detail || 'The upload failed. Check the file type and size.');
+        data && typeof data === 'object' && !Array.isArray(data)
+          ? Object.entries(data as Record<string, unknown>)
+              .map(([k, v]) => `${k}: ${Array.isArray(v) ? v[0] : v}`)
+              .join(' · ')
+          : '';
+      let message = detail;
+      if (response?.status === 413) {
+        // The limit is on the whole request (file, thumbnail and form fields),
+        // so a readable 413 wins over any body it carries.
+        const size = file ? ` (${formatBytes(file.size + (thumbnail?.size ?? 0))})` : '';
+        message = `This upload${size} is larger than the server accepts. Use a smaller media file or thumbnail.`;
+      } else if (!message && !response) {
+        // No response at all: the connection dropped (maybe after the server
+        // saved the episode), or the proxy refused the body without CORS
+        // headers, which the browser reports the same way.
+        message =
+          'The Console could not confirm the upload. Check the episode list before trying again. If it is not there and this keeps happening, the file may be too large.';
+      }
+      setError(message || 'The upload failed. Check the file type and size.');
       setProgress(null);
     }
   };
@@ -153,11 +171,13 @@ export const MediaUploader = ({
               value={mediaType}
               onChange={(e) => {
                 setMediaType(e.target.value as 'audio' | 'video');
+                setError(null);
                 // The accepted extensions change, so an already-picked file may
                 // no longer be valid. Clearing is less confusing than leaving a
                 // .mp3 selected under "video".
                 setFile(null);
               }}
+              disabled={progress !== null}
               className={inputCls}
             >
               <option value="audio">Audio / podcast</option>
@@ -193,12 +213,16 @@ export const MediaUploader = ({
             ref={fileInput}
             type="file"
             accept={mediaType === 'audio' ? 'audio/*' : 'video/*'}
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            onChange={(e) => {
+              setFile(e.target.files?.[0] ?? null);
+              setError(null);
+            }}
             className="hidden"
           />
           <button
             type="button"
             onClick={() => fileInput.current?.click()}
+            disabled={progress !== null}
             className="mt-1 flex w-full items-center gap-3 rounded-console-md border border-dashed border-console-border-strong px-3 py-3 text-left transition-colors hover:bg-console-tinted"
           >
             <FileIcon size={18} className="shrink-0 text-console-subtle" />
@@ -222,7 +246,9 @@ export const MediaUploader = ({
                 className="shrink-0 text-console-subtle"
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (progress !== null) return;
                   setFile(null);
+                  setError(null);
                 }}
               />
             )}
@@ -238,13 +264,17 @@ export const MediaUploader = ({
             ref={thumbInput}
             type="file"
             accept="image/*"
-            onChange={(e) => setThumbnail(e.target.files?.[0] ?? null)}
+            onChange={(e) => {
+              setThumbnail(e.target.files?.[0] ?? null);
+              setError(null);
+            }}
             className="hidden"
           />
           <div className="mt-1 flex items-center gap-3">
             <button
               type="button"
               onClick={() => thumbInput.current?.click()}
+              disabled={progress !== null}
               className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-console-md border border-dashed border-console-border-strong transition-colors hover:bg-console-tinted"
             >
               {thumbPreview ? (
@@ -266,7 +296,11 @@ export const MediaUploader = ({
               {thumbnail && (
                 <button
                   type="button"
-                  onClick={() => setThumbnail(null)}
+                  onClick={() => {
+                    setThumbnail(null);
+                    setError(null);
+                  }}
+                  disabled={progress !== null}
                   className="mt-0.5 text-[12px] text-console-danger hover:underline"
                 >
                   Remove
