@@ -28,6 +28,16 @@ app.conf.beat_schedule = {
         'options': {'queue': 'default'},
     },
 
+    # A second try at 05:00, before teens wake. The source does not always have
+    # the day's devotional up by 00:10 (18 November 2026 had none at 00:10).
+    # The task skips a day that already has one, so on most days this does
+    # nothing; it never replaces a devotional published by hand or at 00:10.
+    'scrape-daily-devotional-retry': {
+        'task': 'content.tasks.daily_devotional_scrape',
+        'schedule': crontab(hour=5, minute=0),
+        'options': {'queue': 'default'},
+    },
+
     # The habit reminder ladder (docs/12-gamification.md). A periodic sweep, not
     # four scheduled per-user jobs: each rung is evaluated against completion state
     # at the moment it would fire, so completing the devotional cancels every

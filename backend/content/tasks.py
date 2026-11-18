@@ -96,7 +96,8 @@ def daily_devotional_scrape(self):
     """
     Celery task to scrape and save today's Teen Open Heaven devotional.
     
-    This task is scheduled to run daily at 00:10 server time.
+    Scheduled daily at 00:10 Lagos, and again at 05:00 in case the source had
+    nothing up yet (backend/celery.py); the second run skips a day that has one.
     It will:
     - Check if today's devotional already exists
     - If not, scrape from openheavens.com.ng
