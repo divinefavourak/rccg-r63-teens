@@ -9,8 +9,7 @@ changes: every client already uses `https://api.thefaithtribe.live/api/v1`.
 ```
                       ┌────────────────────── VPS ───────────────────────┐
  api.thefaithtribe ──▶│ caddy :443 ──▶ web (gunicorn) ──┬──▶ db (Postgres 17)
-                      │                                 └──▶ redis ◀── worker
-                      │                                            ◀── beat
+                      │                                 └──▶ redis ◀── worker (+ beat)
                       └──────────────────────────────────────────────────┘
 ```
 
@@ -18,8 +17,7 @@ changes: every client already uses `https://api.thefaithtribe.live/api/v1`.
 |---|---|
 | `caddy` | HTTPS. Gets and renews its own certificates. The only service with ports open (80, 443). |
 | `web` | gunicorn, 2 workers × 4 threads. |
-| `worker` | Celery worker, queues `default` and `celery`. |
-| `beat` | Celery beat: the schedule in `backend/backend/celery.py`. Exactly one. |
+| `worker` | Celery worker, queues `default` and `celery`, with beat inside it (`-B`): the schedule in `backend/backend/celery.py`. One process to save memory on a 1.6 GB server, so **never scale it past 1**: each copy would send every scheduled task again. |
 | `db` | Postgres 17. Data in the `db-data` volume. |
 | `redis` | Cache (db 0) and Celery queue (db 1). |
 
@@ -52,7 +50,7 @@ at the end.
 
 ```bash
 dc logs -f web            # requests and errors
-dc logs -f worker beat    # scheduled tasks: "Sending due task" / "succeeded"
+dc logs -f worker         # scheduled tasks: "Sending due task" / "succeeded"
 dc logs --since 1h caddy  # HTTPS and certificates
 ```
 
@@ -130,7 +128,7 @@ docker run --rm --env-file /root/src.env postgres:17-alpine sh -c \
   'psql "$PGURL" -tAc "SELECT count(*) FROM users_user; SELECT count(*) FROM events_eventregistration;"'
 
 # Restore into an empty database (this deletes whatever the VPS database holds).
-dc stop web worker beat
+dc stop web worker
 dc exec -T db psql -U faithtribe -d postgres \
   -c 'DROP DATABASE IF EXISTS faithtribe WITH (FORCE);' \
   -c 'CREATE DATABASE faithtribe OWNER faithtribe;'
@@ -214,7 +212,7 @@ Use the private bucket (`R2_PRIVATE_BUCKET_NAME`), never the public one.
 ### Restoring a backup
 
 ```bash
-dc stop web worker beat
+dc stop web worker
 dc exec -T db psql -U faithtribe -d postgres \
   -c 'DROP DATABASE IF EXISTS faithtribe WITH (FORCE);' \
   -c 'CREATE DATABASE faithtribe OWNER faithtribe;'

@@ -91,12 +91,16 @@ services:
     # (backend/backend/celery.py) sends to the queue named "default", and a
     # worker with no -Q listens only to "celery". Both, so a task sent without
     # a queue is collected too.
-    command: celery -A backend worker -Q default,celery --concurrency 2 -l info
-
-  beat:
-    <<: *app
-    # Exactly one beat, ever: two would send every scheduled task twice.
-    command: celery -A backend beat -l info -s /beat/celerybeat-schedule
+    #
+    # -B runs beat inside this worker. The VPS has 1.6 GB of memory and a
+    # separate beat process costs ~100 MB; one child process (--concurrency 1)
+    # is plenty for these tasks. It also means there is exactly one beat, so
+    # NEVER scale this service past 1: each copy would send every scheduled
+    # task again. With more memory, split beat back out into its own service.
+    command: >
+      celery -A backend worker -B
+      -Q default,celery --concurrency 1
+      -s /beat/celerybeat-schedule -l info
     volumes:
       - beat-data:/beat
 
