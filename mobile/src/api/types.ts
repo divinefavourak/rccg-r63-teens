@@ -666,6 +666,8 @@ export interface PersonMembership {
   is_primary: boolean;
   is_active: boolean;
   joined_at: string;
+  /** Said "I teach" at sign-up and nobody has answered yet; null otherwise. */
+  asked_to_teach_at?: string | null;
 }
 
 /** `RoleSerializer`. What a role may do, and where it may be held. */

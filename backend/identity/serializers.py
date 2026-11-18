@@ -62,11 +62,15 @@ class RoleSerializer(serializers.ModelSerializer):
 class MembershipSerializer(serializers.ModelSerializer):
     organization_node_detail = NodeRefSerializer(source='organization_node', read_only=True)
     user_detail = UserRefSerializer(source='user', read_only=True)
+    # Said "I teach" at sign-up and no coordinator has answered yet
+    # (identity/teach_requests.py). Null otherwise.
+    asked_to_teach_at = serializers.DateTimeField(source='user.asked_to_teach_at', read_only=True)
 
     class Meta:
         model = Membership
         fields = ('id', 'user', 'user_detail', 'organization_node',
-                  'organization_node_detail', 'is_primary', 'is_active', 'joined_at')
+                  'organization_node_detail', 'is_primary', 'is_active', 'joined_at',
+                  'asked_to_teach_at')
         read_only_fields = ('id', 'joined_at')
 
 

@@ -7,7 +7,7 @@ import type { PersonMembership, PersonRole } from '../../../src/api/types';
 import { Icon } from '../../../src/components/Icon';
 import { useTeacherTools } from '../../../src/state/teacher';
 import { Avatar, colourFor } from '../../../src/ui/cards';
-import { SearchField } from '../../../src/ui/inputs';
+import { ChipRow, SearchField } from '../../../src/ui/inputs';
 import { Press } from '../../../src/ui/Press';
 import { EmptyState, Skeleton, TabHeader } from '../../../src/ui/screen';
 import { useTokens } from '../../../src/theme/ThemeProvider';
@@ -27,7 +27,13 @@ export default function PeopleScreen() {
 
   const [text, setText] = useState('');
   const search = useDebounced(text.trim(), 350);
-  const people = usePeople(search, tools.people);
+  // "Asked to teach": adults who said so at sign-up, for whoever can give the
+  // role. Counted separately so the chip shows how many are waiting.
+  const [view, setView] = useState<'all' | 'asked'>('all');
+  const asked = view === 'asked' && tools.assignRoles;
+  const people = usePeople(search, tools.people, asked);
+  const waiting = usePeople('', tools.people && tools.assignRoles, true);
+  const waitingCount = waiting.data?.pages[0]?.count ?? 0;
 
   const rows = useMemo(
     () => people.data?.pages.flatMap((page) => page.results) ?? [],
@@ -82,8 +88,18 @@ export default function PeopleScreen() {
     <View className="flex-1 bg-surf-base">
       <TabHeader title="People" />
 
-      <View className="px-5 pb-3">
+      <View className="gap-3 px-5 pb-3">
         <SearchField label="Search by name or email" value={text} onChange={setText} />
+        {tools.assignRoles && (waitingCount > 0 || asked) && (
+          <ChipRow
+            options={[
+              { value: 'all', label: 'Everyone' },
+              { value: 'asked', label: `Asked to teach (${waitingCount})` },
+            ]}
+            value={view}
+            onChange={setView}
+          />
+        )}
       </View>
 
       {people.isPending ? (
@@ -122,7 +138,11 @@ export default function PeopleScreen() {
           }
           ListEmptyComponent={
             <Text className="py-6 text-center font-ui text-[16px] leading-6 text-ink-2">
-              {search ? `Nobody called “${search}” in your part of the church.` : 'Nobody here yet.'}
+              {asked
+                ? 'Nobody is waiting. Everyone who said they teach has an answer.'
+                : search
+                  ? `Nobody called “${search}” in your part of the church.`
+                  : 'Nobody here yet.'}
             </Text>
           }
           ListFooterComponent={
@@ -155,7 +175,10 @@ const PersonRow = memo(function PersonRow({
   const home = membership.organization_node_detail?.name;
   const roleLabels = (roles ?? []).map((r) => r.role_detail?.label).filter(Boolean) as string[];
   const switchedOff = membership.user_detail?.is_active === false;
-  const line = [roleLabels.join(', '), home].filter(Boolean).join(' · ');
+  const asksToTeach = !!membership.asked_to_teach_at;
+  const line = [asksToTeach ? 'Asked to teach' : '', roleLabels.join(', '), home]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <Press

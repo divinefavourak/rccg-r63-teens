@@ -25,7 +25,16 @@ export interface SignUpForm {
   year: string;
   /** The church path chosen so far, top-down. */
   church: Partial<Record<ChurchLevel, ChurchNode>>;
+  /** "Do you teach at church?", asked from ASK_TEACH_FROM. Null until answered. */
+  teaches: boolean | null;
 }
+
+/**
+ * From this age sign-up asks whether they teach. Saying yes gives them nothing
+ * yet: the coordinators over their church are told, and one of them gives the
+ * Teacher role (identity/teach_requests.py on the server).
+ */
+export const ASK_TEACH_FROM = 20;
 
 const EMPTY: SignUpForm = {
   firstName: '',
@@ -38,6 +47,7 @@ const EMPTY: SignUpForm = {
   month: '',
   year: '',
   church: {},
+  teaches: null,
 };
 
 /** The levels the flow asks for, in order. Area exists but is never shown. */
@@ -145,6 +155,12 @@ export function deepestChurch(form: SignUpForm): ChurchNode | undefined {
   return undefined;
 }
 
+/** Whether they said they teach, counting only an answer to a question we asked. */
+export function asksToTeach(form: SignUpForm): boolean {
+  const dob = birthDate(form);
+  return form.teaches === true && !!dob && ageFrom(dob) >= ASK_TEACH_FROM;
+}
+
 /** The body for `POST /auth/signup/complete/`, minus the code. */
 export function toDetails(form: SignUpForm): SignUpDetails {
   return {
@@ -155,5 +171,6 @@ export function toDetails(form: SignUpForm): SignUpDetails {
     gender: form.gender || undefined,
     date_of_birth: birthDate(form) ?? undefined,
     church_node: deepestChurch(form)?.id,
+    asks_to_teach: asksToTeach(form) || undefined,
   };
 }

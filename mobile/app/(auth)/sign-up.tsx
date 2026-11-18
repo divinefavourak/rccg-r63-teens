@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BackHandler, Pressable, Text, TextInput, View } from 'react-native';
+import { BackHandler, Keyboard, Pressable, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 
@@ -11,6 +11,7 @@ import { toE164, useAuth } from '../../src/state/auth';
 import { markWelcomed } from '../../src/state/welcome';
 import {
   ageFrom,
+  ASK_TEACH_FROM,
   birthDate,
   CHURCH_STEPS,
   toDetails,
@@ -164,6 +165,8 @@ export default function SignUpScreen() {
   const dob = birthDate(form);
   const age = dob ? ageFrom(dob) : null;
   const ageGroup = age === null ? null : ageGroupFor(age);
+  // Teachers and coordinators sign up through the same form as teens.
+  const asksAboutTeaching = age !== null && age >= ASK_TEACH_FROM;
 
   const canContinue = useMemo(() => {
     switch (step) {
@@ -177,13 +180,17 @@ export default function SignUpScreen() {
           toE164(form.phone, form.country.dial) !== ''
         );
       case 4:
-        return ageGroup !== null && ageGroup.eligible;
+        return (
+          ageGroup !== null &&
+          ageGroup.eligible &&
+          (!asksAboutTeaching || form.teaches !== null)
+        );
       default:
         // Gender can be skipped; the church steps have "I am not sure", and a
         // level with nothing to choose from lets the teen finish.
         return churchLevel ? levelEmpty || !!form.church[churchLevel] : true;
     }
-  }, [step, form, ageGroup, churchLevel, levelEmpty, googleTicket]);
+  }, [step, form, ageGroup, asksAboutTeaching, churchLevel, levelEmpty, googleTicket]);
 
   /** Send the code — or, with Google, create the account straight away. */
   const submit = useCallback(async () => {
@@ -202,6 +209,7 @@ export default function SignUpScreen() {
           date_of_birth: details.date_of_birth,
           gender: details.gender,
           church_node: details.church_node,
+          asks_to_teach: details.asks_to_teach,
         });
         router.replace('/all-set');
         return;
@@ -451,6 +459,33 @@ export default function SignUpScreen() {
             />
           </View>
           {age !== null && ageGroup && <AgeCard age={age} group={ageGroup} />}
+          {asksAboutTeaching && ageGroup?.eligible && (
+            <View className="gap-2 pt-2" accessibilityRole="radiogroup">
+              <Text className="font-ui-sb text-[16px] leading-6 text-ink-1">
+                Do you teach at church?
+              </Text>
+              <Text className="font-ui text-[14px] leading-5 text-ink-2">
+                Teens’ teachers and coordinators. We’ll tell your coordinator, and your teacher
+                tools appear once they confirm.
+              </Text>
+              <OptionRow
+                title="Yes, I teach"
+                selected={form.teaches === true}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  set('teaches', true);
+                }}
+              />
+              <OptionRow
+                title="No"
+                selected={form.teaches === false}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  set('teaches', false);
+                }}
+              />
+            </View>
+          )}
         </>
       )}
 

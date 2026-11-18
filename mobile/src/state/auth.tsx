@@ -36,6 +36,8 @@ export interface GoogleSignupCompletion {
   date_of_birth: string;
   gender?: string;
   church_node?: string;
+  /** "I teach at church", from 20 up. A request a coordinator answers. */
+  asks_to_teach?: boolean;
 }
 
 /** How Google's browser flow ended on this phone. */
@@ -94,6 +96,8 @@ export interface SignUpDetails {
   date_of_birth?: string;
   /** The deepest church node the teen picked, usually a parish. */
   church_node?: string;
+  /** "I teach at church", from 20 up. A request a coordinator answers. */
+  asks_to_teach?: boolean;
 }
 
 /**

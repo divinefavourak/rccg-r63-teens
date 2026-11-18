@@ -159,6 +159,8 @@ class SignupCompleteSerializer(_ContactSerializer):
     # The deepest hierarchy node the teen picked — normally a parish, but any
     # level is accepted for "I am not sure of my parish".
     church_node = serializers.UUIDField(required=False, allow_null=True)
+    # "Do you teach at church?", asked from 20 up. Only ever a request.
+    asks_to_teach = serializers.BooleanField(required=False, default=False)
 
     def validate_code(self, value):
         return value.strip()
@@ -331,6 +333,10 @@ def _create_teen(data):
 
     if node is not None:
         Membership.objects.create(user=user, organization_node=node, is_primary=True)
+
+    if data.get('asks_to_teach'):
+        from identity import teach_requests
+        teach_requests.record(user, data.get('date_of_birth'), node)
 
     logger.info('[Signup] account created user=%s node=%s', user.username, node and node.pk)
     return user

@@ -103,7 +103,8 @@ class MembershipViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
     """List/inspect memberships within the caller's scope; create with
     memberships.manage at the target node."""
     serializer_class = MembershipSerializer
-    # `?is_active=true`, `?search=`, `?node=` and `?page_size=` (up to 200).
+    # `?is_active=true`, `?search=`, `?node=`, `?asked_to_teach=true` and
+    # `?page_size=` (up to 200).
     filterset_fields = ['is_active', 'is_primary']
     search_fields = _PERSON_SEARCH + ['organization_node__name']
 
@@ -123,7 +124,32 @@ class MembershipViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
               .order_by('-joined_at'))
         qs = authz.scope_queryset(qs, self.request.user, Perm.MEMBERSHIPS_VIEW,
                                   node_field='organization_node')
+        if self.request.query_params.get('asked_to_teach') == 'true':
+            # Oldest first: whoever has waited longest is answered first.
+            qs = (qs.filter(user__asked_to_teach_at__isnull=False)
+                  .order_by('user__asked_to_teach_at'))
         return _narrow_to_node(qs, self.request, 'organization_node')
+
+    @action(detail=True, methods=['post'], url_path='decline-teaching')
+    def decline_teaching(self, request, pk=None):
+        """
+        "Not a teacher": answer someone's "I teach" from sign-up without giving
+        them a role. `POST /identity/memberships/<id>/decline-teaching/`.
+
+        Needs `roles.assign` where they belong, the same as giving the role
+        would. They stay exactly as they were, a member with no role.
+        """
+        from . import teach_requests
+
+        membership = self.get_object()
+        if not authz.has_permission(request.user, Perm.ROLES_ASSIGN, membership.organization_node):
+            return Response(
+                {'detail': 'Only someone who can give roles here can answer this.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        teach_requests.decline(membership.user)
+        membership.user.refresh_from_db(fields=['asked_to_teach_at'])
+        return Response(self.get_serializer(membership).data)
 
     def perform_create(self, serializer):
         # Route through the service so single-primary demotion and the active
