@@ -3,6 +3,8 @@ Serializers for the profiles app.
 """
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from users.usernames import clean_username, model_validators
+
 from .models import TeenProfile, DevotionalProgress, ManualProgress, Favorite
 
 User = get_user_model()
@@ -127,6 +129,10 @@ class TeenProfileUpdateSerializer(serializers.ModelSerializer):
 
     MAX_AVATAR_BYTES = 5 * 1024 * 1024
 
+    # Their own username; anyone may change it (users/usernames.py).
+    username = serializers.CharField(
+        required=False, max_length=150, validators=model_validators(),
+    )
     first_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
     last_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
     phone = serializers.CharField(
@@ -141,6 +147,7 @@ class TeenProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = TeenProfile
         fields = [
+            'username',
             'first_name',
             'last_name',
             'phone',
@@ -168,6 +175,9 @@ class TeenProfileUpdateSerializer(serializers.ModelSerializer):
             'notification_preferences',
         ]
 
+    def validate_username(self, value):
+        return clean_username(value, self.instance.user if self.instance else None)
+
     def validate_avatar(self, value):
         if value and value.size > self.MAX_AVATAR_BYTES:
             raise serializers.ValidationError(
@@ -188,7 +198,7 @@ class TeenProfileUpdateSerializer(serializers.ModelSerializer):
         user = instance.user
         user_fields = [
             field
-            for field in ('first_name', 'last_name', 'phone')
+            for field in ('username', 'first_name', 'last_name', 'phone')
             if field in validated_data
         ]
         for field in user_fields:

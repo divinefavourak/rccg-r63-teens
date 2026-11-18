@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     User as UserIcon, Mail, Phone, Lock, Eye, EyeOff, Save, Loader, Shield, LogOut,
-    Camera, MapPin, HeartPulse, Users, CalendarDays,
+    Camera, MapPin, HeartPulse, Users, CalendarDays, AtSign,
 } from 'lucide-react';
 import { useAuthContext } from '../../context/AuthContext';
 import api from '../../api/axios';
@@ -159,6 +159,7 @@ const Settings = () => {
     const { user, logout, updateProfile, refreshUser } = useAuthContext();
 
     const [profileData, setProfileData] = useState({
+        username: user?.username || '',
         first_name: user?.first_name || '',
         last_name: user?.last_name || '',
         email: user?.email || '',
@@ -232,7 +233,10 @@ const Settings = () => {
         e.preventDefault();
         setProfileLoading(true);
         try {
+            const username = profileData.username.trim();
             await updateProfile({
+                // Only when changed, so an old account's name is never re-checked.
+                ...(username && username !== user?.username ? { username } : {}),
                 first_name: profileData.first_name,
                 last_name: profileData.last_name,
                 email: profileData.email,
@@ -456,6 +460,7 @@ const Settings = () => {
                         <Field label="First Name" icon={UserIcon} name="first_name" value={profileData.first_name} onChange={handleProfileChange} placeholder="Ada" />
                         <Field label="Last Name" icon={UserIcon} name="last_name" value={profileData.last_name} onChange={handleProfileChange} placeholder="Okafor" />
                     </div>
+                    <Field label="Username" icon={AtSign} name="username" value={profileData.username} onChange={(e) => setProfileData(prev => ({ ...prev, username: e.target.value.replace(/\s/g, '') }))} placeholder="ada.obi" hint="Letters, numbers and . _ - @ + only, at least 3." />
                     <Field label="Email Address" icon={Mail} type="email" name="email" value={profileData.email} onChange={handleProfileChange} placeholder="you@example.com" required />
                     <Field label="Phone Number" icon={Phone} type="tel" name="phone" value={profileData.phone} onChange={handleProfileChange} placeholder="+234 800 000 0000" />
                     <div>
