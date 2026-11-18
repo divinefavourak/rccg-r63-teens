@@ -629,7 +629,92 @@ export const PERM = {
   eventsCheckin: 'events.checkin',
   profilesView: 'profiles.view',
   paymentsReconcile: 'payments.reconcile',
+  membershipsView: 'memberships.view',
+  membershipsManage: 'memberships.manage',
+  usersManage: 'users.manage',
+  rolesView: 'roles.view',
+  rolesAssign: 'roles.assign',
 } as const;
+
+// ─── People, for leaders (identity/serializers.py, users/serializers.py) ───
+
+/** Every level of the tree, where `ChurchLevel` is only the ones a teen picks. */
+export type NodeType = 'national' | ChurchLevel | 'department';
+
+export interface NodeRef {
+  id: string;
+  name: string;
+  node_type: NodeType;
+}
+
+/** `UserRefSerializer`: enough to name someone in a list. */
+export interface PersonRef {
+  id: string;
+  username: string;
+  display_name: string;
+  email: string;
+  is_active: boolean;
+}
+
+/** `MembershipSerializer`: where someone belongs. Belonging, not authority. */
+export interface PersonMembership {
+  id: string;
+  user: string;
+  user_detail: PersonRef | null;
+  organization_node: string;
+  organization_node_detail: NodeRef | null;
+  is_primary: boolean;
+  is_active: boolean;
+  joined_at: string;
+}
+
+/** `RoleSerializer`. What a role may do, and where it may be held. */
+export interface LeaderRole {
+  id: string;
+  code: string;
+  label: string;
+  description: string;
+  allowed_node_types: NodeType[];
+  permissions: string[];
+  is_active: boolean;
+}
+
+/** `RoleAssignmentSerializer`: a role someone holds, and where. */
+export interface PersonRole {
+  id: string;
+  user: string;
+  role: string;
+  role_detail: LeaderRole | null;
+  node: string;
+  node_detail: NodeRef | null;
+  is_active: boolean;
+  start_date: string;
+}
+
+/** `UserSerializer`, the fields a leader may read and correct. */
+export interface PersonAccount {
+  id: string;
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  phone: string | null;
+  gender: string | null;
+  is_active: boolean;
+}
+
+/** `/hierarchy/nodes/`: the caller's part of the tree and the way up to it. */
+export interface TreeNode {
+  id: string;
+  name: string;
+  node_type: NodeType;
+  path: string;
+  depth: number;
+  is_active?: boolean;
+  /** Inside the caller's authority, rather than an ancestor shown for context. */
+  selectable: boolean;
+  parent_id: string | null;
+}
 
 // ─── Library (content/serializers.py, media/serializers.py) ────────────────
 

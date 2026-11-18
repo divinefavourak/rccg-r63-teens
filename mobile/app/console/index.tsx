@@ -93,15 +93,17 @@ export default function TeacherHomeScreen() {
             </Text>
           )}
         </View>
-        {/* Back to the teen app. Replaces rather than pops, so it works however
-            this screen was reached. */}
+        {/* The switch to the teen side: Today, the Bible, their own streak.
+            Leaders land here (src/state/landing.ts) and keep all of that; the
+            card on Me brings them back. Replaces rather than pops, so it works
+            however this screen was reached. */}
         <Press
-          onPress={() => router.replace('/me')}
-          accessibilityLabel="Exit teacher tools"
-          className="h-10 flex-row items-center gap-1 rounded-full bg-surf-sunken pl-2.5 pr-3.5"
+          onPress={() => router.replace('/')}
+          accessibilityLabel="Go to my Faith Tribe: Today, the Bible and my streak"
+          className="h-10 flex-row items-center gap-1.5 rounded-full bg-surf-sunken pl-2.5 pr-3.5"
         >
-          <Icon name="close" size={16} color={tokens.text1} />
-          <Text className="font-ui-sb text-[14px] leading-5 text-ink-1">Exit</Text>
+          <Icon name="sun" size={16} color={tokens.text1} />
+          <Text className="font-ui-sb text-[14px] leading-5 text-ink-1">My Faith Tribe</Text>
         </Press>
       </View>
 
