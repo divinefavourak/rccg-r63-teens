@@ -9,7 +9,7 @@ __pycache__/
 .pytest_cache/
 htmlcov/
 .coverage
-media/
+# Not media/: that is the Media & Podcasts app (backend/media), not only uploads.
 private_media/
 staticfiles/
 debug.log
