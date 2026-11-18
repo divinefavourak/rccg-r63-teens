@@ -11,7 +11,8 @@ const AGE_LABELS: Record<string, string> = {
     children: 'Children (6–8)',
     pre_teen: 'Pre-Teen (9–12)',
     teen: 'Teen (13–19)',
-    superteen: 'Superteen (19+)',
+    superteen: 'Superteen (20–25)',
+    adult: 'Adult (26+)',
 };
 
 const ManualList = () => {

@@ -62,5 +62,6 @@ export function ageGroupFor(age: number): { label: string; eligible: boolean } {
   if (age <= 8) return { label: 'Children (6–8)', eligible: true };
   if (age <= 12) return { label: 'Pre-teen (9–12)', eligible: true };
   if (age <= 19) return { label: 'Teen (13–19)', eligible: true };
-  return { label: 'Superteen (19+)', eligible: true };
+  if (age <= 25) return { label: 'Superteen (20–25)', eligible: true };
+  return { label: 'Adult (26+)', eligible: true };
 }

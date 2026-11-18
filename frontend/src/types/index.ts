@@ -4,7 +4,7 @@
 // ─── Enums / Literals ────────────────────────────────────────────────────────
 
 export type UserRole = 'admin' | 'coordinator' | 'teacher' | 'teen' | 'individual';
-export type AgeGroup = 'toddler' | 'children' | 'pre_teen' | 'teen' | 'superteen' | '';
+export type AgeGroup = 'toddler' | 'children' | 'pre_teen' | 'teen' | 'superteen' | 'adult' | '';
 export type ContentStatus = 'draft' | 'published' | 'scheduled' | 'archived';
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────

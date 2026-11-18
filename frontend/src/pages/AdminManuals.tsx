@@ -14,7 +14,8 @@ const AGE_GROUP_LABELS: Record<string, string> = {
     children: 'Children (6-8)',
     pre_teen: 'Pre-Teen (9-12)',
     teen: 'Teens (13-19)',
-    superteen: 'Superteen (19+)',
+    superteen: 'Superteen (20–25)',
+    adult: 'Adult (26+)',
 };
 
 const EMPTY_FORM = {
@@ -300,7 +301,8 @@ const AdminManuals = () => {
                     <option value="children">Children (6-8)</option>
                     <option value="pre_teen">Pre-Teen (9-12)</option>
                     <option value="teen">Teens (13-19)</option>
-                    <option value="superteen">Superteen (19+)</option>
+                    <option value="superteen">Superteen (20–25)</option>
+                    <option value="adult">Adult (26+)</option>
                 </select>
             </div>
 
@@ -497,7 +499,8 @@ const AdminManuals = () => {
                                                     <option value="children">Children (6-8)</option>
                                                     <option value="pre_teen">Pre-Teen (9-12)</option>
                                                     <option value="teen">Teens (13-19)</option>
-                                                    <option value="superteen">Superteen (19+)</option>
+                                                    <option value="superteen">Superteen (20–25)</option>
+                                                    <option value="adult">Adult (26+)</option>
                                                 </select>
                                             </div>
                                             <div>
@@ -893,7 +896,8 @@ const AdminManuals = () => {
                                         <option value="children">Children (6-8)</option>
                                         <option value="pre_teen">Pre-Teen (9-12)</option>
                                         <option value="teen">Teens (13-19)</option>
-                                        <option value="superteen">Superteen (19+)</option>
+                                        <option value="superteen">Superteen (20–25)</option>
+                                        <option value="adult">Adult (26+)</option>
                                     </select>
                                 </div>
                             </div>

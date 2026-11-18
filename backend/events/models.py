@@ -41,7 +41,8 @@ class Event(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
         CHILDREN  = 'children',  'Children (6-8)'
         PRE_TEEN  = 'pre_teen',  'Pre-Teens (9-12)'
         TEEN      = 'teen',      'Teens (13-19)'
-        SUPERTEEN = 'superteen', 'Superteens (19+)'
+        SUPERTEEN = 'superteen', 'Superteens (20-25)'
+        ADULT     = 'adult',     'Adults (26+)'
 
     # Event Details
     title = models.CharField(max_length=255)

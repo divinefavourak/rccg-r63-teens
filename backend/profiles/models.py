@@ -18,7 +18,8 @@ class TeenProfile(UUIDMixin, TimestampMixin):
         CHILDREN  = 'children',  'Children (6-8)'
         PRE_TEEN  = 'pre_teen',  'Pre-Teen (9-12)'
         TEEN      = 'teen',      'Teen (13-19)'
-        SUPERTEEN = 'superteen', 'Superteen (19+)'
+        SUPERTEEN = 'superteen', 'Superteen (20-25)'
+        ADULT     = 'adult',     'Adult (26+)'
     
     class Gender(models.TextChoices):
         MALE = 'male', 'Male'
@@ -122,8 +123,12 @@ class TeenProfile(UUIDMixin, TimestampMixin):
             return self.AgeGroup.PRE_TEEN
         elif age <= 19:
             return self.AgeGroup.TEEN
-        else:
+        elif age <= 25:
             return self.AgeGroup.SUPERTEEN
+        else:
+            # Teachers, coordinators and parents sign up too. Calling a
+            # 48-year-old a Superteen was wrong (reported 18 November 2026).
+            return self.AgeGroup.ADULT
     
     @property
     def age(self):
