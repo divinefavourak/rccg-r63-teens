@@ -1,18 +1,89 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import Navbar from '../components/Navbar';
+import { m } from 'framer-motion';
+import { Download } from 'lucide-react';
 import api from '../api/axios';
 import { type Manual } from '../types';
-import { FaBook, FaDownload, FaEye } from 'react-icons/fa';
 import Seo from '../components/Seo';
+import SitePage, { CARD, PROSE_LINK, Section } from '../components/site/SitePage';
+import PageHeader from '../components/site/PageHeader';
+import { AboutSection, EmptyState, SkeletonGrid } from '../components/site/ContentBlocks';
+import { POP_TONES } from '../components/site/tones';
+import FloatingObject from '../components/site/FloatingObject';
+import { fadeUp, stagger } from '../components/site/motion';
+import { OBJECTS } from '../assets/site';
 
 const AGE_LABELS: Record<string, string> = {
-    all: 'All Ages',
+    all: 'All ages',
     children: 'Children (6–8)',
-    pre_teen: 'Pre-Teen (9–12)',
+    pre_teen: 'Pre-teen (9–12)',
     teen: 'Teen (13–19)',
     superteen: 'Superteen (20–25)',
     adult: 'Adult (26+)',
+};
+
+const ManualCard = ({ manual, tone }: { manual: Manual; tone: string }) => {
+    const pdf = manual.pdf_file || manual.pdf_url || '';
+
+    return (
+        <m.li variants={fadeUp} className={`${CARD} group flex flex-col overflow-hidden`}>
+            <div className={`relative aspect-[16/10] overflow-hidden ${tone}`}>
+                {manual.cover_image ? (
+                    <img src={manual.cover_image} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+                ) : (
+                    <FloatingObject src={OBJECTS.notebook} className="absolute left-1/2 top-1/2 size-28 -translate-x-1/2 -translate-y-1/2" />
+                )}
+            </div>
+            <div className="flex flex-1 flex-col gap-3 p-5">
+                <div className="flex flex-wrap items-center gap-2 text-label-sm">
+                    {manual.target_age_group && (
+                        <span className="rounded-full bg-surface-sunken px-2.5 py-1">
+                            {AGE_LABELS[manual.target_age_group] || manual.target_age_group}
+                        </span>
+                    )}
+                    {manual.week_number > 0 && <span className="text-content-muted">Week {manual.week_number}</span>}
+                    {manual.week_start_date && (
+                        <span className="text-content-muted">
+                            ·{' '}
+                            {new Date(manual.week_start_date).toLocaleDateString('en-GB', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                                timeZone: 'UTC',
+                            })}
+                        </span>
+                    )}
+                </div>
+                <h3 className="text-title-md">{manual.title}</h3>
+                {manual.theme && <p className="line-clamp-2 text-body-sm text-content-secondary">{manual.theme}</p>}
+
+                <div className="mt-auto pt-2">
+                    {pdf ? (
+                        <div className="flex gap-2">
+                            <a
+                                href={pdf}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex h-12 flex-1 items-center justify-center rounded-full bg-ink text-body-md-strong text-on-ink transition-transform duration-150 hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+                            >
+                                Open the PDF
+                            </a>
+                            <a
+                                href={pdf}
+                                download
+                                aria-label={`Download ${manual.title}`}
+                                className="grid size-12 shrink-0 place-items-center rounded-full border-[1.5px] border-ink transition-transform duration-150 hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+                            >
+                                <Download size={18} aria-hidden />
+                            </a>
+                        </div>
+                    ) : (
+                        <p className="text-body-sm text-content-muted">The PDF for this week is not uploaded yet.</p>
+                    )}
+                </div>
+            </div>
+        </m.li>
+    );
 };
 
 const ManualList = () => {
@@ -20,146 +91,83 @@ const ManualList = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetchManuals();
+        let cancelled = false;
+        api.get('/content/manuals/?page_size=60&ordering=-week_start_date')
+            .then(({ data }) => {
+                if (!cancelled) setManuals(Array.isArray(data) ? data : data.results || []);
+            })
+            .catch(() => console.error('Failed to fetch manuals'))
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
-    const fetchManuals = async () => {
-        try {
-            const { data } = await api.get('/content/manuals/?page_size=60&ordering=-week_start_date');
-            setManuals(Array.isArray(data) ? data : data.results || []);
-        } catch (error) {
-            console.error("Failed to fetch manuals");
-        } finally {
-            setLoading(false);
-        }
-    };
-
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+        <SitePage>
             <Seo path="/manuals" />
-            <Navbar />
-            <div className="container mx-auto px-4 py-24">
 
-                <div className="text-center mb-12">
-                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary-600 dark:text-primary-400 mb-3">
-                        RCCG Region 63 Junior Church
-                    </p>
-                    <h1 className="text-4xl font-black text-gray-900 dark:text-white uppercase mb-4">
-                        Teaching Manuals
-                    </h1>
-                    <div className="w-24 h-1 bg-yellow-500 mx-auto rounded-full mb-4"></div>
-                    <p className="mt-4 text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                        The study manual used in Junior Church classes, week by week and by age group. Open one in the
-                        browser or download the PDF — free, for teachers and for the teens they teach.
-                    </p>
-                </div>
+            <PageHeader
+                eyebrow="STUDY MANUALS"
+                title="Teaching manuals"
+                intro="The study manual used in Junior Church classes, week by week and by age group. Open one in the browser or download the PDF — free, for teachers and for the teens they teach."
+                tone="bg-pop-violet"
+                object={OBJECTS.notebook}
+            />
 
+            <Section className="pt-8 lg:pt-10">
                 {loading ? (
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                        {[1, 2, 3].map(i => <div key={i} className="h-64 bg-gray-200 animate-pulse rounded-2xl"></div>)}
-                    </div>
+                    <SkeletonGrid count={3} height="h-80" />
+                ) : manuals.length === 0 ? (
+                    <EmptyState object={OBJECTS.fileText} title="No manuals published yet.">
+                        They appear here as each week&rsquo;s edition is released. Teachers: ask your parish
+                        coordinator for this week&rsquo;s copy in the meantime.
+                    </EmptyState>
                 ) : (
-                    <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-                        {manuals.map((manual) => (
-                            <div key={manual.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden group hover:-translate-y-1 transition-transform duration-300">
-                                <div className="h-48 bg-gray-200 dark:bg-gray-700 relative">
-                                    {/* Placeholder or actual cover */}
-                                    {manual.cover_image ? (
-                                        <img src={manual.cover_image} alt={manual.title} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-gray-400">
-                                            <FaBook size={48} />
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="p-6">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        {manual.target_age_group && (
-                                            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                                {AGE_LABELS[manual.target_age_group] || manual.target_age_group}
-                                            </span>
-                                        )}
-                                        {manual.week_number > 0 && (
-                                            <span className="text-xs text-gray-400">Week {manual.week_number}</span>
-                                        )}
-                                    </div>
-                                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1">{manual.title}</h3>
-                                    {manual.theme && (
-                                        <p className="text-gray-500 text-sm mb-1 line-clamp-1">{manual.theme}</p>
-                                    )}
-                                    {manual.week_start_date && (
-                                        <p className="text-xs text-gray-400 mb-4">
-                                            {new Date(manual.week_start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                        </p>
-                                    )}
-
-                                    {(manual.pdf_file || manual.pdf_url) ? (
-                                        <div className="flex gap-4">
-                                            <a
-                                                href={manual.pdf_file || manual.pdf_url || ''}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="flex-1 btn-primary py-3 flex items-center justify-center gap-2 text-sm"
-                                            >
-                                                <FaEye /> View
-                                            </a>
-                                            <a
-                                                href={manual.pdf_file || manual.pdf_url || ''}
-                                                download
-                                                className="btn-secondary px-4 flex items-center justify-center"
-                                            >
-                                                <FaDownload />
-                                            </a>
-                                        </div>
-                                    ) : (
-                                        <p className="text-xs text-center text-gray-400 py-2">No PDF available</p>
-                                    )}
-                                </div>
-                            </div>
+                    <m.ul
+                        initial="hidden"
+                        animate="show"
+                        variants={stagger(0.05)}
+                        className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6"
+                    >
+                        {manuals.map((manual, i) => (
+                            <ManualCard key={manual.id} manual={manual} tone={POP_TONES[(i + 2) % POP_TONES.length]} />
                         ))}
-                    </div>
+                    </m.ul>
                 )}
+            </Section>
 
-                {!loading && manuals.length === 0 && (
-                    <p className="text-center text-gray-500 dark:text-gray-400 py-16">
-                        No manuals have been published yet. They appear here as each week&rsquo;s edition is released.
+            {/*
+                A teacher arrives here mid-week with a class on Sunday and no
+                idea which edition is current. This says what the manual is, how
+                it is organised, and what to do when the week's edition is
+                missing from the list.
+            */}
+            <div className="pb-16 lg:pb-24">
+                <AboutSection id="about-manuals" title="About the weekly manual">
+                    <p>
+                        Every week, RCCG Junior Church publishes a teaching manual for each age group — children,
+                        pre-teens, teens and superteens. Each edition carries a theme, a Scripture passage, the lesson
+                        itself and questions for the class, and it is studied on the same Sunday across the region so
+                        that a teen who moves parish does not fall behind.
                     </p>
-                )}
-
-                {/*
-                    A teacher arrives here mid-week with a class on Sunday and no
-                    idea which edition is current. This says what the manual is,
-                    how it is organised, and what to do when the week's edition
-                    is missing from the list.
-                */}
-                <section aria-labelledby="about-manuals" className="mt-20 max-w-3xl mx-auto">
-                    <h2 id="about-manuals" className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-                        About the weekly manual
-                    </h2>
-                    <div className="space-y-4 text-gray-600 dark:text-gray-400 leading-relaxed">
-                        <p>
-                            Every week, RCCG Junior Church publishes a teaching manual for each age group — children,
-                            pre-teens, teens and superteens. Each edition carries a theme, a Scripture passage, the
-                            lesson itself and questions for the class, and it is studied on the same Sunday across the
-                            region so that a teen who moves parish does not fall behind.
-                        </p>
-                        <p>
-                            Teachers use the PDF to prepare and to print. Teens who missed the class, or who want to
-                            read the lesson again, can open the same file here. If this week&rsquo;s edition is not
-                            listed yet, it has not been uploaded — check back, or ask your parish coordinator.
-                        </p>
-                        <p>
-                            The manual is not the same as the{' '}
-                            <Link to="/devotionals" className="text-primary-600 dark:text-primary-400 underline">
-                                daily devotional
-                            </Link>
-                            . The devotional is read at home, one short reading a day; the manual is the class
-                            lesson.
-                        </p>
-                    </div>
-                </section>
+                    <p>
+                        Teachers use the PDF to prepare and to print. Teens who missed the class, or who want to read
+                        the lesson again, can open the same file here. If this week&rsquo;s edition is not listed yet,
+                        it has not been uploaded — check back, or ask your parish coordinator.
+                    </p>
+                    <p>
+                        The manual is not the same as the{' '}
+                        <Link to="/devotionals" className={PROSE_LINK}>
+                            daily devotional
+                        </Link>
+                        . The devotional is read at home, one short reading a day; the manual is the class lesson.
+                    </p>
+                </AboutSection>
             </div>
-        </div>
+        </SitePage>
     );
 };
 

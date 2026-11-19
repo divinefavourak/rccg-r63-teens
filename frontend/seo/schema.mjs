@@ -46,7 +46,7 @@ export function organizationLd() {
     '@type': 'Organization',
     '@id': ORGANIZATION_ID,
     name: SITE.name,
-    alternateName: SITE.legalName,
+    alternateName: [...SITE.alternateNames, SITE.legalName],
     legalName: SITE.legalName,
     slogan: SITE.slogan,
     url: SITE.origin,
@@ -80,8 +80,12 @@ export function websiteLd() {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
     '@id': WEBSITE_ID,
-    url: SITE.origin,
+    // Google's site-name system reads this node on the home page: `name` first,
+    // then `alternateName` when the name alone is ambiguous. `url` is the home
+    // page with its trailing slash, the same string as the home canonical.
+    url: `${SITE.origin}/`,
     name: SITE.name,
+    alternateName: SITE.alternateNames,
     description: SITE.description,
     inLanguage: SITE.language,
     publisher: { '@id': ORGANIZATION_ID },

@@ -37,6 +37,7 @@ import {
   devotionalTitle,
   eventDescription,
   eventIsFree,
+  formatDay,
   headToHtml,
   metaFor,
 } from '../seo/site.mjs';
@@ -117,9 +118,26 @@ function noscriptBlock({ heading, intro, items = [], paragraphs = [] }) {
  */
 function renderPage(shell, meta, noscript) {
   return shell
-    .replace(HEAD_REGION, () => headToHtml(meta))
+    .replace(HEAD_REGION, () => `${headToHtml(meta)}${VERIFICATION_TAGS}`)
     .replace(NOSCRIPT_REGION, () => noscript);
 }
+
+/**
+ * Ownership tags for Google Search Console and Bing Webmaster Tools, read from
+ * the build environment so no token lives in the repository.
+ *
+ * Optional. A DNS TXT record at the registrar proves the whole domain at once
+ * and is the better route; these exist for whoever can reach the Vercel
+ * settings but not the DNS. Set `GOOGLE_SITE_VERIFICATION` and/or
+ * `BING_SITE_VERIFICATION` to the `content` value each console gives you.
+ */
+const VERIFICATION_TAGS = [
+  ['google-site-verification', process.env.GOOGLE_SITE_VERIFICATION],
+  ['msvalidate.01', process.env.BING_SITE_VERIFICATION],
+]
+  .filter(([, token]) => token && /^[\w-]+$/.test(token.trim()))
+  .map(([name, token]) => `\n  <meta name="${name}" content="${token.trim()}" />`)
+  .join('');
 
 async function writePage(routePath, html) {
   const target = routePath === '/' ? BASE : join(DIST, routePath.replace(/^\//, ''), 'index.html');
@@ -191,10 +209,36 @@ function staticNoscript(route, content) {
   }
 
   if (route.path === '/') {
+    // The front page is what a search for the name lands on, and the readers
+    // that do not run JavaScript (Bing's first pass, every answer-engine
+    // crawler) used to get one sentence and five links here. Say what Faith
+    // Tribe is in full sentences, and link the newest readings and the next
+    // events, so the page carries its own name and real content.
+    const now = Date.now();
+    const latest = [...content.devotionals]
+      .filter((item) => item?.id && item.date)
+      .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+      .slice(0, 7);
+    const upcoming = content.events
+      .filter((item) => item?.id && new Date(item.end_datetime || item.start_datetime).getTime() >= now)
+      .slice(0, 5);
+
     return noscriptBlock({
       heading: `${SITE.name} — ${SITE.legalName}`,
       intro: SITE.description,
-      items: PRIMARY_LINKS,
+      paragraphs: [
+        `${SITE.name} is the app and website of ${SITE.legalName}, part of ${SITE.parent.name}. Every morning it publishes Teenage Open Heavens, a short devotional for teenagers with a memory verse, a message, a key point and a prayer point. It also carries the whole Bible, the weekly Junior Church teaching manual, podcasts and worship videos, and registration for the region’s camps and events.`,
+        `Reading is free and needs no account. The ${SITE.name} app for Android and iPhone keeps today’s reading, the Bible and a reading streak in one place.`,
+      ],
+      items: [
+        ...latest.map((item) => ({
+          href: `/devotionals/${item.id}`,
+          label: item.title,
+          note: formatDay(item.date) || undefined,
+        })),
+        ...upcoming.map((item) => ({ href: `/events/${item.id}`, label: item.title, note: 'Event' })),
+        ...PRIMARY_LINKS,
+      ],
     });
   }
 

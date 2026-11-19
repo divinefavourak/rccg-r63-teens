@@ -32,6 +32,15 @@
 export const SITE = {
   origin: 'https://www.thefaithtribe.live',
   name: 'Faith Tribe',
+  /**
+   * The other names people type for this site. Google reads `alternateName` on
+   * the WebSite node when it picks the site name shown above a result; with
+   * only `name` it had one string to match a brand search against, and "faith
+   * tribe" is a common phrase (men's groups, an academic term, sermons) that
+   * this site does not own yet. Real variants only: the article form people
+   * say aloud, the domain, and the name with the church it belongs to.
+   */
+  alternateNames: ['The Faith Tribe', 'thefaithtribe.live', 'Faith Tribe RCCG Region 63'],
   /** The organisation behind the product, used in JSON-LD `legalName`. */
   legalName: 'RCCG Region 63 Junior Church',
   /** One line the organisation uses about itself. Not the meta description. */

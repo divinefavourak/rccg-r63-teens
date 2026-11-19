@@ -72,8 +72,7 @@ const Footer = () => {
         </div>
 
         <div className="mt-16 pt-8 border-t border-gray-200 dark:border-gray-800 text-center text-xs flex flex-col md:flex-row justify-between items-center gap-4">
-          <p>© 2025 RCCG Region 63 Junior Church | Faith Tribe. All rights reserved.</p>
-          <p className="font-bold text-primary-600 dark:text-primary-400 tracking-wider uppercase text-[10px]">The Priceless Gift</p>
+          <p>© {new Date().getFullYear()} Faith Tribe · RCCG Region 63 Junior Church. All rights reserved.</p>
 
           <button
             onClick={scrollToTop}

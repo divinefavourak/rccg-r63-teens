@@ -127,8 +127,12 @@ class UserEmailService:
         """
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
+        # The website's /reset-password page takes the same uid and token (both
+        # come from default_token_generator) and is the only page that does:
+        # the /set-password this used to name has never existed, so a new
+        # leader's "set your password" button opened the 404 page.
         set_password_url = (
-            f"{_get_frontend_url()}/set-password?uid={uid}&token={token}"
+            f"{_get_frontend_url()}/reset-password?uid={uid}&token={token}"
         )
 
         subject = 'Your RCCG Region 63 Account Has Been Created'
