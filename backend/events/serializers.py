@@ -890,8 +890,8 @@ class BatchSeatSerializer(serializers.ModelSerializer):
         model = EventRegistration
         fields = [
             'id', 'registration_id', 'claim_code', 'attendee_gender', 'attendee_name',
-            'attendee_phone', 'status', 'payment_status', 'claimed', 'claimed_at',
-            'checked_in_at', 'bed',
+            'attendee_phone', 'attendee_age', 'guardian_name', 'guardian_phone',
+            'status', 'payment_status', 'claimed', 'claimed_at', 'checked_in_at', 'bed',
         ]
 
 
@@ -1022,8 +1022,14 @@ class SeatNameSerializer(serializers.Serializer):
     registration_id = serializers.CharField(max_length=30)
     name = serializers.CharField(max_length=255, allow_blank=True)
     phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    # For a child's seat, which is never claimed: their age and who to call.
+    age = serializers.IntegerField(min_value=0, max_value=120, required=False, allow_null=True)
+    guardian_name = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    guardian_phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
 
 
 class ClaimSeatSerializer(serializers.Serializer):
-    registration_id = serializers.CharField(max_length=30)
-    claim_code = serializers.CharField(max_length=12)
+    # Only for a seat with an older, six-character code.
+    registration_id = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    # Room for the dash and spaces people type; `batches.claim` drops them.
+    claim_code = serializers.CharField(max_length=24)

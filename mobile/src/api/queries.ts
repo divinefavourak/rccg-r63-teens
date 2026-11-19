@@ -443,13 +443,14 @@ export function useCheckPayment(id: string | undefined) {
 const TOO_MANY = 'Too many tries. Wait a minute, then try again.';
 
 /**
- * Take a seat a coordinator bought: the ticket number and the code they gave
- * out. The seat comes back as one of the teen's own tickets.
+ * Take a seat a coordinator bought, with the code they gave out (an older,
+ * six-character code also needs its ticket number). The seat comes back as
+ * one of the teen's own tickets.
  */
 export function useClaimTicket() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { registration_id: string; claim_code: string }) => {
+    mutationFn: async (input: { claim_code: string; registration_id?: string }) => {
       try {
         return await api.post<EventRegistration>('/events/registrations/claim/', input);
       } catch (err) {

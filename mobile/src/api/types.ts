@@ -947,6 +947,11 @@ export interface Seat {
   claim_code?: string;
   attendee_gender: string;
   attendee_name: string;
+  attendee_phone?: string;
+  /** A child's seat, named by the coordinator and never claimed: age and who to call. */
+  attendee_age?: number | null;
+  guardian_name?: string;
+  guardian_phone?: string;
   status: string;
   payment_status: string;
   claimed: boolean;

@@ -415,8 +415,9 @@ class EventRegistration(UUIDMixin, TimestampMixin):
     # Group registration
     # =====================
     # A seat in a coordinator's batch. Its attendee fields stay blank until the
-    # teen claims it with the ticket number and `claim_code` the coordinator
-    # handed out.
+    # teen claims it with the `claim_code` the coordinator handed out (a seat
+    # with an older, six-character code also needs its ticket number), or the
+    # coordinator names it, as for a child who has no phone.
     batch = models.ForeignKey(
         'events.RegistrationBatch',
         on_delete=models.CASCADE,
@@ -517,6 +518,12 @@ class EventRegistration(UUIDMixin, TimestampMixin):
             # project, so an unindexed sort over it is the most expensive one.
             models.Index(fields=['-created_at'], name='evreg_created_desc_idx'),
         ]
+
+    @property
+    def claim_code_display(self):
+        """The claim code as the ticket sheet and emails show it."""
+        from .batches import display_code
+        return display_code(self.claim_code)
 
     def __str__(self):
         return f"{self.registration_id} - {self.attendee_name}"

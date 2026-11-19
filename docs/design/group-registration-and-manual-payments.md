@@ -4,7 +4,7 @@ What was built in the backend and the web Console, and what the phone app needs 
 
 ## The idea in one paragraph
 
-An event is paid for either **online** (the gateway, Squad today) or by **bank transfer** to an account set on the event. A coordinator can register a **group**: a headcount of boys and girls from their part of the church, paid for once. Each place is a **seat** with a ticket number and a claim code. The coordinator hands these out, and at the event each teen claims their seat in the app. Transfer receipts are checked in the Console by whoever holds `payments.reconcile` over that part of the church: Super Admin, National Coordinator or Regional Coordinator. Verifying a receipt writes a `Payment`, so there is one ledger.
+An event is paid for either **online** (the gateway, Squad today) or by **bank transfer** to an account set on the event. A coordinator can register a **group**: a headcount of boys and girls from their part of the church, paid for once. Each place is a **seat** with a ticket number and a claim code. The coordinator hands the codes out, and each teen claims their seat in the app with theirs; a child without a phone is named on the seat instead and checked in by ticket number or name. Transfer receipts are checked in the Console by whoever holds `payments.reconcile` over that part of the church: Super Admin, National Coordinator or Regional Coordinator. Verifying a receipt writes a `Payment`, so there is one ledger.
 
 ## Models
 
@@ -28,7 +28,7 @@ All are under `/api/v1/` and need a signed-in user.
 | `PATCH /events/batches/<id>/` | the group's coordinators | Change the counts (before any payment), the contact email or phone, or the notes. |
 | `POST /events/batches/<id>/cancel/` | the group's coordinators | Only while nothing has been paid. |
 | `PATCH /events/batches/<id>/seats/` | the group's coordinators | `{seats: [{registration_id, name, phone}]}` puts names on seats. |
-| `POST /events/registrations/claim/` | any teen | `{registration_id, claim_code}` returns the registration, now theirs. Throttled. |
+| `POST /events/registrations/claim/` | any teen | `{claim_code}` (plus `registration_id` for an older 6-character code; otherwise `code: "ticket_needed"`) returns the registration, now theirs. Throttled. |
 | `POST /payments/batches/<id>/checkout/` · `/check/` | the group's coordinators | Gateway checkout for what the group still owes, and asking the gateway afterwards. |
 | `POST /payments/receipts/` (multipart) | the payer | `batch` or `registration`, plus `amount`, `paid_on`, `payer_name`, `bank_reference` and `file`. |
 | `GET /payments/receipts/` · `/<id>/` | the sender, the group's coordinators, reconcilers | `?status=submitted&event=<id>` |
@@ -41,7 +41,7 @@ All are under `/api/v1/` and need a signed-in user.
 ## Mobile app
 
 Built. The phone talks to the same endpoints:
-- `app/ticket/claim.tsx` claims a ticket, reached from the row at the top of My tickets.
+- `app/ticket/claim.tsx` claims a ticket with one code field, reached from the row at the top of My tickets and from "I have a code from my coordinator" on the event and register screens. The ticket-number field appears only for an older 6-character code.
 - `app/ticket/[id].tsx` shows the bank-transfer panel and receipts on a `manual` event.
 - `app/console/groups/` holds the coordinator's groups: the list, one group, and a new group.
 - `src/components/PaymentPieces.tsx` has the bank details, the receipt form and the receipt list, used by both the ticket and the group screens.

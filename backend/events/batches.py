@@ -4,9 +4,15 @@ pays for it once.
 
 A batch is a number of seats, so many for boys and so many for girls. Each
 seat is an `EventRegistration` with a ticket number and a claim code, and no
-attendee yet. The coordinator hands the numbers out; at the event the teen
-opens the app and claims their seat with both (`claim`), which files it
-under their account and fills in who they are.
+attendee yet. The coordinator hands the codes out; the teen opens the app and
+claims their seat with the code (`claim`), which files it under their account
+and fills in who they are. Seats made before codes grew to eight characters
+are claimed with their ticket number and code together.
+
+A seat need not be claimed at all. Children usually have no phone of their
+own, so the coordinator puts the child's name and age and a parent's name
+and phone on the seat (`name_seats`), and the check-in desk finds it by its
+ticket number or the child's name.
 
 * The price of a seat is the event's price, or its group price when the
   headcount reaches the event's group threshold. It is fixed on the batch
@@ -44,7 +50,11 @@ BatchStatus = RegistrationBatch.Status
 # Letters and digits that cannot be misread for one another: no 0/O, 1/l/I.
 # Upper case only, since a coordinator reads them out loud.
 _CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-CLAIM_CODE_LENGTH = 6
+# Eight characters from 32 is about a million million codes, so a code alone
+# is enough to find a seat; claims are throttled per account on top of that.
+# Seats made before were given six, and are claimed with their ticket number.
+CLAIM_CODE_LENGTH = 8
+LEGACY_CLAIM_CODE_LENGTH = 6
 _REFERENCE_LENGTH = 6
 
 # A sanity limit on one batch, not a business rule.
@@ -54,7 +64,26 @@ GENDERS = ('male', 'female')
 
 
 class BatchError(Exception):
-    """The request cannot be done. The message is for the coordinator."""
+    """
+    The request cannot be done. The message is for whoever asked; `code`, when
+    set, tells an app what to do next (`ticket_needed`: ask for the ticket
+    number too).
+    """
+
+    def __init__(self, message, code=None):
+        super().__init__(message)
+        self.code = code
+
+
+def normalise_code(value):
+    """A claim code as typed: spaces, dashes and case do not matter."""
+    return ''.join(ch for ch in str(value or '') if ch.isalnum()).upper()
+
+
+def display_code(code):
+    """A claim code as shown and read out: an eight-character one in two halves."""
+    code = code or ''
+    return f'{code[:4]}-{code[4:]}' if len(code) == CLAIM_CODE_LENGTH else code
 
 
 # ── Price ────────────────────────────────────────────────────────────────────
@@ -288,8 +317,10 @@ def cancel(user, batch, reason=''):
 def name_seats(user, batch, rows):
     """
     Put names on seats before the teens claim them, for the ticket sheet and
-    the check-in desk. `rows` is `[{'registration_id', 'name', 'phone'}]`.
-    Returns `(updated, errors)`, the errors one per row that was not used.
+    the check-in desk. `rows` is `[{'registration_id', 'name', 'phone'}]`,
+    each optionally with `age`, `guardian_name` and `guardian_phone`: a child's
+    seat, which nobody claims, carries who to call. Returns
+    `(updated, errors)`, the errors one per row that was not used.
     """
     seats = {
         s.registration_id.upper(): s
@@ -315,7 +346,17 @@ def name_seats(user, batch, rows):
         seat.attendee_name = name
         if phone:
             seat.attendee_phone = phone
-        seat.save(update_fields=['attendee_name', 'attendee_phone', 'updated_at'])
+        fields = ['attendee_name', 'attendee_phone', 'updated_at']
+        age = row.get('age')
+        if age is not None:
+            seat.attendee_age = age
+            fields.append('attendee_age')
+        for key in ('guardian_name', 'guardian_phone'):
+            value = str(row.get(key) or '').strip()
+            if value:
+                setattr(seat, key, value[:255 if key == 'guardian_name' else 20])
+                fields.append(key)
+        seat.save(update_fields=fields)
         updated += 1
     return updated, errors
 
@@ -392,26 +433,41 @@ def _announce_paid(batch):
 
 def claim(user, ticket, code):
     """
-    File a seat under `user`, who proved it is theirs with its ticket number
-    and claim code. Returns the seat. Raises `BatchError` with the reason it
-    cannot.
+    File a seat under `user`, who proved it is theirs with its claim code, and
+    for a seat made with a six-character code its ticket number as well.
+    `ticket` may be empty. Returns the seat. Raises `BatchError` with the
+    reason it cannot.
     """
     ticket = (ticket or '').strip().upper()
-    code = (code or '').strip().upper()
-    if not ticket or not code:
-        raise BatchError('Enter the ticket number and the code your coordinator gave you.')
+    code = normalise_code(code)
+    if not code:
+        raise BatchError('Enter the code your coordinator gave you.')
+    if not ticket and len(code) <= LEGACY_CLAIM_CODE_LENGTH:
+        # Too short to stand alone: one of the older codes, which came with a
+        # ticket number. Said before any lookup, so it gives nothing away.
+        raise BatchError(
+            'This is one of the older, shorter codes. Enter the ticket number that came '
+            'with it too.', code='ticket_needed')
 
     with transaction.atomic():
-        seat = (
+        seats = (
             # The seat alone: locking the event too would make every claim at
             # the gate wait on every other, and can deadlock with `resize`.
             EventRegistration.objects.select_for_update(of=('self',))
             .select_related('event')
-            .filter(registration_id__iexact=ticket, batch__isnull=False).first())
-        # The same answer for a ticket that is not a seat and a wrong code, so
-        # the endpoint cannot be used to find out which ticket numbers exist.
-        if seat is None or not constant_time_compare(seat.claim_code or '', code):
-            raise BatchError('That ticket number and code do not match.')
+            .filter(batch__isnull=False))
+        if ticket:
+            seat = seats.filter(registration_id__iexact=ticket).first()
+            # The same answer for a ticket that is not a seat and a wrong
+            # code, so the endpoint cannot be used to find which ticket
+            # numbers exist.
+            if seat is None or not constant_time_compare(seat.claim_code or '', code):
+                raise BatchError('That ticket number and code do not match.')
+        else:
+            seat = seats.filter(claim_code=code).first()
+            if seat is None:
+                raise BatchError(
+                    'That code does not match a ticket. Check it with your coordinator.')
         if seat.claimed_at:
             if seat.user_id == user.pk:
                 return seat

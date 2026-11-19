@@ -1,6 +1,6 @@
 """
 Group registration: a coordinator buys seats for a headcount, and each teen
-claims theirs at the event with the ticket number and code.
+claims theirs with the code (an older seat: its ticket number and code).
 """
 from decimal import Decimal
 
@@ -170,6 +170,20 @@ class ResizeAndCancelTests(GroupTestCase):
         seat.refresh_from_db()
         self.assertEqual(seat.attendee_name, 'Ada Obi')
 
+    def test_naming_a_childs_seat(self):
+        seat = self.batch.seats.order_by('registration_id').first()
+        updated, errors = batches.name_seats(self.coordinator, self.batch, [{
+            'registration_id': seat.registration_id, 'name': 'Tolu Ade', 'age': 7,
+            'guardian_name': 'Mrs Ade', 'guardian_phone': '08035550000',
+        }])
+        self.assertEqual((updated, errors), (1, []))
+        seat.refresh_from_db()
+        self.assertEqual(seat.attendee_age, 7)
+        self.assertEqual(seat.guardian_name, 'Mrs Ade')
+        self.assertEqual(seat.guardian_phone, '08035550000')
+        # Unclaimed, so the desk finds it by its ticket number or the name.
+        self.assertIsNone(seat.claimed_at)
+
 
 class ClaimTests(GroupTestCase):
     def setUp(self):
@@ -189,6 +203,28 @@ class ClaimTests(GroupTestCase):
         self.assertIsNotNone(seat.claimed_at)
         # Claiming it again is harmless.
         self.assertEqual(batches.claim(self.teen, seat.registration_id, seat.claim_code), seat)
+
+    def test_new_seats_get_an_eight_character_code(self):
+        self.assertEqual(len(self.seat.claim_code), batches.CLAIM_CODE_LENGTH)
+        self.assertEqual(batches.display_code('K7Q2MX8B'), 'K7Q2-MX8B')
+
+    def test_the_code_alone_is_enough(self):
+        typed = batches.display_code(self.seat.claim_code).lower().replace('-', ' - ')
+        seat = batches.claim(self.teen, '', typed)
+        self.assertEqual(seat.pk, self.seat.pk)
+        self.assertEqual(seat.user, self.teen)
+
+    def test_a_wrong_code_alone(self):
+        with self.assertRaisesMessage(batches.BatchError, 'does not match a ticket'):
+            batches.claim(self.teen, '', 'ZZZZ-ZZZZ')
+
+    def test_an_older_short_code_asks_for_the_ticket_number(self):
+        EventRegistration.objects.filter(pk=self.seat.pk).update(claim_code='K7Q2MX')
+        with self.assertRaises(batches.BatchError) as caught:
+            batches.claim(self.teen, '', 'K7Q2MX')
+        self.assertEqual(caught.exception.code, 'ticket_needed')
+        seat = batches.claim(self.teen, self.seat.registration_id, 'k7q2mx')
+        self.assertEqual(seat.user, self.teen)
 
     def test_a_wrong_code_and_an_unknown_ticket_say_the_same(self):
         with self.assertRaisesMessage(batches.BatchError, 'do not match'):
@@ -356,6 +392,25 @@ class BatchApiTests(APITestCase):
         self.assertEqual(response.data['registration_id'], seat.registration_id)
         mine = self.client.get('/api/v1/events/registrations/mine/')
         self.assertEqual([r['id'] for r in mine.data], [str(seat.id)])
+
+    def test_claim_endpoint_with_the_code_alone(self):
+        batch = batches.create(self.coordinator, self.event, self.tree['prov'], 1, 0)
+        seat = batch.seats.get()
+        teen = make_user('tobi', gender='male')
+        self.client.force_authenticate(teen)
+        response = self.client.post('/api/v1/events/registrations/claim/', {
+            'claim_code': batches.display_code(seat.claim_code),
+        }, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['registration_id'], seat.registration_id)
+
+    def test_claim_endpoint_says_when_the_ticket_number_is_needed(self):
+        teen = make_user('tobi', gender='male')
+        self.client.force_authenticate(teen)
+        response = self.client.post(
+            '/api/v1/events/registrations/claim/', {'claim_code': 'K7Q2MX'}, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data['code'], 'ticket_needed')
 
     def test_resize_and_cancel_through_the_api(self):
         batch = batches.create(self.coordinator, self.event, self.tree['prov'], 1, 1)

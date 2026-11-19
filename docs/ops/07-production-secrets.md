@@ -33,7 +33,7 @@ publishes no port for it.
 | `PUBLIC_API_URL` | The API's own address from outside, e.g. `https://api.thefaithtribe.live`, with no path. Squad sends each payer back to `<this>/api/v1/payments/return/<reference>/`. Unset ⇒ the address of the request is used, which behind the host's proxy comes out as `http://`. |
 | `UNPAID_REGISTRATION_HOLD_HOURS` | How long an unpaid place on a paid event is held. Default `24`. `0` never releases one. |
 | `R2_PRIVATE_BUCKET_NAME` | A Cloudflare R2 bucket with **no public domain**, for bank-transfer receipts (`common/storage.py`). Receipts are only ever streamed through `/api/v1/payments/receipts/<id>/file/` to someone allowed to see them. Unset ⇒ they go into `R2_BUCKET_NAME` with a private ACL under unguessable names, which is weaker if that bucket is public. Without R2 at all they go to `PRIVATE_MEDIA_ROOT` (default `backend/private_media/`), which must be on a persistent disk. |
-| `TICKET_CLAIM_THROTTLE_RATE` | How often one account may try to claim a group seat with a ticket number and code. Default `10/min`. |
+| `TICKET_CLAIM_THROTTLE_RATE` | How often one account may try to claim a group seat with a code. Default `10/min`. |
 | `MOBILE_APP_SCHEME` | The phone app's link scheme, default `faithtribe` (`mobile/app.json`). The page after payment links back to the app only at an address with this scheme, or at an origin in `CORS_ALLOWED_ORIGINS` or `FRONTEND_URL`. |
 
 In the Squad dashboard, under **Profile → API & Webhook**, set the webhook URL

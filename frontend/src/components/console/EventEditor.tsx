@@ -521,7 +521,7 @@ export const EventEditor = ({
             <>
               <p className="mt-1 text-[12px] font-medium leading-4 text-console-muted">
                 A coordinator enters how many boys and girls are coming and pays
-                once. Each teen gets a ticket number and code to claim in the app.
+                once. Each teen gets a code to claim in the app; children can be named on their seats instead.
               </p>
               {!form.is_free && (
                 <div className="mt-2 grid gap-3 sm:grid-cols-2">

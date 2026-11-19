@@ -4,7 +4,7 @@
 {% block accent %}{% if outcome == 'paid' %}#10B981{% elif outcome == 'rejected' %}#FF7BAC{% else %}#FFC857{% endif %}{% endblock %}
 {% block eyebrow %}Group registration{% endblock %}
 {% block heading %}{% if outcome == 'paid' %}{{ batch.headcount }} seat{{ batch.headcount|pluralize }} confirmed{% elif outcome == 'rejected' %}We could not accept your receipt{% else %}Payment received, balance outstanding{% endif %}{% endblock %}
-{% block lead %}{% if coordinator_name %}Hi {{ coordinator_name }}. {% endif %}{% if outcome == 'paid' %}Your group is paid for. Give each teen their ticket number and code; they claim their seat in the Faith Tribe app.{% elif outcome == 'rejected' %}{% if note %}The reason given: {{ note }}{% else %}Check the receipt and send it again.{% endif %}{% else %}We have recorded what was received. The seats are confirmed once the balance is paid.{% endif %}{% endblock %}
+{% block lead %}{% if coordinator_name %}Hi {{ coordinator_name }}. {% endif %}{% if outcome == 'paid' %}Your group is paid for. Give each teen their code; they claim their seat in the Faith Tribe app. Children who have no phone need not claim: they are checked in by ticket number or name.{% elif outcome == 'rejected' %}{% if note %}The reason given: {{ note }}{% else %}Check the receipt and send it again.{% endif %}{% else %}We have recorded what was received. The seats are confirmed once the balance is paid.{% endif %}{% endblock %}
 
 {% block content %}
 {% include "emails/_event.html" with top="0" %}
@@ -35,7 +35,7 @@
   <tr>
     <td valign="top" style="padding:12px 12px 12px 0;{% if not forloop.first %}border-top:1px solid #EAE3DA;{% endif %}font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:14px;line-height:20px;font-weight:700;color:#1C1916;">{{ seat.registration_id }}</td>
     <td valign="top" style="padding:12px 12px 12px 0;{% if not forloop.first %}border-top:1px solid #EAE3DA;{% endif %}font-size:14px;line-height:20px;color:#4B4540;">{{ seat.attendee_gender|capfirst }}</td>
-    <td valign="top" align="right" style="padding:12px 0;{% if not forloop.first %}border-top:1px solid #EAE3DA;{% endif %}font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:14px;line-height:20px;font-weight:700;letter-spacing:0.8px;color:#1C1916;">{{ seat.claim_code }}</td>
+    <td valign="top" align="right" style="padding:12px 0;{% if not forloop.first %}border-top:1px solid #EAE3DA;{% endif %}font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:14px;line-height:20px;font-weight:700;letter-spacing:0.8px;color:#1C1916;">{{ seat.claim_code_display }}</td>
   </tr>
   {% endfor %}
 </table>

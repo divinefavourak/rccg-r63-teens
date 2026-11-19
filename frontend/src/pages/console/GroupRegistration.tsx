@@ -2,9 +2,12 @@
  * Group registration — a coordinator registers a headcount and pays once.
  *
  * A group is so many boys and so many girls for one event. Each place is a
- * seat with a ticket number and a claim code; the coordinator hands those
- * out, and at the event each teen claims their seat in the app. Names are
- * optional and can be added later, here or from a spreadsheet.
+ * seat with a ticket number and a claim code; the coordinator hands the codes
+ * out, and each teen claims their seat in the app with theirs. Names are
+ * optional and can be added later, here or from a spreadsheet. A child, who
+ * usually has no phone, is not expected to claim: the coordinator names the
+ * seat with the child's age and a parent's name and phone, and the desk
+ * checks the child in by ticket number or name.
  *
  * How the group is paid for is the event's choice (`EventEditor`): online,
  * through the gateway, or by transfer to the event's account with a receipt
@@ -62,6 +65,7 @@ import {
   naira,
   parseNamesCsv,
   receiptStatus,
+  showCode,
   type BatchDetail,
   type BatchRow,
   type BatchStatus,
@@ -208,7 +212,7 @@ const NewGroup = ({
   return (
     <Modal
       title="Register a group"
-      subtitle="Say how many are coming. Each person gets a ticket number and a code to claim it in the app."
+      subtitle="Say how many are coming. Each person gets a ticket number and a code to claim it in the app; children can simply be named."
       onClose={onClose}
       width={560}
       footer={
@@ -557,7 +561,7 @@ const NamesUpload = ({
   return (
     <Modal
       title="Add names from a spreadsheet"
-      subtitle="Download the template, type a name beside each ticket number, and upload it back. Names are optional; a teen's own name replaces it when they claim the seat."
+      subtitle="Download the template, type a name beside each ticket number, and upload it back. Names are optional; a teen's own name replaces it when they claim the seat. For children, fill in the age and parent columns too."
       onClose={onClose}
       width={620}
       footer={
@@ -606,6 +610,8 @@ const NamesUpload = ({
                 <Th>Ticket</Th>
                 <Th>Name</Th>
                 <Th>Phone</Th>
+                <Th>Age</Th>
+                <Th>Parent</Th>
                 <Th />
               </tr>
             </thead>
@@ -615,6 +621,8 @@ const NamesUpload = ({
                   <Td className="font-mono text-[13px]">{r.registration_id}</Td>
                   <Td>{r.name}</Td>
                   <Td>{r.phone}</Td>
+                  <Td>{r.age ?? ''}</Td>
+                  <Td>{[r.guardian_name, r.guardian_phone].filter(Boolean).join(' · ')}</Td>
                   <Td>
                     {!known.has(r.registration_id.toUpperCase()) && (
                       <span className="text-[12px] font-semibold text-console-danger">
@@ -916,6 +924,16 @@ const PaymentCard = ({
 
 // ─── One group ───────────────────────────────────────────────────────────────
 
+/** One seat's unsaved changes; a field left untouched is not sent. */
+type SeatDraft = { name?: string; age?: string; guardian_name?: string; guardian_phone?: string };
+
+/** The name a seat is made with ("Province 9 · seat 3"), which is not a person's. */
+const isPlaceholder = (name: string) => name.includes(' · seat ');
+
+/** A field inside a table cell, smaller than a form field. */
+const CELL_FIELD =
+  'w-full min-w-[160px] rounded-console-md bg-console-tinted px-2.5 py-1.5 text-[14px] outline-none focus:ring-2 focus:ring-console-text';
+
 const GroupDetail = ({
   id,
   readOnly,
@@ -958,7 +976,10 @@ const GroupDetail = ({
   const [cancelling, setCancelling] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [editing, setEditing] = useState<Record<string, string> | null>(null);
+  // Typed but not yet saved, by ticket number. Only what was touched is sent.
+  const [editing, setEditing] = useState<Record<string, SeatDraft> | null>(null);
+  const draft = (ticket: string, field: keyof SeatDraft, value: string) =>
+    setEditing((m) => ({ ...(m ?? {}), [ticket]: { ...(m?.[ticket] ?? {}), [field]: value } }));
   const [saving, setSaving] = useState(false);
 
   if (batch.isLoading) {
@@ -982,9 +1003,24 @@ const GroupDetail = ({
     setSaving(true);
     setError(null);
     try {
+      const byTicket = new Map(b.seats.map((s) => [s.registration_id, s]));
       const seats = Object.entries(editing)
-        .filter(([, name]) => name.trim())
-        .map(([registration_id, name]) => ({ registration_id, name }));
+        .map(([registration_id, change]) => {
+          const seat = byTicket.get(registration_id);
+          // A seat needs a name for anything on it to be saved, so a name
+          // left untouched keeps the one it has.
+          const kept = seat && !isPlaceholder(seat.attendee_name) ? seat.attendee_name : '';
+          const name = (change.name ?? kept).trim();
+          const years = change.age === undefined ? undefined : Number.parseInt(change.age, 10);
+          return {
+            registration_id,
+            name,
+            ...(years !== undefined && Number.isFinite(years) ? { age: years } : {}),
+            ...(change.guardian_name !== undefined ? { guardian_name: change.guardian_name.trim() } : {}),
+            ...(change.guardian_phone !== undefined ? { guardian_phone: change.guardian_phone.trim() } : {}),
+          };
+        })
+        .filter((row) => row.name);
       const { data } = await api.patch<{ updated: number; batch: BatchDetail }>(
         `/events/batches/${b.id}/seats/`,
         { seats },
@@ -1130,6 +1166,7 @@ const GroupDetail = ({
                   {showCodes && <Th>Code</Th>}
                   <Th>Gender</Th>
                   <Th>Name</Th>
+                  <Th>Child's details</Th>
                   <Th>Status</Th>
                   <Th>Payment</Th>
                   <Th>Claimed</Th>
@@ -1140,21 +1177,58 @@ const GroupDetail = ({
                   <tr key={s.id}>
                     <Td className="font-mono text-[13px] font-semibold">{s.registration_id}</Td>
                     {showCodes && (
-                      <Td className="font-mono text-[13px] font-bold tracking-[0.08em]">{s.claim_code}</Td>
+                      <Td className="whitespace-nowrap font-mono text-[13px] font-bold tracking-[0.08em]">
+                        {showCode(s.claim_code)}
+                      </Td>
                     )}
                     <Td className="capitalize">{s.attendee_gender}</Td>
                     <Td>
                       {editing && !s.claimed ? (
                         <input
                           aria-label={`Name for ${s.registration_id}`}
-                          defaultValue={s.attendee_name.includes(' · seat ') ? '' : s.attendee_name}
-                          onChange={(e) =>
-                            setEditing((m) => ({ ...(m ?? {}), [s.registration_id]: e.target.value }))
-                          }
-                          className="w-full min-w-[160px] rounded-console-md bg-console-tinted px-2.5 py-1.5 text-[14px] outline-none focus:ring-2 focus:ring-console-text"
+                          defaultValue={isPlaceholder(s.attendee_name) ? '' : s.attendee_name}
+                          onChange={(e) => draft(s.registration_id, 'name', e.target.value)}
+                          className={CELL_FIELD}
                         />
                       ) : (
                         s.attendee_name
+                      )}
+                    </Td>
+                    <Td className="text-[13px] text-console-body">
+                      {editing && !s.claimed ? (
+                        <div className="flex min-w-[300px] gap-1.5">
+                          <input
+                            aria-label={`Age for ${s.registration_id}`}
+                            placeholder="Age"
+                            inputMode="numeric"
+                            defaultValue={s.attendee_age ?? ''}
+                            onChange={(e) => draft(s.registration_id, 'age', e.target.value)}
+                            className={`${CELL_FIELD} !w-16 !min-w-0`}
+                          />
+                          <input
+                            aria-label={`Parent's name for ${s.registration_id}`}
+                            placeholder="Parent's name"
+                            defaultValue={s.guardian_name}
+                            onChange={(e) => draft(s.registration_id, 'guardian_name', e.target.value)}
+                            className={`${CELL_FIELD} !min-w-[110px]`}
+                          />
+                          <input
+                            aria-label={`Parent's phone for ${s.registration_id}`}
+                            placeholder="Parent's phone"
+                            inputMode="tel"
+                            defaultValue={s.guardian_phone}
+                            onChange={(e) => draft(s.registration_id, 'guardian_phone', e.target.value)}
+                            className={`${CELL_FIELD} !min-w-[110px]`}
+                          />
+                        </div>
+                      ) : (
+                        [
+                          s.attendee_age != null ? `Age ${s.attendee_age}` : '',
+                          s.guardian_name,
+                          s.guardian_phone,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ') || '—'
                       )}
                     </Td>
                     <Td>

@@ -341,6 +341,15 @@ export default function EventRegisterScreen() {
             loading={register.isPending}
             className="w-full"
           />
+          {/* Registered in a group by a coordinator: enter the code instead. */}
+          {event.data.group_registration_enabled && (
+            <Button
+              label="I have a code from my coordinator"
+              variant="tertiary"
+              onPress={() => router.replace('/ticket/claim')}
+              className="w-full"
+            />
+          )}
         </View>
       </KeyboardView>
     </View>

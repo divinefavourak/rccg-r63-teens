@@ -24,12 +24,16 @@ const PAID_POLL_FOR_MS = 5 * 60 * 1000;
 
 const genderWord = (g: string) => (g === 'male' ? 'Boy' : g === 'female' ? 'Girl' : '');
 
+/** An eight-character code in two halves, the way it is read out; older ones as they are. */
+const showCode = (code?: string | null) =>
+  code && code.length === 8 ? `${code.slice(0, 4)}-${code.slice(4)}` : code ?? '';
+
 /** What goes out through the share sheet: every ticket and its code. */
 function ticketSheet(group: BatchDetail): string {
   const lines = group.seats
     .filter((s) => s.status !== 'cancelled')
     .map((s, i) =>
-      [`${i + 1}. ${s.registration_id}`, s.claim_code, genderWord(s.attendee_gender), s.attendee_name]
+      [`${i + 1}. ${s.registration_id}`, showCode(s.claim_code), genderWord(s.attendee_gender), s.attendee_name]
         .filter(Boolean)
         .join(' · '),
     );
@@ -38,7 +42,8 @@ function ticketSheet(group: BatchDetail): string {
     '',
     ...lines,
     '',
-    'Each teen opens the Faith Tribe app, goes to My tickets, taps "Got a ticket from your coordinator?", and enters their ticket number and code.',
+    'Each teen opens the event in the Faith Tribe app, taps "I have a code from my coordinator", and enters their code.',
+    'Children without a phone need not claim: they are checked in by ticket number or name.',
   ].join('\n');
 }
 
@@ -246,7 +251,8 @@ export default function GroupScreen() {
           Tickets
         </SectionTitle>
         <Text className="-mt-2 font-ui text-[14px] leading-5 text-ink-2">
-          Give each teen a ticket number and its code. At the event they claim it in the app.
+          Give each teen their code to claim in the app. Children without a phone need not claim:
+          the desk checks them in by ticket number or name.
         </Text>
         <View className="w-full rounded-2xl bg-surf-raised px-4 py-1">
           {seats.map((seat, i) => (
@@ -293,7 +299,12 @@ function SeatRow({ seat, last }: { seat: Seat; last: boolean }) {
           {seat.registration_id}
         </Text>
         <Text numberOfLines={1} className="font-ui text-[13px] leading-5 text-ink-2">
-          {[genderWord(seat.attendee_gender), seat.claimed ? seat.attendee_name : null]
+          {[
+            genderWord(seat.attendee_gender),
+            seat.claimed || seat.guardian_name ? seat.attendee_name : null,
+            seat.attendee_age != null ? `${seat.attendee_age}` : null,
+            seat.guardian_name ? `Parent: ${seat.guardian_name}` : null,
+          ]
             .filter(Boolean)
             .join(' · ')}
         </Text>
@@ -302,7 +313,7 @@ function SeatRow({ seat, last }: { seat: Seat; last: boolean }) {
         <StatusChip label="Claimed" tone="good" />
       ) : seat.claim_code ? (
         <Text selectable className="font-ui-b text-[16px] leading-6 tracking-[2px] text-ink-1">
-          {seat.claim_code}
+          {showCode(seat.claim_code)}
         </Text>
       ) : null}
     </View>

@@ -840,8 +840,10 @@ class RegistrationBatchViewSet(viewsets.GenericViewSet):
 
 class ClaimSeatView(generics.GenericAPIView):
     """
-    `POST /events/registrations/claim/` with `registration_id` and
-    `claim_code`: a teen takes the seat their coordinator bought for them.
+    `POST /events/registrations/claim/` with `claim_code`: a teen takes the
+    seat their coordinator bought for them. A seat with an older,
+    six-character code also needs its `registration_id`; without it the
+    answer carries `code: "ticket_needed"`.
     """
 
     permission_classes = [permissions.IsAuthenticated]
@@ -854,10 +856,13 @@ class ClaimSeatView(generics.GenericAPIView):
         try:
             seat = batches.claim(
                 request.user,
-                serializer.validated_data['registration_id'],
+                serializer.validated_data.get('registration_id', ''),
                 serializer.validated_data['claim_code'],
             )
         except batches.BatchError as exc:
-            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            body = {'detail': str(exc)}
+            if exc.code:
+                body['code'] = exc.code
+            return Response(body, status=status.HTTP_400_BAD_REQUEST)
         seat = EventRegistration.objects.select_related('event', 'event__scope_node').get(pk=seat.pk)
         return Response(EventRegistrationDetailSerializer(seat, context={'request': request}).data)

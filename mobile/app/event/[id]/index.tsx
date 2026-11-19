@@ -254,11 +254,23 @@ export default function EventDetailScreen() {
         ) : isGuest ? (
           <Button label="Sign up to register" onPress={() => router.push('/sign-up')} className="w-full" />
         ) : (
-          <Button
-            label={`Register · ${price}`}
-            onPress={() => router.push({ pathname: '/event/[id]/register', params: { id } })}
-            className="w-full"
-          />
+          <View className="gap-2">
+            <Button
+              label={`Register · ${price}`}
+              onPress={() => router.push({ pathname: '/event/[id]/register', params: { id } })}
+              className="w-full"
+            />
+            {/* A coordinator may have registered the teen in a group already:
+                then there is nothing to pay, only a code to enter. */}
+            {event.group_registration_enabled && (
+              <Button
+                label="I have a code from my coordinator"
+                variant="tertiary"
+                onPress={() => router.push('/ticket/claim')}
+                className="w-full"
+              />
+            )}
+          </View>
         )}
       </View>
     </View>
