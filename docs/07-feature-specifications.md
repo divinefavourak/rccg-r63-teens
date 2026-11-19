@@ -89,7 +89,7 @@ Format per feature: **Purpose · Problem solved · Acceptance criteria (AC) · D
 **AC**
 
 - Curated shelves (Featured, Series, Topics) managed by admins — no algorithmic feed, no infinite scroll (`01-vision.md` principles).
-- Article reader (offline once opened ✧ V1.5 explicit downloads), video player (tap-to-play only, quality selector, resume), podcast player (background audio, mini-player, speed, resume).
+- Article reader (offline once opened ✧ V1.5 explicit downloads), video player (tap-to-play only; Faith Tribe's own controls on app and website: play/pause, ±10 s skip buttons and double-tap, drag-to-seek bar, speed 1–2×, full screen that turns a wide video sideways on an upright phone; quality selector and resume not built yet), podcast player (background audio, mini-player, speed, resume).
 - Save from any card; series group episodes with progression.
 - Data-saver mode respected everywhere.
 **Dependencies:** Content system (#5), storage/CDN with HLS for video.

@@ -5,6 +5,7 @@ import api from '../api/axios';
 import { type MediaEpisode } from '../types';
 import { FaMusic, FaClock } from 'react-icons/fa';
 import Seo from '../components/Seo';
+import VideoPlayer from '../components/VideoPlayer';
 
 const MEDIA_BASE = import.meta.env.VITE_MEDIA_URL || 'http://localhost:8000';
 
@@ -96,10 +97,11 @@ const MediaList = () => {
                                 <div key={item.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden group">
                                     <div className="aspect-video bg-gray-900 relative">
                                         {item.media_type === 'video' && mediaUrl ? (
-                                            <video controls className="w-full h-full object-cover">
-                                                <source src={mediaUrl} type="video/mp4" />
-                                                Your browser does not support video.
-                                            </video>
+                                            <VideoPlayer
+                                                src={mediaUrl}
+                                                poster={resolveUrl(item.thumbnail)}
+                                                title={item.title}
+                                            />
                                         ) : (
                                             <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-900 to-primary-900 gap-3 px-4">
                                                 <FaMusic className="text-white/20 text-5xl" />
