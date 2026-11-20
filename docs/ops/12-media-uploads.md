@@ -119,8 +119,26 @@ mutagen could not read the file's duration. That is not an error: the
 serializer catches it and stores 0. Re-export the file (MP3 or MP4) and upload
 it again.
 
+## Deleting an episode or a series
+
+In the Console, open **Library & Media**. Each episode card has a bin icon next
+to its title, and each row on the **Series** tab has one at the end. You need
+`media.manage`. The dialog asks you to confirm, and the delete cannot be undone.
+
+- **An episode:** the row goes, its audio, video and thumbnail files are removed
+  from R2 once the delete commits, and any likes on it go too.
+- **A series:** every episode in it goes as well, drafts included, each with its
+  files. The series artwork is removed from R2.
+
+The file clean-up lives in `backend/media/signals.py`. If R2 refuses a file
+delete, the row is still gone and the file is left behind. Remove it from the R2
+bucket by hand.
+
 ## History
 
+- **20 November 2026:** the Console had no way to delete media; only the old
+  `/legacy-admin` page did. Library & Media now deletes episodes and series,
+  and deleting an episode also removes the likes on it.
 - **18 November 2026:** a 24 MiB MP3 failed with only the generic message. The
   Caddyfile had one 25MB limit for every request. Media paths now get 500MB,
   and the Console names the cause when a request is rejected or never gets an
