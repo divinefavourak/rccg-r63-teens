@@ -1,0 +1,41 @@
+# Rebuild the website once a day so the new devotional gets a page of its own.
+#
+# The build (frontend/scripts/generate-site.mjs) writes one HTML file per
+# published devotional and event, plus the sitemap, the feed and llms.txt. Vercel
+# only builds when main changes, so a devotional published at 00:10 was served by
+# the SPA fallback, which is marked noindex, until somebody happened to merge a
+# PR. On a quiet week that was days of readings no search engine would index.
+#
+# Set-up, once, by someone with access to Vercel and GitHub:
+#   1. Vercel -> the website project (root `frontend`) -> Settings -> Git ->
+#      Deploy Hooks: create one for branch `main`. Copy the URL.
+#   2. GitHub -> this repository -> Settings -> Secrets and variables ->
+#      Actions: add it as `VERCEL_DEPLOY_HOOK_URL`.
+# Until the secret exists the job logs a notice and does nothing.
+
+name: Daily site rebuild
+
+on:
+  schedule:
+    # 23:40 UTC is 00:40 in Lagos: half an hour after the 00:10 devotional
+    # scrape, so the build sees the day's reading.
+    - cron: '40 23 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger the Vercel deploy hook
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::notice::VERCEL_DEPLOY_HOOK_URL is not set; skipping. See the comment at the top of this workflow."
+            exit 0
+          fi
+          curl --fail --silent --show-error --max-time 30 -X POST "$HOOK" > /dev/null
+          echo "Deploy hook accepted."

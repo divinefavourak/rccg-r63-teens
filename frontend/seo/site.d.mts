@@ -80,7 +80,9 @@ export type ResolvedMeta = {
 export const SITE: {
   origin: string;
   name: string;
+  alternateNames: string[];
   legalName: string;
+  slogan: string;
   locale: string;
   language: string;
   description: string;
@@ -89,6 +91,8 @@ export const SITE: {
   contact: { email: string; telephone: string; phone: string; phoneHref: string };
   parent: { name: string; url: string };
   areaServed: string;
+  address: { locality: string; region: string; country: string };
+  sameAs: string[];
   webApp: string;
   feedPath: string;
 };

@@ -58,7 +58,7 @@ def _registration_context():
         'full_name': 'Ada Okafor',
         'category': 'Teen',
         'registered_at': datetime(2026, 10, 3, 14, 30, tzinfo=dt_timezone.utc),
-        'registration_url': f'{FRONTEND}/events/teens-camp-2026/registration/CAMP-20261218-00001',
+        'registration_url': 'https://app.example.com/event/1',
         'avatar_url': AVATAR,
         'frontend_url': FRONTEND,
         'parish': 'Grace Parish',
@@ -101,7 +101,7 @@ def sample_contexts():
         'account_created': {
             **user_base, 'user': user, 'full_name': 'Ada Okafor', 'username': 'ada_o', 'role': 'Coordinator',
             'created_by': SimpleNamespace(get_display_name=lambda: 'Pastor Femi'),
-            'set_password_url': f'{FRONTEND}/set-password?uid=MQ&token=abc-123',
+            'set_password_url': f'{FRONTEND}/reset-password?uid=MQ&token=abc-123',
         },
         'password_changed': {**user_base, 'user': user, 'full_name': 'Ada Okafor'},
         'password_reset': {
@@ -109,7 +109,7 @@ def sample_contexts():
             'reset_url': f'{FRONTEND}/reset-password?uid=MQ&token=abc-123',
         },
         'daily_devotional': {
-            'devotional': devotional, 'devotional_url': f'{FRONTEND}/devotional/shine-where-you-are',
+            'devotional': devotional, 'devotional_url': f'{FRONTEND}/devotionals/7c1d2e9a-0b4f-4f7e-9a51-3e2d8c6b1a90',
             'frontend_url': FRONTEND, **LOGOS,
         },
         'ticket_confirmation': _registration_context(),

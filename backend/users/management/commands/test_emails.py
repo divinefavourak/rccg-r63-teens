@@ -170,7 +170,7 @@ class Command(BaseCommand):
         frontend_url = getattr(settings, 'FRONTEND_URL', '') or 'https://www.thefaithtribe.live'
         context = {
             'devotional':     devotional,
-            'devotional_url': f"{frontend_url}/devotional/{devotional.slug}",
+            'devotional_url': f"{frontend_url.rstrip('/')}/devotionals/{devotional.pk}",
             'frontend_url':   frontend_url,
             'logo_url':       'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/logo.jpg',
             'faith_logo_url': 'https://pub-b5941d04504949d5a4bd4ee53aea9a2d.r2.dev/faith_logo.jpg',

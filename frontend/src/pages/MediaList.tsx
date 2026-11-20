@@ -1,11 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import Navbar from '../components/Navbar';
+import { m } from 'framer-motion';
+import { Clock } from 'lucide-react';
 import api from '../api/axios';
 import { type MediaEpisode } from '../types';
-import { FaMusic, FaClock } from 'react-icons/fa';
 import Seo from '../components/Seo';
 import VideoPlayer from '../components/VideoPlayer';
+import SitePage, { CARD, PROSE_LINK, Section } from '../components/site/SitePage';
+import PageHeader from '../components/site/PageHeader';
+import { AboutSection, EmptyState, Segmented, SkeletonGrid } from '../components/site/ContentBlocks';
+import FloatingObject from '../components/site/FloatingObject';
+import { fadeUp, stagger } from '../components/site/motion';
+import { OBJECTS } from '../assets/site';
 
 const MEDIA_BASE = import.meta.env.VITE_MEDIA_URL || 'http://localhost:8000';
 
@@ -22,150 +28,142 @@ const getMediaUrl = (item: MediaEpisode): string | null => {
     return resolveUrl(item.audio_url || item.audio_file);
 };
 
-const MediaList = () => {
-    const [media, setMedia] = useState<MediaEpisode[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState<'all' | 'audio' | 'video'>('all');
+type Filter = 'all' | 'audio' | 'video';
 
-    useEffect(() => {
-        fetchMedia();
-    }, [filter]);
-
-    const fetchMedia = async () => {
-        setLoading(true);
-        try {
-            let url = '/media/episodes/';
-            if (filter !== 'all') url += `?media_type=${filter}`;
-            const { data } = await api.get(url);
-            setMedia(Array.isArray(data) ? data : data.results || []);
-        } catch (error) {
-            console.error('Failed to fetch media', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+const MediaCard = ({ item }: { item: MediaEpisode }) => {
+    const mediaUrl = getMediaUrl(item);
+    const thumbnail = resolveUrl(item.thumbnail);
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-            <Seo path="/media" />
-            <Navbar />
-            <div className="container mx-auto px-4 py-24">
-
-                <div className="text-center mb-12">
-                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary-600 dark:text-primary-400 mb-3">
-                        RCCG Region 63 Junior Church
-                    </p>
-                    <h1 className="text-4xl font-black text-gray-900 dark:text-white uppercase mb-4">
-                        Podcasts &amp; Worship Video
-                    </h1>
-                    <div className="w-24 h-1 bg-primary-500 mx-auto rounded-full"></div>
-                    <p className="mt-4 text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                        Messages, choir ministrations and teaching from the region, free to stream in your browser.
-                        Filter by audio or video.
-                    </p>
-
-                    <div className="mt-8 inline-flex bg-white dark:bg-gray-800 p-1 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-                        {(['all', 'audio', 'video'] as const).map((type) => (
-                            <button
-                                key={type}
-                                onClick={() => setFilter(type)}
-                                className={`px-6 py-2 rounded-lg text-sm font-bold uppercase transition-all ${filter === type
-                                    ? 'bg-primary-500 text-white shadow-md'
-                                    : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
-                                    }`}
-                            >
-                                {type}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                {loading ? (
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                        {[1, 2, 3].map(i => <div key={i} className="h-64 bg-gray-200 dark:bg-gray-700 animate-pulse rounded-2xl"></div>)}
-                    </div>
-                ) : media.length === 0 ? (
-                    <div className="text-center py-20 text-gray-500 dark:text-gray-400">
-                        <FaMusic className="text-5xl mx-auto mb-4 opacity-30" />
-                        <p className="text-lg font-medium">No media available yet.</p>
-                    </div>
+        <m.li variants={fadeUp} className={`${CARD} group flex flex-col overflow-hidden`}>
+            <div className="relative aspect-video overflow-hidden bg-ink">
+                {item.media_type === 'video' && mediaUrl ? (
+                    <VideoPlayer src={mediaUrl} poster={thumbnail} title={item.title} />
                 ) : (
-                    <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-                        {media.map((item) => {
-                            const mediaUrl = getMediaUrl(item);
-                            return (
-                                <div key={item.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden group">
-                                    <div className="aspect-video bg-gray-900 relative">
-                                        {item.media_type === 'video' && mediaUrl ? (
-                                            <VideoPlayer
-                                                src={mediaUrl}
-                                                poster={resolveUrl(item.thumbnail)}
-                                                title={item.title}
-                                            />
-                                        ) : (
-                                            <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-900 to-primary-900 gap-3 px-4">
-                                                <FaMusic className="text-white/20 text-5xl" />
-                                                {mediaUrl && (
-                                                    <audio controls className="w-full max-w-xs">
-                                                        <source src={mediaUrl} />
-                                                    </audio>
-                                                )}
-                                            </div>
-                                        )}
-                                        {item.thumbnail && (
-                                            <img
-                                                src={resolveUrl(item.thumbnail) || ''}
-                                                alt={item.title}
-                                                className="absolute inset-0 w-full h-full object-cover opacity-0 group-hover:opacity-0 pointer-events-none"
-                                            />
-                                        )}
-                                    </div>
-
-                                    <div className="p-6">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${item.media_type === 'video' ? 'bg-red-100 text-red-600' : 'bg-purple-100 text-purple-600'}`}>
-                                                {item.media_type}
-                                            </span>
-                                            {item.duration_formatted && (
-                                                <div className="flex items-center text-gray-400 text-xs gap-1">
-                                                    <FaClock /> {item.duration_formatted}
-                                                </div>
-                                            )}
-                                        </div>
-                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 line-clamp-1">{item.title}</h3>
-                                        <p className="text-gray-500 text-sm line-clamp-2">{item.description}</p>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                    <div className="relative flex h-full flex-col items-center justify-center gap-3 bg-pop-violet px-4">
+                        {thumbnail ? (
+                            <img src={thumbnail} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover opacity-40" />
+                        ) : (
+                            <FloatingObject src={OBJECTS.headphone} className="size-20" />
+                        )}
+                        {mediaUrl && (
+                            <audio controls preload="none" className="relative w-full max-w-xs">
+                                <source src={mediaUrl} />
+                            </audio>
+                        )}
                     </div>
                 )}
-
-                <section aria-labelledby="about-media" className="mt-20 max-w-3xl mx-auto">
-                    <h2 id="about-media" className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-                        What is in the library
-                    </h2>
-                    <div className="space-y-4 text-gray-600 dark:text-gray-400 leading-relaxed">
-                        <p>
-                            The library holds what the region has already recorded: messages from camps and
-                            conferences, choir and worship ministrations, and teaching series. It is not a live
-                            stream — everything here plays from the beginning, at whatever hour suits you.
-                        </p>
-                        <p>
-                            For the written side of the same ministry, the{' '}
-                            <Link to="/devotionals" className="text-primary-600 dark:text-primary-400 underline">
-                                daily devotional
-                            </Link>{' '}
-                            is published every morning, and the{' '}
-                            <Link to="/manuals" className="text-primary-600 dark:text-primary-400 underline">
-                                weekly teaching manual
-                            </Link>{' '}
-                            is what classes study on Sunday.
-                        </p>
-                    </div>
-                </section>
             </div>
-        </div>
+
+            <div className="flex flex-1 flex-col gap-2 p-5">
+                <div className="flex items-center justify-between gap-3 text-label-sm">
+                    <span className={`rounded-full px-2.5 py-1 text-pop-on ${item.media_type === 'video' ? 'bg-pop-pink' : 'bg-pop-sky'}`}>
+                        {item.media_type === 'video' ? 'Video' : 'Audio'}
+                    </span>
+                    {item.duration_formatted && (
+                        <span className="flex items-center gap-1 text-content-muted">
+                            <Clock size={14} aria-hidden /> {item.duration_formatted}
+                        </span>
+                    )}
+                </div>
+                <h3 className="line-clamp-2 text-title-md">{item.title}</h3>
+                {item.description && <p className="line-clamp-2 text-body-sm text-content-secondary">{item.description}</p>}
+            </div>
+        </m.li>
+    );
+};
+
+const MediaList = () => {
+    const [filter, setFilter] = useState<Filter>('all');
+    // The rows remember which filter they answer. "Loading" is then simply "the
+    // rows on hand are for another filter", with no flag to set and reset.
+    const [result, setResult] = useState<{ filter: Filter; items: MediaEpisode[] } | null>(null);
+    const loading = result?.filter !== filter;
+    const media = result?.items ?? [];
+
+    useEffect(() => {
+        let cancelled = false;
+        const url = filter === 'all' ? '/media/episodes/' : `/media/episodes/?media_type=${filter}`;
+        api.get(url)
+            .then(({ data }) => {
+                if (!cancelled) setResult({ filter, items: Array.isArray(data) ? data : data.results || [] });
+            })
+            .catch((error) => {
+                console.error('Failed to fetch media', error);
+                if (!cancelled) setResult({ filter, items: [] });
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [filter]);
+
+    return (
+        <SitePage>
+            <Seo path="/media" />
+
+            <PageHeader
+                eyebrow="PODCASTS & VIDEO"
+                title="Podcasts & worship video"
+                intro="Messages, choir ministrations and teaching from the region, free to stream in your browser."
+                tone="bg-pop-pink"
+                object={OBJECTS.headphone}
+            />
+
+            <Section className="pt-8 lg:pt-10">
+                <Segmented<Filter>
+                    label="Show"
+                    value={filter}
+                    onChange={setFilter}
+                    options={[
+                        { value: 'all', label: 'All' },
+                        { value: 'audio', label: 'Audio' },
+                        { value: 'video', label: 'Video' },
+                    ]}
+                />
+            </Section>
+
+            <Section className="pt-6">
+                {loading ? (
+                    <SkeletonGrid count={3} height="h-80" />
+                ) : media.length === 0 ? (
+                    <EmptyState object={OBJECTS.music} title="Nothing here yet.">
+                        New recordings from camps and services are added as they are ready.
+                    </EmptyState>
+                ) : (
+                    <m.ul
+                        initial="hidden"
+                        animate="show"
+                        variants={stagger(0.05)}
+                        className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6"
+                    >
+                        {media.map((item) => (
+                            <MediaCard key={item.id} item={item} />
+                        ))}
+                    </m.ul>
+                )}
+            </Section>
+
+            <div className="pb-16 lg:pb-24">
+                <AboutSection id="about-media" title="What is in the library">
+                    <p>
+                        The library holds what the region has already recorded: messages from camps and conferences,
+                        choir and worship ministrations, and teaching series. It is not a live stream — everything here
+                        plays from the beginning, at whatever hour suits you.
+                    </p>
+                    <p>
+                        For the written side of the same ministry, the{' '}
+                        <Link to="/devotionals" className={PROSE_LINK}>
+                            daily devotional
+                        </Link>{' '}
+                        is published every morning, and the{' '}
+                        <Link to="/manuals" className={PROSE_LINK}>
+                            weekly teaching manual
+                        </Link>{' '}
+                        is what classes study on Sunday.
+                    </p>
+                </AboutSection>
+            </div>
+        </SitePage>
     );
 };
 

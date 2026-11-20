@@ -138,11 +138,13 @@ const Navbar = () => {
               />
             </div>
             <div className="flex flex-col">
+              {/* The product's name, as on every other page of the site. This
+                  bar used to call it "RCCG Region 63 Teens Platform". */}
               <span className="font-bold text-gray-900 dark:text-white leading-none tracking-tight">
-                RCCG REGION 63
+                Faith Tribe
               </span>
               <span className="text-[10px] text-primary-600 dark:text-primary-400 font-bold tracking-widest uppercase mt-0.5">
-                Teens Platform
+                RCCG Region 63
               </span>
             </div>
           </Link>

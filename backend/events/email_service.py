@@ -74,11 +74,12 @@ def _base_context(registration):
     """
     frontend_url = _get_frontend_url()
     event = registration.event
-    # Deep-link into the attendee's registration on the frontend
-    registration_url = (
-        f"{frontend_url}/events/{event.slug}/registration/{registration.registration_id}"
-        if event and event.slug else None
-    )
+    # The event in the web app, which shows a signed-in attendee "View your
+    # ticket". This used to point at /events/<slug>/registration/<id> on the
+    # website, a route that has never existed there, so "View my ticket" in
+    # the confirmation email opened the 404 page.
+    from .share import web_app_url
+    registration_url = web_app_url(event) if event else None
     from . import bedspaces
     owes = registration.payment_status == registration.PaymentStatus.PENDING
     return {

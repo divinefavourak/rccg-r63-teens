@@ -9,6 +9,10 @@
  * episode to the person who uploaded it is the artwork, not the title in a
  * column. Selecting one opens it inline — you should be able to confirm the
  * right file went up without leaving the page.
+ *
+ * Episodes and series can be deleted here. The server removes the files from
+ * storage and the likes on an episode (`media/signals.py`); a series takes
+ * every episode in it, drafts included.
  */
 import { useMemo, useState } from 'react';
 import {
@@ -17,15 +21,19 @@ import {
   Headphones,
   Layers,
   Play,
+  Trash2,
   Upload,
   X,
 } from 'lucide-react';
+import api from '../../api/axios';
 import ScreenShell from '../../components/console/ScreenShell';
 import {
+  AlertBanner,
   Btn,
   Card,
   EmptyState,
   ErrorState,
+  Modal,
   Pager,
   PublishPill,
   Skeleton,
@@ -71,7 +79,18 @@ interface Series {
 
 type Tab = 'episodes' | 'series';
 
+/** What the delete dialog is asking about. */
+type Deleting =
+  | { kind: 'episode'; item: Episode }
+  | { kind: 'series'; item: Series };
+
 const PAGE_SIZE = 18;
+
+/** The server's own reason, when it sent one. */
+function serverDetail(err: unknown): string | undefined {
+  return (err as { response?: { data?: { detail?: string } } })?.response?.data
+    ?.detail;
+}
 
 /** The playable URL, whichever field it landed in. */
 function sourceOf(e: Episode): string | null {
@@ -116,6 +135,43 @@ export const Media = () => {
     [allSeries.items],
   );
 
+  const [deleting, setDeleting] = useState<Deleting | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [note, setNote] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    const { kind, item } = deleting;
+    setDeleteBusy(true);
+    setNote(null);
+    try {
+      await api.delete(`/media/${kind === 'episode' ? 'episodes' : 'series'}/${item.id}/`);
+      setNote({ kind: 'success', text: `${item.title} is deleted.` });
+      if (kind === 'episode') {
+        if (playing?.id === item.id) setPlaying(null);
+        // The last card on a later page: step back, or the grid comes up empty.
+        if (episodes.items.length === 1 && episodePage > 1) setEpisodePage((p) => p - 1);
+        else episodes.reload();
+      } else {
+        // The series' episodes went with it, so both lists and the
+        // uploader's picker are stale.
+        if (series.items.length === 1 && seriesPage > 1) setSeriesPage((p) => p - 1);
+        else series.reload();
+        episodes.reload();
+        allSeries.reload();
+        if (playing?.series === item.id) setPlaying(null);
+      }
+    } catch (err: unknown) {
+      setNote({
+        kind: 'error',
+        text: serverDetail(err) ?? `We couldn't delete ${item.title}. Try again.`,
+      });
+    } finally {
+      setDeleting(null);
+      setDeleteBusy(false);
+    }
+  };
+
   return (
     <ScreenShell
       title="Library & Media"
@@ -138,6 +194,49 @@ export const Media = () => {
             episodes.reload();
           }}
         />
+      )}
+
+      {deleting && (
+        <Modal
+          title={`Delete ${deleting.item.title}?`}
+          subtitle={
+            deleting.kind === 'episode'
+              ? 'This cannot be undone. The episode and its files leave the library, the app and the website, and any likes on it go too.'
+              : 'This cannot be undone. Every episode in this series goes with it, drafts included, along with their files.'
+          }
+          onClose={() => !deleteBusy && setDeleting(null)}
+          width={480}
+          footer={
+            <>
+              <Btn size="md" disabled={deleteBusy} onClick={() => setDeleting(null)}>
+                Cancel
+              </Btn>
+              <Btn variant="danger" size="md" disabled={deleteBusy} onClick={confirmDelete}>
+                {deleteBusy
+                  ? 'Deleting…'
+                  : deleting.kind === 'episode'
+                    ? 'Delete episode'
+                    : 'Delete series'}
+              </Btn>
+            </>
+          }
+        >
+          {null}
+        </Modal>
+      )}
+
+      {note && (
+        <AlertBanner
+          kind={note.kind}
+          className="mb-4"
+          action={
+            <Btn variant="soft" size="md" onClick={() => setNote(null)}>
+              Dismiss
+            </Btn>
+          }
+        >
+          {note.text}
+        </AlertBanner>
       )}
 
       <Tabs
@@ -273,9 +372,22 @@ export const Media = () => {
                   </button>
 
                   <div className="p-4">
-                    <p className="line-clamp-2 text-[14px] font-semibold leading-5 text-console-text">
-                      {e.title}
-                    </p>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="line-clamp-2 text-[14px] font-semibold leading-5 text-console-text">
+                        {e.title}
+                      </p>
+                      <PermissionGate permission="media.manage">
+                        <Btn
+                          variant="ghost"
+                          aria-label={`Delete ${e.title}`}
+                          title="Delete"
+                          className="-mr-2 -mt-1.5 w-8 px-0"
+                          onClick={() => setDeleting({ kind: 'episode', item: e })}
+                        >
+                          <Trash2 size={14} />
+                        </Btn>
+                      </PermissionGate>
+                    </div>
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                       <PublishPill status={e.status ?? 'draft'} />
                       {e.series_title && (
@@ -339,6 +451,9 @@ export const Media = () => {
                   <Th>Series</Th>
                   <Th>Episodes</Th>
                   <Th>Status</Th>
+                  <Th>
+                    <span className="sr-only">Actions</span>
+                  </Th>
                 </tr>
               </thead>
               <tbody>
@@ -375,6 +490,18 @@ export const Media = () => {
                     </Td>
                     <Td>
                       <PublishPill status={s.status ?? 'draft'} />
+                    </Td>
+                    <Td className="text-right">
+                      <PermissionGate permission="media.manage">
+                        <Btn
+                          variant="ghost"
+                          aria-label={`Delete ${s.title}`}
+                          title="Delete"
+                          onClick={() => setDeleting({ kind: 'series', item: s })}
+                        >
+                          <Trash2 size={14} />
+                        </Btn>
+                      </PermissionGate>
                     </Td>
                   </tr>
                 ))}

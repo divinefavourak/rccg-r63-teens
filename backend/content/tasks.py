@@ -42,7 +42,10 @@ def send_daily_devotional_email(devotional_id):
         return {'success': True, 'sent': 0}
 
     frontend_url = getattr(settings, 'FRONTEND_URL', None) or 'https://www.thefaithtribe.live'
-    devotional_url = f"{frontend_url}/devotional/{devotional.slug}"
+    # The website routes a reading by id at /devotionals/<id>. This used to
+    # build /devotional/<slug>, a path the site has never had, so the button
+    # in every daily email opened the 404 page.
+    devotional_url = f"{frontend_url.rstrip('/')}/devotionals/{devotional.pk}"
 
     context = {
         'devotional': devotional,

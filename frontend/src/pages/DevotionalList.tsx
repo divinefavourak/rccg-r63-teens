@@ -1,12 +1,52 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Link } from 'react-router-dom';
-import Navbar from '../components/Navbar';
-import DevotionalCard from '../components/DevotionalCard';
-import { type Devotional } from '../types';
+import { m } from 'framer-motion';
 import api from '../api/axios';
-import { FaCalendarAlt, FaSearch } from 'react-icons/fa';
+import { type Devotional } from '../types';
 import Seo from '../components/Seo';
+import SitePage, { CARD, FIELD, PROSE_LINK, Section } from '../components/site/SitePage';
+import PageHeader from '../components/site/PageHeader';
+import { AboutSection, EmptyState, NextLinks, SkeletonGrid } from '../components/site/ContentBlocks';
+import { POP_TONES } from '../components/site/tones';
+import FloatingObject from '../components/site/FloatingObject';
+import SiteButton from '../components/site/SiteButton';
+import { IN_VIEW, fadeUp, stagger } from '../components/site/motion';
+import { OBJECTS } from '../assets/site';
 import { itemListLd } from '../../seo/schema.mjs';
+import { formatAPIDate } from '../utils/dates';
+
+/** The verse reference a card shows, from whichever field this row carries. */
+const verseOf = (d: Devotional) =>
+    d.memory_verse_passage || d.bible_text_passage || d.scripture_reference || d.anchor_scripture || '';
+
+const dayOf = (d: Devotional, style: 'short' | 'long' = 'short') =>
+    formatAPIDate(
+        d.date,
+        style === 'long'
+            ? { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }
+            : { day: 'numeric', month: 'short', year: 'numeric' },
+        'en-GB',
+    );
+
+/** One reading in the grid. The colour is fixed by position so it does not
+ *  flicker as the list reloads. */
+const DevotionalTile = ({ devotional, tone }: { devotional: Devotional; tone: string }) => (
+    <m.li variants={fadeUp}>
+        <Link
+            to={`/devotionals/${devotional.id}`}
+            className={`${CARD} group flex h-full flex-col overflow-hidden transition-transform duration-200 hover:-translate-y-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink`}
+        >
+            <div className={`flex min-h-[140px] flex-col justify-end gap-2 p-5 text-pop-on ${tone}`}>
+                <span className="text-label-sm uppercase tracking-[0.08em]">{dayOf(devotional)}</span>
+                <h3 className="line-clamp-2 text-title-lg">{devotional.title}</h3>
+            </div>
+            <div className="flex flex-1 items-center justify-between gap-3 p-5">
+                <span className="truncate text-body-sm text-content-secondary">{verseOf(devotional)}</span>
+                <span className="shrink-0 text-label-md text-content-primary group-hover:underline">Read →</span>
+            </div>
+        </Link>
+    </m.li>
+);
 
 /**
  * The archive of Teenage Open Heavens.
@@ -24,207 +64,253 @@ import { itemListLd } from '../../seo/schema.mjs';
 const DevotionalList = () => {
     const [devotionals, setDevotionals] = useState<Devotional[]>([]);
     const [loading, setLoading] = useState(true);
+    const [failed, setFailed] = useState(false);
+    const [attempt, setAttempt] = useState(0);
     const [selectedDate, setSelectedDate] = useState<string>('');
     const [searchQuery, setSearchQuery] = useState('');
+    const searchId = useId();
+    const dateId = useId();
 
     useEffect(() => {
-        fetchDevotionals();
-    }, [selectedDate]); // Refetch when date changes
+        let cancelled = false;
+        const load = async () => {
+            setLoading(true);
+            try {
+                const params = new URLSearchParams({ status: 'published', page_size: '60', ordering: '-date' });
+                if (selectedDate) params.set('date', selectedDate);
+                const { data } = await api.get(`/content/devotionals/?${params.toString()}`);
+                // Paginated endpoints return { results }, hard-sliced actions an array.
+                if (!cancelled) {
+                    setDevotionals(Array.isArray(data) ? data : data.results || []);
+                    setFailed(false);
+                }
+            } catch (error) {
+                console.error('Failed to fetch devotionals', error);
+                if (!cancelled) {
+                    setDevotionals([]);
+                    setFailed(true);
+                }
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        };
+        load();
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedDate, attempt]);
 
-    const fetchDevotionals = async () => {
-        setLoading(true);
-        try {
-            const params = new URLSearchParams({ status: 'published', page_size: '60', ordering: '-date' });
-            if (selectedDate) params.set('date', selectedDate);
+    const term = searchQuery.trim().toLowerCase();
+    const filtered = devotionals.filter(
+        (d) => !term || d.title.toLowerCase().includes(term) || (d.content || '').toLowerCase().includes(term),
+    );
+    const filtering = Boolean(term || selectedDate);
+    // With no filter on, the newest reading leads as a wide card: it is what
+    // most visitors came for.
+    const [latest, ...rest] = filtered;
+    const grid = filtering ? filtered : rest;
 
-            const { data } = await api.get(`/content/devotionals/?${params.toString()}`);
-            // Paginated endpoints return { results }, hard-sliced actions an array.
-            setDevotionals(Array.isArray(data) ? data : data.results || []);
-        } catch (error) {
-            console.error("Failed to fetch devotionals", error);
-        } finally {
-            setLoading(false);
-        }
+    const clearFilters = () => {
+        setSelectedDate('');
+        setSearchQuery('');
     };
 
-    const filteredDevotionals = devotionals.filter(d =>
-        d.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (d.content || '').toLowerCase().includes(searchQuery.toLowerCase())
-    );
-
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+        <SitePage>
             <Seo
                 path="/devotionals"
                 jsonLd={
                     devotionals.length
                         ? itemListLd({
-                            url: '/devotionals',
-                            name: 'Teenage Open Heavens — daily devotionals',
-                            itemType: 'Article',
-                            items: devotionals.slice(0, 20).map((item) => ({
-                                url: `/devotionals/${item.id}`,
-                                name: item.title,
-                                datePublished: item.date,
-                                image: item.cover_image,
-                            })),
-                        })
+                              url: '/devotionals',
+                              name: 'Teenage Open Heavens — daily devotionals',
+                              itemType: 'Article',
+                              items: devotionals.slice(0, 20).map((item) => ({
+                                  url: `/devotionals/${item.id}`,
+                                  name: item.title,
+                                  datePublished: item.date,
+                                  image: item.cover_image,
+                              })),
+                          })
                         : undefined
                 }
             />
-            <Navbar />
-            <div className="container mx-auto px-4 py-24">
 
-                {/* Header */}
-                <div className="text-center mb-12">
-                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary-600 dark:text-primary-400 mb-3">
-                        RCCG Region 63 Junior Church
-                    </p>
-                    <h1 className="text-3xl md:text-4xl font-black text-gray-900 dark:text-white uppercase mb-4">
-                        Teenage Open Heavens
-                    </h1>
-                    <div className="w-24 h-1 bg-primary-500 mx-auto rounded-full"></div>
-                    <p className="mt-4 text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                        The daily devotional for teenagers: a short reading, a memory verse to keep, a key point and a
-                        prayer point. A new one is published every morning, and the archive stays open.
-                    </p>
-                </div>
+            <PageHeader
+                eyebrow="DAILY DEVOTIONAL"
+                title="Teenage Open Heavens"
+                intro="The daily devotional for teenagers: a short reading, a memory verse to keep, a key point and a prayer point. A new one is published every morning, and the archive stays open."
+                tone="bg-pop-green"
+                object={OBJECTS.sun}
+            />
 
-                {/* Filters */}
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-8 flex flex-col md:flex-row gap-4 items-center justify-between">
-                    <div className="relative w-full md:w-64">
-                        <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <label htmlFor="devotional-search" className="sr-only">Search devotionals by title or topic</label>
+            {/* Filters */}
+            <Section className="pt-8 lg:pt-10">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <label htmlFor={searchId} className="sr-only">
+                        Search devotionals by title or topic
+                    </label>
+                    <input
+                        id={searchId}
+                        type="search"
+                        placeholder="Search a topic, like “friends” or “fear”"
+                        className={`${FIELD} sm:max-w-[420px]`}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                    <div className="flex items-center gap-3">
+                        <label htmlFor={dateId} className="text-label-md text-content-secondary">
+                            Date
+                        </label>
                         <input
-                            id="devotional-search"
-                            type="search"
-                            placeholder="Search topics..."
-                            className="w-full pl-10 pr-4 py-2 rounded-lg bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-primary-500 focus:outline-none dark:text-white"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                    </div>
-
-                    <div className="flex items-center gap-2 w-full md:w-auto">
-                        <FaCalendarAlt className="text-gray-400" aria-hidden />
-                        <label htmlFor="devotional-date" className="sr-only">Pick a date</label>
-                        <input
-                            id="devotional-date"
+                            id={dateId}
                             type="date"
-                            className="px-4 py-2 rounded-lg bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-primary-500 focus:outline-none dark:text-white dark:[color-scheme:dark]"
+                            className={`${FIELD} w-auto`}
                             value={selectedDate}
                             onChange={(e) => setSelectedDate(e.target.value)}
                         />
-                        {selectedDate && (
+                        {filtering && (
                             <button
-                                onClick={() => setSelectedDate('')}
-                                className="text-sm text-red-500 hover:text-red-700"
+                                type="button"
+                                onClick={clearFilters}
+                                className="rounded-full px-3 py-2 text-label-md text-content-primary underline underline-offset-4 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
                             >
                                 Clear
                             </button>
                         )}
                     </div>
                 </div>
+            </Section>
 
-                {/* List */}
+            <Section className="pt-6">
                 {loading ? (
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                        {[1, 2, 3].map(i => (
-                            <div key={i} className="h-64 bg-gray-200 dark:bg-gray-800 rounded-2xl animate-pulse"></div>
-                        ))}
-                    </div>
-                ) : (
-                    <>
-                        {filteredDevotionals.length > 0 ? (
-                            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                                {filteredDevotionals.map((devotional) => (
-                                    <DevotionalCard key={devotional.id} devotional={devotional} />
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="text-center py-20 text-gray-500">
-                                <p className="text-xl">No devotionals found.</p>
-                                <button
-                                    onClick={() => { setSelectedDate(''); setSearchQuery(''); }}
-                                    className="mt-4 text-primary-500 hover:underline"
-                                >
-                                    Clear filters
-                                </button>
-                            </div>
+                    <SkeletonGrid height="h-56" />
+                ) : failed ? (
+                    // Said plainly, not as "no matches": a failed request with
+                    // no filter on used to tell the reader to clear filters
+                    // they had never set.
+                    <EmptyState object={OBJECTS.wifi} title="The devotionals didn’t load.">
+                        <button
+                            type="button"
+                            onClick={() => setAttempt((n) => n + 1)}
+                            className="text-label-md underline underline-offset-4 hover:no-underline"
+                        >
+                            Try again
+                        </button>
+                    </EmptyState>
+                ) : filtered.length === 0 ? (
+                    <EmptyState
+                        object={OBJECTS.zoom}
+                        title={filtering ? 'No devotionals match that.' : 'No devotionals published yet.'}
+                    >
+                        {filtering && (
+                            <button
+                                type="button"
+                                onClick={clearFilters}
+                                className="text-label-md underline underline-offset-4 hover:no-underline"
+                            >
+                                Clear the filters
+                            </button>
                         )}
-                    </>
-                )}
+                    </EmptyState>
+                ) : (
+                    <div className="flex flex-col gap-5 lg:gap-6">
+                        {!filtering && latest && (
+                            <m.div initial="hidden" animate="show" variants={stagger(0.08)}>
+                                <Link
+                                    to={`/devotionals/${latest.id}`}
+                                    className="group relative flex flex-col gap-4 overflow-hidden rounded-[36px] bg-ink p-6 text-on-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink lg:flex-row lg:items-end lg:justify-between lg:rounded-[48px] lg:p-12"
+                                >
+                                    <div className="flex max-w-[720px] flex-col gap-3">
+                                        <m.span
+                                            variants={fadeUp}
+                                            className="w-fit rounded-full bg-pop-green px-3 py-1.5 text-label-sm tracking-[0.08em] text-pop-on"
+                                        >
+                                            LATEST · {dayOf(latest, 'long').toUpperCase()}
+                                        </m.span>
+                                        <m.h2 variants={fadeUp} className="text-display lg:text-display-xl">
+                                            {latest.title}
+                                        </m.h2>
+                                        {latest.memory_verse_content && (
+                                            <m.p
+                                                variants={fadeUp}
+                                                className="line-clamp-3 font-reader text-body-lg italic opacity-90"
+                                            >
+                                                “{latest.memory_verse_content}”
+                                                {latest.memory_verse_passage && (
+                                                    <span className="not-italic"> — {latest.memory_verse_passage}</span>
+                                                )}
+                                            </m.p>
+                                        )}
+                                    </div>
+                                    <m.span
+                                        variants={fadeUp}
+                                        className="inline-flex h-14 w-fit shrink-0 items-center rounded-full bg-pop-green px-7 text-body-md-strong text-pop-on transition-transform duration-150 group-hover:-translate-y-0.5 group-hover:scale-[1.03]"
+                                    >
+                                        Read it now
+                                    </m.span>
+                                    <FloatingObject
+                                        src={OBJECTS.candle}
+                                        className="pointer-events-none absolute -right-2 -top-4 hidden size-28 lg:block"
+                                    />
+                                </Link>
+                            </m.div>
+                        )}
 
-                {/*
-                    The prose section. It exists because a grid of cards says what
-                    the devotionals are called and nothing about what they are,
-                    who writes them, or how often they arrive — which is the part
-                    a reader deciding whether to come back, and a search engine,
-                    both need.
-                */}
-                <section aria-labelledby="about-the-devotional" className="mt-20 max-w-3xl mx-auto">
-                    <h2 id="about-the-devotional" className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-                        What is Teenage Open Heavens?
-                    </h2>
-                    <div className="space-y-4 text-gray-600 dark:text-gray-400 leading-relaxed">
-                        <p>
-                            Teenage Open Heavens is the daily devotional of the Redeemed Christian Church of God,
-                            written for teenagers rather than for adults. Each day&rsquo;s reading opens with a
-                            passage of Scripture and a memory verse, carries a short message, and ends with a key
-                            point and a prayer point you can pray in your own words.
-                        </p>
-                        <p>
-                            Every reading here is published free, without an account, and it stays available
-                            afterwards — so a missed morning is not a lost one. If you would rather read on your
-                            phone with the verse, the Bible text and a reminder in one place, the{' '}
-                            <Link to="/#install" className="text-primary-600 dark:text-primary-400 underline">
-                                Faith Tribe app
-                            </Link>{' '}
-                            carries today&rsquo;s devotional, the whole Bible and your reading streak.
-                        </p>
+                        {grid.length > 0 && (
+                            <m.ul
+                                initial="hidden"
+                                animate="show"
+                                variants={stagger(0.04)}
+                                className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6"
+                            >
+                                {grid.map((devotional, i) => (
+                                    <DevotionalTile
+                                        key={devotional.id}
+                                        devotional={devotional}
+                                        tone={POP_TONES[i % POP_TONES.length]}
+                                    />
+                                ))}
+                            </m.ul>
+                        )}
                     </div>
+                )}
+            </Section>
 
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mt-10 mb-3">
-                        Keep going after today&rsquo;s reading
-                    </h2>
-                    <ul className="grid gap-3 sm:grid-cols-2">
-                        <li>
-                            <Link to="/manuals" className="block rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 hover:border-primary-400 transition-colors">
-                                <span className="font-semibold text-gray-900 dark:text-white">This week&rsquo;s study manual</span>
-                                <span className="block text-sm text-gray-500 dark:text-gray-400">
-                                    The teaching manual for your class, week by week.
-                                </span>
-                            </Link>
-                        </li>
-                        <li>
-                            <Link to="/media" className="block rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 hover:border-primary-400 transition-colors">
-                                <span className="font-semibold text-gray-900 dark:text-white">Podcasts and worship</span>
-                                <span className="block text-sm text-gray-500 dark:text-gray-400">
-                                    Messages and ministration to listen to on the way.
-                                </span>
-                            </Link>
-                        </li>
-                        <li>
-                            <Link to="/events" className="block rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 hover:border-primary-400 transition-colors">
-                                <span className="font-semibold text-gray-900 dark:text-white">Camps and events</span>
-                                <span className="block text-sm text-gray-500 dark:text-gray-400">
-                                    What is coming up in Region 63, and how to register.
-                                </span>
-                            </Link>
-                        </li>
-                        <li>
-                            <Link to="/help" className="block rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 hover:border-primary-400 transition-colors">
-                                <span className="font-semibold text-gray-900 dark:text-white">Questions</span>
-                                <span className="block text-sm text-gray-500 dark:text-gray-400">
-                                    Accounts, notifications and how to get the app.
-                                </span>
-                            </Link>
-                        </li>
-                    </ul>
-                </section>
+            <AboutSection id="about-the-devotional" title="What is Teenage Open Heavens?">
+                <p>
+                    Teenage Open Heavens is the daily devotional of the Redeemed Christian Church of God, written for
+                    teenagers rather than for adults. Each day&rsquo;s reading opens with a passage of Scripture and a
+                    memory verse, carries a short message, and ends with a key point and a prayer point you can pray
+                    in your own words.
+                </p>
+                <p>
+                    Every reading here is published free, without an account, and it stays available afterwards — so
+                    a missed morning is not a lost one. If you would rather read on your phone with the verse, the
+                    Bible text and a reminder in one place, the{' '}
+                    <Link to="/#install" className={PROSE_LINK}>
+                        Faith Tribe app
+                    </Link>{' '}
+                    carries today&rsquo;s devotional, the whole Bible and your reading streak.
+                </p>
+            </AboutSection>
 
-            </div>
-        </div>
+            <NextLinks
+                title="Keep going after today’s reading"
+                links={[
+                    { to: '/manuals', label: 'This week’s study manual', note: 'The teaching manual for your class, week by week.' },
+                    { to: '/media', label: 'Podcasts and worship', note: 'Messages and ministration to listen to on the way.' },
+                    { to: '/events', label: 'Camps and events', note: 'What is coming up in Region 63, and how to register.' },
+                    { to: '/help', label: 'Questions', note: 'Accounts, notifications and how to get the app.' },
+                ]}
+            />
+
+            <Section narrow className="pb-16 pt-10 lg:pb-24">
+                <m.div {...IN_VIEW} variants={fadeUp}>
+                    <SiteButton to="/#install">Get the Faith Tribe app</SiteButton>
+                </m.div>
+            </Section>
+        </SitePage>
     );
 };
 
