@@ -31,6 +31,7 @@ interface EventOption {
   start_datetime: string;
   venue: string;
   registration_status: string;
+  group_registration_only?: boolean;
   min_age: number | null;
   max_age: number | null;
 }
@@ -96,7 +97,8 @@ const TicketForm = () => {
     api.get('/events/events/?status=published')
       .then(({ data }) => {
         const list: EventOption[] = Array.isArray(data) ? data : (data.results || []);
-        const open = list.filter(e => e.registration_status === 'open');
+        // An event only coordinators register for has no form to fill here.
+        const open = list.filter(e => e.registration_status === 'open' && !e.group_registration_only);
         setEvents(open);
         if (open.length === 1) setSelectedEventId(open[0].id);
       })

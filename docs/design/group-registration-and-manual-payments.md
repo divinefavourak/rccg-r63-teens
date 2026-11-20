@@ -10,7 +10,7 @@ An event is paid for either **online** (the gateway, Squad today) or by **bank t
 
 | Model | Where | What it is |
 |---|---|---|
-| `Event.payment_method` | `events/models.py` | `online` or `manual`. With `bank_name`, `bank_account_number`, `bank_account_name`, `payment_instructions`, `group_registration_enabled`. |
+| `Event.payment_method` | `events/models.py` | `online` or `manual`. With `bank_name`, `bank_account_number`, `bank_account_name`, `payment_instructions`, `group_registration_enabled`, `group_registration_only` (only coordinators register; teens claim). |
 | `RegistrationBatch` | `events/models.py` | A group: `reference` (`GRP-XXXXXX`), `event`, `node`, `male_count`, `female_count`, `unit_price`, `amount_due`, `amount_paid`, `status` (`awaiting_payment`, `under_review`, `part_paid`, `paid`, `cancelled`). |
 | `EventRegistration.batch`, `.claim_code`, `.claimed_at`, `.node` | `events/models.py` | A seat is a registration with a batch. `node` scopes who reconciles it. |
 | `PaymentReceipt` | `payments/models.py` | A transfer receipt for a batch **or** a registration, in private storage. `status`: `submitted`, `verified`, `rejected`. |
@@ -36,7 +36,7 @@ All are under `/api/v1/` and need a signed-in user.
 | `POST /payments/receipts/<id>/verify/` · `/reject/` | `payments.reconcile` over the node | `{amount, note}` or `{reason}` |
 | `GET /payments/reconciliation/?event=<id>` | `payments.view` or `payments.reconcile` | Summary, ledger, groups still owing. `&export=csv` for the ledger. |
 
-`EventRegistrationDetailSerializer` (the phone's ticket) now also carries `batch` and `claimed_at`. `can_pay` is false for a seat, which is paid with its group, and for a manual-payment event, because the gateway is refused there. `EventListSerializer` and `EventDetailSerializer` carry `payment_method` and `group_registration_enabled`. The detail also carries the bank fields.
+`EventRegistrationDetailSerializer` (the phone's ticket) now also carries `batch` and `claimed_at`. `can_pay` is false for a seat, which is paid with its group, and for a manual-payment event, because the gateway is refused there. `EventListSerializer` and `EventDetailSerializer` carry `payment_method`, `group_registration_enabled` and `group_registration_only`. The detail also carries the bank fields.
 
 ## Mobile app
 
@@ -84,5 +84,6 @@ Use the words the Console uses, so a coordinator hears one vocabulary: *group*, 
 ## Operations
 
 - Set `R2_PRIVATE_BUCKET_NAME` to a bucket with no public domain before taking real receipts. See `docs/ops/07-production-secrets.md`.
-- Migrations: `events.0013`, `payments.0005`, and `identity.0007`, which grants `payments.reconcile`. Every existing event stays `online`, and group registration is **on** for all events, existing ones included. Turn it off per event in the editor.
-- To take transfers for an event: in the Console, edit the event, choose **Bank transfer**, fill in the account, and tick **Coordinators can register groups**. Optionally set a group price from a group size.
+- Migrations: `events.0013`, `payments.0005`, and `identity.0007`, which grants `payments.reconcile`; then `events.0014` (`group_registration_only`, off for every event). Every existing event stays `online`, and group registration is **on** for all events, existing ones included. Change it per event in the editor's **Who registers**.
+- To take transfers for an event: in the Console, edit the event, choose **Bank transfer**, fill in the account, and under **Who registers** pick *Teens or their coordinator* or *Coordinators only*. Optionally set a group price from a group size.
+- To check a receipt: Console → Payments → To check, or open the group: while a receipt waits, someone holding `payments.reconcile` sees **Check the receipt**, which opens it on Payments (`/admin/payments?receipt=<id>`). The coordinator sees that it is being checked, with **Send another receipt** for a second transfer instead of the whole form.

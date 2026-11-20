@@ -427,6 +427,12 @@ def _announce_paid(batch):
         EventEmailService.send_batch_paid(batch)
     except Exception:
         logger.exception('Could not email the coordinator that %s is paid', batch.reference)
+    from . import notifications
+    try:
+        notifications.notify_group_paid(batch)
+    except Exception:
+        logger.exception('Could not tell the coordinator in the app that %s is paid',
+                         batch.reference)
 
 
 # ── A teen claiming a seat ───────────────────────────────────────────────────

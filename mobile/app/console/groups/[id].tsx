@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AppState, Linking, Platform, RefreshControl, ScrollView, Share, Text, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { createURL } from 'expo-linking';
 
@@ -13,8 +14,11 @@ import {
   ReceiptSheet,
   StatusChip,
 } from '../../../src/components/PaymentPieces';
+import { Icon } from '../../../src/components/Icon';
 import { dayLabel } from '../../../src/data/events';
+import { useTokens } from '../../../src/theme/ThemeProvider';
 import { Button } from '../../../src/ui/Button';
+import { Press } from '../../../src/ui/Press';
 import { StatTile } from '../../../src/ui/cards';
 import { BackHeader, EmptyState, SectionTitle, Skeleton } from '../../../src/ui/screen';
 
@@ -61,6 +65,18 @@ export default function GroupScreen() {
   const [sending, setSending] = useState(false);
   const [sentToPay, setSentToPay] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
+  // What was just copied, said for a moment in a toast: "all" or a ticket number.
+  const [copied, setCopied] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(null), 2000);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
+  const copy = useCallback((text: string, what: string) => {
+    Clipboard.setStringAsync(text).then(() => setCopied(what), () => {});
+  }, []);
 
   const back = useCallback(
     () => (router.canGoBack() ? router.back() : router.replace('/console/groups')),
@@ -103,8 +119,13 @@ export default function GroupScreen() {
 
   const onShare = useCallback(() => {
     if (!data) return;
+    // A desktop browser often has no share sheet: copy instead, and say so.
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && !navigator.share) {
+      copy(ticketSheet(data), 'all');
+      return;
+    }
     Share.share({ message: ticketSheet(data) }).catch(() => {});
-  }, [data]);
+  }, [data, copy]);
 
   if (group.isPending) {
     return (
@@ -145,6 +166,8 @@ export default function GroupScreen() {
   const claimed = seats.filter((s) => s.claimed).length;
   const hasCodes = seats.some((s) => !!s.claim_code);
   const owes = !free && Number(data.balance) > 0 && data.status !== 'cancelled';
+  const ready = data.status === 'paid' || (free && data.status !== 'cancelled');
+  const unclaimed = seats.filter((s) => !s.claimed && s.claim_code).length;
 
   return (
     <View className="flex-1 bg-surf-base">
@@ -158,6 +181,18 @@ export default function GroupScreen() {
         contentContainerStyle={{ gap: 16, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 32 }}
         refreshControl={<RefreshControl refreshing={group.isRefetching} onRefresh={group.refetch} />}
       >
+        {!!copied && (
+          <View
+            accessibilityLiveRegion="polite"
+            className="flex-row items-center gap-2 self-center rounded-full bg-ink px-4 py-2"
+          >
+            <Icon name="check" size={16} color="#FFFFFF" />
+            <Text className="font-ui-sb text-[14px] leading-5 text-on-ink">
+              {copied === 'all' ? 'Every ticket and code copied. Paste it anywhere.' : `Code for ${copied} copied.`}
+            </Text>
+          </View>
+        )}
+
         <View className="gap-1">
           <Text accessibilityRole="header" className="font-ui-b text-[24px] leading-8 text-ink-1">
             {data.event_title}
@@ -244,19 +279,33 @@ export default function GroupScreen() {
         )}
 
         {/* ── Seats ──────────────────────────────────────────────────── */}
-        <SectionTitle
-          actionLabel={hasCodes ? 'Share' : undefined}
-          onAction={hasCodes ? onShare : undefined}
-        >
-          Tickets
-        </SectionTitle>
+        <SectionTitle>Tickets</SectionTitle>
         <Text className="-mt-2 font-ui text-[14px] leading-5 text-ink-2">
-          Give each teen their code to claim in the app. Children without a phone need not claim:
-          the desk checks them in by ticket number or name.
+          {ready && unclaimed > 0
+            ? 'Paid and confirmed. Hand out the codes: tap one to copy it, or copy them all for your group chat. '
+            : 'Give each teen their code to claim in the app: tap one to copy it. '}
+          Children without a phone need not claim: the desk checks them in by ticket number or name.
         </Text>
+        {hasCodes && (
+          <View className="flex-row gap-3">
+            <Button
+              label="Copy all codes"
+              variant={ready ? 'primary' : 'secondary'}
+              onPress={() => copy(ticketSheet(data), 'all')}
+              className="flex-1"
+            />
+            <Button label="Share" variant="secondary" onPress={onShare} className="flex-1" />
+          </View>
+        )}
         <View className="w-full rounded-2xl bg-surf-raised px-4 py-1">
           {seats.map((seat, i) => (
-            <SeatRow key={seat.id} seat={seat} last={i === seats.length - 1} />
+            <SeatRow
+              key={seat.id}
+              seat={seat}
+              last={i === seats.length - 1}
+              copied={copied === seat.registration_id}
+              onCopy={() => copy(showCode(seat.claim_code), seat.registration_id)}
+            />
           ))}
         </View>
 
@@ -291,7 +340,18 @@ function Row({ label, value, strong = false }: { label: string; value: string; s
   );
 }
 
-function SeatRow({ seat, last }: { seat: Seat; last: boolean }) {
+function SeatRow({
+  seat,
+  last,
+  copied,
+  onCopy,
+}: {
+  seat: Seat;
+  last: boolean;
+  copied: boolean;
+  onCopy: () => void;
+}) {
+  const tokens = useTokens();
   return (
     <View className={`flex-row items-center gap-3 py-3 ${last ? '' : 'border-b border-line'}`}>
       <View className="min-w-0 flex-1">
@@ -312,9 +372,22 @@ function SeatRow({ seat, last }: { seat: Seat; last: boolean }) {
       {seat.claimed ? (
         <StatusChip label="Claimed" tone="good" />
       ) : seat.claim_code ? (
-        <Text selectable className="font-ui-b text-[16px] leading-6 tracking-[2px] text-ink-1">
-          {showCode(seat.claim_code)}
-        </Text>
+        // The whole code is the control: easier to hit than a small icon.
+        <Press
+          onPress={onCopy}
+          accessibilityRole="button"
+          accessibilityLabel={
+            copied
+              ? `Code for ${seat.registration_id} copied`
+              : `Copy code ${showCode(seat.claim_code)} for ${seat.registration_id}`
+          }
+          className="h-11 flex-row items-center gap-2 rounded-full bg-surf-sunken pl-3.5 pr-3"
+        >
+          <Text className="font-ui-b text-[16px] leading-6 tracking-[2px] text-ink-1">
+            {showCode(seat.claim_code)}
+          </Text>
+          <Icon name={copied ? 'check' : 'copy'} size={16} color={tokens.text1} />
+        </Press>
       ) : null}
     </View>
   );

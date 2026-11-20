@@ -557,7 +557,12 @@ export function useGroupEvents(enabled = true) {
           e.status === 'published',
       ),
     enabled,
-    staleTime: STALE.catalogue,
+    // Asked again every time the new-group screen opens. An organiser opens
+    // an event for groups on the website, then a coordinator comes here for
+    // it: a list kept for the catalogue's ten minutes (and between launches)
+    // would not have it yet. What was kept still shows while this loads.
+    staleTime: 0,
+    refetchOnMount: 'always',
     retry: retryTransient,
   });
 }

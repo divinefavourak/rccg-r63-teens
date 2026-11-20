@@ -166,7 +166,9 @@ const EventDetail = () => {
     const now = new Date();
     const isUpcoming = new Date(event.start_datetime) > now;
     const regOpen = event.registration_status === 'open';
-    const canRegister = isUpcoming && regOpen && !registered;
+    // Coordinators register everyone for this one; a teen claims in the app.
+    const byCoordinator = Boolean(event.group_registration_only);
+    const canRegister = isUpcoming && regOpen && !registered && !byCoordinator;
 
     const canonicalPath = `/events/${event.id}`;
     // Shared with the build, so the file and the document agree.
@@ -235,7 +237,11 @@ const EventDetail = () => {
                         <span className={`inline-block mb-3 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest ${
                             canRegister ? 'bg-green-500 text-white' : 'bg-red-500/80 text-white'
                         }`}>
-                            {registered ? 'Registered ✓' : canRegister ? 'Registration Open' : 'Registration Closed'}
+                            {registered
+                                ? 'Registered ✓'
+                                : byCoordinator && isUpcoming
+                                    ? 'Through your coordinator'
+                                    : canRegister ? 'Registration Open' : 'Registration Closed'}
                         </span>
                         <h1 className="text-3xl md:text-5xl font-black text-white mb-4 leading-tight max-w-4xl">
                             {event.title}
@@ -463,6 +469,12 @@ const EventDetail = () => {
                             {registered ? (
                                 <div className="w-full py-4 rounded-xl bg-green-500/10 text-green-600 dark:text-green-400 font-bold text-center border border-green-200 dark:border-green-800">
                                     ✓ You are registered!
+                                </div>
+                            ) : byCoordinator && isUpcoming ? (
+                                <div className="w-full rounded-xl border border-gray-200 dark:border-gray-700 p-4 text-center text-sm text-gray-600 dark:text-gray-300">
+                                    Coordinators register people for this event. Ask yours for a code, then
+                                    open the event in the Faith Tribe app, tap “I have a code from my
+                                    coordinator” and enter it.
                                 </div>
                             ) : (
                                 <button

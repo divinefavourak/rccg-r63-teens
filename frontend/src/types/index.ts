@@ -560,6 +560,9 @@ export interface Event {
   max_attendees?: number;
   waitlist_enabled?: boolean;
   max_waitlist?: number | null;
+  group_registration_enabled?: boolean;
+  /** Only coordinators register; a teen claims their seat in the app with a code. */
+  group_registration_only?: boolean;
 
   // Pricing
   is_free?: boolean;

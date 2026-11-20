@@ -162,6 +162,23 @@ export default function EventRegisterScreen() {
     );
   }
 
+  // Reached by a link or an older screen: this event has no form to fill.
+  if (event.data.group_registration_only) {
+    return (
+      <View className="flex-1 bg-surf-base">
+        <BackHeader title="Register" onBack={back} />
+        <View className="flex-1 justify-center">
+          <EmptyState
+            drawing="sitting"
+            message="Coordinators register people for this event. Ask yours for your code, then enter it to get your ticket."
+            actionLabel="Enter my code"
+            onAction={() => router.replace('/ticket/claim')}
+          />
+        </View>
+      </View>
+    );
+  }
+
   const price = priceLabel(event.data);
   const paid = !event.data.is_free;
   const summary = [dayLabel(startOf(event.data)), whereLabel(event.data)].filter(Boolean).join(' · ');

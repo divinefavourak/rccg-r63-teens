@@ -122,6 +122,9 @@ class Event(UUIDMixin, TimestampMixin, PublishableMixin, ViewableMixin):
     # Coordinators may register a group (a headcount) and pay for it at once:
     # `events/batches.py`. On unless the organiser turns it off.
     group_registration_enabled = models.BooleanField(default=True)
+    # Only coordinators register: a teen cannot register themself, and claims
+    # the seat their coordinator paid for with its code. Implies the above.
+    group_registration_only = models.BooleanField(default=False)
 
     # Eligibility
     #

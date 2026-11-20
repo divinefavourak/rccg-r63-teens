@@ -240,6 +240,8 @@ export interface EventListItem {
   payment_method?: 'online' | 'manual';
   /** Whether coordinators can register groups for it. */
   group_registration_enabled?: boolean;
+  /** Only coordinators register; a teen claims a seat with a code instead. */
+  group_registration_only?: boolean;
   /**
    * The page to share it by: the flier as a chat preview, then on into the
    * app or the web app. Absent from a server older than it.

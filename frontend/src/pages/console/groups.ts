@@ -179,6 +179,25 @@ const HOW_TO_CLAIM =
   'Teens: open the event in the Faith Tribe app, tap "I have a code from my coordinator" and enter your code. ' +
   'Children without a phone need not claim: they are checked in by ticket number or name.';
 
+/** Every ticket and code as plain text, to paste into a group chat. */
+export function ticketsText(batch: BatchDetail): string {
+  const word = (g: string) => (g === 'male' ? 'Boy' : g === 'female' ? 'Girl' : '');
+  const lines = batch.seats
+    .filter((s) => s.status !== 'cancelled')
+    .map((s, i) =>
+      [`${i + 1}. ${s.registration_id}`, showCode(s.claim_code), word(s.attendee_gender), s.attendee_name]
+        .filter(Boolean)
+        .join(' · '),
+    );
+  return [
+    `${batch.event_title}: tickets for ${batch.node_detail?.name ?? 'our group'} (${batch.reference})`,
+    '',
+    ...lines,
+    '',
+    HOW_TO_CLAIM,
+  ].join('\n');
+}
+
 /** Every seat with its ticket number and code, to share or print. */
 export function downloadTicketsCsv(batch: BatchDetail) {
   const rows = [

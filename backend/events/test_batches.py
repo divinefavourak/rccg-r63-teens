@@ -436,3 +436,76 @@ class BatchApiTests(APITestCase):
         self.assertEqual(response.status_code, 200, response.data)
         self.event.refresh_from_db()
         self.assertEqual(self.event.payment_method, Event.PaymentMethod.MANUAL)
+
+
+class CoordinatorsOnlyTests(GroupTestCase):
+    """An event only coordinators register for: teens claim, and nothing else."""
+
+    def setUp(self):
+        super().setUp()
+        self.event = group_event(group_registration_only=True)
+
+    def register(self, user):
+        client = APIClient()
+        client.force_authenticate(user)
+        return client.post(
+            f'/api/v1/events/events/{self.event.id}/register/', attendee(user.email), format='json')
+
+    def test_a_teen_cannot_register_themself(self):
+        response = self.register(make_user('tobi'))
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('coordinator', str(response.data['event']))
+        self.assertFalse(self.event.registrations.exists())
+
+    def test_nor_through_the_registrations_endpoint(self):
+        teen = make_user('tobi')
+        client = APIClient()
+        client.force_authenticate(teen)
+        response = client.post('/api/v1/events/registrations/', {
+            **attendee(teen.email), 'event': str(self.event.id)}, format='json')
+        self.assertEqual(response.status_code, 400)
+
+    def test_someone_who_runs_the_event_still_can(self):
+        admin = make_user('admin', is_superuser=True, is_staff=True)
+        response = self.register(admin)
+        self.assertEqual(response.status_code, 201, response.data)
+
+    def test_a_coordinator_registers_a_group_and_a_teen_claims(self):
+        batch = batches.create(self.coordinator, self.event, self.tree['prov'], 1, 0)
+        seat = batch.seats.get()
+        teen = make_user('tobi', gender='male')
+        self.assertEqual(batches.claim(teen, '', seat.claim_code).user, teen)
+
+    def test_it_turns_group_registration_on(self):
+        from events.serializers import EventCreateUpdateSerializer
+        event = group_event(title='Youth Camp', group_registration_enabled=False)
+        serializer = EventCreateUpdateSerializer(
+            event, data={'group_registration_only': True}, partial=True)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        serializer.save()
+        event.refresh_from_db()
+        self.assertTrue(event.group_registration_enabled)
+        self.assertTrue(event.group_registration_only)
+
+    def test_turning_groups_off_turns_it_off(self):
+        from events.serializers import EventCreateUpdateSerializer
+        serializer = EventCreateUpdateSerializer(
+            self.event, data={'group_registration_enabled': False}, partial=True)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        serializer.save()
+        self.event.refresh_from_db()
+        self.assertFalse(self.event.group_registration_only)
+
+
+class GroupPaidMessageTests(GroupTestCase):
+    def test_the_coordinator_is_told_in_the_app_and_sent_to_the_group(self):
+        from events import notifications
+        from notifications.models import Notification
+        batch = batches.create(self.coordinator, group_event(), self.tree['prov'], 2, 1)
+        notifications.notify_group_paid(batch)
+        note = Notification.objects.get(user=self.coordinator)
+        self.assertEqual(note.deep_link, f'/console/groups/{batch.id}')
+        self.assertIn('3 tickets', note.body)
+        # Told once, however many times the payment is confirmed.
+        notifications.notify_group_paid(batch)
+        self.assertEqual(Notification.objects.filter(user=self.coordinator).count(), 1)

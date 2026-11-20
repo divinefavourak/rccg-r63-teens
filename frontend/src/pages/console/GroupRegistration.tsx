@@ -19,7 +19,7 @@
  * receipt, read-only.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -66,6 +66,7 @@ import {
   parseNamesCsv,
   receiptStatus,
   showCode,
+  ticketsText,
   type BatchDetail,
   type BatchRow,
   type BatchStatus,
@@ -640,6 +641,53 @@ const NamesUpload = ({
   );
 };
 
+// ─── Handing out codes ───────────────────────────────────────────────────────
+
+/** Copy to the clipboard and say so for a moment; false if the browser refused. */
+function useCopy() {
+  const [copied, setCopied] = useState(false);
+  const copy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* The text is on screen, and in the CSV, to copy by hand. */
+    }
+  };
+  return { copied, copy };
+}
+
+/** Every ticket and code at once, ready for a WhatsApp group. */
+const CopyAll = ({ text }: { text: string }) => {
+  const { copied, copy } = useCopy();
+  return (
+    <Btn variant="soft" size="md" onClick={() => copy(text)} aria-live="polite">
+      <Copy size={16} /> {copied ? 'Copied' : 'Copy all codes'}
+    </Btn>
+  );
+};
+
+/** One code, copied with a click on it. */
+const CopyCode = ({ ticket, code }: { ticket: string; code: string }) => {
+  const { copied, copy } = useCopy();
+  return (
+    <button
+      type="button"
+      aria-label={copied ? `Code for ${ticket} copied` : `Copy code ${code} for ${ticket}`}
+      onClick={() => copy(code)}
+      className="inline-flex items-center gap-1.5 rounded-console-md px-2 py-1 font-mono text-[13px] font-bold tracking-[0.08em] text-console-text hover:bg-console-tinted"
+    >
+      {code}
+      {copied ? (
+        <span className="font-sans text-[11px] font-semibold tracking-normal text-console-muted">Copied</span>
+      ) : (
+        <Copy size={14} className="text-console-muted" />
+      )}
+    </button>
+  );
+};
+
 // ─── Paying ──────────────────────────────────────────────────────────────────
 
 const CopyLine = ({ label, value }: { label: string; value: string }) => {
@@ -795,6 +843,14 @@ const PaymentCard = ({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  // While a receipt waits, sending another is the exception (a second,
+  // part payment), so the form waits behind a button.
+  const [another, setAnother] = useState(false);
+  const { can } = useConsoleAuth();
+  // The server decides per receipt; this only decides whether to offer.
+  const canCheck = can('payments.reconcile');
+  const waiting = batch.receipts.filter((r) => r.status === 'submitted');
+  const askingToPay = waiting.length === 0 || another;
 
   const payOnline = async () => {
     setBusy(true);
@@ -828,12 +884,30 @@ const PaymentCard = ({
             Paid in full. Every seat is confirmed. Hand out the ticket numbers and codes.
           </AlertBanner>
         )}
-        {batch.status === 'under_review' && (
-          <AlertBanner kind="info">
-            A receipt is being checked against the bank statement. Nothing more is needed from you
-            for now.
-          </AlertBanner>
-        )}
+        {waiting.length > 0 &&
+          (canCheck ? (
+            <AlertBanner
+              kind="info"
+              action={
+                <Link
+                  to={`/admin/payments?receipt=${waiting[0].id}`}
+                  className="inline-flex h-10 items-center whitespace-nowrap rounded-full bg-console-action px-4 text-[14px] font-semibold text-console-on-action hover:bg-console-action-hover"
+                >
+                  Check the receipt
+                </Link>
+              }
+            >
+              {waiting.length === 1
+                ? `A receipt for ${naira(waiting[0].amount_claimed)} is waiting to be checked against the bank statement.`
+                : `${waiting.length} receipts are waiting to be checked against the bank statement.`}{' '}
+              Verifying it confirms the seats once the group is paid in full.
+            </AlertBanner>
+          ) : (
+            <AlertBanner kind="info">
+              A receipt is being checked against the bank statement. Nothing more is needed from you
+              for now.
+            </AlertBanner>
+          ))}
 
         {!readOnly && batch.can_pay_online && (
           <div>
@@ -847,7 +921,13 @@ const PaymentCard = ({
           </div>
         )}
 
-        {batch.bank_details && batch.status !== 'paid' && batch.status !== 'cancelled' && (
+        {!readOnly && !askingToPay && batch.can_send_receipt && (
+          <Btn variant="soft" size="md" onClick={() => setAnother(true)}>
+            <FileUp size={16} /> Send another receipt
+          </Btn>
+        )}
+
+        {askingToPay && batch.bank_details && batch.status !== 'paid' && batch.status !== 'cancelled' && (
           <div>
             <p className="text-[14px] leading-5 text-console-body">
               Transfer <strong>{naira(batch.balance)}</strong> to this account, then send the
@@ -867,12 +947,13 @@ const PaymentCard = ({
           </div>
         )}
 
-        {!readOnly && batch.can_send_receipt && (
+        {!readOnly && askingToPay && batch.can_send_receipt && (
           <ReceiptForm
             key={batch.receipts.length}
             batch={batch}
             onSent={() => {
               setSent(true);
+              setAnother(false);
               onChanged();
             }}
           />
@@ -888,6 +969,7 @@ const PaymentCard = ({
                   <Th>Amount</Th>
                   <Th>Status</Th>
                   <Th>Note</Th>
+                  {canCheck && <Th />}
                 </tr>
               </thead>
               <tbody>
@@ -910,6 +992,18 @@ const PaymentCard = ({
                         </span>
                       </Td>
                       <Td className="text-[13px] text-console-body">{r.review_note || '—'}</Td>
+                      {canCheck && (
+                        <Td>
+                          {r.status === 'submitted' && (
+                            <Link
+                              to={`/admin/payments?receipt=${r.id}`}
+                              className="whitespace-nowrap text-[14px] font-semibold text-console-action hover:underline"
+                            >
+                              Check
+                            </Link>
+                          )}
+                        </Td>
+                      )}
                     </tr>
                   );
                 })}
@@ -1065,6 +1159,7 @@ const GroupDetail = ({
           </Btn>
           {showCodes && (
             <>
+              <CopyAll text={ticketsText(b)} />
               <Btn variant="soft" size="md" onClick={() => downloadTicketsCsv(b)}>
                 <Download size={16} /> Tickets CSV
               </Btn>
@@ -1177,8 +1272,14 @@ const GroupDetail = ({
                   <tr key={s.id}>
                     <Td className="font-mono text-[13px] font-semibold">{s.registration_id}</Td>
                     {showCodes && (
-                      <Td className="whitespace-nowrap font-mono text-[13px] font-bold tracking-[0.08em]">
-                        {showCode(s.claim_code)}
+                      <Td className="whitespace-nowrap">
+                        {s.claim_code && !s.claimed ? (
+                          <CopyCode ticket={s.registration_id} code={showCode(s.claim_code)} />
+                        ) : (
+                          <span className="font-mono text-[13px] font-bold tracking-[0.08em]">
+                            {showCode(s.claim_code)}
+                          </span>
+                        )}
                       </Td>
                     )}
                     <Td className="capitalize">{s.attendee_gender}</Td>

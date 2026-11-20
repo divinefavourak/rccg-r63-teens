@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -163,8 +163,9 @@ export default function NewGroupScreen() {
                 ? 'We couldn’t load the events. Check your connection, then try again.'
                 : 'No event is taking group registrations right now.'
             }
-            actionLabel={events.isError ? 'Try again' : 'Back'}
-            onAction={events.isError ? () => events.refetch() : back}
+            // An organiser may be opening one for groups right now.
+            actionLabel={events.isError ? 'Try again' : 'Check again'}
+            onAction={() => events.refetch()}
           />
         </View>
       </View>
@@ -178,6 +179,7 @@ export default function NewGroupScreen() {
         <ScrollView
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={events.isRefetching} onRefresh={events.refetch} />}
           contentContainerStyle={{
             gap: 16,
             paddingHorizontal: 20,
