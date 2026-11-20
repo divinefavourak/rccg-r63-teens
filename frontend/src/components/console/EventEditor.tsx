@@ -86,12 +86,33 @@ export interface EventDraft {
   bank_account_name?: string;
   payment_instructions?: string;
   group_registration_enabled?: boolean;
+  group_registration_only?: boolean;
   group_discount_threshold?: number | null;
   group_discount_price?: string | number | null;
 }
 
 /** `<input type="datetime-local">` wants `YYYY-MM-DDTHH:mm`, ISO gives more. */
 const toLocalInput = (iso?: string) => (iso ? iso.slice(0, 16) : '');
+
+type WhoRegisters = 'teens' | 'both' | 'coordinators';
+
+const WHO_REGISTERS: { value: WhoRegisters; label: string; hint: string }[] = [
+  {
+    value: 'both',
+    label: 'Teens or their coordinator',
+    hint: 'Teens register themselves, or a coordinator registers a group and hands out codes.',
+  },
+  {
+    value: 'coordinators',
+    label: 'Coordinators only',
+    hint: 'Coordinators register and pay for their group. Teens can’t register; they claim their ticket with a code.',
+  },
+  {
+    value: 'teens',
+    label: 'Teens only',
+    hint: 'Each teen registers in the app. No group registration.',
+  },
+];
 
 const Field = ({
   label,
@@ -156,6 +177,7 @@ export const EventEditor = ({
     bank_account_name: event?.bank_account_name ?? '',
     payment_instructions: event?.payment_instructions ?? '',
     group_registration_enabled: event?.group_registration_enabled ?? true,
+    group_registration_only: event?.group_registration_only ?? false,
     group_discount_threshold: event?.group_discount_threshold ?? null,
     group_discount_price: event?.group_discount_price ?? '',
   });
@@ -181,6 +203,11 @@ export const EventEditor = ({
       : false;
   // A transfer needs somewhere to transfer to. The server says the same.
   const manual = !form.is_free && form.payment_method === 'manual';
+  const whoRegisters: WhoRegisters = form.group_registration_only
+    ? 'coordinators'
+    : form.group_registration_enabled
+      ? 'both'
+      : 'teens';
   const bankMissing =
     manual &&
     !(form.bank_name?.trim() && form.bank_account_number?.trim() && form.bank_account_name?.trim());
@@ -508,53 +535,66 @@ export const EventEditor = ({
           )}
         </div>
 
-        <div className="rounded-console-md border border-console-border p-3">
-          <label className="flex items-center gap-2 text-[14px] text-console-body">
-            <input
-              type="checkbox"
-              checked={Boolean(form.group_registration_enabled)}
-              onChange={(e) => set('group_registration_enabled', e.target.checked)}
-            />
-            Coordinators can register groups
-          </label>
-          {form.group_registration_enabled && (
-            <>
-              <p className="mt-1 text-[12px] font-medium leading-4 text-console-muted">
-                A coordinator enters how many boys and girls are coming and pays
-                once. Each teen gets a ticket number and code to claim in the app.
-              </p>
-              {!form.is_free && (
-                <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                  <Field label="Group price from" hint="People in a group. Optional.">
-                    <input
-                      type="number"
-                      min="2"
-                      value={form.group_discount_threshold ?? ''}
-                      onChange={(e) =>
-                        set(
-                          'group_discount_threshold',
-                          e.target.value ? Number(e.target.value) : null,
-                        )
-                      }
-                      className={inputCls}
-                    />
-                  </Field>
-                  <Field label="Group price per person (₦)">
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      disabled={!form.group_discount_threshold}
-                      value={String(form.group_discount_price ?? '')}
-                      onChange={(e) => set('group_discount_price', e.target.value)}
-                      className={inputCls}
-                    />
-                  </Field>
-                </div>
-              )}
-            </>
+        {/* Who registers, as one choice: two switches underneath
+            (`group_registration_enabled`, `group_registration_only`), but three
+            ways an event can run, and the third must not hide behind the second. */}
+        <fieldset className="rounded-console-md border border-console-border p-3">
+          <legend className="px-1 text-[12px] font-medium uppercase leading-4 tracking-[0.06em] text-console-muted">
+            Who registers
+          </legend>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {WHO_REGISTERS.map(({ value, label, hint }) => (
+              <label
+                key={value}
+                className={`flex cursor-pointer gap-2 rounded-console-md border-2 p-3 ${whoRegisters === value ? 'border-console-text' : 'border-console-border'}`}
+              >
+                <input
+                  type="radio"
+                  name="who_registers"
+                  className="mt-1"
+                  checked={whoRegisters === value}
+                  onChange={() => {
+                    set('group_registration_enabled', value !== 'teens');
+                    set('group_registration_only', value === 'coordinators');
+                  }}
+                />
+                <span>
+                  <span className="block text-[14px] font-semibold text-console-text">{label}</span>
+                  <span className="block text-[12px] leading-4 text-console-muted">{hint}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          {form.group_registration_enabled && !form.is_free && (
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <Field label="Group price from" hint="People in a group. Optional.">
+                <input
+                  type="number"
+                  min="2"
+                  value={form.group_discount_threshold ?? ''}
+                  onChange={(e) =>
+                    set(
+                      'group_discount_threshold',
+                      e.target.value ? Number(e.target.value) : null,
+                    )
+                  }
+                  className={inputCls}
+                />
+              </Field>
+              <Field label="Group price per person (₦)">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  disabled={!form.group_discount_threshold}
+                  value={String(form.group_discount_price ?? '')}
+                  onChange={(e) => set('group_discount_price', e.target.value)}
+                  className={inputCls}
+                />
+              </Field>
+            </div>
           )}
-        </div>
+        </fieldset>
 
         <button
           type="button"

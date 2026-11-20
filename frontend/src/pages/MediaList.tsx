@@ -5,6 +5,7 @@ import { Clock } from 'lucide-react';
 import api from '../api/axios';
 import { type MediaEpisode } from '../types';
 import Seo from '../components/Seo';
+import VideoPlayer from '../components/VideoPlayer';
 import SitePage, { CARD, PROSE_LINK, Section } from '../components/site/SitePage';
 import PageHeader from '../components/site/PageHeader';
 import { AboutSection, EmptyState, Segmented, SkeletonGrid } from '../components/site/ContentBlocks';
@@ -37,12 +38,7 @@ const MediaCard = ({ item }: { item: MediaEpisode }) => {
         <m.li variants={fadeUp} className={`${CARD} group flex flex-col overflow-hidden`}>
             <div className="relative aspect-video overflow-hidden bg-ink">
                 {item.media_type === 'video' && mediaUrl ? (
-                    // The one player slot on this page. A custom player is being
-                    // built on another branch; it replaces exactly this element.
-                    <video controls preload="metadata" poster={thumbnail || undefined} className="h-full w-full object-cover">
-                        <source src={mediaUrl} type="video/mp4" />
-                        Your browser does not support video.
-                    </video>
+                    <VideoPlayer src={mediaUrl} poster={thumbnail} title={item.title} />
                 ) : (
                     <div className="relative flex h-full flex-col items-center justify-center gap-3 bg-pop-violet px-4">
                         {thumbnail ? (

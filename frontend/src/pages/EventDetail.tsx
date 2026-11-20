@@ -92,7 +92,9 @@ const EventDetail = () => {
 
     const started = new Date(event.start_datetime).getTime() <= now;
     const regOpen = event.registration_status === 'open';
-    const canRegister = !started && regOpen && !registered;
+    // Coordinators register everyone for this one; a teen claims in the app.
+    const byCoordinator = Boolean(event.group_registration_only);
+    const canRegister = !started && regOpen && !registered && !byCoordinator;
     const price = eventPriceLabel(event);
     const left = spotsLeft(event);
     const place = eventPlace(event);
@@ -112,7 +114,9 @@ const EventDetail = () => {
           ? new Date(event.end_datetime || event.start_datetime).getTime() < now
               ? 'PAST EVENT'
               : 'HAPPENING NOW'
-          : regOpen
+          : byCoordinator
+            ? 'THROUGH YOUR COORDINATOR'
+            : regOpen
             ? 'REGISTRATION OPEN'
             : 'REGISTRATION CLOSED';
 
@@ -340,6 +344,12 @@ const EventDetail = () => {
                             {registered ? (
                                 <p className="rounded-full bg-pop-green px-5 py-4 text-center text-body-md-strong text-pop-on">
                                     You are registered
+                                </p>
+                            ) : byCoordinator && !started ? (
+                                <p className="rounded-3xl bg-surface-sunken px-5 py-4 text-center text-body-sm text-content-secondary">
+                                    Coordinators register people for this event. Ask yours for a code, then
+                                    open the event in the Faith Tribe app, tap “I have a code from my
+                                    coordinator” and enter it.
                                 </p>
                             ) : (
                                 <button

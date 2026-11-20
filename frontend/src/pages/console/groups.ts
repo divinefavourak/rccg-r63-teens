@@ -51,6 +51,10 @@ export interface Seat {
   attendee_gender: string;
   attendee_name: string;
   attendee_phone: string;
+  /** A child's seat, named here and never claimed: age and who to call. */
+  attendee_age: number | null;
+  guardian_name: string;
+  guardian_phone: string;
   status: string;
   payment_status: string;
   claimed: boolean;
@@ -166,16 +170,47 @@ const slug = (text: string) =>
 
 const gender = (value: string) => (value ? value[0].toUpperCase() + value.slice(1) : '');
 
+/** An eight-character code in two halves, the way it is read out; older six-character ones as they are. */
+export const showCode = (code?: string | null) =>
+  code && code.length === 8 ? `${code.slice(0, 4)}-${code.slice(4)}` : code ?? '';
+
+/** What the teen does with their code; printed on the sheet. */
+const HOW_TO_CLAIM =
+  'Teens: open the event in the Faith Tribe app, tap "I have a code from my coordinator" and enter your code. ' +
+  'Children without a phone need not claim: they are checked in by ticket number or name.';
+
+/** Every ticket and code as plain text, to paste into a group chat. */
+export function ticketsText(batch: BatchDetail): string {
+  const word = (g: string) => (g === 'male' ? 'Boy' : g === 'female' ? 'Girl' : '');
+  const lines = batch.seats
+    .filter((s) => s.status !== 'cancelled')
+    .map((s, i) =>
+      [`${i + 1}. ${s.registration_id}`, showCode(s.claim_code), word(s.attendee_gender), s.attendee_name]
+        .filter(Boolean)
+        .join(' · '),
+    );
+  return [
+    `${batch.event_title}: tickets for ${batch.node_detail?.name ?? 'our group'} (${batch.reference})`,
+    '',
+    ...lines,
+    '',
+    HOW_TO_CLAIM,
+  ].join('\n');
+}
+
 /** Every seat with its ticket number and code, to share or print. */
 export function downloadTicketsCsv(batch: BatchDetail) {
   const rows = [
-    ['Ticket', 'Claim code', 'Gender', 'Name', 'Phone', 'Claimed'],
+    ['Ticket', 'Claim code', 'Gender', 'Name', 'Phone', 'Age', 'Parent name', 'Parent phone', 'Claimed'],
     ...batch.seats.map((s) => [
       s.registration_id,
-      s.claim_code ?? '',
+      showCode(s.claim_code),
       gender(s.attendee_gender),
       s.attendee_name,
       s.attendee_phone ?? '',
+      s.attendee_age ?? '',
+      s.guardian_name ?? '',
+      s.guardian_phone ?? '',
       s.claimed ? 'Yes' : 'No',
     ]),
   ];
@@ -188,14 +223,15 @@ export function downloadTicketsCsv(batch: BatchDetail) {
 
 /**
  * The template for naming seats: the ticket numbers already filled in, so the
- * coordinator only types names. Uploaded back through `parseNamesCsv`.
+ * coordinator only types names. The age and parent columns are for children,
+ * who are not expected to claim. Uploaded back through `parseNamesCsv`.
  */
 export function downloadNamesTemplate(batch: BatchDetail) {
   const rows = [
-    ['Ticket', 'Gender', 'Name', 'Phone'],
+    ['Ticket', 'Gender', 'Name', 'Phone', 'Age', 'Parent name', 'Parent phone'],
     ...batch.seats
       .filter((s) => !s.claimed)
-      .map((s) => [s.registration_id, gender(s.attendee_gender), '', '']),
+      .map((s) => [s.registration_id, gender(s.attendee_gender), '', '', '', '', '']),
   ];
   const text = rows.map((r) => r.map((v) => cell(String(v))).join(',')).join('\r\n');
   save(
@@ -234,12 +270,8 @@ export async function downloadTicketsPdf(batch: BatchDetail) {
         MARGIN,
         y + 11,
       );
-      doc.text(
-        'Each teen opens the Faith Tribe app, taps Claim a ticket, and enters the ticket number and code.',
-        MARGIN,
-        y + 16,
-      );
-      y += 22;
+      doc.text(doc.splitTextToSize(HOW_TO_CLAIM, WIDTH - 2 * MARGIN), MARGIN, y + 16);
+      y += 26;
     }
     doc.setFillColor(242, 234, 224).rect(MARGIN, y, WIDTH - 2 * MARGIN, ROW, 'F');
     doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(28, 25, 22);
@@ -261,9 +293,13 @@ export async function downloadTicketsPdf(batch: BatchDetail) {
     const values = [
       String(index + 1),
       seat.registration_id,
-      seat.claim_code ?? '',
+      showCode(seat.claim_code),
       gender(seat.attendee_gender),
-      seat.claimed ? `${seat.attendee_name} (claimed)` : seat.attendee_name,
+      seat.claimed
+        ? `${seat.attendee_name} (claimed)`
+        : seat.guardian_name
+          ? `${seat.attendee_name} · parent ${seat.guardian_name}`
+          : seat.attendee_name,
     ];
     let x = MARGIN;
     doc.setFontSize(10);
@@ -324,6 +360,10 @@ export interface NameRow {
   registration_id: string;
   name: string;
   phone: string;
+  /** For a child's seat. */
+  age?: number;
+  guardian_name?: string;
+  guardian_phone?: string;
 }
 
 /**
@@ -338,15 +378,25 @@ export function parseNamesCsv(text: string): { rows: NameRow[]; error?: string }
   const ticket = find('ticket', 'ticket number', 'registration_id');
   const name = find('name', 'full name');
   const phone = find('phone', 'phone number');
+  const age = find('age');
+  const parent = find('parent name', 'parent', 'guardian name', 'guardian');
+  const parentPhone = find('parent phone', 'guardian phone', "parent's phone");
   if (ticket < 0 || name < 0) {
     return { rows: [], error: 'The file needs a Ticket column and a Name column. Use the template.' };
   }
+  const at = (r: string[], i: number) => (i >= 0 ? (r[i] ?? '').trim() : '');
   const rows = body
-    .map((r) => ({
-      registration_id: (r[ticket] ?? '').trim(),
-      name: (r[name] ?? '').trim(),
-      phone: phone >= 0 ? (r[phone] ?? '').trim() : '',
-    }))
+    .map((r): NameRow => {
+      const years = Number.parseInt(at(r, age), 10);
+      return {
+        registration_id: at(r, ticket),
+        name: at(r, name),
+        phone: at(r, phone),
+        ...(Number.isFinite(years) && years >= 0 && years <= 120 ? { age: years } : {}),
+        ...(at(r, parent) ? { guardian_name: at(r, parent) } : {}),
+        ...(at(r, parentPhone) ? { guardian_phone: at(r, parentPhone) } : {}),
+      };
+    })
     .filter((r) => r.registration_id && r.name);
   return { rows };
 }

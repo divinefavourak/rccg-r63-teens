@@ -249,16 +249,41 @@ export default function EventDetailScreen() {
             onPress={() => router.push({ pathname: '/ticket/[id]', params: { id: registration.id } })}
             className="w-full"
           />
+        ) : event.group_registration_only ? (
+          // Coordinators register everyone; a teen only claims. Still open
+          // once registration closes: claiming is how a paid seat reaches them.
+          <View className="gap-2">
+            <Text className="text-center font-ui text-[14px] leading-5 text-ink-2">
+              Your coordinator registers you for this event. Ask them for your code.
+            </Text>
+            <Button
+              label={isGuest ? 'Sign up to claim your ticket' : 'I have a code from my coordinator'}
+              onPress={() => router.push(isGuest ? '/sign-up' : '/ticket/claim')}
+              className="w-full"
+            />
+          </View>
         ) : isClosed(event) ? (
           <Button label={closedLabel(event)} disabled className="w-full" />
         ) : isGuest ? (
           <Button label="Sign up to register" onPress={() => router.push('/sign-up')} className="w-full" />
         ) : (
-          <Button
-            label={`Register · ${price}`}
-            onPress={() => router.push({ pathname: '/event/[id]/register', params: { id } })}
-            className="w-full"
-          />
+          <View className="gap-2">
+            <Button
+              label={`Register · ${price}`}
+              onPress={() => router.push({ pathname: '/event/[id]/register', params: { id } })}
+              className="w-full"
+            />
+            {/* A coordinator may have registered the teen in a group already:
+                then there is nothing to pay, only a code to enter. */}
+            {event.group_registration_enabled && (
+              <Button
+                label="I have a code from my coordinator"
+                variant="tertiary"
+                onPress={() => router.push('/ticket/claim')}
+                className="w-full"
+              />
+            )}
+          </View>
         )}
       </View>
     </View>

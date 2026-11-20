@@ -23,6 +23,10 @@ export function routeFor(link: string | null | undefined): Href | null {
   if (person) return { pathname: '/console/people/[id]', params: { id: person[1] } };
   if (link.startsWith('/console/people')) return '/console/people';
 
+  const group = /^\/console\/groups\/([^/]+)\/?$/.exec(link);
+  if (group) return { pathname: '/console/groups/[id]', params: { id: group[1] } };
+  if (link.startsWith('/console/groups')) return '/console/groups';
+
   if (link.startsWith('/settings/notifications')) return '/settings/notifications';
   if (link.startsWith('/settings')) return '/settings';
   if (link.startsWith('/notifications')) return '/notifications';

@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ApiError } from '../../src/api/client';
 import { useClaimTicket } from '../../src/api/queries';
 import { useAuth } from '../../src/state/auth';
 import { FormError } from '../../src/ui/AuthShell';
@@ -11,19 +12,34 @@ import { Button } from '../../src/ui/Button';
 import { TextField } from '../../src/ui/inputs';
 import { BackHeader, EmptyState, KeyboardView } from '../../src/ui/screen';
 
+/** Letters and digits only, upper case: how a code is typed does not matter. */
+const clean = (v: string) => v.replace(/[^0-9a-z]/gi, '').toUpperCase();
+
+/** "K7Q2MX8B" as "K7Q2-MX8B", the way the ticket sheet prints it. */
+const spaced = (v: string) => (v.length > 4 ? `${v.slice(0, 4)}-${v.slice(4)}` : v);
+
+const CODE_LENGTH = 8;
+/** Seats made before codes grew to eight characters: claimed with their ticket number too. */
+const OLD_CODE_LENGTH = 6;
+
 /**
  * Claim a ticket: a seat a coordinator registered in a group, handed out as a
- * ticket number and a six-letter code. Claiming puts the seat on this account,
- * with the teen's own name, age and phone from their profile.
+ * code. Claiming puts the seat on this account, with the teen's own name, age
+ * and phone from their profile. An older, six-character code also needs the
+ * ticket number that came with it, so that field appears only then.
+ *
+ * Opened from My tickets or from an event, and by a link carrying `?code=`.
  */
 export default function ClaimTicketScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isGuest } = useAuth();
   const claim = useClaimTicket();
+  const params = useLocalSearchParams<{ code?: string }>();
 
   const [ticket, setTicket] = useState('');
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(() => clean(params.code ?? '').slice(0, CODE_LENGTH));
+  const [needTicket, setNeedTicket] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The keyboard's Done can fire while a claim is still on its way; the
   // button's spinner does not stop that.
@@ -34,17 +50,32 @@ export default function ClaimTicketScreen() {
   const submit = async () => {
     if (sending.current) return;
     const registration_id = ticket.trim().toUpperCase();
-    const claim_code = code.replace(/\s/g, '').toUpperCase();
-    if (!registration_id || claim_code.length !== 6) {
-      setError('Enter the ticket number and the six-letter code your coordinator gave you.');
+    const claim_code = code;
+    const older = claim_code.length === OLD_CODE_LENGTH;
+    if (claim_code.length !== CODE_LENGTH && !older) {
+      setError('Enter the 8-character code your coordinator gave you.');
+      return;
+    }
+    if (older && !registration_id) {
+      setNeedTicket(true);
+      setError('That is one of the older, shorter codes. Enter the ticket number that came with it too.');
       return;
     }
     setError(null);
     sending.current = true;
     try {
-      const seat = await claim.mutateAsync({ registration_id, claim_code });
+      const seat = await claim.mutateAsync({
+        claim_code,
+        ...(registration_id ? { registration_id } : {}),
+      });
       router.replace({ pathname: '/ticket/[id]', params: { id: seat.id } });
     } catch (err) {
+      if (
+        err instanceof ApiError &&
+        (err.payload as { code?: string } | undefined)?.code === 'ticket_needed'
+      ) {
+        setNeedTicket(true);
+      }
       setError(err instanceof Error ? err.message : 'That did not work. Please try again.');
     } finally {
       sending.current = false;
@@ -88,33 +119,39 @@ export default function ClaimTicketScreen() {
                 Got a ticket from your coordinator?
               </Text>
               <Text className="font-ui text-[14px] leading-5 text-pop-on">
-                Enter its number and code. Your name, age and phone go on it from your profile.
+                Enter the code they gave you. Your name, age and phone go on the ticket from your
+                profile.
               </Text>
             </View>
             <Object3D name="star" size={56} />
           </View>
 
           <TextField
-            label="Ticket number"
-            value={ticket}
-            onChange={(v) => setTicket(v.toUpperCase())}
-            placeholder="As your coordinator wrote it"
-            autoCapitalize="characters"
-            autoComplete="off"
-            returnKeyType="next"
-          />
-          <TextField
             label="Code"
-            value={code}
-            // Spaces out first, then six: a code pasted as "3SQ QUY" still fits.
-            onChange={(v) => setCode(v.replace(/\s/g, '').toUpperCase().slice(0, 6))}
-            placeholder="6 letters and numbers"
+            value={spaced(code)}
+            // Dashes and spaces out first, then eight: a code pasted as
+            // "k7q2 mx8b" or "K7Q2-MX8B" fits the same.
+            onChange={(v) => setCode(clean(v).slice(0, CODE_LENGTH))}
+            placeholder="XXXX-XXXX"
             autoCapitalize="characters"
             autoComplete="off"
             large
-            returnKeyType="done"
-            onSubmitEditing={submit}
+            returnKeyType={needTicket ? 'next' : 'done'}
+            onSubmitEditing={needTicket ? undefined : submit}
           />
+          {needTicket && (
+            <TextField
+              label="Ticket number"
+              value={ticket}
+              onChange={(v) => setTicket(v.toUpperCase())}
+              placeholder="As your coordinator wrote it"
+              hint="Only older codes need this."
+              autoCapitalize="characters"
+              autoComplete="off"
+              returnKeyType="done"
+              onSubmitEditing={submit}
+            />
+          )}
 
           <View className="flex-1" />
           <View>

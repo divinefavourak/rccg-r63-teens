@@ -2,10 +2,10 @@ import { useEffect } from 'react';
 import { ScrollView, Share, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { useVideoPlayer, VideoView } from 'expo-video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { episodeQuery, useSaved } from '../../src/api/queries';
+import { VideoPlayer } from '../../src/components/VideoPlayer';
 import { minutesLabel } from '../../src/data/library';
 import { useAuth } from '../../src/state/auth';
 import { usePlayer, videoSourceOf } from '../../src/state/player';
@@ -15,10 +15,10 @@ import { BackHeader, EmptyState, Skeleton } from '../../src/ui/screen';
 /**
  * A video from the Library, played in the app.
  *
- * The phone's own controls (play, scrub, full screen) rather than custom ones:
- * they are what teens already know, and they handle rotation and captions.
- * Talk audio and a video never play over each other, so opening this pauses
- * the audio player.
+ * The app's own player (`components/VideoPlayer`) rather than the phone's
+ * controls, so the video looks like the rest of the app on every phone and in
+ * the browser. Talk audio and a video never play over each other, so opening
+ * this pauses the audio player.
  */
 export default function WatchScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -65,6 +65,10 @@ export default function WatchScreen() {
           paddingHorizontal: 20,
           paddingTop: 8,
           paddingBottom: Math.max(insets.bottom, 16) + 16,
+          // On a tablet or a wide browser the page stays a readable width.
+          width: '100%',
+          maxWidth: 880,
+          alignSelf: 'center',
         }}
       >
         {query.isPending ? (
@@ -88,7 +92,11 @@ export default function WatchScreen() {
           </View>
         ) : (
           <>
-            <Video uri={source} />
+            <VideoPlayer
+              uri={source}
+              title={episode.title}
+              durationHint={episode.duration_seconds ?? 0}
+            />
 
             <Text
               accessibilityRole="header"
@@ -118,25 +126,6 @@ export default function WatchScreen() {
           </>
         )}
       </ScrollView>
-    </View>
-  );
-}
-
-/**
- * The player itself. Its own component so the native player is only made once
- * the address is known; it starts playing as soon as it is ready.
- */
-function Video({ uri }: { uri: string }) {
-  const player = useVideoPlayer(uri, (p) => p.play());
-  return (
-    <View className="w-full overflow-hidden rounded-2xl" style={{ backgroundColor: '#000' }}>
-      <VideoView
-        player={player}
-        nativeControls
-        contentFit="contain"
-        allowsPictureInPicture
-        style={{ width: '100%', aspectRatio: 16 / 9 }}
-      />
     </View>
   );
 }

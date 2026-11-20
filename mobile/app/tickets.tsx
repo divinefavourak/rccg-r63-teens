@@ -127,7 +127,7 @@ function ClaimRow({ onPress }: { onPress: () => void }) {
           Got a ticket from your coordinator?
         </Text>
         <Text className="font-ui text-[14px] leading-5 text-ink-2">
-          Claim it with its number and code.
+          Claim it with the code they gave you.
         </Text>
       </View>
       <Icon name="chevronRight" size={20} color={tokens.text2} />

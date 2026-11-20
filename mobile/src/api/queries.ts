@@ -443,13 +443,14 @@ export function useCheckPayment(id: string | undefined) {
 const TOO_MANY = 'Too many tries. Wait a minute, then try again.';
 
 /**
- * Take a seat a coordinator bought: the ticket number and the code they gave
- * out. The seat comes back as one of the teen's own tickets.
+ * Take a seat a coordinator bought, with the code they gave out (an older,
+ * six-character code also needs its ticket number). The seat comes back as
+ * one of the teen's own tickets.
  */
 export function useClaimTicket() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { registration_id: string; claim_code: string }) => {
+    mutationFn: async (input: { claim_code: string; registration_id?: string }) => {
       try {
         return await api.post<EventRegistration>('/events/registrations/claim/', input);
       } catch (err) {
@@ -556,7 +557,12 @@ export function useGroupEvents(enabled = true) {
           e.status === 'published',
       ),
     enabled,
-    staleTime: STALE.catalogue,
+    // Asked again every time the new-group screen opens. An organiser opens
+    // an event for groups on the website, then a coordinator comes here for
+    // it: a list kept for the catalogue's ten minutes (and between launches)
+    // would not have it yet. What was kept still shows while this loads.
+    staleTime: 0,
+    refetchOnMount: 'always',
     retry: retryTransient,
   });
 }
