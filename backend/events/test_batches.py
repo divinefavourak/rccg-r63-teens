@@ -1,6 +1,6 @@
 """
 Group registration: a coordinator buys seats for a headcount, and each teen
-claims theirs at the event with the ticket number and code.
+claims theirs with the code (an older seat: its ticket number and code).
 """
 from decimal import Decimal
 
@@ -170,6 +170,20 @@ class ResizeAndCancelTests(GroupTestCase):
         seat.refresh_from_db()
         self.assertEqual(seat.attendee_name, 'Ada Obi')
 
+    def test_naming_a_childs_seat(self):
+        seat = self.batch.seats.order_by('registration_id').first()
+        updated, errors = batches.name_seats(self.coordinator, self.batch, [{
+            'registration_id': seat.registration_id, 'name': 'Tolu Ade', 'age': 7,
+            'guardian_name': 'Mrs Ade', 'guardian_phone': '08035550000',
+        }])
+        self.assertEqual((updated, errors), (1, []))
+        seat.refresh_from_db()
+        self.assertEqual(seat.attendee_age, 7)
+        self.assertEqual(seat.guardian_name, 'Mrs Ade')
+        self.assertEqual(seat.guardian_phone, '08035550000')
+        # Unclaimed, so the desk finds it by its ticket number or the name.
+        self.assertIsNone(seat.claimed_at)
+
 
 class ClaimTests(GroupTestCase):
     def setUp(self):
@@ -189,6 +203,28 @@ class ClaimTests(GroupTestCase):
         self.assertIsNotNone(seat.claimed_at)
         # Claiming it again is harmless.
         self.assertEqual(batches.claim(self.teen, seat.registration_id, seat.claim_code), seat)
+
+    def test_new_seats_get_an_eight_character_code(self):
+        self.assertEqual(len(self.seat.claim_code), batches.CLAIM_CODE_LENGTH)
+        self.assertEqual(batches.display_code('K7Q2MX8B'), 'K7Q2-MX8B')
+
+    def test_the_code_alone_is_enough(self):
+        typed = batches.display_code(self.seat.claim_code).lower().replace('-', ' - ')
+        seat = batches.claim(self.teen, '', typed)
+        self.assertEqual(seat.pk, self.seat.pk)
+        self.assertEqual(seat.user, self.teen)
+
+    def test_a_wrong_code_alone(self):
+        with self.assertRaisesMessage(batches.BatchError, 'does not match a ticket'):
+            batches.claim(self.teen, '', 'ZZZZ-ZZZZ')
+
+    def test_an_older_short_code_asks_for_the_ticket_number(self):
+        EventRegistration.objects.filter(pk=self.seat.pk).update(claim_code='K7Q2MX')
+        with self.assertRaises(batches.BatchError) as caught:
+            batches.claim(self.teen, '', 'K7Q2MX')
+        self.assertEqual(caught.exception.code, 'ticket_needed')
+        seat = batches.claim(self.teen, self.seat.registration_id, 'k7q2mx')
+        self.assertEqual(seat.user, self.teen)
 
     def test_a_wrong_code_and_an_unknown_ticket_say_the_same(self):
         with self.assertRaisesMessage(batches.BatchError, 'do not match'):
@@ -357,6 +393,25 @@ class BatchApiTests(APITestCase):
         mine = self.client.get('/api/v1/events/registrations/mine/')
         self.assertEqual([r['id'] for r in mine.data], [str(seat.id)])
 
+    def test_claim_endpoint_with_the_code_alone(self):
+        batch = batches.create(self.coordinator, self.event, self.tree['prov'], 1, 0)
+        seat = batch.seats.get()
+        teen = make_user('tobi', gender='male')
+        self.client.force_authenticate(teen)
+        response = self.client.post('/api/v1/events/registrations/claim/', {
+            'claim_code': batches.display_code(seat.claim_code),
+        }, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['registration_id'], seat.registration_id)
+
+    def test_claim_endpoint_says_when_the_ticket_number_is_needed(self):
+        teen = make_user('tobi', gender='male')
+        self.client.force_authenticate(teen)
+        response = self.client.post(
+            '/api/v1/events/registrations/claim/', {'claim_code': 'K7Q2MX'}, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data['code'], 'ticket_needed')
+
     def test_resize_and_cancel_through_the_api(self):
         batch = batches.create(self.coordinator, self.event, self.tree['prov'], 1, 1)
         self.client.force_authenticate(self.coordinator)
@@ -381,3 +436,76 @@ class BatchApiTests(APITestCase):
         self.assertEqual(response.status_code, 200, response.data)
         self.event.refresh_from_db()
         self.assertEqual(self.event.payment_method, Event.PaymentMethod.MANUAL)
+
+
+class CoordinatorsOnlyTests(GroupTestCase):
+    """An event only coordinators register for: teens claim, and nothing else."""
+
+    def setUp(self):
+        super().setUp()
+        self.event = group_event(group_registration_only=True)
+
+    def register(self, user):
+        client = APIClient()
+        client.force_authenticate(user)
+        return client.post(
+            f'/api/v1/events/events/{self.event.id}/register/', attendee(user.email), format='json')
+
+    def test_a_teen_cannot_register_themself(self):
+        response = self.register(make_user('tobi'))
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('coordinator', str(response.data['event']))
+        self.assertFalse(self.event.registrations.exists())
+
+    def test_nor_through_the_registrations_endpoint(self):
+        teen = make_user('tobi')
+        client = APIClient()
+        client.force_authenticate(teen)
+        response = client.post('/api/v1/events/registrations/', {
+            **attendee(teen.email), 'event': str(self.event.id)}, format='json')
+        self.assertEqual(response.status_code, 400)
+
+    def test_someone_who_runs_the_event_still_can(self):
+        admin = make_user('admin', is_superuser=True, is_staff=True)
+        response = self.register(admin)
+        self.assertEqual(response.status_code, 201, response.data)
+
+    def test_a_coordinator_registers_a_group_and_a_teen_claims(self):
+        batch = batches.create(self.coordinator, self.event, self.tree['prov'], 1, 0)
+        seat = batch.seats.get()
+        teen = make_user('tobi', gender='male')
+        self.assertEqual(batches.claim(teen, '', seat.claim_code).user, teen)
+
+    def test_it_turns_group_registration_on(self):
+        from events.serializers import EventCreateUpdateSerializer
+        event = group_event(title='Youth Camp', group_registration_enabled=False)
+        serializer = EventCreateUpdateSerializer(
+            event, data={'group_registration_only': True}, partial=True)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        serializer.save()
+        event.refresh_from_db()
+        self.assertTrue(event.group_registration_enabled)
+        self.assertTrue(event.group_registration_only)
+
+    def test_turning_groups_off_turns_it_off(self):
+        from events.serializers import EventCreateUpdateSerializer
+        serializer = EventCreateUpdateSerializer(
+            self.event, data={'group_registration_enabled': False}, partial=True)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        serializer.save()
+        self.event.refresh_from_db()
+        self.assertFalse(self.event.group_registration_only)
+
+
+class GroupPaidMessageTests(GroupTestCase):
+    def test_the_coordinator_is_told_in_the_app_and_sent_to_the_group(self):
+        from events import notifications
+        from notifications.models import Notification
+        batch = batches.create(self.coordinator, group_event(), self.tree['prov'], 2, 1)
+        notifications.notify_group_paid(batch)
+        note = Notification.objects.get(user=self.coordinator)
+        self.assertEqual(note.deep_link, f'/console/groups/{batch.id}')
+        self.assertIn('3 tickets', note.body)
+        # Told once, however many times the payment is confirmed.
+        notifications.notify_group_paid(batch)
+        self.assertEqual(Notification.objects.filter(user=self.coordinator).count(), 1)

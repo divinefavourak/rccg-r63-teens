@@ -142,9 +142,9 @@ def sample_contexts():
             'event': _event(), 'outcome': 'paid', 'note': '', 'coordinator_name': 'Bro. Segun',
             'seats': [
                 SimpleNamespace(registration_id='CAMP-20261218-00001', attendee_gender='male',
-                                claim_code='K7Q2MX'),
+                                claim_code_display='K7Q2-MX8B'),
                 SimpleNamespace(registration_id='CAMP-20261218-00002', attendee_gender='female',
-                                claim_code='P3ZR8N'),
+                                claim_code_display='P3ZR-8NWD'),
             ],
             'batch_url': f'{FRONTEND}/admin/groups?batch=1', 'frontend_url': FRONTEND, **LOGOS,
         },

@@ -93,7 +93,7 @@ Each component ships with: anatomy, variants, states (default/hover/pressed/focu
 
 **Skeletons** — text lines, card, list-row, reader-page skeletons; shimmer subtle; skeleton-first loading is the default (`09-design-principles.md`).
 
-**Media** — video player (poster + tap-to-play, quality menu), podcast player + docked mini-player, audio scrubber, image with blur-up loading.
+**Media** — video player (poster + tap-to-play, quality menu; controls drawn over the video in fixed cream `#FDFAF5` and pop amber `#FFC857` on a dark scrim, whatever the theme, and fading out 3 s after the last touch while playing), podcast player + docked mini-player, audio scrubber, image with blur-up loading.
 
 **Feedback** — toast (bottom, above nav, 3s, single-line + optional action), inline banners (offline bar, sync state), empty-state block (illustration + one line + one action — `06-user-flows.md` flow 26), streak celebration moment (specced motion, `09-design-principles.md`).
 

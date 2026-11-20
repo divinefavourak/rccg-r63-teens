@@ -240,6 +240,8 @@ export interface EventListItem {
   payment_method?: 'online' | 'manual';
   /** Whether coordinators can register groups for it. */
   group_registration_enabled?: boolean;
+  /** Only coordinators register; a teen claims a seat with a code instead. */
+  group_registration_only?: boolean;
   /**
    * The page to share it by: the flier as a chat preview, then on into the
    * app or the web app. Absent from a server older than it.
@@ -947,6 +949,11 @@ export interface Seat {
   claim_code?: string;
   attendee_gender: string;
   attendee_name: string;
+  attendee_phone?: string;
+  /** A child's seat, named by the coordinator and never claimed: age and who to call. */
+  attendee_age?: number | null;
+  guardian_name?: string;
+  guardian_phone?: string;
   status: string;
   payment_status: string;
   claimed: boolean;

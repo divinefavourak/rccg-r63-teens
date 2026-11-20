@@ -154,6 +154,30 @@
   animation: fadeIn 0.8s ease-out both;
 }
 
+/* The video player's "10 seconds" flash after a double tap: in, hold, out. */
+@keyframes skipFlash {
+  0% {
+    opacity: 0;
+  }
+  15%,
+  65% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.skip-flash {
+  animation: skipFlash 0.7s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skip-flash {
+    animation: none;
+  }
+}
+
 /*
   Height-auto expansion without measuring anything in JS. Animating
   grid-template-rows from 0fr to 1fr is the one CSS technique that transitions to

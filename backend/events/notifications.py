@@ -157,6 +157,31 @@ def notify_payment_received(registration, place_gone=False):
     )
 
 
+def notify_group_paid(batch):
+    """
+    A coordinator's group is paid for and every seat confirmed. The codes were
+    theirs to see from the start; this is the moment to hand them out, so the
+    message opens the group, where each code copies with a tap.
+    """
+    user = batch.created_by
+    if user is None:
+        return None
+    seats = batch.seats.exclude(status='cancelled').count()
+    return send(
+        user,
+        NotificationType.TRANSACTIONAL,
+        'Your group is paid',
+        f'{batch.event.title}: all {seats} tickets for {batch.reference} are confirmed. '
+        f'Open the group to copy or share the codes.',
+        deep_link=f'/console/groups/{batch.id}',
+        data={'event_id': str(batch.event_id), 'batch_id': str(batch.id),
+              'event_title': batch.event.title},
+        dedupe_key=f'event:group_paid:{batch.id}',
+        # Called from the webhook or a receipt review: neither waits on a push.
+        defer_push=True,
+    )
+
+
 def notify_place_released(registration):
     """
     The place was held for payment and given up when the time ran out. Said

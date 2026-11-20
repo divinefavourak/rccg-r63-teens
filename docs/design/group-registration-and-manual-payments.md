@@ -4,13 +4,13 @@ What was built in the backend and the web Console, and what the phone app needs 
 
 ## The idea in one paragraph
 
-An event is paid for either **online** (the gateway, Squad today) or by **bank transfer** to an account set on the event. A coordinator can register a **group**: a headcount of boys and girls from their part of the church, paid for once. Each place is a **seat** with a ticket number and a claim code. The coordinator hands these out, and at the event each teen claims their seat in the app. Transfer receipts are checked in the Console by whoever holds `payments.reconcile` over that part of the church: Super Admin, National Coordinator or Regional Coordinator. Verifying a receipt writes a `Payment`, so there is one ledger.
+An event is paid for either **online** (the gateway, Squad today) or by **bank transfer** to an account set on the event. A coordinator can register a **group**: a headcount of boys and girls from their part of the church, paid for once. Each place is a **seat** with a ticket number and a claim code. The coordinator hands the codes out, and each teen claims their seat in the app with theirs; a child without a phone is named on the seat instead and checked in by ticket number or name. Transfer receipts are checked in the Console by whoever holds `payments.reconcile` over that part of the church: Super Admin, National Coordinator or Regional Coordinator. Verifying a receipt writes a `Payment`, so there is one ledger.
 
 ## Models
 
 | Model | Where | What it is |
 |---|---|---|
-| `Event.payment_method` | `events/models.py` | `online` or `manual`. With `bank_name`, `bank_account_number`, `bank_account_name`, `payment_instructions`, `group_registration_enabled`. |
+| `Event.payment_method` | `events/models.py` | `online` or `manual`. With `bank_name`, `bank_account_number`, `bank_account_name`, `payment_instructions`, `group_registration_enabled`, `group_registration_only` (only coordinators register; teens claim). |
 | `RegistrationBatch` | `events/models.py` | A group: `reference` (`GRP-XXXXXX`), `event`, `node`, `male_count`, `female_count`, `unit_price`, `amount_due`, `amount_paid`, `status` (`awaiting_payment`, `under_review`, `part_paid`, `paid`, `cancelled`). |
 | `EventRegistration.batch`, `.claim_code`, `.claimed_at`, `.node` | `events/models.py` | A seat is a registration with a batch. `node` scopes who reconciles it. |
 | `PaymentReceipt` | `payments/models.py` | A transfer receipt for a batch **or** a registration, in private storage. `status`: `submitted`, `verified`, `rejected`. |
@@ -28,7 +28,7 @@ All are under `/api/v1/` and need a signed-in user.
 | `PATCH /events/batches/<id>/` | the group's coordinators | Change the counts (before any payment), the contact email or phone, or the notes. |
 | `POST /events/batches/<id>/cancel/` | the group's coordinators | Only while nothing has been paid. |
 | `PATCH /events/batches/<id>/seats/` | the group's coordinators | `{seats: [{registration_id, name, phone}]}` puts names on seats. |
-| `POST /events/registrations/claim/` | any teen | `{registration_id, claim_code}` returns the registration, now theirs. Throttled. |
+| `POST /events/registrations/claim/` | any teen | `{claim_code}` (plus `registration_id` for an older 6-character code; otherwise `code: "ticket_needed"`) returns the registration, now theirs. Throttled. |
 | `POST /payments/batches/<id>/checkout/` · `/check/` | the group's coordinators | Gateway checkout for what the group still owes, and asking the gateway afterwards. |
 | `POST /payments/receipts/` (multipart) | the payer | `batch` or `registration`, plus `amount`, `paid_on`, `payer_name`, `bank_reference` and `file`. |
 | `GET /payments/receipts/` · `/<id>/` | the sender, the group's coordinators, reconcilers | `?status=submitted&event=<id>` |
@@ -36,12 +36,12 @@ All are under `/api/v1/` and need a signed-in user.
 | `POST /payments/receipts/<id>/verify/` · `/reject/` | `payments.reconcile` over the node | `{amount, note}` or `{reason}` |
 | `GET /payments/reconciliation/?event=<id>` | `payments.view` or `payments.reconcile` | Summary, ledger, groups still owing. `&export=csv` for the ledger. |
 
-`EventRegistrationDetailSerializer` (the phone's ticket) now also carries `batch` and `claimed_at`. `can_pay` is false for a seat, which is paid with its group, and for a manual-payment event, because the gateway is refused there. `EventListSerializer` and `EventDetailSerializer` carry `payment_method` and `group_registration_enabled`. The detail also carries the bank fields.
+`EventRegistrationDetailSerializer` (the phone's ticket) now also carries `batch` and `claimed_at`. `can_pay` is false for a seat, which is paid with its group, and for a manual-payment event, because the gateway is refused there. `EventListSerializer` and `EventDetailSerializer` carry `payment_method`, `group_registration_enabled` and `group_registration_only`. The detail also carries the bank fields.
 
 ## Mobile app
 
 Built. The phone talks to the same endpoints:
-- `app/ticket/claim.tsx` claims a ticket, reached from the row at the top of My tickets.
+- `app/ticket/claim.tsx` claims a ticket with one code field, reached from the row at the top of My tickets and from "I have a code from my coordinator" on the event and register screens. The ticket-number field appears only for an older 6-character code.
 - `app/ticket/[id].tsx` shows the bank-transfer panel and receipts on a `manual` event.
 - `app/console/groups/` holds the coordinator's groups: the list, one group, and a new group.
 - `src/components/PaymentPieces.tsx` has the bank details, the receipt form and the receipt list, used by both the ticket and the group screens.
@@ -84,5 +84,6 @@ Use the words the Console uses, so a coordinator hears one vocabulary: *group*, 
 ## Operations
 
 - Set `R2_PRIVATE_BUCKET_NAME` to a bucket with no public domain before taking real receipts. See `docs/ops/07-production-secrets.md`.
-- Migrations: `events.0013`, `payments.0005`, and `identity.0007`, which grants `payments.reconcile`. Every existing event stays `online`, and group registration is **on** for all events, existing ones included. Turn it off per event in the editor.
-- To take transfers for an event: in the Console, edit the event, choose **Bank transfer**, fill in the account, and tick **Coordinators can register groups**. Optionally set a group price from a group size.
+- Migrations: `events.0013`, `payments.0005`, and `identity.0007`, which grants `payments.reconcile`; then `events.0014` (`group_registration_only`, off for every event). Every existing event stays `online`, and group registration is **on** for all events, existing ones included. Change it per event in the editor's **Who registers**.
+- To take transfers for an event: in the Console, edit the event, choose **Bank transfer**, fill in the account, and under **Who registers** pick *Teens or their coordinator* or *Coordinators only*. Optionally set a group price from a group size.
+- To check a receipt: Console → Payments → To check, or open the group: while a receipt waits, someone holding `payments.reconcile` sees **Check the receipt**, which opens it on Payments (`/admin/payments?receipt=<id>`). The coordinator sees that it is being checked, with **Send another receipt** for a second transfer instead of the whole form.
