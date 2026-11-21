@@ -68,7 +68,64 @@ dc logs -f worker         # scheduled tasks: "Sending due task" / "succeeded"
 dc logs --since 1h caddy  # HTTPS and certificates
 ```
 
-Logs are capped at 3 × 10 MB per container.
+Logs are capped at 3 × 10 MB per container. A deploy recreates `web` and
+`worker`, which empties their logs: read them before redeploying.
+
+```bash
+dc logs --since 30m web | grep -iE "error|traceback" -A 15   # errors with the stack
+dc logs --since 24h worker | grep -iE "failed|error"         # tasks that failed
+tail /var/log/faithtribe-backup.log                          # last night's backup
+```
+
+## Disk space
+
+The app itself (code, database volume, backups) is under 300 MB. The rest of
+the 39 GB disk is Ubuntu, snaps from the remote desktop, Docker images and two
+swap files (`/swapfile` 2 GB, `/home/swapfile` 512 MB; both are used, keep them).
+
+The system journal is capped at 200 MB
+(`/etc/systemd/journald.conf.d/size.conf`, set 2026-11-21). Before that it had
+grown to 2.7 GB, almost all of it failed SSH logins.
+
+Every `dc build` adds to Docker's build cache and nothing removes it. When the
+disk passes about 70%:
+
+```bash
+df -h /
+docker system df                  # look at "Build Cache"
+docker builder prune -f           # safe: running images are untouched
+snap list --all | awk '/disabled/{print $1, $3}' \
+  | while read n r; do snap remove "$n" --revision="$r"; done   # old snap copies
+```
+
+On 2026-11-21 this took the disk from 57% to 47%.
+
+## SSH and fail2ban
+
+Bots try root passwords all day: 22,351 failures on 2026-11-20. Password
+logins are left on deliberately, so the user can sign in from anywhere, and
+`fail2ban` (installed 2026-11-21) bans the guessers. The rules live in
+`/etc/fail2ban/jail.d/faithtribe.local`: 5 failures in 10 minutes means a
+1-hour ban, which doubles for each repeat, up to 1 week.
+
+```bash
+fail2ban-client status sshd                   # failures and banned addresses
+fail2ban-client set sshd unbanip 1.2.3.4      # let an address back in
+```
+
+Mistyping the password 5 times bans your own address too. Wait an hour,
+connect from another network, or use the provider's web console, which
+fail2ban does not touch, and unban yourself there.
+
+Turning password logins off (keys only) would stop the attempts completely:
+
+```bash
+printf 'PasswordAuthentication no\nPermitRootLogin prohibit-password\n' \
+  > /etc/ssh/sshd_config.d/10-keys-only.conf
+sshd -t && systemctl reload ssh
+```
+
+This has not been done. Only do it once every place you log in from has a key.
 
 ---
 
