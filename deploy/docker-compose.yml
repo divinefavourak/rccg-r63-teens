@@ -22,6 +22,9 @@ x-logging: &logging
 x-app: &app
   build:
     context: ../backend
+    args:
+      # Sentry's release: `SENTRY_RELEASE=$(git rev-parse --short HEAD) dc build`.
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
   image: faithtribe-api:latest
   env_file: .env
   restart: unless-stopped

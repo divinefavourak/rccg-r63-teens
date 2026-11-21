@@ -39,6 +39,12 @@ RUN useradd --create-home --uid 1000 app \
     && chown -R app:app /app /beat
 USER app
 
+# The commit this image was built from, so Sentry ties each error to a
+# release (deploy: `SENTRY_RELEASE=$(git rev-parse --short HEAD) dc build`).
+# Last, so a new commit only changes this layer and nothing above is rebuilt.
+ARG SENTRY_RELEASE=
+ENV SENTRY_RELEASE=${SENTRY_RELEASE}
+
 EXPOSE 8000
 
 # gthread: a slow client downloading a large response (the Bible pack) holds a

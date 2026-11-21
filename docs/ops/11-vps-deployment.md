@@ -36,7 +36,7 @@ alias dc='docker compose -f deploy/docker-compose.yml'
 
 ```bash
 git pull
-dc build
+SENTRY_RELEASE=$(git rev-parse --short HEAD) dc build   # tags Sentry errors with the commit
 dc run --rm web ./release.sh     # migrate + the post-deploy commands
 dc up -d                         # replaces only containers whose image changed
 dc ps                            # all running, web healthy
@@ -113,34 +113,44 @@ keeps the errors.
 
 ## Error reports (Sentry)
 
-Every unhandled error in `web` or `worker`, and every `logger.error()`, is
-sent to Sentry, which emails each new problem once and keeps it there through
-deploys and restarts. It is set up at the end of
-`backend/backend/settings.py` and stays off while `SENTRY_DSN` is empty, so
-local runs and tests send nothing.
+Sentry project: `faith-tribe/rccg-r63-teens` (Python / Django, data held in
+the EU). It gets:
 
-To switch it on, put the DSN from sentry.io (a Django project, then
-Settings → Client Keys) in `deploy/.env` and recreate the two services. A
-plain restart keeps the old environment.
+- **Errors:** every unhandled error in `web` or `worker`, and every
+  `logger.error()`. Sentry emails each new problem once and keeps it through
+  deploys and restarts.
+- **Traces:** 10% of requests in production, every request when `DEBUG` is
+  on. `SENTRY_TRACES_SAMPLE_RATE` overrides that (`0` turns tracing off).
+- **Logs:** every `logger.warning()` and above, searchable under Explore →
+  Logs.
+
+It is set up at the end of `backend/backend/settings.py` and stays off while
+`SENTRY_DSN` is empty, so local runs and tests send nothing. The DSN is in
+`deploy/.env` on the server. A new value needs the two services recreated,
+because a plain restart keeps the old environment:
 
 ```bash
-echo 'SENTRY_DSN=https://...@....ingest.sentry.io/...' >> deploy/.env
 dc up -d --force-recreate web worker
 ```
+
+Each error is tagged with the commit it came from (`release`) when the image is
+built with `SENTRY_RELEASE=$(git rev-parse --short HEAD) dc build`, as in
+"Deploying a change". An image built without it reports no release.
 
 What is sent, and what is not. Most users are under 18:
 
 - **Sent:** the error, its stack trace with local variables, the URL and
-  method, and the server's environment (`SENTRY_ENVIRONMENT`, default
-  `production`).
+  method, and the environment (`SENTRY_ENVIRONMENT`, default `production`).
 - **Not sent:** the user, their IP address, cookies and request bodies
-  (`send_default_pii=False`, `max_request_body_size='never'`). Sentry's
-  default scrubber blanks variables named like passwords, tokens and
-  secrets.
+  (`send_default_pii=False`, `max_request_body_size='never'`).
+- **Blanked before sending:** email addresses and Nigerian phone numbers
+  anywhere in a report, trace or log, including log messages such as
+  `'Email failed to %s'` and local variables (`backend/common/sentry.py`,
+  shown as `[email]` and `[phone]`). If that ever fails, the report is dropped
+  rather than sent unscrubbed. Sentry's own scrubber also blanks variables
+  named like passwords, tokens and secrets.
 - **Ignored:** `django.security.DisallowedHost`, which bots trigger all day
   and which would use up the quota.
-- **Performance tracing** is off (`SENTRY_TRACES_SAMPLE_RATE=0`). Set, for
-  example, `0.05` to sample 5% of requests.
 
 ## Disk space
 

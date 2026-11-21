@@ -693,39 +693,61 @@ LOGGING = {
     },
 }
 
-# Error reports (Sentry). Off until SENTRY_DSN is set, so local runs and tests
-# send nothing. Django and Celery are picked up automatically, so this covers
-# the web service and the worker, which both load these settings. Any
-# logger.error() becomes a report too.
+# Sentry: error reports, a sample of request traces, and warnings as Sentry
+# Logs. Off until SENTRY_DSN is set, so local runs and tests send nothing.
+# Django and Celery are picked up automatically, so this covers the web
+# service and the worker, which both load these settings.
 #
 # Most users are under 18, so personal data stays out: no user, IP or cookies
 # (send_default_pii off) and no request bodies, which carry names, phone
-# numbers and receipts. Stack traces keep their local variables because they
-# are what makes a report useful. Sentry's default scrubber blanks the ones
-# named like passwords, tokens and secrets.
+# numbers and receipts. common/sentry.py then blanks email addresses and phone
+# numbers left in messages and local variables, such as 'Email failed to %s'.
+# Sentry's own scrubber blanks variables named like passwords and tokens.
 SENTRY_DSN = os.getenv('SENTRY_DSN', '').strip()
 if SENTRY_DSN:
-    import sentry_sdk
-    from sentry_sdk.integrations.logging import ignore_logger
+    import logging as _logging
 
+    import sentry_sdk
+    from sentry_sdk.integrations.logging import (
+        LoggingIntegration,
+        ignore_logger,
+        ignore_logger_for_sentry_logs,
+    )
+
+    from common.sentry import scrub_event, scrub_log
+
+    # Every request is traced locally, so a test shows up at once; production
+    # samples 10%. SENTRY_TRACES_SAMPLE_RATE overrides both (0 turns it off).
     try:
-        _sentry_traces = float(os.getenv('SENTRY_TRACES_SAMPLE_RATE', '0') or 0)
+        _sentry_traces = float(
+            os.getenv('SENTRY_TRACES_SAMPLE_RATE') or (1.0 if DEBUG else 0.1)
+        )
     except ValueError:
-        _sentry_traces = 0.0
+        _sentry_traces = 0.1
 
     sentry_sdk.init(
         dsn=SENTRY_DSN,
-        environment=os.getenv('SENTRY_ENVIRONMENT', 'development' if DEBUG else 'production'),
+        environment=os.getenv('SENTRY_ENVIRONMENT') or ('development' if DEBUG else 'production'),
         release=os.getenv('SENTRY_RELEASE') or None,
         send_default_pii=False,
         max_request_body_size='never',
-        # Performance tracing is off by default: the free plan's quota is
-        # small, and errors are what we are after.
         traces_sample_rate=_sentry_traces,
+        before_send=scrub_event,
+        before_send_transaction=scrub_event,
+        enable_logs=True,
+        before_send_log=scrub_log,
+        integrations=[
+            LoggingIntegration(
+                level=_logging.INFO,               # breadcrumbs on a report
+                event_level=_logging.ERROR,        # logger.error() → a report
+                sentry_logs_level=_logging.WARNING,  # warnings up → Sentry Logs
+            ),
+        ],
     )
     # Bots send requests with someone else's Host header all day. Django logs
     # each as an error, which would use up the monthly quota on noise.
     ignore_logger('django.security.DisallowedHost')
+    ignore_logger_for_sentry_logs('django.security.DisallowedHost')
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'R63 API',
