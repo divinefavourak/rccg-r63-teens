@@ -125,10 +125,10 @@ services:
 
   # Dozzle: the log viewer at https://api.thefaithtribe.live/logs/ (Caddy
   # routes /logs there). Read-only: actions and the container shell are off by
-  # default and stay off. It reads logs through the Docker socket, and the
-  # filter shows this project's containers only, not the other bot on the box.
-  # The login comes from deploy/dozzle/users.yml, which is made on the server
-  # and never committed (docs/ops/11-vps-deployment.md, "Log viewer").
+  # default and stay off. It reads logs through the Docker socket and shows
+  # every container on the box, the cardio-snipe-bot included. The login
+  # comes from deploy/dozzle/users.yml, which is made on the server and never
+  # committed (docs/ops/11-vps-deployment.md, "Log viewer").
   logs:
     image: amir20/dozzle:v11.4.1
     restart: unless-stopped
@@ -137,7 +137,6 @@ services:
       DOZZLE_BASE: /logs
       DOZZLE_AUTH_PROVIDER: simple
       DOZZLE_AUTH_TTL: 12h
-      DOZZLE_FILTER: label=com.docker.compose.project=faithtribe
       DOZZLE_NO_ANALYTICS: "true"
       DOZZLE_DISABLE_AVATARS: "true"
       DOZZLE_DISABLE_SETUP_WIZARD: "true"

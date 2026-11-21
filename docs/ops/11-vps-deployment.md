@@ -79,14 +79,17 @@ tail /var/log/faithtribe-backup.log                          # last night's back
 
 ## Log viewer (Dozzle)
 
-**https://api.thefaithtribe.live/logs/** shows every Faith Tribe container's
-logs live in the browser, with search, and works on a phone. It is the `logs`
+**https://api.thefaithtribe.live/logs/** shows the logs of every container on
+the server live in the browser, with search, and works on a phone. It is the `logs`
 service in `deploy/docker-compose.yml` ([Dozzle](https://dozzle.dev), about
 10 MB of memory). Caddy sends `/logs` to it and everything else to Django.
 
 - **Read-only.** Container actions and the shell are off. It cannot restart,
   stop or change anything.
-- **This project only.** `DOZZLE_FILTER` hides the other bot on the server.
+- **Every container**, `cardio-snipe-bot` included (shown since 2026-11-21).
+  To limit it to Faith Tribe again, add
+  `DOZZLE_FILTER: label=com.docker.compose.project=faithtribe` to the
+  service's environment.
 - **Login:** user `admin`. The password is not in the repo. It is hashed into
   `deploy/dozzle/users.yml` on the server (git-ignored, mode 600). A session
   lasts 12 hours. Dozzle's session secret is kept in the same folder.
@@ -105,7 +108,39 @@ dc restart logs
 The login needs this file, so on a new server make it before `dc up -d`.
 
 Like `dc logs`, it only sees what Docker still holds: the newest 30 MB per
-container, emptied when a deploy recreates `web` and `worker`.
+container, emptied when a deploy recreates `web` and `worker`. Sentry, below,
+keeps the errors.
+
+## Error reports (Sentry)
+
+Every unhandled error in `web` or `worker`, and every `logger.error()`, is
+sent to Sentry, which emails each new problem once and keeps it there through
+deploys and restarts. It is set up at the end of
+`backend/backend/settings.py` and stays off while `SENTRY_DSN` is empty, so
+local runs and tests send nothing.
+
+To switch it on, put the DSN from sentry.io (a Django project, then
+Settings → Client Keys) in `deploy/.env` and recreate the two services. A
+plain restart keeps the old environment.
+
+```bash
+echo 'SENTRY_DSN=https://...@....ingest.sentry.io/...' >> deploy/.env
+dc up -d --force-recreate web worker
+```
+
+What is sent, and what is not. Most users are under 18:
+
+- **Sent:** the error, its stack trace with local variables, the URL and
+  method, and the server's environment (`SENTRY_ENVIRONMENT`, default
+  `production`).
+- **Not sent:** the user, their IP address, cookies and request bodies
+  (`send_default_pii=False`, `max_request_body_size='never'`). Sentry's
+  default scrubber blanks variables named like passwords, tokens and
+  secrets.
+- **Ignored:** `django.security.DisallowedHost`, which bots trigger all day
+  and which would use up the quota.
+- **Performance tracing** is off (`SENTRY_TRACES_SAMPLE_RATE=0`). Set, for
+  example, `0.05` to sample 5% of requests.
 
 ## Disk space
 
