@@ -143,7 +143,10 @@ export const DevotionalEditor = ({
     let cancelled = false;
     (async () => {
       try {
-        const { data } = await api.get(`/content/devotionals/${devotional!.id}/`);
+        // count=0: opening a devotional to edit it is not a view.
+        const { data } = await api.get(`/content/devotionals/${devotional!.id}/`, {
+          params: { count: 0 },
+        });
         if (cancelled) return;
         setForm((prev) => {
           const next = { ...prev };

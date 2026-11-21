@@ -19,7 +19,7 @@
  */
 import { useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, DownloadCloud, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, DownloadCloud, Eye, Plus } from 'lucide-react';
 import api from '../../api/axios';
 import ScreenShell from '../../components/console/ScreenShell';
 import { PermissionGate } from '../../components/console/PermissionGate';
@@ -43,7 +43,15 @@ interface CalendarDay {
   date: string;
   status: string | null;
   is_covered: boolean;
-  devotional: { id: string; title: string; status: string } | null;
+  devotional: {
+    id: string;
+    title: string;
+    status: string;
+    /** Readers who opened it, once per reader every 6 hours. */
+    view_count?: number;
+    /** Readers who marked it read. */
+    read_count?: number;
+  } | null;
 }
 
 interface CalendarResponse {
@@ -452,8 +460,18 @@ export const Content = () => {
                             <span className="line-clamp-2 text-[14px] font-semibold leading-5 text-console-text">
                               {item.title}
                             </span>
-                            <span className="mt-auto pt-1.5">
+                            <span className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-1.5">
                               <PublishPill status={item.status} />
+                              {item.status === 'published' && (
+                                <span
+                                  className="inline-flex items-center gap-1 text-[12px] font-medium leading-4 tabular-nums text-console-muted"
+                                  title={`${item.view_count ?? 0} views, ${item.read_count ?? 0} marked read`}
+                                >
+                                  <Eye size={13} aria-hidden />
+                                  <span className="sr-only">Views:</span>
+                                  {item.view_count ?? 0}
+                                </span>
+                              )}
                             </span>
                           </>
                         ) : gap ? (

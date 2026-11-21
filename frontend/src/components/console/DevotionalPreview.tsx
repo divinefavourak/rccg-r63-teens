@@ -10,6 +10,7 @@
  * A reviewer needs to see whether it is there before they hit Approve, not after.
  */
 import { useCallback, useEffect, useState } from 'react';
+import { CheckCircle2, Eye } from 'lucide-react';
 import api from '../../api/axios';
 import { Badge, Btn, Modal } from './primitives';
 import { ExplanatoryChip } from './PermissionGate';
@@ -35,7 +36,11 @@ interface DevotionalDetail {
   memory_verses?: MemoryVerse[];
   submitted_by?: string | null;
   review_notes?: string;
+  view_count?: number;
+  read_count?: number;
 }
+
+const plural = (n: number, word: string) => `${n} ${n === 1 ? word : `${word}s`}`;
 
 const STATUS_TONE: Record<
   string,
@@ -74,8 +79,10 @@ export const DevotionalPreview = ({
     if (!id) return;
     setIsLoading(true);
     try {
+      // count=0: an editor looking is not a reader, so this is not a view.
       const { data } = await api.get<DevotionalDetail>(
         `/content/devotionals/${id}/`,
+        { params: { count: 0 } },
       );
       setItem(data);
       setError(null);
@@ -199,6 +206,19 @@ export const DevotionalPreview = ({
             </Badge>
             {mine && <Badge tone="neutral">You submitted this</Badge>}
           </div>
+
+          {item.status === 'published' && (
+            <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[14px] leading-5 text-console-body tabular-nums">
+              <span className="inline-flex items-center gap-1.5">
+                <Eye size={16} aria-hidden className="text-console-muted" />
+                {plural(item.view_count ?? 0, 'view')}
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <CheckCircle2 size={16} aria-hidden className="text-console-muted" />
+                {item.read_count ?? 0} marked read
+              </span>
+            </p>
+          )}
 
           {noVerse && (
             <ExplanatoryChip
