@@ -85,10 +85,11 @@ export const SITE = {
   address: { locality: 'Lagos', region: 'Lagos', country: 'NG' },
 
   /**
-   * Official profiles, used as `sameAs`. Empty until there are accounts the
-   * church controls; a guessed handle in structured data is worse than none.
+   * Official profiles, used as `sameAs` and linked from the site footer. Only
+   * accounts the church controls, confirmed by the team; a guessed handle in
+   * structured data is worse than none.
    */
-  sameAs: [],
+  sameAs: ['https://www.instagram.com/faithtribe_rg63/'],
 
   /** The iPhone web app. Linked from the landing page, and a separate project. */
   webApp: 'https://app.thefaithtribe.live',
