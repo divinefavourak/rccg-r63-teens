@@ -107,6 +107,7 @@ class DevotionalListSerializer(serializers.ModelSerializer):
             'cover_image',
             'has_audio',
             'view_count',
+            'read_count',
             'status',
             'published_at',
         ]

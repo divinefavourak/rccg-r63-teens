@@ -140,10 +140,14 @@ class DevotionalViewSet(ReviewWorkflowMixin, viewsets.ModelViewSet):
     
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
-        count_view(request, instance)
+        # The Console's preview and editor send ?count=0: an editor checking a
+        # devotional is not a reader, and on a few views a day each look would
+        # show. Anyone could send it, which only means not being counted.
+        if request.query_params.get('count') != '0':
+            count_view(request, instance)
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
-    
+
     @action(detail=False, methods=['get'])
     def today(self, request):
         """
