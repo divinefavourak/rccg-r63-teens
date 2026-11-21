@@ -32,16 +32,26 @@
 		max_size 25MB
 	}
 
-	reverse_proxy web:8000 {
-		# While `web` is being recreated on a deploy (about 10 seconds) its
-		# name does not resolve and nothing listens. Without this Caddy fails
-		# those requests at once with a bare 502, which carries no CORS
-		# headers, so the web app reports every call as a CORS error (seen
-		# 18 November 2026). Caddy now holds a request and keeps trying for
-		# up to 30 seconds. Only failures to connect are retried, so a
-		# request is never sent to Django twice.
-		lb_try_duration 30s
-		lb_try_interval 500ms
+	# The log viewer (Dozzle, the `logs` service), behind its own login.
+	# Dozzle runs with DOZZLE_BASE=/logs, so the prefix is passed on, not
+	# stripped. Django has no route under /logs.
+	@logs path /logs /logs/*
+	handle @logs {
+		reverse_proxy logs:8080
+	}
+
+	handle {
+		reverse_proxy web:8000 {
+			# While `web` is being recreated on a deploy (about 10 seconds) its
+			# name does not resolve and nothing listens. Without this Caddy fails
+			# those requests at once with a bare 502, which carries no CORS
+			# headers, so the web app reports every call as a CORS error (seen
+			# 18 November 2026). Caddy now holds a request and keeps trying for
+			# up to 30 seconds. Only failures to connect are retried, so a
+			# request is never sent to Django twice.
+			lb_try_duration 30s
+			lb_try_interval 500ms
+		}
 	}
 
 	log {

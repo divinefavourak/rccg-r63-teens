@@ -77,6 +77,36 @@ dc logs --since 24h worker | grep -iE "failed|error"         # tasks that failed
 tail /var/log/faithtribe-backup.log                          # last night's backup
 ```
 
+## Log viewer (Dozzle)
+
+**https://api.thefaithtribe.live/logs/** shows every Faith Tribe container's
+logs live in the browser, with search, and works on a phone. It is the `logs`
+service in `deploy/docker-compose.yml` ([Dozzle](https://dozzle.dev), about
+10 MB of memory). Caddy sends `/logs` to it and everything else to Django.
+
+- **Read-only.** Container actions and the shell are off. It cannot restart,
+  stop or change anything.
+- **This project only.** `DOZZLE_FILTER` hides the other bot on the server.
+- **Login:** user `admin`. The password is not in the repo. It is hashed into
+  `deploy/dozzle/users.yml` on the server (git-ignored, mode 600). A session
+  lasts 12 hours. Dozzle's session secret is kept in the same folder.
+
+To change the password, or to make the file on a new server:
+
+```bash
+cd /srv/faithtribe
+install -d -m 700 deploy/dozzle
+docker run --rm amir20/dozzle:v11.4.1 generate admin \
+  --password 'NEW-PASSWORD' --name 'Faith Tribe admin' > deploy/dozzle/users.yml
+chmod 600 deploy/dozzle/users.yml
+dc restart logs
+```
+
+The login needs this file, so on a new server make it before `dc up -d`.
+
+Like `dc logs`, it only sees what Docker still holds: the newest 30 MB per
+container, emptied when a deploy recreates `web` and `worker`.
+
 ## Disk space
 
 The app itself (code, database volume, backups) is under 300 MB. The rest of
