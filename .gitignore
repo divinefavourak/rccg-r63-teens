@@ -134,3 +134,5 @@ backend/debug.log
 # Launch-video renders from the brag tool: thousands of frames per run.
 brag-output*/
 mobile/google-services.json
+# Log viewer login (bcrypt hashes), made on the server only
+deploy/dozzle/
