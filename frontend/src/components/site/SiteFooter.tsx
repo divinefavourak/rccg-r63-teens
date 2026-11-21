@@ -1,5 +1,11 @@
 import { Link } from 'react-router-dom';
 import LogoLockup from './LogoLockup';
+import { SITE } from '../../../seo/site.mjs';
+
+/** The handle shown for a profile URL, e.g. `@faithtribe_rg63`. */
+const handleOf = (url: string) => `@${new URL(url).pathname.replace(/\//g, '')}`;
+
+const INSTAGRAM = SITE.sameAs.find((url) => url.includes('instagram.com'));
 
 /**
  * The site's footer, which is also its sitemap.
@@ -62,6 +68,14 @@ const SiteFooter = () => (
             Faith Tribe is the daily companion of RCCG Region 63 Junior Church. One short reading a
             day, the whole Bible, and the events happening in your part of the church.
           </p>
+          {/* A visible link as well as the `sameAs` in the structured data:
+              search engines trust the claim more when the page makes it too.
+              `rel="me"` marks the profile as this site's own. */}
+          {INSTAGRAM && (
+            <a href={INSTAGRAM} target="_blank" rel="me noopener noreferrer" className={`${LINK} w-fit`}>
+              Instagram {handleOf(INSTAGRAM)}
+            </a>
+          )}
         </div>
       </div>
 
