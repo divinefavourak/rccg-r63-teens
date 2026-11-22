@@ -6,6 +6,7 @@ Personal-layer endpoints are owner-scoped twice over: `get_queryset` filters to
 `request.user` (so a foreign object 404s rather than 403s, leaking nothing), and
 `IsOwner` guards object access. Business logic lives in `bible.services`.
 """
+import django_filters
 from django.http import FileResponse
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -422,10 +423,22 @@ class BookmarkViewSet(OwnedViewSetMixin,
     ordering = ['-created_at']
 
 
+class HighlightFilter(django_filters.FilterSet):
+    """`?chapter=<id>` reads as the reader thinks: the highlights on this page."""
+
+    chapter = django_filters.UUIDFilter(field_name='verse__chapter')
+
+    class Meta:
+        model = Highlight
+        fields = ['color', 'verse', 'chapter']
+
+
 class HighlightViewSet(OwnedViewSetMixin, viewsets.ModelViewSet):
     queryset = Highlight.objects.select_related('verse__chapter__book__translation')
     serializer_class = HighlightSerializer
-    filterset_fields = ['color']
+    # `chapter` is what the reader asks for: the highlights on the page it has
+    # open, one small request, rather than every highlight the teen has made.
+    filterset_class = HighlightFilter
     ordering = ['-created_at']
 
 

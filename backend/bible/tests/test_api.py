@@ -150,6 +150,32 @@ class HighlightApiTests(APITestCase):
         )
         self.assertEqual(status.HTTP_400_BAD_REQUEST, response.status_code)
 
+    def test_filter_by_chapter_returns_only_that_page(self):
+        here = Highlight.objects.create(user=self.user, verse=self.verses[0])
+        elsewhere = make_verse(make_chapter(self.verses[0].chapter.book, number=4), number=1)
+        Highlight.objects.create(user=self.user, verse=elsewhere, color='green')
+
+        response = self.client.get(
+            reverse('bible-highlight-list'), {'chapter': str(self.verses[0].chapter_id)}
+        )
+        self.assertEqual(status.HTTP_200_OK, response.status_code)
+        self.assertEqual([str(here.id)], [row['id'] for row in response.data['results']])
+
+    def test_chapter_filter_never_shows_another_teens_highlights(self):
+        other = make_user('other')
+        Highlight.objects.create(user=other, verse=self.verses[0], color='pink')
+
+        response = self.client.get(
+            reverse('bible-highlight-list'), {'chapter': str(self.verses[0].chapter_id)}
+        )
+        self.assertEqual(0, response.data['count'])
+
+    def test_delete_own_highlight(self):
+        highlight = Highlight.objects.create(user=self.user, verse=self.verses[0])
+        response = self.client.delete(reverse('bible-highlight-detail', args=[highlight.id]))
+        self.assertEqual(status.HTTP_204_NO_CONTENT, response.status_code)
+        self.assertFalse(Highlight.objects.exists())
+
 
 class NoteApiTests(APITestCase):
     @classmethod

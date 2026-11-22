@@ -8,17 +8,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   useBookmarks,
   useBooks,
+  useChapterHighlights,
   useRecordChapterRead,
   useReference,
   useScripture,
+  useSetHighlight,
   useToggleBookmark,
   useTranslations,
 } from '../../src/api/queries';
-import type { BibleBook, BibleVerse } from '../../src/api/types';
+import type { BibleBook, BibleVerse, HighlightColor } from '../../src/api/types';
 import { BibleNavigator, isOldTestament } from '../../src/components/BibleNavigator';
 import { Icon, type IconName } from '../../src/components/Icon';
 import { useNavClearance } from '../../src/components/useNavClearance';
 import { useAuth } from '../../src/state/auth';
+import { useTokens } from '../../src/theme/ThemeProvider';
 import { downloadTranslation, useDownloadState } from '../../src/state/bibleDownload';
 import { useChrome } from '../../src/state/chrome';
 import { copyWords, plainVerse, redLetterParts, shareWords } from '../../src/data/scripture';
@@ -28,7 +31,14 @@ import { POP_BG } from '../../src/ui/cards';
 import { ChipRow, OptionRow } from '../../src/ui/inputs';
 import { Press } from '../../src/ui/Press';
 import { EmptyState, HEADER_GAP, OfflineBar, Sheet, Skeleton } from '../../src/ui/screen';
-import { DURATION, POP, type PopColour, type ReaderTokens } from '../../src/theme/tokens';
+import {
+  DURATION,
+  HIGHLIGHT_COLORS,
+  HIGHLIGHT_SWATCH,
+  POP,
+  type PopColour,
+  type ReaderTokens,
+} from '../../src/theme/tokens';
 
 /** A chapter counts as read once it has been open this long. */
 const READ_AFTER_MS = 10_000;
@@ -254,6 +264,23 @@ export default function BibleScreen() {
     return map;
   }, [bookmarks.data]);
 
+  const highlights = useChapterHighlights(chapterId, !isGuest);
+  const setHighlight = useSetHighlight();
+  /** Verse id → its highlight colour, for this chapter. */
+  const marked = useMemo(() => {
+    const map = new Map<string, HighlightColor>();
+    for (const h of highlights.data ?? []) map.set(h.verse, h.color);
+    return map;
+  }, [highlights.data]);
+
+  /** Shown over the text for a few seconds when a highlight did not save. */
+  const [markFailed, setMarkFailed] = useState(false);
+  useEffect(() => {
+    if (!markFailed) return;
+    const timer = setTimeout(() => setMarkFailed(false), 5000);
+    return () => clearTimeout(timer);
+  }, [markFailed]);
+
   const [copied, setCopied] = useState(false);
   useEffect(() => setCopied(false), [selected]);
 
@@ -296,6 +323,42 @@ export default function BibleScreen() {
     toggleBookmark.mutate({ verseId: selected.id, bookmarkId: savedAs.get(selected.id) });
   }, [selected, isGuest, router, toggleBookmark, savedAs]);
 
+  /**
+   * Highlight the chosen verse, or clear it by tapping its colour again. The
+   * sheet closes so the teen sees the stroke land on the page; it is drawn
+   * before the server answers.
+   */
+  const onHighlight = useCallback(
+    (color: HighlightColor) => {
+      if (!selected) return;
+      setSelected(null);
+      if (isGuest) {
+        router.push('/sign-up');
+        return;
+      }
+      setMarkFailed(false);
+      setHighlight.mutate(
+        {
+          verseId: selected.id,
+          chapterId: selected.chapter,
+          color: marked.get(selected.id) === color ? null : color,
+        },
+        { onError: () => setMarkFailed(true) },
+      );
+    },
+    [selected, isGuest, router, setHighlight, marked],
+  );
+
+  const onClearHighlight = useCallback(() => {
+    if (!selected) return;
+    setSelected(null);
+    setMarkFailed(false);
+    setHighlight.mutate(
+      { verseId: selected.id, chapterId: selected.chapter, color: null },
+      { onError: () => setMarkFailed(true) },
+    );
+  }, [selected, setHighlight]);
+
   // ── Rows ────────────────────────────────────────────────────────────────
   const renderVerse = useCallback(
     ({ item }: { item: BibleVerse }) => (
@@ -309,12 +372,13 @@ export default function BibleScreen() {
               : 'plain'
         }
         saved={savedAs.has(item.id)}
+        mark={marked.get(item.id)}
         fontSize={reader.fontSize}
         tok={tok}
         onPress={setSelected}
       />
     ),
-    [selected, focus, savedAs, reader.fontSize, tok],
+    [selected, focus, savedAs, marked, reader.fontSize, tok],
   );
 
   const header = (
@@ -423,6 +487,17 @@ export default function BibleScreen() {
       </View>
 
       {offline && <OfflineBar />}
+      {markFailed && (
+        <View
+          accessibilityLiveRegion="polite"
+          className="mx-5 mb-2 rounded-xl px-4 py-2.5"
+          style={{ backgroundColor: tok.sunken }}
+        >
+          <Text className="font-ui-md text-[14px] leading-5 text-feedback-error">
+            That highlight did not save. Check your connection and try again.
+          </Text>
+        </View>
+      )}
 
       {/* ── The text ────────────────────────────────────────────────────── */}
       {!reader.ready || passage.isPending ? (
@@ -513,10 +588,11 @@ export default function BibleScreen() {
                 That did not save. Check your connection and tap again.
               </Text>
             )}
-            <View className="h-[52px] flex-row items-center rounded-full bg-surf-sunken px-5">
-              <Text className="flex-1 font-ui-sb text-[16px] leading-6 text-ink-3">Highlight</Text>
-              <Text className="font-ui-md text-[12px] leading-4 text-ink-3">Coming soon</Text>
-            </View>
+            <HighlightPicker
+              current={marked.get(selected.id)}
+              onPick={onHighlight}
+              onClear={onClearHighlight}
+            />
           </View>
         )}
       </Sheet>
@@ -740,6 +816,7 @@ const VerseRow = memo(function VerseRow({
   verse,
   state,
   saved,
+  mark,
   fontSize,
   tok,
   onPress,
@@ -748,6 +825,8 @@ const VerseRow = memo(function VerseRow({
   /** `selected` has its action sheet open; `focus` is where a link landed. */
   state: 'plain' | 'selected' | 'focus';
   saved: boolean;
+  /** The teen's own highlight on this verse, if any. */
+  mark?: HighlightColor;
   fontSize: number;
   tok: ReaderTokens;
   onPress: (verse: BibleVerse) => void;
@@ -759,15 +838,20 @@ const VerseRow = memo(function VerseRow({
       onPress={() => onPress(verse)}
       accessibilityRole="button"
       // The address first, then the words (09-design-principles.md).
-      accessibilityLabel={`${verse.reference}${saved ? ', saved' : ''}. ${plainVerse(verse.text)}`}
-      accessibilityHint="Opens share, save and copy"
+      accessibilityLabel={`${verse.reference}${saved ? ', saved' : ''}${
+        mark ? `, highlighted ${mark}` : ''
+      }. ${plainVerse(verse.text)}`}
+      accessibilityHint="Opens share, save, copy and highlight"
       accessibilityState={{ selected }}
       style={
         selected
           ? { backgroundColor: POP.amber, borderRadius: 20, padding: 12 }
-          : state === 'focus'
-            ? { backgroundColor: tok.highlight, borderRadius: 12 }
-            : undefined
+          : mark
+            ? // The wash reaches a little past the words, without moving them.
+              { backgroundColor: tok.marks[mark], borderRadius: 10, marginHorizontal: -8, paddingHorizontal: 8 }
+            : state === 'focus'
+              ? { backgroundColor: tok.highlight, borderRadius: 12 }
+              : undefined
       }
     >
       <Text
@@ -804,6 +888,75 @@ const VerseRow = memo(function VerseRow({
     </Pressable>
   );
 });
+
+const COLOUR_NAMES: Record<HighlightColor, string> = {
+  yellow: 'Yellow',
+  green: 'Green',
+  blue: 'Blue',
+  pink: 'Pink',
+};
+
+/**
+ * Four colours and, once a verse has one, a way to take it off. The colours
+ * carry no meaning (`08-bible-experience.md` §3); tapping the one already on
+ * the verse clears it too, so a second tap undoes a first.
+ */
+function HighlightPicker({
+  current,
+  onPick,
+  onClear,
+}: {
+  current: HighlightColor | undefined;
+  onPick: (color: HighlightColor) => void;
+  onClear: () => void;
+}) {
+  const tokens = useTokens();
+  return (
+    <View className="w-full gap-2">
+      <View className="flex-row items-baseline justify-between">
+        <Text className="font-ui-sb text-[16px] leading-6 text-ink-1">Highlight</Text>
+        {current && (
+          <Text className="font-ui-md text-[12px] leading-4 text-ink-3">Tap it again to remove</Text>
+        )}
+      </View>
+      <View className="flex-row gap-3">
+        {HIGHLIGHT_COLORS.map((color) => {
+          const on = current === color;
+          return (
+            <Press
+              key={color}
+              onPress={() => onPick(color)}
+              accessibilityRole="button"
+              accessibilityLabel={
+                on ? `${COLOUR_NAMES[color]}, on. Tap to remove` : `Highlight ${COLOUR_NAMES[color]}`
+              }
+              accessibilityState={{ selected: on }}
+              className="h-11 flex-1 items-center justify-center rounded-full"
+              style={{
+                backgroundColor: HIGHLIGHT_SWATCH[color],
+                // The swatches are the same in both app themes, so the ring is
+                // the swatch's own dark, not the theme's ink.
+                borderWidth: on ? 2 : 0,
+                borderColor: POP.on,
+              }}
+            >
+              {on && <Icon name="check" size={20} color={POP.on} />}
+            </Press>
+          );
+        })}
+        {current && (
+          <Press
+            onPress={onClear}
+            accessibilityLabel="Remove highlight"
+            className="h-11 w-11 items-center justify-center rounded-full bg-surf-sunken"
+          >
+            <Icon name="close" size={20} color={tokens.text1} />
+          </Press>
+        )}
+      </View>
+    </View>
+  );
+}
 
 /** Share, Save, Copy: a colour tile with a dark round icon. */
 function ActionTile({
