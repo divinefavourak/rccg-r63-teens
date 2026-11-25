@@ -34,7 +34,6 @@ export function eventLd(event: Record<string, any>, url: string): JsonLd;
 export function itemListLd(input: {
   url: string;
   name: string;
-  itemType?: string;
   items: {
     url: string;
     name: string;
