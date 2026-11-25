@@ -105,6 +105,12 @@ export default function BibleScreen() {
     to?: string;
     passage?: string;
     returnTo?: string;
+    /**
+     * The translation the link means, e.g. "KJV" from a verse kept in it.
+     * A highlight belongs to one translation's verse, so opening it in another
+     * would show the words without it. Absent: stay in the current one.
+     */
+    translation?: string;
     /** Makes a repeat of the same link a new one, so it lands again. */
     at?: string;
   }>();
@@ -115,10 +121,11 @@ export default function BibleScreen() {
   useEffect(() => {
     const address =
       params.book && params.chapter
-        ? `${params.book}|${params.chapter}|${params.verse}|${params.to}|${params.returnTo}|${params.at}`
+        ? `${params.book}|${params.chapter}|${params.verse}|${params.to}|${params.translation}|${params.returnTo}|${params.at}`
         : '';
     if (address && address !== applied.current) {
       applied.current = address;
+      if (params.translation) setTranslation(params.translation);
       open(
         params.book as string,
         Number(params.chapter) || 1,
@@ -129,9 +136,10 @@ export default function BibleScreen() {
       return;
     }
     const found = referred.data;
-    const key = `p:${params.passage}|${params.returnTo}|${params.at}`;
+    const key = `p:${params.passage}|${params.translation}|${params.returnTo}|${params.at}`;
     if (params.passage && found && key !== applied.current) {
       applied.current = key;
+      if (params.translation) setTranslation(params.translation);
       open(found.book, found.chapter, found.start_verse ?? undefined, found.end_verse ?? undefined);
       setReturnTo(params.returnTo || null);
       return;
@@ -148,6 +156,7 @@ export default function BibleScreen() {
     params.verse,
     params.to,
     params.passage,
+    params.translation,
     params.returnTo,
     params.at,
     referred.data,
@@ -265,7 +274,9 @@ export default function BibleScreen() {
   }, [bookmarks.data]);
 
   const highlights = useChapterHighlights(chapterId, !isGuest);
-  const setHighlight = useSetHighlight();
+  /** Shown over the text for a few seconds when a highlight did not save. */
+  const [markFailed, setMarkFailed] = useState(false);
+  const setHighlight = useSetHighlight({ onError: () => setMarkFailed(true) });
   /** Verse id → its highlight colour, for this chapter. */
   const marked = useMemo(() => {
     const map = new Map<string, HighlightColor>();
@@ -273,8 +284,6 @@ export default function BibleScreen() {
     return map;
   }, [highlights.data]);
 
-  /** Shown over the text for a few seconds when a highlight did not save. */
-  const [markFailed, setMarkFailed] = useState(false);
   useEffect(() => {
     if (!markFailed) return;
     const timer = setTimeout(() => setMarkFailed(false), 5000);
@@ -337,14 +346,11 @@ export default function BibleScreen() {
         return;
       }
       setMarkFailed(false);
-      setHighlight.mutate(
-        {
-          verseId: selected.id,
-          chapterId: selected.chapter,
-          color: marked.get(selected.id) === color ? null : color,
-        },
-        { onError: () => setMarkFailed(true) },
-      );
+      setHighlight.mutate({
+        verseId: selected.id,
+        chapterId: selected.chapter,
+        color: marked.get(selected.id) === color ? null : color,
+      });
     },
     [selected, isGuest, router, setHighlight, marked],
   );
@@ -353,10 +359,7 @@ export default function BibleScreen() {
     if (!selected) return;
     setSelected(null);
     setMarkFailed(false);
-    setHighlight.mutate(
-      { verseId: selected.id, chapterId: selected.chapter, color: null },
-      { onError: () => setMarkFailed(true) },
-    );
+    setHighlight.mutate({ verseId: selected.id, chapterId: selected.chapter, color: null });
   }, [selected, setHighlight]);
 
   // ── Rows ────────────────────────────────────────────────────────────────

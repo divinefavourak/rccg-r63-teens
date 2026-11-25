@@ -111,6 +111,13 @@ export default function SavedScreen() {
     [highlights.data],
   );
 
+  /** Open a kept verse in the translation it was kept in. */
+  const openVerse = (passage: string, translation: string | null | undefined) =>
+    router.push({
+      pathname: '/bible',
+      params: translation ? { passage, translation } : { passage },
+    });
+
   const back = () => (router.canGoBack() ? router.back() : router.replace('/me'));
 
   const pending = !isGuest && (bookmarks.isPending || favorites.isPending || highlights.isPending);
@@ -124,7 +131,23 @@ export default function SavedScreen() {
   const showVerses = filter === 'all' || filter === 'verses' ? verses : [];
   const showMarked = filter === 'all' || filter === 'highlights' ? marked : [];
   const showLibrary = filter === 'all' || filter === 'library' ? library : [];
-  const nothingSaved = verses.length === 0 && marked.length === 0 && wanted.length === 0;
+  // Each store can fail on its own. One that did is said so where its rows
+  // would be, with a retry; it is never shown as empty, and the others still show.
+  const lost = {
+    verses: bookmarks.isError && !bookmarks.data,
+    highlights: highlights.isError && !highlights.data,
+    library: favorites.isError && !favorites.data,
+  };
+  const showLost = (Object.keys(lost) as (keyof typeof lost)[]).filter(
+    (store) => lost[store] && (filter === 'all' || filter === store),
+  );
+  const nothingSaved =
+    verses.length === 0 &&
+    marked.length === 0 &&
+    wanted.length === 0 &&
+    !lost.verses &&
+    !lost.highlights &&
+    !lost.library;
   const refetchAll = () => {
     bookmarks.refetch();
     highlights.refetch();
@@ -194,9 +217,7 @@ export default function SavedScreen() {
               <SavedVerse
                 key={mark.id}
                 mark={mark}
-                onOpen={() =>
-                  router.push({ pathname: '/bible', params: { passage: mark.target_reference } })
-                }
+                onOpen={() => openVerse(mark.target_reference, mark.verse_detail?.translation_code)}
                 onRemove={() =>
                   toggleBookmark.mutate({ verseId: mark.verse as string, bookmarkId: mark.id })
                 }
@@ -209,7 +230,7 @@ export default function SavedScreen() {
                 mark={mark}
                 onOpen={() => {
                   const reference = mark.verse_detail?.reference;
-                  if (reference) router.push({ pathname: '/bible', params: { passage: reference } });
+                  if (reference) openVerse(reference, mark.verse_detail?.translation_code);
                 }}
                 onRemove={() => setHighlight.mutate({ verseId: mark.verse, color: null })}
               />
@@ -237,7 +258,32 @@ export default function SavedScreen() {
               />
             ))}
 
-            {showVerses.length === 0 && showMarked.length === 0 && showLibrary.length === 0 && (
+            {showLost.map((store) => (
+              <View key={store} className="w-full gap-3 rounded-2xl bg-surf-sunken p-4">
+                <Text className="font-ui text-[14px] leading-5 text-ink-2">
+                  {store === 'verses'
+                    ? 'We couldn’t load your saved verses.'
+                    : store === 'highlights'
+                      ? 'We couldn’t load your highlights.'
+                      : 'We couldn’t load what you saved from the Library.'}{' '}
+                  Check your connection, then try again.
+                </Text>
+                <Press
+                  onPress={() =>
+                    (store === 'verses' ? bookmarks : store === 'highlights' ? highlights : favorites).refetch()
+                  }
+                  accessibilityLabel={`Try loading your ${store === 'library' ? 'Library items' : store} again`}
+                  className="h-11 items-center justify-center self-start rounded-full bg-ink px-5"
+                >
+                  <Text className="font-ui-sb text-[14px] leading-5 text-on-ink">Try again</Text>
+                </Press>
+              </View>
+            ))}
+
+            {showLost.length === 0 &&
+              showVerses.length === 0 &&
+              showMarked.length === 0 &&
+              showLibrary.length === 0 && (
               <Text className="text-center font-ui text-[16px] leading-6 text-ink-2">
                 {filter === 'verses'
                   ? 'No verses saved yet. Tap a verse in the Bible, then Save.'
@@ -247,6 +293,7 @@ export default function SavedScreen() {
               </Text>
             )}
 
+            {showVerses.length + showMarked.length + showLibrary.length > 0 && (
             <Text className="text-center font-ui-md text-[12px] leading-4 text-ink-3">
               {filter === 'highlights' || (showMarked.length > 0 && showVerses.length === 0 && showLibrary.length === 0)
                 ? 'Tap × to take a highlight off.'
@@ -254,6 +301,7 @@ export default function SavedScreen() {
                   ? 'Tap a bookmark, or × on a highlight, to remove it from here.'
                   : 'Tap a bookmark to remove it from here.'}
             </Text>
+            )}
           </>
         )}
       </ScrollView>
