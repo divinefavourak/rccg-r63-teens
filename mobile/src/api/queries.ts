@@ -23,6 +23,8 @@ import type {
   ArticleDetail,
   ArticleListItem,
   Bookmark,
+  Highlight,
+  HighlightColor,
   MediaEpisode,
   ProgressCalendar,
   ScriptureSearch,
@@ -87,6 +89,10 @@ export const keys = {
   scriptureSearch: (text: string, translation?: string) =>
     ['bible', 'search', text, translation ?? 'default'] as const,
   bookmarks: ['bible', 'bookmarks'] as const,
+  /** Every highlight, for the Saved screen. */
+  highlights: ['bible', 'highlights'] as const,
+  /** The highlights on one chapter, for the reader. */
+  chapterHighlights: (chapterId: string) => ['bible', 'highlights', 'chapter', chapterId] as const,
   articles: (params?: string) => ['articles', params ?? ''] as const,
   article: (id: string) => ['article', id] as const,
   episodes: (params?: string) => ['episodes', params ?? ''] as const,
@@ -1135,6 +1141,198 @@ export function useToggleBookmark() {
         ? api.delete('/bible/bookmarks/' + input.bookmarkId + '/')
         : api.post<Bookmark>('/bible/bookmarks/', { verse: input.verseId }),
     onSettled: () => qc.invalidateQueries({ queryKey: keys.bookmarks }),
+  });
+}
+
+// ─── Bible: highlights ─────────────────────────────────────────────────────
+
+/**
+ * Each highlighted verse as the server last confirmed it: its row id and colour.
+ *
+ * The cache can't answer that once a tap has been drawn ahead of the server: an
+ * optimistic row has no real id yet, and its colour may never land. Writes look
+ * here instead, and run one at a time (see `scope` below), so a second tap
+ * always sees the first one's answer. A failed write paints back from here.
+ * A verse with no entry has no highlight, as far as this phone has heard.
+ */
+const confirmedHighlights = new Map<string, { id: string; color: HighlightColor }>();
+
+function rememberHighlights(rows: Highlight[]) {
+  for (const row of rows) confirmedHighlights.set(row.verse, { id: row.id, color: row.color });
+}
+
+/**
+ * The highlights on one chapter. Small: the reader asks for the page it has
+ * open, not for every highlight the teen has ever made.
+ */
+export function useChapterHighlights(chapterId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: keys.chapterHighlights(chapterId ?? ''),
+    queryFn: async () => {
+      const rows = await fetchAllPages<Highlight>(
+        '/bible/highlights/?' + new URLSearchParams({ chapter: chapterId ?? '' }).toString(),
+      );
+      rememberHighlights(rows);
+      return rows;
+    },
+    enabled: enabled && !!chapterId,
+    staleTime: STALE.mine,
+    retry: retryTransient,
+  });
+}
+
+/** Every highlight, newest first, with its verse's words (the Saved screen). */
+export function useHighlights(enabled = true) {
+  return useQuery({
+    queryKey: keys.highlights,
+    queryFn: async () => {
+      const rows = await fetchAllPages<Highlight>('/bible/highlights/');
+      rememberHighlights(rows);
+      return rows;
+    },
+    enabled,
+    staleTime: STALE.mine,
+    retry: retryTransient,
+  });
+}
+
+/** The verse's highlight as the server has it now, or null. */
+async function lookUpHighlight(verseId: string): Promise<Highlight | null> {
+  const [row] = await fetchAllPages<Highlight>(
+    '/bible/highlights/?' + new URLSearchParams({ verse: verseId }).toString(),
+  );
+  return row ?? null;
+}
+
+/** Delete one row; already gone counts as done. */
+async function deleteHighlight(id: string): Promise<boolean> {
+  try {
+    await api.delete('/bible/highlights/' + id + '/');
+    return true;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return false;
+    throw error;
+  }
+}
+
+/** Create, recolour or clear one verse's highlight, whichever gets it to `color`. */
+async function writeHighlight(verseId: string, color: HighlightColor | null): Promise<void> {
+  const known = confirmedHighlights.get(verseId);
+
+  if (color === null) {
+    // Without a known id, or with one that is gone, the verse may still carry
+    // a highlight: one made where the answer was lost on the way back, or one
+    // re-made on another device. Ask the server which, rather than assume.
+    const deleted = known ? await deleteHighlight(known.id) : false;
+    if (!deleted) {
+      const current = await lookUpHighlight(verseId);
+      if (current) await deleteHighlight(current.id);
+    }
+    confirmedHighlights.delete(verseId);
+    return;
+  }
+
+  if (known) {
+    try {
+      await api.patch<Highlight>('/bible/highlights/' + known.id + '/', { color });
+      confirmedHighlights.set(verseId, { id: known.id, color });
+      return;
+    } catch (error) {
+      if (!(error instanceof ApiError && error.status === 404)) throw error;
+      confirmedHighlights.delete(verseId);
+    }
+  }
+
+  try {
+    const made = await api.post<Highlight>('/bible/highlights/', { verse: verseId, color });
+    confirmedHighlights.set(verseId, { id: made.id, color });
+  } catch (error) {
+    if (!(error instanceof ApiError && error.status === 400)) throw error;
+    // One highlight per verse: this one was made somewhere this phone has not
+    // heard about yet. Find it and recolour it instead.
+    const existing = await lookUpHighlight(verseId);
+    if (!existing) throw error;
+    await api.patch<Highlight>('/bible/highlights/' + existing.id + '/', { color });
+    confirmedHighlights.set(verseId, { id: existing.id, color });
+  }
+}
+
+type HighlightWrite = { verseId: string; chapterId?: string; color: HighlightColor | null };
+
+/**
+ * Show one verse in `color` (or with no highlight) in every list that holds it.
+ * A verse that gains a highlight joins its chapter's list when the chapter is
+ * known; Saved waits for its refetch, which brings the verse's words with it.
+ */
+function paintHighlight(
+  qc: ReturnType<typeof useQueryClient>,
+  { verseId, chapterId, color }: HighlightWrite,
+) {
+  qc.setQueriesData<Highlight[]>({ queryKey: keys.highlights }, (old) =>
+    old
+      ?.filter((h) => color !== null || h.verse !== verseId)
+      .map((h) => (h.verse === verseId && color ? { ...h, color } : h)),
+  );
+  if (chapterId && color) {
+    qc.setQueryData<Highlight[]>(keys.chapterHighlights(chapterId), (old = []) =>
+      old.some((h) => h.verse === verseId)
+        ? old
+        : [...old, { id: `optimistic-${verseId}`, verse: verseId, color }],
+    );
+  }
+}
+
+const HIGHLIGHT_MUTATION = ['bible', 'highlight'] as const;
+
+/**
+ * Highlight a verse in a colour, or clear it with `null`.
+ *
+ * Drawn at once, before the server answers: a highlight is a pen stroke and
+ * must feel like one. The writes go out one at a time, in the order tapped, so
+ * flicking yellow → green → blue ends blue on the server as well as on screen.
+ * The chapter is refetched only once the last write has landed, or a refetch
+ * in between would briefly paint an older colour back.
+ */
+export function useSetHighlight(options: { onError?: () => void } = {}) {
+  const qc = useQueryClient();
+  const { onError } = options;
+  return useMutation({
+    mutationKey: HIGHLIGHT_MUTATION,
+    scope: { id: 'bible-highlight' },
+    /**
+     * `chapterId` is the chapter the verse is on, when the caller knows it (the
+     * reader does). Without it a new highlight is not drawn ahead of the
+     * server, but recolouring and clearing still are, wherever it is shown.
+     */
+    mutationFn: (input: HighlightWrite) => writeHighlight(input.verseId, input.color),
+    onMutate: async (input) => {
+      await qc.cancelQueries({ queryKey: keys.highlights });
+      paintHighlight(qc, input);
+    },
+    // Here rather than on each `mutate` call: a later call replaces an earlier
+    // one's callbacks, so a failure queued behind another tap would go unsaid.
+    onError: (_error, input) => {
+      // Paint back what the server is known to hold, unless a later tap on the
+      // same verse is still on its way: that one decides what shows. Done
+      // here, not left to the refetch, because with no signal that fails too.
+      const later = qc
+        .getMutationCache()
+        .findAll({ mutationKey: HIGHLIGHT_MUTATION, status: 'pending' })
+        .filter((m) => (m.state.variables as HighlightWrite | undefined)?.verseId === input.verseId);
+      if (later.length <= 1) {
+        paintHighlight(qc, {
+          ...input,
+          color: confirmedHighlights.get(input.verseId)?.color ?? null,
+        });
+      }
+      onError?.();
+    },
+    onSettled: () => {
+      // This mutation still counts as running while it settles. Refetching
+      // while a later tap is in flight would paint an older colour back.
+      if (qc.isMutating({ mutationKey: HIGHLIGHT_MUTATION }) > 1) return;
+      qc.invalidateQueries({ queryKey: keys.highlights });
+    },
   });
 }
 

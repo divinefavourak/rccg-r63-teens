@@ -142,6 +142,46 @@ export type PopColour = Exclude<keyof typeof POP, 'on'>;
 export const TOKENS: Record<Scheme, Tokens> = { light: LIGHT, dark: DARK };
 
 /**
+ * The four highlight colours (`08-bible-experience.md` §3): muted, and with no
+ * meaning attached — a teen makes their own system.
+ *
+ * `READER_HIGHLIGHT` is the wash behind a highlighted verse, tuned per reader
+ * theme so the words keep their contrast on each paper. `HIGHLIGHT_SWATCH` is
+ * the solid dot in the verse sheet, which is app chrome and doesn't change
+ * with the reader's theme.
+ */
+export const HIGHLIGHT_COLORS = ['yellow', 'green', 'blue', 'pink'] as const;
+export type HighlightTone = (typeof HIGHLIGHT_COLORS)[number];
+
+export const HIGHLIGHT_SWATCH: Record<HighlightTone, string> = {
+  yellow: '#F2D16B',
+  green: '#9FD3A9',
+  blue: '#9DC1EA',
+  pink: '#EFADC8',
+};
+
+export const READER_HIGHLIGHT: Record<ReaderTheme, Record<HighlightTone, string>> = {
+  light: {
+    yellow: 'rgba(242, 196, 48, 0.32)',
+    green: 'rgba(92, 184, 112, 0.26)',
+    blue: 'rgba(92, 150, 222, 0.24)',
+    pink: 'rgba(232, 112, 160, 0.22)',
+  },
+  sepia: {
+    yellow: 'rgba(230, 180, 40, 0.34)',
+    green: 'rgba(100, 170, 100, 0.28)',
+    blue: 'rgba(90, 140, 200, 0.26)',
+    pink: 'rgba(220, 110, 150, 0.24)',
+  },
+  dark: {
+    yellow: 'rgba(214, 170, 40, 0.30)',
+    green: 'rgba(70, 170, 100, 0.30)',
+    blue: 'rgba(80, 140, 230, 0.32)',
+    pink: 'rgba(220, 90, 150, 0.30)',
+  },
+};
+
+/**
  * Bible Reader themes.
  *
  * The reader carries a third mode (sepia) that the rest of the app does not,
@@ -168,6 +208,8 @@ export interface ReaderTokens {
   onInk: string;
   /** The words of Jesus, set in red as printed Bibles do. */
   christ: string;
+  /** The wash behind a verse the teen has highlighted, by colour. */
+  marks: Record<HighlightTone, string>;
 }
 
 export const READER_TOKENS: Record<ReaderTheme, ReaderTokens> = {
@@ -184,6 +226,7 @@ export const READER_TOKENS: Record<ReaderTheme, ReaderTokens> = {
     ink: '#1C1916',
     onInk: '#FDFAF5',
     christ: '#B42318',
+    marks: READER_HIGHLIGHT.light,
   },
   sepia: {
     bg: '#F4EDD8',
@@ -198,6 +241,7 @@ export const READER_TOKENS: Record<ReaderTheme, ReaderTokens> = {
     ink: '#2C2416',
     onInk: '#F8F2E0',
     christ: '#A32015',
+    marks: READER_HIGHLIGHT.sepia,
   },
   dark: {
     bg: '#1C1916',
@@ -212,6 +256,7 @@ export const READER_TOKENS: Record<ReaderTheme, ReaderTokens> = {
     ink: '#FDFAF5',
     onInk: '#1C1916',
     christ: '#FF8A7A',
+    marks: READER_HIGHLIGHT.dark,
   },
 };
 

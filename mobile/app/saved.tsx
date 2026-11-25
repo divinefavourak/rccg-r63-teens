@@ -11,10 +11,12 @@ import {
   useDevotionals,
   useEpisodes,
   useFavorites,
+  useHighlights,
+  useSetHighlight,
   useToggleBookmark,
   useToggleFavorite,
 } from '../src/api/queries';
-import type { Bookmark, Favorite } from '../src/api/types';
+import type { Bookmark, Favorite, Highlight } from '../src/api/types';
 import { Icon } from '../src/components/Icon';
 import { LibraryCard, useOpenLibraryItem } from '../src/components/LibraryPieces';
 import { fromDevotional, fromEpisode, type LibraryItem } from '../src/data/library';
@@ -23,22 +25,23 @@ import { useAuth } from '../src/state/auth';
 import { ChipRow } from '../src/ui/inputs';
 import { Press } from '../src/ui/Press';
 import { BackHeader, EmptyState, IconButton, Skeleton } from '../src/ui/screen';
-import { POP } from '../src/theme/tokens';
+import { HIGHLIGHT_SWATCH, POP } from '../src/theme/tokens';
 
-type Filter = 'all' | 'verses' | 'library';
+type Filter = 'all' | 'verses' | 'highlights' | 'library';
 
 const FILTERS = [
   { value: 'all', label: 'All' },
   { value: 'verses', label: 'Verses' },
+  { value: 'highlights', label: 'Highlights' },
   { value: 'library', label: 'Library' },
 ] as const;
 
 /**
- * Saved (Figma "Saved"): the verses a teen has kept from the Bible and the
- * readings and talks kept from the Library, newest first.
+ * Saved (Figma "Saved"): the verses a teen has kept or highlighted in the
+ * Bible and the readings and talks kept from the Library, newest first.
  *
- * Two different stores sit behind it. Verses are Bible bookmarks, which carry
- * their own text. Library items are favourites, which hold only an id — so
+ * Three stores sit behind it. Verses are Bible bookmarks and highlights are
+ * Bible highlights; both carry their own text. Library items are favourites, which hold only an id — so
  * each is matched against the lists the Library already has in memory, and
  * only fetched by itself when it is too old to be in them.
  */
@@ -50,10 +53,12 @@ export default function SavedScreen() {
   const [filter, setFilter] = useState<Filter>('all');
 
   const bookmarks = useBookmarks(!isGuest);
+  const highlights = useHighlights(!isGuest);
   const favorites = useFavorites(!isGuest);
   const devotionals = useDevotionals();
   const episodes = useEpisodes();
   const toggleBookmark = useToggleBookmark();
+  const setHighlight = useSetHighlight();
   const toggleFavorite = useToggleFavorite();
 
   const wanted = useMemo(
@@ -101,13 +106,53 @@ export default function SavedScreen() {
     [bookmarks.data],
   );
 
+  const marked = useMemo(
+    () => (highlights.data ?? []).filter((h) => !!h.verse_detail),
+    [highlights.data],
+  );
+
+  /** Open a kept verse in the translation it was kept in. */
+  const openVerse = (passage: string, translation: string | null | undefined) =>
+    router.push({
+      pathname: '/bible',
+      params: translation ? { passage, translation } : { passage },
+    });
+
   const back = () => (router.canGoBack() ? router.back() : router.replace('/me'));
 
-  const pending = !isGuest && (bookmarks.isPending || favorites.isPending);
-  const failed = bookmarks.isError && favorites.isError && !bookmarks.data && !favorites.data;
-  const showVerses = filter !== 'library' ? verses : [];
-  const showLibrary = filter !== 'verses' ? library : [];
-  const nothingSaved = verses.length === 0 && wanted.length === 0;
+  const pending = !isGuest && (bookmarks.isPending || favorites.isPending || highlights.isPending);
+  const failed =
+    bookmarks.isError &&
+    favorites.isError &&
+    highlights.isError &&
+    !bookmarks.data &&
+    !favorites.data &&
+    !highlights.data;
+  const showVerses = filter === 'all' || filter === 'verses' ? verses : [];
+  const showMarked = filter === 'all' || filter === 'highlights' ? marked : [];
+  const showLibrary = filter === 'all' || filter === 'library' ? library : [];
+  // Each store can fail on its own. One that did is said so where its rows
+  // would be, with a retry; it is never shown as empty, and the others still show.
+  const lost = {
+    verses: bookmarks.isError && !bookmarks.data,
+    highlights: highlights.isError && !highlights.data,
+    library: favorites.isError && !favorites.data,
+  };
+  const showLost = (Object.keys(lost) as (keyof typeof lost)[]).filter(
+    (store) => lost[store] && (filter === 'all' || filter === store),
+  );
+  const nothingSaved =
+    verses.length === 0 &&
+    marked.length === 0 &&
+    wanted.length === 0 &&
+    !lost.verses &&
+    !lost.highlights &&
+    !lost.library;
+  const refetchAll = () => {
+    bookmarks.refetch();
+    highlights.refetch();
+    favorites.refetch();
+  };
 
   return (
     <View className="flex-1 bg-surf-base">
@@ -125,11 +170,8 @@ export default function SavedScreen() {
         refreshControl={
           isGuest ? undefined : (
             <RefreshControl
-              refreshing={bookmarks.isRefetching || favorites.isRefetching}
-              onRefresh={() => {
-                bookmarks.refetch();
-                favorites.refetch();
-              }}
+              refreshing={bookmarks.isRefetching || highlights.isRefetching || favorites.isRefetching}
+              onRefresh={refetchAll}
             />
           )
         }
@@ -155,10 +197,7 @@ export default function SavedScreen() {
               drawing="sitting"
               message="We couldn’t load what you saved. Check your connection, then try again."
               actionLabel="Try again"
-              onAction={() => {
-                bookmarks.refetch();
-                favorites.refetch();
-              }}
+              onAction={refetchAll}
             />
           </View>
         ) : nothingSaved ? (
@@ -178,12 +217,22 @@ export default function SavedScreen() {
               <SavedVerse
                 key={mark.id}
                 mark={mark}
-                onOpen={() =>
-                  router.push({ pathname: '/bible', params: { passage: mark.target_reference } })
-                }
+                onOpen={() => openVerse(mark.target_reference, mark.verse_detail?.translation_code)}
                 onRemove={() =>
                   toggleBookmark.mutate({ verseId: mark.verse as string, bookmarkId: mark.id })
                 }
+              />
+            ))}
+
+            {showMarked.map((mark) => (
+              <HighlightedVerse
+                key={mark.id}
+                mark={mark}
+                onOpen={() => {
+                  const reference = mark.verse_detail?.reference;
+                  if (reference) openVerse(reference, mark.verse_detail?.translation_code);
+                }}
+                onRemove={() => setHighlight.mutate({ verseId: mark.verse, color: null })}
               />
             ))}
 
@@ -209,17 +258,50 @@ export default function SavedScreen() {
               />
             ))}
 
-            {showVerses.length === 0 && showLibrary.length === 0 && (
+            {showLost.map((store) => (
+              <View key={store} className="w-full gap-3 rounded-2xl bg-surf-sunken p-4">
+                <Text className="font-ui text-[14px] leading-5 text-ink-2">
+                  {store === 'verses'
+                    ? 'We couldn’t load your saved verses.'
+                    : store === 'highlights'
+                      ? 'We couldn’t load your highlights.'
+                      : 'We couldn’t load what you saved from the Library.'}{' '}
+                  Check your connection, then try again.
+                </Text>
+                <Press
+                  onPress={() =>
+                    (store === 'verses' ? bookmarks : store === 'highlights' ? highlights : favorites).refetch()
+                  }
+                  accessibilityLabel={`Try loading your ${store === 'library' ? 'Library items' : store} again`}
+                  className="h-11 items-center justify-center self-start rounded-full bg-ink px-5"
+                >
+                  <Text className="font-ui-sb text-[14px] leading-5 text-on-ink">Try again</Text>
+                </Press>
+              </View>
+            ))}
+
+            {showLost.length === 0 &&
+              showVerses.length === 0 &&
+              showMarked.length === 0 &&
+              showLibrary.length === 0 && (
               <Text className="text-center font-ui text-[16px] leading-6 text-ink-2">
                 {filter === 'verses'
                   ? 'No verses saved yet. Tap a verse in the Bible, then Save.'
-                  : 'Nothing saved from the Library yet.'}
+                  : filter === 'highlights'
+                    ? 'No highlights yet. Tap a verse in the Bible, then pick a colour.'
+                    : 'Nothing saved from the Library yet.'}
               </Text>
             )}
 
+            {showVerses.length + showMarked.length + showLibrary.length > 0 && (
             <Text className="text-center font-ui-md text-[12px] leading-4 text-ink-3">
-              Tap a bookmark to remove it from here.
+              {filter === 'highlights' || (showMarked.length > 0 && showVerses.length === 0 && showLibrary.length === 0)
+                ? 'Tap × to take a highlight off.'
+                : showMarked.length > 0
+                  ? 'Tap a bookmark, or × on a highlight, to remove it from here.'
+                  : 'Tap a bookmark to remove it from here.'}
             </Text>
+            )}
           </>
         )}
       </ScrollView>
@@ -280,6 +362,54 @@ function SavedVerse({
   );
 }
 
+/**
+ * A highlighted verse, on a card of its own highlight colour. Tapping it opens
+ * the Bible there; × takes the highlight off.
+ */
+function HighlightedVerse({
+  mark,
+  onOpen,
+  onRemove,
+}: {
+  mark: Highlight;
+  onOpen: () => void;
+  onRemove: () => void;
+}) {
+  if (!mark.verse_detail) return null;
+  const verse = { ...mark.verse_detail, text: plainVerse(mark.verse_detail.text) };
+  const reference = [verse.reference, verse.translation_code].filter(Boolean).join(' · ');
+
+  return (
+    <View
+      className="w-full gap-3 overflow-hidden rounded-2xl px-5 pb-3 pt-5"
+      style={{ backgroundColor: HIGHLIGHT_SWATCH[mark.color] }}
+    >
+      <Press
+        onPress={onOpen}
+        scaleTo={0.985}
+        accessibilityLabel={`${verse.reference}, highlighted ${mark.color}. ${verse.text}. Opens in the Bible`}
+        className="gap-3"
+      >
+        <Text className="font-ui-md text-[12px] uppercase leading-4 text-pop-on">Highlight</Text>
+        <Text className="font-read-md text-[20px] leading-8 text-pop-on">“{verse.text}”</Text>
+      </Press>
+      <View className="flex-row items-center gap-2">
+        <Text numberOfLines={1} className="flex-1 font-ui-sb text-[14px] leading-5 text-pop-on">
+          {reference}
+        </Text>
+        <VerseAction
+          icon="shareUp"
+          label={`Share ${verse.reference}`}
+          onPress={() => {
+            Share.share({ message: `“${verse.text}”\n${reference}` }).catch(() => {});
+          }}
+        />
+        <VerseAction icon="close" label={`Remove the highlight on ${verse.reference}`} onPress={onRemove} />
+      </View>
+    </View>
+  );
+}
+
 /** A plain 44px icon on the violet card; always dark, as the card never changes. */
 function VerseAction({
   icon,
@@ -287,7 +417,7 @@ function VerseAction({
   filled,
   onPress,
 }: {
-  icon: 'shareUp' | 'bookmark';
+  icon: 'shareUp' | 'bookmark' | 'close';
   label: string;
   filled?: boolean;
   onPress: () => void;

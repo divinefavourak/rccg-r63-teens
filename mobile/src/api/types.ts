@@ -328,10 +328,23 @@ export interface BibleChapterDetail {
   verses: BibleVerse[];
 }
 
+/** The four muted colours (bible/models.py Highlight.Color). No meaning is imposed. */
+export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink';
+
+/** A highlighted verse (bible/serializers.py HighlightSerializer). One per verse. */
 export interface Highlight {
   id: string;
   verse: string;
-  color: string;
+  color: HighlightColor;
+  verse_detail?: {
+    id: string;
+    number: number;
+    text: string;
+    reference: string;
+    translation_code: string | null;
+  } | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 /** A saved verse or chapter (bible/serializers.py BookmarkSerializer). */

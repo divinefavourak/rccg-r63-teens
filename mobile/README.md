@@ -596,8 +596,8 @@ Not restated in code, but load-bearing:
 
 - Marking a devotional read — the Progress domain records it, but the app only
   posts challenge completions so far
-- Bible search, highlights, notes and continue-reading (endpoints exist under
-  `/bible/`; the reader currently only reads passages)
+- Bible notes (the endpoint exists under `/bible/notes/`). Highlights are
+  built: tap a verse, pick one of four colours; they show in Saved too
 - Library's video, podcast and course shelves — `/media/` and the article and
   manual endpoints under `/content/`
 - Audio/video playback and the docked mini-player
