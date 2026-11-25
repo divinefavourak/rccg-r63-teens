@@ -212,7 +212,7 @@ export function eventLd(event, url) {
     // description always says when, where and how much.
     description: eventDescription(event) || event.description,
     startDate: event.start_datetime,
-    endDate: event.end_datetime || event.start_datetime,
+    endDate: event.end_datetime,
     eventStatus: 'https://schema.org/EventScheduled',
     eventAttendanceMode: event.is_virtual
       ? 'https://schema.org/OnlineEventAttendanceMode'
