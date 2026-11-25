@@ -16,7 +16,7 @@
  *   - Optional fields are dropped when the data is absent rather than padded
  *     with a placeholder.
  */
-import { SITE, absoluteUrl, eventIsFree, eventPrice } from './site.mjs';
+import { SITE, absoluteUrl, eventDescription, eventIsFree, eventPrice } from './site.mjs';
 
 const ORGANIZATION_ID = `${SITE.origin}/#organization`;
 const WEBSITE_ID = `${SITE.origin}/#website`;
@@ -163,6 +163,31 @@ export function articleLd({ url, title, description, datePublished, dateModified
 }
 
 /**
+ * Where an event happens. Google treats a missing `location` as a critical
+ * error that keeps the event out of results, so every attendance mode gets one:
+ * a Place for in-person, a VirtualLocation for online (the event page, never
+ * the private join link), and both for hybrid. A physical event with no venue
+ * falls back to the region, which is where every event here is held.
+ */
+function eventLocation(event, pageUrl) {
+  const place = compact({
+    '@type': 'Place',
+    name: event.venue || event.city || SITE.areaServed,
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: event.address,
+      addressLocality: event.city || SITE.address.locality,
+      addressRegion: event.state || SITE.address.region,
+      addressCountry: SITE.address.country,
+    },
+  });
+  const online = { '@type': 'VirtualLocation', url: pageUrl };
+  if (event.is_virtual) return online;
+  if (event.is_hybrid) return [place, online];
+  return place;
+}
+
+/**
  * An event, from the row the API returned.
  *
  * `offers` is only added when the site actually sells something: a free event
@@ -183,9 +208,11 @@ export function eventLd(event, url) {
     '@id': `${pageUrl}#event`,
     name: event.title,
     url: pageUrl,
-    description: event.short_description || event.description,
+    // `short_description` is sometimes just the word "flyer"; the built
+    // description always says when, where and how much.
+    description: eventDescription(event) || event.description,
     startDate: event.start_datetime,
-    endDate: event.end_datetime,
+    endDate: event.end_datetime || event.start_datetime,
     eventStatus: 'https://schema.org/EventScheduled',
     eventAttendanceMode: event.is_virtual
       ? 'https://schema.org/OnlineEventAttendanceMode'
@@ -195,18 +222,7 @@ export function eventLd(event, url) {
     image: event.cover_image ? [event.cover_image] : undefined,
     isAccessibleForFree: free,
     inLanguage: SITE.language,
-    location: event.venue || event.city
-      ? {
-          '@type': 'Place',
-          name: event.venue || SITE.legalName,
-          address: {
-            '@type': 'PostalAddress',
-            addressLocality: event.city,
-            addressRegion: event.state,
-            addressCountry: 'NG',
-          },
-        }
-      : undefined,
+    location: eventLocation(event, pageUrl),
     offers: free || price !== null
       ? {
           '@type': 'Offer',
@@ -214,7 +230,7 @@ export function eventLd(event, url) {
           price: free ? '0' : String(price),
           priceCurrency: 'NGN',
           availability: soldOut ? 'https://schema.org/SoldOut' : 'https://schema.org/InStock',
-          validFrom: event.registration_opens_at,
+          validFrom: event.registration_opens_at || event.registration_opens,
         }
       : undefined,
     organizer: siteOrganizer
@@ -237,8 +253,12 @@ export function eventLd(event, url) {
  * text the card shows. Google has used ItemList for carousel and list results
  * since 2023, and an answer engine can quote it without guessing at the DOM.
  */
-export function itemListLd({ url, name, items, itemType = 'Thing' }) {
+export function itemListLd({ url, name, items }) {
   const pageUrl = absoluteUrl(url);
+  // Google's "summary page" form: each ListItem is just a link to the page
+  // that carries the full object. Typing the entries (`Event`, `Article`)
+  // made Google validate them as stand-alone events with no location, offers
+  // or organiser — the detail pages already describe each one completely.
   return compact({
     '@context': 'https://schema.org',
     '@type': 'ItemList',
@@ -248,15 +268,8 @@ export function itemListLd({ url, name, items, itemType = 'Thing' }) {
     itemListElement: items.map((item, index) => ({
       '@type': 'ListItem',
       position: index + 1,
-      item: compact({
-        '@type': itemType,
-        '@id': absoluteUrl(item.url),
-        url: absoluteUrl(item.url),
-        name: item.name,
-        datePublished: item.datePublished,
-        startDate: item.startDate,
-        image: item.image ? absoluteUrl(item.image) : undefined,
-      }),
+      url: absoluteUrl(item.url),
+      name: item.name,
     })),
   });
 }

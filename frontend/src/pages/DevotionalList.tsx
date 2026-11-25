@@ -124,7 +124,6 @@ const DevotionalList = () => {
                         ? itemListLd({
                               url: '/devotionals',
                               name: 'Teenage Open Heavens — daily devotionals',
-                              itemType: 'Article',
                               items: devotionals.slice(0, 20).map((item) => ({
                                   url: `/devotionals/${item.id}`,
                                   name: item.title,

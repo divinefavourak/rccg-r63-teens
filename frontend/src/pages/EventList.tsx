@@ -153,7 +153,6 @@ const EventList = () => {
                         ? itemListLd({
                               url: '/events',
                               name: 'Camps, retreats and events for RCCG Region 63 teenagers',
-                              itemType: 'Event',
                               items: events.slice(0, 20).map((item) => ({
                                   url: `/events/${item.id}`,
                                   name: item.title,

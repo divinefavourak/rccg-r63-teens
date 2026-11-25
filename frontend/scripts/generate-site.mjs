@@ -278,7 +278,6 @@ async function writeStaticPages(shell, content) {
         itemListLd({
           url: '/devotionals',
           name: 'Teenage Open Heavens — daily devotionals',
-          itemType: 'Article',
           items: content.devotionals.slice(0, 20).map((item) => ({
             url: `/devotionals/${item.id}`,
             name: item.title,
@@ -294,7 +293,6 @@ async function writeStaticPages(shell, content) {
         itemListLd({
           url: '/events',
           name: 'Camps, retreats and events for RCCG Region 63 teenagers',
-          itemType: 'Event',
           items: content.events.slice(0, 20).map((item) => ({
             url: `/events/${item.id}`,
             name: item.title,
